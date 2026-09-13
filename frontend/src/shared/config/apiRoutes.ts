@@ -89,13 +89,6 @@ export const EMBEDS = {
 export const KB_API = {
   /** GET(所属一覧) / POST(作成) — /api/v2/kb/workspaces */
   workspaces: `${API_V2}/kb/workspaces`,
-  /**
-   * GET — /api/v2/kb/me/recent-pages（段2・段3）
-   *
-   * 自分が最近見たページをワークスペース横断・新しい順に返す（上限あり）。
-   * ヘッダーの「最近見たページ ▾」が使う。
-   */
-  recentPages: `${API_V2}/kb/me/recent-pages`,
   /** DELETE(削除) — /api/v2/kb/workspaces/:slug。配下ごと消える。会社のものは消せない */
   workspace: (workspaceSlug: string) => `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}`,
   /** GET — /api/v2/kb/workspaces/:slug/members。所属していれば誰でも叩ける（裸の配列で返る） */
@@ -316,11 +309,20 @@ export const TICKET_API = {
   /**
    * GET(一覧) / POST(作成) — /api/v2/kb/workspaces/:slug/spaces/:spaceId/tickets
    *
-   * 一覧のクエリは statusId / typeId / assigneePrincipalId（いずれも省略可）と
+   * 一覧のクエリは statusId / typeId / assigneePrincipalId / label / q（いずれも省略可）と
    * archived（'true' でアーカイブだけを返す。省略時は現役だけ。「込み」は取れない）。
+   * unassigned / assignedToMe / assigneePrincipalId は互いに排他（同時指定は 400）。
    */
   tickets: (workspaceSlug: string, spaceId: string) =>
     `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/tickets`,
+  /**
+   * GET — /api/v2/kb/workspaces/:slug/spaces/:spaceId/tickets/counts
+   *
+   * サイドバー「保存した絞り込み」の件数バッジ（total / assignedToMe / overdue / unassigned）。
+   * フロントエンドでは計算しない（自分の principal 解決・全件走査が要るため）。
+   */
+  ticketCounts: (workspaceSlug: string, spaceId: string) =>
+    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/tickets/counts`,
   /** GET — /api/v2/kb/workspaces/:slug/tickets/by-key/:key（例 FRESTYLE-12） */
   ticketByKey: (workspaceSlug: string, key: string) =>
     `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/by-key/${encodeURIComponent(key)}`,

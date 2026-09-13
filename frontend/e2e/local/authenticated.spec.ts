@@ -179,8 +179,7 @@ test.describe('スペース追加導線（POST モック）', () => {
     // 今いるスペースの名前が出る（段14 で見出しはボタンではなくただの表示になった）。
     await expect(page.getByText('バックエンド定例').and(visible).first()).toBeVisible();
 
-    // スペースの切替・作成はヘッダーの「スペース ▾」が持つ（段3）。
-    await page.getByRole('button', { name: 'スペース', exact: true }).and(visible).first().click();
+    await page.getByRole('button', { name: 'スペースを切り替える' }).and(visible).first().click();
     // 「プライベートスペースを作成」も部分一致で当たるので厳密一致にする。
     await page.getByRole('button', { name: 'スペースを作成', exact: true }).and(visible).first().click();
     await page.getByLabel('スペースの名前').and(visible).first().fill('営業定例');

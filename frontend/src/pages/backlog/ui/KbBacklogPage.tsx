@@ -13,6 +13,7 @@ import { useTicketLabels } from '../model/useTicketLabels';
 import { usePrincipalNames } from '../model/usePrincipalNames';
 import { useBacklogSpace } from '../model/useBacklogSpace';
 import { useBacklogUrlState } from '../model/useBacklogUrlState';
+import BacklogFilterBar from './BacklogFilterBar';
 import BacklogList from './BacklogList';
 import TicketDetailPanel from './TicketDetailPanel';
 import TicketStatusAdmin from './TicketStatusAdmin';
@@ -32,7 +33,27 @@ export default function KbBacklogPage() {
 
   // 面・アーカイブの切り替え・選択中のチケットは URL に持つ。チケットを開いて戻ったときに
   // 絞り込みと選択が残るようにするため（useBacklogUrlState）。
-  const { tab, archived, selectedId, setTab, setArchived, selectTicket, reset } = useBacklogUrlState();
+  const {
+    tab,
+    archived,
+    selectedId,
+    statusId,
+    typeId,
+    labelId,
+    unassigned,
+    assignedToMe,
+    overdue,
+    q,
+    setTab,
+    setArchived,
+    selectTicket,
+    setStatusId,
+    setTypeId,
+    setLabelId,
+    setAssignedToMe,
+    setQuery,
+    reset,
+  } = useBacklogUrlState();
   const [detailMobileOpen, setDetailMobileOpen] = useState(false);
   const [enabling, setEnabling] = useState(false);
 
@@ -41,7 +62,16 @@ export default function KbBacklogPage() {
     (id) => navigate(`/kb/backlog/${id}`, { replace: true }),
   );
 
-  const list = useTicketList(workspaceSlug ?? undefined, space?.id, { archived });
+  const list = useTicketList(workspaceSlug ?? undefined, space?.id, {
+    archived,
+    statusId: statusId ?? undefined,
+    typeId: typeId ?? undefined,
+    labelId: labelId ?? undefined,
+    unassigned,
+    assignedToMe,
+    overdue,
+    q: q || undefined,
+  });
   const masters = useTicketMasters(workspaceSlug ?? undefined, space?.id);
   const labels = useTicketLabels(workspaceSlug ?? undefined, space?.id);
   const { principals, nameOf, initialsOf } = usePrincipalNames(workspaceSlug ?? undefined);
@@ -89,29 +119,11 @@ export default function KbBacklogPage() {
     }
   };
 
-  if (spaceError) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
-        {spaceError}
-      </div>
-    );
-  }
-
-  if (noSpaces) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center">
-        <div>
-          <p className="mb-1 text-base font-semibold text-[var(--color-text-secondary)]">
-            バックログを使えるスペースがありません
-          </p>
-          <p className="text-sm text-[var(--color-text-muted)]">ナレッジでスペースを作ると使えるようになります。</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-full overflow-hidden">
+      {/* サイドバーは spaceError・noSpaces でも常に描く（KbSidebar 自身が空のワークスペース／
+          空のスペース一覧を検知して作成フォームを出す。ここで早期 return して隠すと、
+          その抜け道ごと失われる）。 */}
       <SecondaryPanel
         title="バックログ"
         peekable
@@ -131,7 +143,22 @@ export default function KbBacklogPage() {
           </button>
         </div>
 
-        {spaceLoading || !space ? (
+        {spaceError ? (
+          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
+            {spaceError}
+          </div>
+        ) : noSpaces ? (
+          <div className="flex flex-1 items-center justify-center px-6 text-center">
+            <div>
+              <p className="mb-1 text-base font-semibold text-[var(--color-text-secondary)]">
+                バックログを使えるスペースがありません
+              </p>
+              <p className="text-sm text-[var(--color-text-muted)]">
+                左のサイドバーからワークスペースまたはスペースを作ると使えるようになります。
+              </p>
+            </div>
+          </div>
+        ) : spaceLoading || !space ? (
           <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-muted)]">
             読み込み中…
           </div>
@@ -221,6 +248,24 @@ export default function KbBacklogPage() {
                 </span>
               )}
             </div>
+
+            {tab === 'tickets' && enabled && (
+              <BacklogFilterBar
+                statuses={masters.statuses}
+                types={masters.types}
+                labels={labels.labels}
+                statusId={statusId}
+                typeId={typeId}
+                labelId={labelId}
+                assignedToMe={assignedToMe}
+                q={q}
+                onChangeStatusId={setStatusId}
+                onChangeTypeId={setTypeId}
+                onChangeLabelId={setLabelId}
+                onToggleAssignedToMe={setAssignedToMe}
+                onChangeQuery={setQuery}
+              />
+            )}
 
             <div className="min-h-0 flex-1" role="tabpanel">
               {tab === 'tickets' &&

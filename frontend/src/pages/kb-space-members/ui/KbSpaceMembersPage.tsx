@@ -34,39 +34,12 @@ export default function KbSpaceMembersPage() {
     navigate(`/kb/spaces/${id}`, { replace: true }),
   );
 
-  if (error) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
-        {error}
-      </div>
-    );
-  }
-
-  if (noSpaces) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center">
-        <div>
-          <p className="mb-1 text-base font-semibold text-[var(--color-text-secondary)]">
-            アクセスできるスペースがありません
-          </p>
-          <p className="text-sm text-[var(--color-text-muted)]">ナレッジでスペースを作ると使えるようになります。</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading || !space || !workspaceSlug) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-muted)]">
-        読み込み中…
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-full overflow-hidden">
+      {/* サイドバーは noSpaces でも常に描く（KbSidebar 自身が空のワークスペース／空の
+          スペース一覧を検知して作成フォームを出す）。 */}
       <SecondaryPanel title="ナレッジ" peekable storageKey="frestyle.panel.note" resizable resizeStorageKey="frestyle.panel.note.width" mobileOpen={mobilePanelOpen} onMobileClose={closeMobilePanel}>
-        <KbSidebar workspaceSlug={workspaceSlug} spaceId={space.id} />
+        <KbSidebar workspaceSlug={workspaceSlug ?? undefined} spaceId={space?.id ?? ''} />
       </SecondaryPanel>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -76,11 +49,39 @@ export default function KbSpaceMembersPage() {
           </button>
         </div>
 
-        <KbSpaceTabs space={space} active="members" />
+        {error && (
+          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
+            {error}
+          </div>
+        )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <MembersList workspaceSlug={workspaceSlug} spaceId={space.id} />
-        </div>
+        {!error && noSpaces && (
+          <div className="flex flex-1 items-center justify-center px-6 text-center">
+            <div>
+              <p className="mb-1 text-base font-semibold text-[var(--color-text-secondary)]">
+                アクセスできるスペースがありません
+              </p>
+              <p className="text-sm text-[var(--color-text-muted)]">
+                左のサイドバーからワークスペースまたはスペースを作ると使えるようになります。
+              </p>
+            </div>
+          </div>
+        )}
+
+        {!error && !noSpaces && (loading || !space || !workspaceSlug) && (
+          <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-muted)]">
+            読み込み中…
+          </div>
+        )}
+
+        {!error && !noSpaces && space && workspaceSlug && (
+          <>
+            <KbSpaceTabs space={space} active="members" />
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <MembersList workspaceSlug={workspaceSlug} spaceId={space.id} />
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

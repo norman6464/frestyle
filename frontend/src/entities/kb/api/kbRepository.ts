@@ -21,7 +21,6 @@ import type {
   KbPageTree,
   KbPageVersion,
   KbPageVersionDetail,
-  KbRecentPage,
   KbResolvedCover,
   KbResolvedPage,
   KbSearchResult,
@@ -102,15 +101,6 @@ const KbRepository = {
   async fetchWorkspaces(): Promise<KbWorkspace[]> {
     const res = await apiClient.get<KbWorkspace[]>(KB_API.workspaces);
     return toArray<KbWorkspace>(res.data);
-  },
-
-  /**
-   * 自分が最近見たページ（段2・段3）。ワークスペース横断・新しい順・上限件数。
-   * ヘッダーの「最近見たページ ▾」が使う。
-   */
-  async fetchRecentPages(): Promise<KbRecentPage[]> {
-    const res = await apiClient.get<KbRecentPage[]>(KB_API.recentPages);
-    return toArray<KbRecentPage>(res.data);
   },
 
   /**

@@ -15,6 +15,11 @@ export interface UseTicketListOptions {
   statusId?: string;
   typeId?: string;
   assigneePrincipalId?: string;
+  labelId?: string;
+  unassigned?: boolean;
+  assignedToMe?: boolean;
+  overdue?: boolean;
+  q?: string;
 }
 
 export interface TicketListState {
@@ -45,11 +50,26 @@ function targetOf(
     statusId: options.statusId,
     typeId: options.typeId,
     assigneePrincipalId: options.assigneePrincipalId,
+    labelId: options.labelId,
+    unassigned: options.unassigned,
+    assignedToMe: options.assignedToMe,
+    overdue: options.overdue,
+    q: options.q,
   };
   // 区切りは全角空白（slug にも UUID にも現れない。useKbComments と同じ理由）。
-  const key = `${workspaceSlug} ${spaceId} ${options.archived ? 'arc' : 'live'} ${options.statusId ?? ''} ${
-    options.typeId ?? ''
-  } ${options.assigneePrincipalId ?? ''}`;
+  const key = [
+    workspaceSlug,
+    spaceId,
+    options.archived ? 'arc' : 'live',
+    options.statusId ?? '',
+    options.typeId ?? '',
+    options.assigneePrincipalId ?? '',
+    options.labelId ?? '',
+    options.unassigned ? 'u' : '',
+    options.assignedToMe ? 'me' : '',
+    options.overdue ? 'od' : '',
+    options.q ?? '',
+  ].join(' ');
   return { key, workspaceSlug, spaceId, filter };
 }
 

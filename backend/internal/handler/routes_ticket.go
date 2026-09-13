@@ -54,7 +54,7 @@ func newTicketAttachmentPresignerOrFallback(deps *routeDeps) repository.TicketAt
 	}
 	pre, err := infraGCS.NewPresigner(context.Background(), bucket)
 	if err != nil {
-		log.Fatalf("[ticket-attachment] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v", bucket, err)
+		log.Fatalf("[ticket-attachment] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v — %s", bucket, err, imagesBucketHint)
 	}
 	return persistence.NewTicketAttachmentPresigner(pre)
 }
@@ -86,7 +86,8 @@ func registerTicketRoutesWith(
 		ticket.NewCreateTicketUseCase(tickets),
 		ticket.NewGetTicketUseCase(tickets),
 		ticket.NewGetTicketAssignmentUseCase(tickets),
-		ticket.NewListTicketsUseCase(tickets),
+		ticket.NewListTicketsUseCase(tickets, permissions),
+		ticket.NewGetTicketCountsUseCase(tickets, permissions),
 		ticket.NewListTicketChildrenUseCase(tickets),
 		ticket.NewUpdateTicketUseCase(tickets),
 		ticket.NewMoveTicketUseCase(tickets),
@@ -164,6 +165,8 @@ func registerTicketRoutesWith(
 
 	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/tickets/enable", h.Enable)
 	tkGroup.GET("/kb/workspaces/:workspaceSlug/spaces/:spaceId/tickets", h.List)
+	// 保存した絞り込みの件数バッジ（自分の担当・期限切れ・未割り当て・総数）。
+	tkGroup.GET("/kb/workspaces/:workspaceSlug/spaces/:spaceId/tickets/counts", h.Counts)
 	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/tickets", h.Create)
 	// 表示キー（例 FRESTYLE-12）からの解決。キーはスペースの key を含む（domain.ParseTicketKey
 	// が最後のハイフンで割る）ので URL 側にスペースを取らない。/tickets/:ticketId と衝突しない

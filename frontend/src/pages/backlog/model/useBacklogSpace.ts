@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { type KbSpace, setCurrentKbSpace } from '@/entities/kb';
+import type { KbSpace } from '@/entities/kb';
 import { resolveBacklogSpace, resolveBacklogSpaceId } from './resolveBacklogSpace';
 
 export interface BacklogSpaceState {
@@ -58,7 +58,6 @@ export function useBacklogSpace(spaceId: string | undefined, onResolvedEntrySpac
           loading: false,
           error: null,
         });
-        setCurrentKbSpace({ workspaceSlug: resolved.workspaceSlug, spaceId: resolved.space.id });
       })
       .catch(() => {
         if (active.current !== key) return;

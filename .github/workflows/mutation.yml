@@ -38,11 +38,11 @@ jobs:
         with:
           # --diff の比較基準 (origin/main) を得るため全履歴を取得する。
           fetch-depth: 0
-          # このジョブ内の git fetch（origin/$BASE_REF の取得）にリポジトリを private 化した
-          # 2026-09-09 以降は認証が要る（匿名の https fetch は "could not read Username" で
-          # 失敗するようになった）。actions/checkout 自身に資格情報を持たせるのが最も確実
-          # （一時トークンをこの job 限りで自動失効。ワークフロー全体の permissions が
-          # contents: read のみなので、書き込みには使えない）。
+          # このジョブ内の git fetch（origin/$BASE_REF の取得）に備え、actions/checkout に
+          # 資格情報を持たせておく（一時トークンをこの job 限りで自動失効。ワークフロー全体の
+          # permissions が contents: read のみなので、書き込みには使えない）。private リポジトリ
+          # に対する匿名の https fetch は "could not read Username" で失敗するため、現在は
+          # public でも外さない。
           persist-credentials: true
 
       - uses: actions/setup-go@v6

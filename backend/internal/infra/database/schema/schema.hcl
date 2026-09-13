@@ -22,6 +22,41 @@ schema "public" {
 }
 
 # =====================================================================
+# pg_trgm 拡張について（あいまい検索の前提条件）
+# =====================================================================
+#
+# チケット題名検索・KB ページ検索（題名・本文）は pg_trgm を使う。採用理由は速度ではなく
+# 「あいまい検索の振れ幅を最低限持ちたい」（表記ゆれ・打ち間違いを拾う）こと。
+#
+# Atlas v1.3.0（ログイン無しの OSS 版 CLI）は `extension` ブロックも `docker` env の
+# `baseline` もいずれも Atlas Pro 限定機能で、`atlas schema inspect` が
+# "extensions are available to logged-in users only. Use `atlas login` to access this
+# feature" で弾く（実測）。そのため schema.hcl は pg_trgm という拡張そのものは宣言できない
+# ——以下の索引で使う `ops = gin_trgm_ops` は、拡張が対象 DB に既に存在する前提で書く
+# （Atlas は宣言に無い拡張を DROP しには来ないため、外で作っておけば索引の宣言だけで足りる）。
+#
+# 拡張の作成（`CREATE EXTENSION IF NOT EXISTS pg_trgm;`）は schema.hcl の外、次の 4 箇所で
+# 独立に行う。同じ 1 行の文を複製しているだけで、schema.hcl と実 DB が食い違わないよう
+# 4 箇所とも「対象 DB へ入る前に必ず素通しする」構成にしてある:
+#   1. backend/scripts/local-db-init/01-extensions.sql
+#      （ローカル docker compose の初回起動。02-schema.sql より前に走る）
+#   2. backend/scripts/atlas-dev/Dockerfile
+#      （make schema-gen/schema-plan/schema-apply の --dev-url 専用イメージ。1 と同じ
+#      ファイルを COPY するだけで内容は複製しない）
+#   3. internal/infra/database/schema.go の ApplySchema
+#      （結合テスト用の空 DB。schema.gen.sql の実行直前に exec）
+#   4. backend/Makefile の schema-ensure-pg-trgm
+#      （schema-plan/schema-apply の対象 TARGET。atlas 実行前に exec）
+#
+# 索引（gin_trgm_ops）はあくまで ILIKE '%needle%' の高速化用（pg_trgm の GIN 索引は
+# LIKE/ILIKE のパターン一致にそのまま使える）。あいまい検索そのもの（表記ゆれ・打ち間違い）は
+# 索引と独立に、クエリ側で word_similarity() を OR 条件として使う
+# （knowledge_base_permission.sql の SearchPages・ticket.sql の ListTickets 参照）。
+# しきい値はまず word_similarity の既定値である 0.6 を固定値で使う（session 単位の GUC
+# `pg_trgm.word_similarity_threshold` は Supabase の transaction pooler 越しだと次の
+# 文で保持される保証が無いため使わない）。実運用のフィードバックで調整する前提。
+
+# =====================================================================
 # 中核（users / workspaces / notifications …）
 # =====================================================================
 
@@ -93,7 +128,7 @@ table "users" {
   # 重複データが既にある DB へこの索引を宣言的に適用すると、Atlas は作成に失敗する
   # （かつては DO ブロックで重複を検知し、警告に留めて起動は落とさない実行時分岐を持っていた。
   # 宣言的スキーマでは「重複があれば黙って作らない」という分岐そのものを表現できないため、
-  # 適用前に重複を解消しておくことが前提になる。2026-09 時点で本番の重複は解消済みで、
+  # 適用前に重複を解消しておくことが前提になる。本番の重複は解消済みで、
   # ローカル / CI は毎回まっさらな DB から始まるため、以後どの環境でも重複には当たらない）。
   index "uq_users_email_active" {
     unique  = true
@@ -230,8 +265,8 @@ table "workspaces" {
 }
 
 # workspace_members: ユーザーとワークスペースの所属そのもの（段 2）。1 人が複数の
-# ワークスペースに所属できる（ユーザー決定 2026-09-10。個人ワークスペースと会社の
-# ワークスペースを両方持つ実態に合わせる）。
+# ワークスペースに所属できる（個人ワークスペースと会社のワークスペースを両方持つ
+# 実態に合わせる）。
 #
 # status は招待から離脱までのライフサイクルを表す:
 #   invited   … 管理者が招いたが、本人はまだ受諾していない（権限はまだ何も届かない）。
@@ -1283,15 +1318,9 @@ table "page_versions" {
 # 連結したもの（pageRef ノードは寄与しない — text 型インラインノードの .text だけを
 # 繋げる。抽出は usecase/kb/page_usecase.go の extractPageSearchAndLinks を参照）。
 #
-# pg_trgm の GIN トライグラム索引は採用しなかった。Atlas v1.3.0（ログイン無しの OSS 版
-# CLI）の `extension` ブロックは Pro 限定機能で、`atlas schema inspect` が
-# "extensions are available to logged-in users only. Use `atlas login` to access this
-# feature" で弾く（実測。backend/Makefile の ATLAS_VERSION 参照）。ログイン資格情報を
-# 持たないため、schema.hcl だけで pg_trgm を有効化する手段が無い。手書きの初期化 SQL で
-# 拡張だけ側路から当てる案は、正本（schema.hcl）と実 DB の状態が乖離する即席のインフラに
-# なるため採らない（その場しのぎの妥協をしない方針）。body への ILIKE '%needle%' は索引が
-# 効かず全表走査になるが、結果は正しい。現状はローカル開発中心の小規模運用
-# （CLAUDE.md §1）なので、機能の正しさを優先し、索引無しの素朴な ILIKE で進める。
+# pg_trgm の GIN トライグラム索引を title / body に張る（ファイル冒頭の
+# 「pg_trgm 拡張について」参照）。ILIKE '%needle%' の高速化用の索引で、あいまい検索
+# （word_similarity）はクエリ側で別途行う。
 table "page_search" {
   schema = schema.public
   column "page_id" {
@@ -1326,6 +1355,20 @@ table "page_search" {
     ref_columns = [table.pages.column.workspace_id, table.pages.column.id]
     on_update   = NO_ACTION
     on_delete   = CASCADE
+  }
+  index "idx_page_search_title_trgm" {
+    type = GIN
+    on {
+      column = column.title
+      ops    = gin_trgm_ops
+    }
+  }
+  index "idx_page_search_body_trgm" {
+    type = GIN
+    on {
+      column = column.body
+      ops    = gin_trgm_ops
+    }
   }
 }
 
@@ -2226,7 +2269,7 @@ table "share_links" {
 # ticket_assignments / ticket_change_groups / ticket_change_items /
 # ticket_page_links / ticket_ticket_links。
 #
-# 設計: 「PostgreSQL チケット・バックログ設計」（2026-09-08）。
+# 設計: 「PostgreSQL チケット・バックログ設計」を参照。
 #
 # 共通の作法（既存表と同じ）:
 #   - 全表が workspace_id を持ち、親への FK は (workspace_id, …, id) の複合 FK。
@@ -2706,6 +2749,22 @@ table "tickets" {
   }
   index "idx_tickets_deleted_at" {
     columns = [column.deleted_at]
+  }
+  # pg_trgm の GIN トライグラム索引（ファイル冒頭の「pg_trgm 拡張について」参照）。
+  # 題名検索（q）の ILIKE '%needle%' 高速化用。あいまい検索はクエリ側の word_similarity。
+  index "idx_tickets_title_trgm" {
+    type = GIN
+    on {
+      column = column.title
+      ops    = gin_trgm_ops
+    }
+  }
+  index "idx_tickets_plain_text_trgm" {
+    type = GIN
+    on {
+      column = column.plain_text
+      ops    = gin_trgm_ops
+    }
   }
   check "ck_tickets_number_positive" {
     expr = "number > 0"

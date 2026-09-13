@@ -812,6 +812,99 @@ func TestTicketRepository_Integration(t *testing.T) {
 		require.Len(t, byStart, 1)
 		assert.NotEqual(t, tagged.ID, byStart[0].Ticket.ID, "start_afterは指定日以降のみ")
 	})
+
+	// 段 5 で足した unassigned / assigned_to_me_principal_id / overdue / q を、実 Postgres の
+	// LEFT JOIN・date比較・ILIKE/word_similarity で固定する。GetTicketCounts も同じ行の集合を
+	// FILTER で集計するので、ここで一緒に確かめる。
+	t.Run("一覧はunassigned_assignedToMe_overdue_qで絞り込める_件数も一致する", func(t *testing.T) {
+		ws, space := setup(t)
+		statusID, typeID := seedTicketMasterViaRepo(ctx, t, repo, ws, space)
+		perm := persistence.NewKnowledgeBasePermissionRepository(sqlDB)
+		me := createUser(t, sqlDB, "me-assigned")
+		meP, err := perm.EnsureUserPrincipal(ctx, ws, me)
+		require.NoError(t, err)
+		other := createUser(t, sqlDB, "other-assigned")
+		otherP, err := perm.EnsureUserPrincipal(ctx, ws, other)
+		require.NoError(t, err)
+
+		mine, err := repo.CreateTicket(ctx, repository.TicketCreateInput{
+			WorkspaceID: ws, SpaceID: space, TypeID: typeID, StatusID: statusID,
+			Title: "認証コードの発行手順", Doc: []byte(`{"type":"doc","content":[]}`), Position: "a0",
+			Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+		})
+		require.NoError(t, err)
+		require.NoError(t, repo.UpsertTicketAssignment(ctx, &domain.TicketAssignment{
+			WorkspaceID: ws, TicketID: mine.ID, AssigneePrincipalID: meP.ID, AssignedByUserID: me,
+		}))
+
+		othersTicket, err := repo.CreateTicket(ctx, repository.TicketCreateInput{
+			WorkspaceID: ws, SpaceID: space, TypeID: typeID, StatusID: statusID,
+			Title: "他人の担当", Doc: []byte(`{"type":"doc","content":[]}`), Position: "a1",
+			Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+		})
+		require.NoError(t, err)
+		require.NoError(t, repo.UpsertTicketAssignment(ctx, &domain.TicketAssignment{
+			WorkspaceID: ws, TicketID: othersTicket.ID, AssigneePrincipalID: otherP.ID, AssignedByUserID: other,
+		}))
+
+		overdueDate := "2020-01-01"
+		overdue, err := repo.CreateTicket(ctx, repository.TicketCreateInput{
+			WorkspaceID: ws, SpaceID: space, TypeID: typeID, StatusID: statusID,
+			Title: "期限切れ", Doc: []byte(`{"type":"doc","content":[]}`), Position: "a2",
+			Priority: domain.TicketPriorityDefault, DueDate: &overdueDate, CreatedByUserID: 1,
+		})
+		require.NoError(t, err)
+
+		unassignedTicket, err := repo.CreateTicket(ctx, repository.TicketCreateInput{
+			WorkspaceID: ws, SpaceID: space, TypeID: typeID, StatusID: statusID,
+			Title: "未割り当て", Doc: []byte(`{"type":"doc","content":[]}`), Position: "a3",
+			Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+		})
+		require.NoError(t, err)
+
+		byUnassigned, err := repo.ListTickets(ctx, repository.ListTicketsInput{
+			WorkspaceID: ws, SpaceID: space, Unassigned: true,
+		})
+		require.NoError(t, err)
+		gotIDs := make([]string, len(byUnassigned))
+		for i, r := range byUnassigned {
+			gotIDs[i] = r.Ticket.ID
+		}
+		assert.ElementsMatch(t, []string{overdue.ID, unassignedTicket.ID}, gotIDs, "unassignedは担当の付いていない全件")
+
+		byAssignedToMe, err := repo.ListTickets(ctx, repository.ListTicketsInput{
+			WorkspaceID: ws, SpaceID: space, AssignedToMePrincipalID: &meP.ID,
+		})
+		require.NoError(t, err)
+		require.Len(t, byAssignedToMe, 1)
+		assert.Equal(t, mine.ID, byAssignedToMe[0].Ticket.ID)
+
+		byOverdue, err := repo.ListTickets(ctx, repository.ListTicketsInput{
+			WorkspaceID: ws, SpaceID: space, Overdue: true,
+		})
+		require.NoError(t, err)
+		require.Len(t, byOverdue, 1)
+		assert.Equal(t, overdue.ID, byOverdue[0].Ticket.ID)
+
+		// q: ILIKE の中間一致（"担当"は「他人の担当」にだけ入っている）。
+		q := "担当"
+		byQ, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, SpaceID: space, Q: &q})
+		require.NoError(t, err)
+		require.Len(t, byQ, 1)
+		assert.Equal(t, othersTicket.ID, byQ[0].Ticket.ID)
+
+		// q: word_similarity によるあいまい検索（「コート」は「コード」の打ち間違い。
+		// ILIKE の中間一致では拾えない）。
+		typo := "認証コート"
+		byTypo, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, SpaceID: space, Q: &typo})
+		require.NoError(t, err)
+		require.Len(t, byTypo, 1, "打ち間違いが word_similarity で拾えていない")
+		assert.Equal(t, mine.ID, byTypo[0].Ticket.ID)
+
+		counts, err := repo.GetTicketCounts(ctx, ws, space, &meP.ID)
+		require.NoError(t, err)
+		assert.Equal(t, repository.TicketCounts{Total: 4, AssignedToMe: 1, Overdue: 1, Unassigned: 2}, counts)
+	})
 }
 
 // seedTicketMasterViaRepo は repository 経由で状態・種別を 1 つずつ用意する

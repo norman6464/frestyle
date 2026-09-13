@@ -44,7 +44,31 @@ SCHEMA_GEN_SQL := $(SCHEMA_DIR)/schema.gen.sql
 LOCAL_DB_INIT_SQL := scripts/local-db-init/02-schema.sql
 # Atlas の dev-database。宣言的 apply の差分計算に使う使い捨ての PostgreSQL
 # （ローカルの Docker で毎回まっさらに立ち上げ、変更を残さない）。
-ATLAS_DEV_URL := docker://postgres/17/dev
+#
+# 素の postgres イメージではなく自前イメージ（frestyle-atlas-pg-trgm-dev）を使う。
+# schema.hcl が pg_trgm の GIN 索引（ops = gin_trgm_ops）を宣言しており、拡張が無い
+# dev db では「operator class ... does not exist」で落ちるため（scripts/atlas-dev/Dockerfile・
+# schema.hcl 冒頭の「pg_trgm 拡張について」参照）。ensure-atlas-dev-image が毎回ビルドする
+# （scripts/local-db-init/01-extensions.sql を COPY するだけの軽量イメージなのでキャッシュが効く）。
+ATLAS_DEV_IMAGE := frestyle-atlas-pg-trgm-dev:17
+ATLAS_DEV_URL := docker+postgres://_/$(ATLAS_DEV_IMAGE)/dev?search_path=public
+
+# atlas の --dev-url 用イメージをビルドする（ローカルのみ・レジストリに push しない）。
+# schema-gen / schema-plan / schema-apply はすべてこれに依存する。
+.PHONY: ensure-atlas-dev-image
+ensure-atlas-dev-image:
+	@echo ">>> building $(ATLAS_DEV_IMAGE) (postgres + pg_trgm, atlas --dev-url 専用)"
+	@docker build -q -t $(ATLAS_DEV_IMAGE) -f scripts/atlas-dev/Dockerfile scripts >/dev/null
+
+# schema-plan / schema-apply の対象 DB（TARGET）に pg_trgm が無いと、GIN 索引の適用が
+# 「operator class ... does not exist」で落ちる。dev db 側と同じ拡張を対象 DB にも用意する
+# （Atlas は extension を管理しない＝作成も削除もしない。ここで先に作るだけで足りる）。
+# ローカルに psql が無い環境でも動くよう、使い捨ての postgres コンテナから叩く。
+.PHONY: schema-ensure-pg-trgm
+schema-ensure-pg-trgm:
+	@if [ -z "$(TARGET)" ]; then echo "使い方: make schema-ensure-pg-trgm TARGET=postgres://..."; exit 1; fi
+	@docker run --rm public.ecr.aws/docker/library/postgres:17.6-alpine \
+	  psql "$(TARGET)" -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 
 .PHONY: ensure-atlas
 ensure-atlas:
@@ -61,7 +85,7 @@ ensure-atlas:
 # IF NOT EXISTS も持たない）。既存 DB への適用は schema-apply（Atlas の宣言的 apply）を使う。
 # CI はこの target を実行し直して git diff で drift（手直し・作り忘れ）をチェックする。
 .PHONY: schema-gen
-schema-gen: ensure-atlas
+schema-gen: ensure-atlas ensure-atlas-dev-image
 	@echo ">>> atlas schema inspect ($(SCHEMA_HCL) -> $(SCHEMA_GEN_SQL), $(LOCAL_DB_INIT_SQL))"
 	@tmp="$$(mktemp)"; \
 	if ! "$(ATLAS)" schema inspect --url "file://$(SCHEMA_HCL)" --dev-url "$(ATLAS_DEV_URL)" --format '{{ sql . }}' > "$$tmp"; then \
@@ -75,14 +99,14 @@ schema-gen: ensure-atlas
 # schema.hcl を TARGET の実 DB に当てたときの差分を表示するだけ（何も変更しない）。
 # 本番へ当てる前に必ずこれで計画を読み、DROP が意図どおりかを確認すること。
 .PHONY: schema-plan
-schema-plan: ensure-atlas
+schema-plan: ensure-atlas ensure-atlas-dev-image schema-ensure-pg-trgm
 	@if [ -z "$(TARGET)" ]; then echo "使い方: make schema-plan TARGET=postgres://..."; exit 1; fi
 	@"$(ATLAS)" schema apply --url "$(TARGET)" --to "file://$(SCHEMA_HCL)" --dev-url "$(ATLAS_DEV_URL)" --dry-run
 
 # schema.hcl を TARGET の実 DB へ宣言的に適用する。Atlas が差分を表示したあと
 # ターミナルで承認を求める（--auto-approve は使い捨て DB 以外では付けない）。
 .PHONY: schema-apply
-schema-apply: ensure-atlas
+schema-apply: ensure-atlas ensure-atlas-dev-image schema-ensure-pg-trgm
 	@if [ -z "$(TARGET)" ]; then echo "使い方: make schema-apply TARGET=postgres://..."; exit 1; fi
 	@"$(ATLAS)" schema apply --url "$(TARGET)" --to "file://$(SCHEMA_HCL)" --dev-url "$(ATLAS_DEV_URL)"
 

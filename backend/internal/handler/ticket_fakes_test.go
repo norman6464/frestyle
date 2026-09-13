@@ -444,6 +444,16 @@ func (f *ticketFakeRepo) ResolveTicketIDByKey(_ context.Context, workspaceID, sp
 	return "", repository.ErrTicketNotFound
 }
 
+// isOverdue は「期限が今日より前、かつ状態が完了(done)ではない」（GetTicketCounts.sql の
+// overdue と同じ判定）。
+func (f *ticketFakeRepo) isOverdue(t *domain.Ticket) bool {
+	if t.DueDate == nil || *t.DueDate >= time.Now().Format("2006-01-02") {
+		return false
+	}
+	s, ok := f.statuses[t.StatusID]
+	return ok && s.Category != domain.TicketStatusCategoryDone
+}
+
 func (f *ticketFakeRepo) ListTickets(_ context.Context, in repository.ListTicketsInput) ([]repository.TicketWithAssignee, error) {
 	var out []repository.TicketWithAssignee
 	for _, t := range f.tickets {
@@ -465,6 +475,26 @@ func (f *ticketFakeRepo) ListTickets(_ context.Context, in repository.ListTicket
 		if in.AssigneePrincipalID != nil {
 			a, ok := f.assignments[t.ID]
 			if !ok || a.AssigneePrincipalID != *in.AssigneePrincipalID {
+				continue
+			}
+		}
+		if in.Unassigned {
+			if _, ok := f.assignments[t.ID]; ok {
+				continue
+			}
+		}
+		if in.AssignedToMePrincipalID != nil {
+			a, ok := f.assignments[t.ID]
+			if !ok || a.AssigneePrincipalID != *in.AssignedToMePrincipalID {
+				continue
+			}
+		}
+		if in.Overdue && !f.isOverdue(t) {
+			continue
+		}
+		if in.Q != nil {
+			q := strings.ToLower(*in.Q)
+			if !strings.Contains(strings.ToLower(t.Title), q) && !strings.Contains(strings.ToLower(t.PlainText), q) {
 				continue
 			}
 		}
@@ -499,6 +529,29 @@ func (f *ticketFakeRepo) ListTickets(_ context.Context, in repository.ListTicket
 	// テストが -race の有無に関わらずランダムに失敗する。実測）。
 	sort.Slice(out, func(i, j int) bool { return out[i].Ticket.Position < out[j].Ticket.Position })
 	return out, nil
+}
+
+func (f *ticketFakeRepo) GetTicketCounts(
+	_ context.Context, workspaceID, spaceID string, myPrincipalID *string,
+) (repository.TicketCounts, error) {
+	var c repository.TicketCounts
+	for _, t := range f.tickets {
+		if t.WorkspaceID != workspaceID || t.SpaceID != spaceID || t.ArchivedAt != nil || t.DeletedAt != nil {
+			continue
+		}
+		c.Total++
+		a, hasAssignee := f.assignments[t.ID]
+		if !hasAssignee {
+			c.Unassigned++
+		}
+		if myPrincipalID != nil && hasAssignee && a.AssigneePrincipalID == *myPrincipalID {
+			c.AssignedToMe++
+		}
+		if f.isOverdue(t) {
+			c.Overdue++
+		}
+	}
+	return c, nil
 }
 
 func (f *ticketFakeRepo) ListTicketChildren(_ context.Context, workspaceID, spaceID, parentID string) ([]domain.Ticket, error) {

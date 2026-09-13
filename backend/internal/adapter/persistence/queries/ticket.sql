@@ -211,16 +211,26 @@ WHERE t.workspace_id = sqlc.arg(workspace_id)
   AND t.number = sqlc.arg(number);
 
 -- name: ListTickets :many
--- status_id / type_id / assignee_principal_id / label_id / due_before / start_after はいずれも
--- sqlc.narg。NULL なら絞らない（段 4 で label_id / due_before / start_after を追加）。
+-- status_id / type_id / assignee_principal_id / label_id / due_before / start_after / q は
+-- いずれも sqlc.narg。NULL なら絞らない（段 4 で label_id / due_before / start_after を追加。
+-- 段 5 で unassigned / assigned_to_me / overdue / q を追加）。
 -- label_id は ticket_labels への EXISTS で絞る（LEFT JOIN だとラベル数だけ行が重複するため）。
 -- due_before / start_after は 'YYYY-MM-DD' 文字列を date として渡す（tickets.due_date /
 -- start_date と同じ運び方。冒頭の作法参照）。
+-- unassigned / assigned_to_me は担当の絞り込みが「誰でもよい/この ID/未割り当て/自分」の
+-- 4 通りあるため、assignee_principal_id とは別の bool narg にする（1 つの引数に "me" 等の
+-- 文字列を混ぜると uuid のパースと衝突するため）。呼び出し側（handler）は 3 つが同時に
+-- 立たないよう検証する。overdue は「期限が今日より前、かつ状態が完了(done)ではない」
+-- （done のチケットは「終わっているので遅延ではない」という扱い。設計 段 5）。
+-- q は題名（title）・本文の素テキスト写し（plain_text）の両方を対象にする。ILIKE の
+-- 中間一致に加えて word_similarity(q, 対象) > 0.6 を OR し、表記ゆれ・打ち間違いも拾う
+-- （KB ページ検索の SearchPages と同じ考え方。schema.hcl 冒頭の「pg_trgm 拡張について」参照）。
 -- ticket_ranks を LEFT JOIN + COALESCE で並び順を rank_position として返す（GetTicket と同じ理由）。
 -- deleted_at IS NULL は常に付ける（include_archived の有無に関わらず、削除済みは一覧に出さない）。
 SELECT t.*, a.assignee_principal_id, COALESCE(r.position, t."position") AS rank_position FROM tickets t
 LEFT JOIN ticket_ranks r ON r.workspace_id = t.workspace_id AND r.ticket_id = t.id AND r.context_kind = 'backlog'
 LEFT JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
+LEFT JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
 WHERE t.workspace_id = sqlc.arg(workspace_id) AND t.space_id = sqlc.arg(space_id)
   AND t.deleted_at IS NULL
   AND (t.archived_at IS NOT NULL) = sqlc.arg(include_archived)::boolean
@@ -229,6 +239,11 @@ WHERE t.workspace_id = sqlc.arg(workspace_id) AND t.space_id = sqlc.arg(space_id
   AND (
     sqlc.narg(assignee_principal_id)::uuid IS NULL
     OR a.assignee_principal_id = sqlc.narg(assignee_principal_id)::uuid
+  )
+  AND (NOT sqlc.arg(unassigned)::boolean OR a.assignee_principal_id IS NULL)
+  AND (
+    sqlc.narg(assigned_to_me_principal_id)::uuid IS NULL
+    OR a.assignee_principal_id = sqlc.narg(assigned_to_me_principal_id)::uuid
   )
   AND (
     sqlc.narg(label_id)::uuid IS NULL
@@ -239,7 +254,35 @@ WHERE t.workspace_id = sqlc.arg(workspace_id) AND t.space_id = sqlc.arg(space_id
   )
   AND (sqlc.narg(due_before)::date IS NULL OR t.due_date <= sqlc.narg(due_before)::date)
   AND (sqlc.narg(start_after)::date IS NULL OR t.start_date >= sqlc.narg(start_after)::date)
+  AND (NOT sqlc.arg(overdue)::boolean OR (t.due_date < CURRENT_DATE AND s.category <> 'done'))
+  AND (
+    sqlc.narg(q)::text IS NULL
+    OR t.title ILIKE '%' || sqlc.narg(q)::text || '%'
+    OR t.plain_text ILIKE '%' || sqlc.narg(q)::text || '%'
+    OR word_similarity(sqlc.narg(q)::text, t.title) > 0.6
+    OR word_similarity(sqlc.narg(q)::text, t.plain_text) > 0.6
+  )
 ORDER BY COALESCE(r.position, t."position");
+
+-- name: GetTicketCounts :one
+-- バックログのサイドバー「保存した絞り込み」が使う件数の集計（段 5）。1 クエリの
+-- FILTER で 4 通りをまとめて数える（4 回に分けて問い合わせると往復が増えるだけで
+-- 対象行の集合はどれも同じ WHERE の前段を共有するため）。
+-- my_principal_id は呼び出し側（handler）が principals から先に引いて渡す
+-- （kind='user' の principal が無い＝そのワークスペースに所属していない相手からは
+-- そもそもこの経路に来ない。ミドルウェアが弾く）。
+SELECT
+  COUNT(*) AS total,
+  COUNT(*) FILTER (
+    WHERE sqlc.narg(my_principal_id)::uuid IS NOT NULL AND a.assignee_principal_id = sqlc.narg(my_principal_id)::uuid
+  ) AS assigned_to_me,
+  COUNT(*) FILTER (WHERE t.due_date < CURRENT_DATE AND s.category <> 'done') AS overdue,
+  COUNT(*) FILTER (WHERE a.assignee_principal_id IS NULL) AS unassigned
+FROM tickets t
+LEFT JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
+LEFT JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
+WHERE t.workspace_id = sqlc.arg(workspace_id) AND t.space_id = sqlc.arg(space_id)
+  AND t.archived_at IS NULL AND t.deleted_at IS NULL;
 
 -- name: ListTicketChildren :many
 -- ticket_ranks を LEFT JOIN + COALESCE で並び順を rank_position として返す（同上）。

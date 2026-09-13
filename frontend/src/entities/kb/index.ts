@@ -6,8 +6,6 @@ export type { KbSpaceTabsProps, KbSpaceTab } from './ui/KbSpaceTabs';
 export { useWorkspaceList } from './model/useWorkspaceList';
 export { useKbSpaceEntry } from './model/useKbSpaceEntry';
 export type { KbSpaceEntryState } from './model/useKbSpaceEntry';
-export { setCurrentKbSpace, useCurrentKbSpace } from './model/currentKbSpaceContext';
-export type { CurrentKbSpace } from './model/currentKbSpaceContext';
 export { NOTE_NEW_PAGE_TITLE } from './config/constants';
 export { subscribeKbTreeEvents, emitKbTreeEvent } from './model/kbTreeEvents';
 export type { KbTreeEvent } from './model/kbTreeEvents';
@@ -26,7 +24,6 @@ export type {
   KbEditorRef,
   KbPage,
   KbLabel,
-  KbRecentPage,
   KbSearchResult,
   KbPageTreeNode,
   KbPageTree,

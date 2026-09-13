@@ -806,6 +806,52 @@ func (q *Queries) GetTicketAssignment(ctx context.Context, arg GetTicketAssignme
 	return i, err
 }
 
+const getTicketCounts = `-- name: GetTicketCounts :one
+SELECT
+  COUNT(*) AS total,
+  COUNT(*) FILTER (
+    WHERE $1::uuid IS NOT NULL AND a.assignee_principal_id = $1::uuid
+  ) AS assigned_to_me,
+  COUNT(*) FILTER (WHERE t.due_date < CURRENT_DATE AND s.category <> 'done') AS overdue,
+  COUNT(*) FILTER (WHERE a.assignee_principal_id IS NULL) AS unassigned
+FROM tickets t
+LEFT JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
+LEFT JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
+WHERE t.workspace_id = $2 AND t.space_id = $3
+  AND t.archived_at IS NULL AND t.deleted_at IS NULL
+`
+
+type GetTicketCountsParams struct {
+	MyPrincipalID uuid.NullUUID
+	WorkspaceID   uuid.UUID
+	SpaceID       uuid.UUID
+}
+
+type GetTicketCountsRow struct {
+	Total        int64
+	AssignedToMe int64
+	Overdue      int64
+	Unassigned   int64
+}
+
+// バックログのサイドバー「保存した絞り込み」が使う件数の集計（段 5）。1 クエリの
+// FILTER で 4 通りをまとめて数える（4 回に分けて問い合わせると往復が増えるだけで
+// 対象行の集合はどれも同じ WHERE の前段を共有するため）。
+// my_principal_id は呼び出し側（handler）が principals から先に引いて渡す
+// （kind='user' の principal が無い＝そのワークスペースに所属していない相手からは
+// そもそもこの経路に来ない。ミドルウェアが弾く）。
+func (q *Queries) GetTicketCounts(ctx context.Context, arg GetTicketCountsParams) (GetTicketCountsRow, error) {
+	row := q.db.QueryRowContext(ctx, getTicketCounts, arg.MyPrincipalID, arg.WorkspaceID, arg.SpaceID)
+	var i GetTicketCountsRow
+	err := row.Scan(
+		&i.Total,
+		&i.AssignedToMe,
+		&i.Overdue,
+		&i.Unassigned,
+	)
+	return i, err
+}
+
 const getTicketForUpdate = `-- name: GetTicketForUpdate :one
 SELECT id, workspace_id, space_id, number, type_id, status_id, parent_id, title, doc, plain_text, priority, start_date, due_date, position, closed_at, resolution, created_by_user_id, archived_at, deleted_at, created_at, updated_at FROM tickets
 WHERE workspace_id = $1 AND id = $2
@@ -1892,6 +1938,7 @@ const listTickets = `-- name: ListTickets :many
 SELECT t.id, t.workspace_id, t.space_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.start_date, t.due_date, t.position, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at, a.assignee_principal_id, COALESCE(r.position, t."position") AS rank_position FROM tickets t
 LEFT JOIN ticket_ranks r ON r.workspace_id = t.workspace_id AND r.ticket_id = t.id AND r.context_kind = 'backlog'
 LEFT JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
+LEFT JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
 WHERE t.workspace_id = $1 AND t.space_id = $2
   AND t.deleted_at IS NULL
   AND (t.archived_at IS NOT NULL) = $3::boolean
@@ -1901,28 +1948,45 @@ WHERE t.workspace_id = $1 AND t.space_id = $2
     $6::uuid IS NULL
     OR a.assignee_principal_id = $6::uuid
   )
+  AND (NOT $7::boolean OR a.assignee_principal_id IS NULL)
   AND (
-    $7::uuid IS NULL
+    $8::uuid IS NULL
+    OR a.assignee_principal_id = $8::uuid
+  )
+  AND (
+    $9::uuid IS NULL
     OR EXISTS (
       SELECT 1 FROM ticket_labels tl
-      WHERE tl.workspace_id = t.workspace_id AND tl.ticket_id = t.id AND tl.label_id = $7::uuid
+      WHERE tl.workspace_id = t.workspace_id AND tl.ticket_id = t.id AND tl.label_id = $9::uuid
     )
   )
-  AND ($8::date IS NULL OR t.due_date <= $8::date)
-  AND ($9::date IS NULL OR t.start_date >= $9::date)
+  AND ($10::date IS NULL OR t.due_date <= $10::date)
+  AND ($11::date IS NULL OR t.start_date >= $11::date)
+  AND (NOT $12::boolean OR (t.due_date < CURRENT_DATE AND s.category <> 'done'))
+  AND (
+    $13::text IS NULL
+    OR t.title ILIKE '%' || $13::text || '%'
+    OR t.plain_text ILIKE '%' || $13::text || '%'
+    OR word_similarity($13::text, t.title) > 0.6
+    OR word_similarity($13::text, t.plain_text) > 0.6
+  )
 ORDER BY COALESCE(r.position, t."position")
 `
 
 type ListTicketsParams struct {
-	WorkspaceID         uuid.UUID
-	SpaceID             uuid.UUID
-	IncludeArchived     bool
-	StatusID            uuid.NullUUID
-	TypeID              uuid.NullUUID
-	AssigneePrincipalID uuid.NullUUID
-	LabelID             uuid.NullUUID
-	DueBefore           pgtext.NullDate
-	StartAfter          pgtext.NullDate
+	WorkspaceID             uuid.UUID
+	SpaceID                 uuid.UUID
+	IncludeArchived         bool
+	StatusID                uuid.NullUUID
+	TypeID                  uuid.NullUUID
+	AssigneePrincipalID     uuid.NullUUID
+	Unassigned              bool
+	AssignedToMePrincipalID uuid.NullUUID
+	LabelID                 uuid.NullUUID
+	DueBefore               pgtext.NullDate
+	StartAfter              pgtext.NullDate
+	Overdue                 bool
+	Q                       sql.NullString
 }
 
 type ListTicketsRow struct {
@@ -1951,11 +2015,20 @@ type ListTicketsRow struct {
 	RankPosition        string
 }
 
-// status_id / type_id / assignee_principal_id / label_id / due_before / start_after はいずれも
-// sqlc.narg。NULL なら絞らない（段 4 で label_id / due_before / start_after を追加）。
+// status_id / type_id / assignee_principal_id / label_id / due_before / start_after / q は
+// いずれも sqlc.narg。NULL なら絞らない（段 4 で label_id / due_before / start_after を追加。
+// 段 5 で unassigned / assigned_to_me / overdue / q を追加）。
 // label_id は ticket_labels への EXISTS で絞る（LEFT JOIN だとラベル数だけ行が重複するため）。
 // due_before / start_after は 'YYYY-MM-DD' 文字列を date として渡す（tickets.due_date /
 // start_date と同じ運び方。冒頭の作法参照）。
+// unassigned / assigned_to_me は担当の絞り込みが「誰でもよい/この ID/未割り当て/自分」の
+// 4 通りあるため、assignee_principal_id とは別の bool narg にする（1 つの引数に "me" 等の
+// 文字列を混ぜると uuid のパースと衝突するため）。呼び出し側（handler）は 3 つが同時に
+// 立たないよう検証する。overdue は「期限が今日より前、かつ状態が完了(done)ではない」
+// （done のチケットは「終わっているので遅延ではない」という扱い。設計 段 5）。
+// q は題名（title）・本文の素テキスト写し（plain_text）の両方を対象にする。ILIKE の
+// 中間一致に加えて word_similarity(q, 対象) > 0.6 を OR し、表記ゆれ・打ち間違いも拾う
+// （KB ページ検索の SearchPages と同じ考え方。schema.hcl 冒頭の「pg_trgm 拡張について」参照）。
 // ticket_ranks を LEFT JOIN + COALESCE で並び順を rank_position として返す（GetTicket と同じ理由）。
 // deleted_at IS NULL は常に付ける（include_archived の有無に関わらず、削除済みは一覧に出さない）。
 func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]ListTicketsRow, error) {
@@ -1966,9 +2039,13 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 		arg.StatusID,
 		arg.TypeID,
 		arg.AssigneePrincipalID,
+		arg.Unassigned,
+		arg.AssignedToMePrincipalID,
 		arg.LabelID,
 		arg.DueBefore,
 		arg.StartAfter,
+		arg.Overdue,
+		arg.Q,
 	)
 	if err != nil {
 		return nil, err

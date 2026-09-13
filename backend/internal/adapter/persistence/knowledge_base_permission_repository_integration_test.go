@@ -1775,6 +1775,21 @@ func TestKnowledgeBaseSearchViewFacts_Integration(t *testing.T) {
 
 		assert.Empty(t, searchFor(f, t, f.alice, "docker"))
 	})
+
+	t.Run("打ち間違いを pg_trgm の word_similarity であいまい検索で拾う", func(t *testing.T) {
+		// 「コート」は「コード」の 1 文字違いの打ち間違い。ILIKE '%needle%' の中間一致
+		// では文字が異なるため絶対に拾えない（拾えてしまったら ILIKE 側の実装が壊れている）。
+		// word_similarity の OR 枝が実際に効いていることをこのテストで確かめる
+		// （schema.hcl 冒頭「pg_trgm 拡張について」・2026-09-09 決定）。
+		f := setupKBPermission(t, sqlDB)
+		typo := mustCreatePage(ctx, t, f.pageUC, f.ws, f.spaceA, nil, "認証コードの発行手順")
+		_ = mustCreatePage(ctx, t, f.pageUC, f.ws, f.spaceA, nil, "無関係")
+		alice := f.principalFor(ctx, t, f.alice)
+		f.grantSpace(ctx, t, f.spaceA, alice.ID, domain.GrantRoleViewer)
+
+		assert.Equal(t, []string{typo.ID}, searchFor(f, t, f.alice, "認証コート"),
+			"打ち間違い「認証コート」が word_similarity のあいまい検索で拾えていない")
+	})
 }
 
 func TestKnowledgeBaseUpdateSpaceName_Integration(t *testing.T) {

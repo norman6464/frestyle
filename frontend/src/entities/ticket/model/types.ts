@@ -312,8 +312,25 @@ export interface TicketListFilter {
   statusId?: string;
   typeId?: string;
   assigneePrincipalId?: string;
+  labelId?: string;
   /** true でアーカイブ済みだけを返す（現役との「込み」は取れない。設計 Ⅳ-C）。 */
   archived?: boolean;
+  /** 担当が付いていないチケットだけ。assigneePrincipalId / assignedToMe とは互いに排他。 */
+  unassigned?: boolean;
+  /** 自分が担当のチケットだけ。principal の解決は backend が行う（フロントでは計算しない）。 */
+  assignedToMe?: boolean;
+  /** 期限が今日より前、かつ状態が完了(done)ではないチケットだけ。 */
+  overdue?: boolean;
+  /** 題名・本文のあいまい検索（ILIKE 中間一致 + word_similarity）。 */
+  q?: string;
+}
+
+/** GET .../tickets/counts の応答。サイドバー「保存した絞り込み」の件数バッジ。 */
+export interface TicketCounts {
+  total: number;
+  assignedToMe: number;
+  overdue: number;
+  unassigned: number;
 }
 
 /** POST .../tickets/enable の応答。 */

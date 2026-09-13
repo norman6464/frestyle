@@ -620,6 +620,67 @@ func Test_チケット一覧_期日での絞り込み(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code, "区切りが違う形式も400")
 }
 
+// Test_チケット一覧_保存した絞り込み は unassigned / assignedToMe / overdue / q の 4 つを固定する。
+func Test_チケット一覧_保存した絞り込み(t *testing.T) {
+	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
+	me := f.perms.userPrincipal(kbWorkspaceID, kbUserID)
+	require.NotNil(t, me, "前提: 自分の principal が解決できる")
+
+	unassigned := f.tickets.addTicket(domain.Ticket{ID: "t-unassigned", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "未割り当て"})
+	mine := f.tickets.addTicket(domain.Ticket{ID: "t-mine", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "自分の担当"})
+	w := f.do(t, http.MethodPut, ticketAPIBase+"/tickets/"+mine.ID+"/assignee", `{"assigneePrincipalId":"`+me.ID+`"}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	others := f.tickets.addTicket(domain.Ticket{ID: "t-others", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "他人の担当"})
+	w = f.do(t, http.MethodPut, ticketAPIBase+"/tickets/"+others.ID+"/assignee", `{"assigneePrincipalId":"principal-other"}`)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?unassigned=true", "")
+	require.Equal(t, http.StatusOK, w.Code)
+	got := decodeJSON[map[string][]map[string]any](t, w)
+	require.Len(t, got["tickets"], 1)
+	assert.Equal(t, unassigned.ID, got["tickets"][0]["id"])
+
+	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?assignedToMe=true", "")
+	require.Equal(t, http.StatusOK, w.Code)
+	got = decodeJSON[map[string][]map[string]any](t, w)
+	require.Len(t, got["tickets"], 1)
+	assert.Equal(t, mine.ID, got["tickets"][0]["id"])
+
+	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?q=担当", "")
+	require.Equal(t, http.StatusOK, w.Code)
+	got = decodeJSON[map[string][]map[string]any](t, w)
+	assert.Len(t, got["tickets"], 2, "「自分の担当」「他人の担当」の2件がタイトルで引っかかる")
+
+	// unassigned・assignedToMe・assigneePrincipalId は互いに排他。同時指定は400。
+	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?unassigned=true&assignedToMe=true", "")
+	assert.Equal(t, http.StatusBadRequest, w.Code, "unassignedとassignedToMeの同時指定は400")
+	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?unassigned=true&assigneePrincipalId="+me.ID, "")
+	assert.Equal(t, http.StatusBadRequest, w.Code, "unassignedとassigneePrincipalIdの同時指定も400")
+}
+
+// Test_チケット件数 はサイドバー「保存した絞り込み」の件数バッジ（GET .../tickets/counts）を固定する。
+func Test_チケット件数(t *testing.T) {
+	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
+	me := f.perms.userPrincipal(kbWorkspaceID, kbUserID)
+	require.NotNil(t, me)
+
+	f.tickets.addStatus(domain.TicketStatus{ID: "status-todo", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Category: domain.TicketStatusCategoryTodo})
+	overdueDate := "2020-01-01"
+	f.tickets.addTicket(domain.Ticket{ID: "t-overdue", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "期限切れ", DueDate: &overdueDate, StatusID: "status-todo"})
+	mine := f.tickets.addTicket(domain.Ticket{ID: "t-mine-2", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "自分の担当2"})
+	w := f.do(t, http.MethodPut, ticketAPIBase+"/tickets/"+mine.ID+"/assignee", `{"assigneePrincipalId":"`+me.ID+`"}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	f.tickets.addTicket(domain.Ticket{ID: "t-unassigned-2", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "未割り当て2"})
+
+	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets/counts", "")
+	require.Equal(t, http.StatusOK, w.Code)
+	got := decodeJSON[ticketCountsResponse](t, w)
+	assert.Equal(t, int64(3), got.Total)
+	assert.Equal(t, int64(1), got.AssignedToMe)
+	assert.Equal(t, int64(1), got.Overdue)
+	assert.Equal(t, int64(2), got.Unassigned)
+}
+
 // Test_チケット詳細_祖先列を根から順に返す は ancestors フィールド（段 5・パンくず用）を固定する。
 func Test_チケット詳細_祖先列を根から順に返す(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)

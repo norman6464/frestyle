@@ -67,6 +67,7 @@ const tree = (spaceId: string, titles: string[]) => ({
 
 // 突き合わせは前から順なので、細かい宛先を先に書く（/spaces が先だと木の要求まで拾う）。
 const fullApi = {
+  '/tickets/counts': { total: 18, assignedToMe: 4, overdue: 2, unassigned: 3 },
   '/spaces/s-1/pages': tree('s-1', ['はじめに', '議事録']),
   '/spaces/s-2/pages': tree('s-2', ['商談メモ']),
   '/me/spaces': mySpaces,

@@ -44,6 +44,7 @@ type TicketHandler struct {
 	get           *ticket.GetTicketUseCase
 	getAssignment *ticket.GetTicketAssignmentUseCase
 	list          *ticket.ListTicketsUseCase
+	getCounts     *ticket.GetTicketCountsUseCase
 	listChildren  *ticket.ListTicketChildrenUseCase
 	update        *ticket.UpdateTicketUseCase
 	move          *ticket.MoveTicketUseCase
@@ -75,6 +76,7 @@ func NewTicketHandler(
 	get *ticket.GetTicketUseCase,
 	getAssignment *ticket.GetTicketAssignmentUseCase,
 	list *ticket.ListTicketsUseCase,
+	getCounts *ticket.GetTicketCountsUseCase,
 	listChildren *ticket.ListTicketChildrenUseCase,
 	update *ticket.UpdateTicketUseCase,
 	move *ticket.MoveTicketUseCase,
@@ -98,7 +100,7 @@ func NewTicketHandler(
 		checkSpace: checkSpace, checkTicket: checkTicket, resolveKey: resolveKey,
 		resolveLoc: resolveLoc,
 		enable:     enable, create: create, get: get, getAssignment: getAssignment,
-		list: list, listChildren: listChildren, update: update,
+		list: list, getCounts: getCounts, listChildren: listChildren, update: update,
 		move: move, archive: archive, restore: restore,
 		del: del, findDeleted: findDeleted, restoreDel: restoreDel, changeStat: changeStat,
 		changeParent: changeParent, assign: assign, unassign: unassign, history: history,
@@ -131,7 +133,11 @@ func respondTicketErr(c *gin.Context, err error) {
 		errors.Is(err, repository.ErrLabelNotFound),
 		errors.Is(err, repository.ErrTicketAttachmentNotFound),
 		errors.Is(err, repository.ErrSpaceNotFound),
-		errors.Is(err, repository.ErrWorkspaceNotFound):
+		errors.Is(err, repository.ErrWorkspaceNotFound),
+		errors.Is(err, repository.ErrPrincipalNotFound):
+		// ErrPrincipalNotFound は権限判定の直後に所属が外された場合に起こり得る
+		// （GetTicketCounts / assignedToMe の principal 解決）。他の拒否と同じ 404 に畳む
+		// （500 にすると再試行してよいと誤解される。kb_page_handler.go と同じ判断）。
 		c.JSON(http.StatusNotFound, errorResponse{Error: "not_found"})
 	case errors.Is(err, ticket.ErrNotCommentAuthor):
 		c.JSON(http.StatusForbidden, errorResponse{Error: "forbidden"})
@@ -530,7 +536,7 @@ func (h *TicketHandler) List(c *gin.Context) {
 	if !h.requireTicketSpacePermission(c, scope, spaceID, domain.CapabilityView) {
 		return
 	}
-	var statusID, typeID, assigneeID, labelID, dueBefore, startAfter *string
+	var statusID, typeID, assigneeID, labelID, dueBefore, startAfter, q *string
 	if v := c.Query("statusId"); v != "" {
 		statusID = &v
 	}
@@ -557,11 +563,31 @@ func (h *TicketHandler) List(c *gin.Context) {
 		}
 		startAfter = &v
 	}
+	if v := c.Query("q"); v != "" {
+		q = &v
+	}
+	unassigned := c.Query("unassigned") == "true"
+	assignedToMe := c.Query("assignedToMe") == "true"
+	overdue := c.Query("overdue") == "true"
+	// 担当の絞り込みは「誰でもよい／この principal／未割り当て／自分」の 4 通りで、同時に
+	// 2 つ以上を立てると担当条件の意味が定まらない（ticket.sql の ListTickets 参照）。
+	assigneeModes := 0
+	for _, on := range []bool{assigneeID != nil, unassigned, assignedToMe} {
+		if on {
+			assigneeModes++
+		}
+	}
+	if assigneeModes > 1 {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_request"})
+		return
+	}
 	tickets, err := h.list.Execute(c.Request.Context(), ticket.ListTicketsInput{
 		WorkspaceID: scope.workspaceID, SpaceID: spaceID,
 		IncludeArchived: c.Query("archived") == "true",
 		StatusID:        statusID, TypeID: typeID, AssigneePrincipalID: assigneeID,
 		LabelID: labelID, DueBefore: dueBefore, StartAfter: startAfter,
+		Unassigned: unassigned, AssignedToMe: assignedToMe, UserID: scope.userID,
+		Overdue: overdue, Q: q,
 	})
 	if err != nil {
 		respondTicketErr(c, err)
@@ -589,6 +615,39 @@ func (h *TicketHandler) List(c *gin.Context) {
 		})
 	}
 	c.JSON(http.StatusOK, ticketListResponse{Tickets: out})
+}
+
+// ticketCountsResponse はサイドバー「保存した絞り込み」の件数バッジ。
+type ticketCountsResponse struct {
+	Total        int64 `json:"total"`
+	AssignedToMe int64 `json:"assignedToMe"`
+	Overdue      int64 `json:"overdue"`
+	Unassigned   int64 `json:"unassigned"`
+}
+
+// Counts はバックログのサイドバー向けに、自分の担当・期限切れ・未割り当て・総数を返す
+// （フロントエンドでは計算しない — 件数はワークスペース全チケットを見ないと出せず、
+// principal 解決も含むため）。
+func (h *TicketHandler) Counts(c *gin.Context) {
+	scope, ok := kbScope(c)
+	if !ok {
+		return
+	}
+	spaceID := c.Param("spaceId")
+	if !h.requireTicketSpacePermission(c, scope, spaceID, domain.CapabilityView) {
+		return
+	}
+	counts, err := h.getCounts.Execute(c.Request.Context(), ticket.GetTicketCountsInput{
+		WorkspaceID: scope.workspaceID, SpaceID: spaceID, UserID: scope.userID,
+	})
+	if err != nil {
+		respondTicketErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, ticketCountsResponse{
+		Total: counts.Total, AssignedToMe: counts.AssignedToMe,
+		Overdue: counts.Overdue, Unassigned: counts.Unassigned,
+	})
 }
 
 // ListChildren は 1 件の直下の子を並び順で返す（孫は含まない・閲覧権限が要る）。ラベルは

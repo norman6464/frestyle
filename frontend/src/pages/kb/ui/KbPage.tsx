@@ -29,13 +29,7 @@ import { useKbPageDoc } from '../model/useKbPageDoc';
 import { createSubpage } from '../model/createSubpage';
 import { resolveEntryPageId } from '../model/resolveEntryPage';
 import { useKbImageResolver } from '../model/useKbImageResolver';
-import {
-  emitKbTreeEvent,
-  KbRepository,
-  setCurrentKbSpace,
-  subscribeKbTreeEvents,
-  type KbIcon,
-} from '@/entities/kb';
+import { emitKbTreeEvent, KbRepository, subscribeKbTreeEvents, type KbIcon } from '@/entities/kb';
 import KbPageTitle from './KbPageTitle';
 import KbPageIconButton from './KbPageIconButton';
 import KbPageMeta from './KbPageMeta';
@@ -93,16 +87,6 @@ export default function KbPage() {
   // ページを開いているときは data.workspaceSlug が正なのでそちらを優先する。
   const navigationWorkspaceSlug = (location.state as { workspaceSlug?: string } | null)?.workspaceSlug;
   const { isOpen: mobilePanelOpen, open: openMobilePanel, close: closeMobilePanel } = useMobilePanelState();
-
-  // ヘッダーの「スペース ▾」「作成」へ、今開いているページのスペースを伝える
-  // （entities/kb/model/currentKbSpaceContext.ts。props で結ぶには両者が遠すぎる）。
-  useEffect(() => {
-    if (!data) return;
-    setCurrentKbSpace({ workspaceSlug: data.workspaceSlug, spaceId: data.page.spaceId });
-    // data 丸ごとを依存にすると自動保存のたびに走る。workspaceSlug/spaceId は
-    // ページを移らない限り変わらないので、この 2 つだけで足りる。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.workspaceSlug, data?.page.spaceId]);
 
   // 本文保存が block_id_conflict で失敗したら再読み込みを促す。0（未発生）はスキップする
   // （マウント時の初期値で誤発火しないため）。再送しても直らない失敗なので、

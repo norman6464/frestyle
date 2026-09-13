@@ -34,6 +34,15 @@ func ApplySchema(ctx context.Context, db *sql.DB) error {
 	if applied {
 		return nil
 	}
+	// pg_trgm はスキーマ本体（schema.gen.sql）の一部ではない — schema.hcl 側で
+	// `extension` ブロックが宣言できない（Atlas OSS 版 CLI は Pro 限定機能。schema.hcl
+	// 冒頭の「pg_trgm 拡張について」参照）ため、schema.gen.sql は GIN トライグラム索引
+	// （ops = gin_trgm_ops）だけを持ち、拡張の存在を前提にしている。ここで先に作らないと
+	// 直後の索引作成が「operator class ... does not exist」で落ちる。
+	// scripts/local-db-init/01-extensions.sql と同じ文（ズレ防止のためこの 1 行のみ複製）。
+	if _, err := db.ExecContext(ctx, `CREATE EXTENSION IF NOT EXISTS pg_trgm`); err != nil {
+		return fmt.Errorf("pg_trgm 拡張の作成に失敗: %w", err)
+	}
 	if _, err := db.ExecContext(ctx, schemaGenSQL); err != nil {
 		return fmt.Errorf("スキーマの適用に失敗: %w", err)
 	}

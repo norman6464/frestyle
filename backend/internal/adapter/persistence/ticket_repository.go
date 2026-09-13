@@ -856,13 +856,16 @@ func (r *ticketRepository) ListTickets(ctx context.Context, in repository.ListTi
 	typeID, ok4 := kbNullID(in.TypeID)
 	assigneeID, ok5 := kbNullID(in.AssigneePrincipalID)
 	labelID, ok6 := kbNullID(in.LabelID)
-	if !ok3 || !ok4 || !ok5 || !ok6 {
+	assignedToMeID, ok7 := kbNullID(in.AssignedToMePrincipalID)
+	if !ok3 || !ok4 || !ok5 || !ok6 || !ok7 {
 		return nil, nil
 	}
 	rows, err := r.queries(ctx).ListTickets(ctx, sqlcgen.ListTicketsParams{
 		WorkspaceID: wsID, SpaceID: spID, IncludeArchived: in.IncludeArchived,
 		StatusID: statusID, TypeID: typeID, AssigneePrincipalID: assigneeID,
+		Unassigned: in.Unassigned, AssignedToMePrincipalID: assignedToMeID,
 		LabelID: labelID, DueBefore: nullDate(in.DueBefore), StartAfter: nullDate(in.StartAfter),
+		Overdue: in.Overdue, Q: nullString(in.Q),
 	})
 	if err != nil {
 		return nil, err
@@ -875,6 +878,29 @@ func (r *ticketRepository) ListTickets(ctx context.Context, in repository.ListTi
 		})
 	}
 	return out, nil
+}
+
+func (r *ticketRepository) GetTicketCounts(
+	ctx context.Context, workspaceID, spaceID string, myPrincipalID *string,
+) (repository.TicketCounts, error) {
+	wsID, ok := kbParseID(workspaceID)
+	spID, ok2 := kbParseID(spaceID)
+	if !ok || !ok2 {
+		return repository.TicketCounts{}, nil
+	}
+	myID, ok3 := kbNullID(myPrincipalID)
+	if !ok3 {
+		return repository.TicketCounts{}, nil
+	}
+	row, err := r.queries(ctx).GetTicketCounts(ctx, sqlcgen.GetTicketCountsParams{
+		WorkspaceID: wsID, SpaceID: spID, MyPrincipalID: myID,
+	})
+	if err != nil {
+		return repository.TicketCounts{}, err
+	}
+	return repository.TicketCounts{
+		Total: row.Total, AssignedToMe: row.AssignedToMe, Overdue: row.Overdue, Unassigned: row.Unassigned,
+	}, nil
 }
 
 func (r *ticketRepository) ListTicketChildren(ctx context.Context, workspaceID, spaceID, parentID string) ([]domain.Ticket, error) {

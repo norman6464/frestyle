@@ -34,8 +34,7 @@ describe('AppShell', () => {
   it('ヘッダーのナビを表示する', () => {
     renderAppShell();
     expect(screen.getAllByText('ホーム').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('スペース').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('最近見たページ').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('ナレッジ').length).toBeGreaterThanOrEqual(1);
   });
 
   it('子コンテンツを表示する', () => {

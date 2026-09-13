@@ -59,4 +59,39 @@ describe('useBacklogUrlState', () => {
     act(() => result.current.state.selectTicket('t-9'));
     expect(result.current.search).toContain('from=notification');
   });
+
+  it('URL から絞り込み(状態・種別・担当・期限切れ・題名検索)を読む', () => {
+    const { result } = renderAt(
+      '/kb/backlog/s-1?statusId=st-1&typeId=ty-1&assignedToMe=1&overdue=1&q=%E8%AA%8D%E8%A8%BC',
+    );
+    expect(result.current.state).toMatchObject({
+      statusId: 'st-1',
+      typeId: 'ty-1',
+      assignedToMe: true,
+      overdue: true,
+      unassigned: false,
+      q: '認証',
+    });
+  });
+
+  it('担当の絞り込みは assigneePrincipalId・unassigned・assignedToMe が互いに排他', () => {
+    const { result } = renderAt('/kb/backlog/s-1?assigneePrincipalId=p-1');
+    act(() => result.current.state.setAssignedToMe(true));
+    expect(result.current.state.assignedToMe).toBe(true);
+    expect(result.current.state.assigneePrincipalId).toBeNull();
+
+    act(() => result.current.state.setUnassigned(true));
+    expect(result.current.state.unassigned).toBe(true);
+    expect(result.current.state.assignedToMe).toBe(false);
+
+    act(() => result.current.state.setAssigneePrincipalId('p-2'));
+    expect(result.current.state.assigneePrincipalId).toBe('p-2');
+    expect(result.current.state.unassigned).toBe(false);
+  });
+
+  it('reset は絞り込みも含めてすべて捨てる', () => {
+    const { result } = renderAt('/kb/backlog/s-1?statusId=st-1&assignedToMe=1&q=x');
+    act(() => result.current.state.reset());
+    expect(result.current.search).toBe('');
+  });
 });

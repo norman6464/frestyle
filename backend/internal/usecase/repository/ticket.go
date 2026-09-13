@@ -84,11 +84,27 @@ type ListTicketsInput struct {
 	StatusID            *string
 	TypeID              *string
 	AssigneePrincipalID *string
-	// LabelID / DueBefore / StartAfter は段 4 で追加した絞り込み。DueBefore / StartAfter は
-	// 'YYYY-MM-DD' 文字列。
+	// LabelID / DueBefore / StartAfter。DueBefore / StartAfter は 'YYYY-MM-DD' 文字列。
 	LabelID    *string
 	DueBefore  *string
 	StartAfter *string
+	// Unassigned / AssignedToMePrincipalID / Overdue / Q は保存した絞り込み・題名検索。
+	// Unassigned・AssignedToMePrincipalID・AssigneePrincipalID は互いに排他（呼び出し側が
+	// 検証する）。AssignedToMePrincipalID は「自分」の principal を usecase 側で解決済みの値
+	// （フロントエンドに解決させない）。Q はタイトル・本文のあいまい検索（ILIKE + word_similarity。
+	// ticket.sql の ListTickets 参照）。
+	Unassigned              bool
+	AssignedToMePrincipalID *string
+	Overdue                 bool
+	Q                       *string
+}
+
+// TicketCounts はバックログのサイドバー「保存した絞り込み」が表示する件数バッジ。
+type TicketCounts struct {
+	Total        int64
+	AssignedToMe int64
+	Overdue      int64
+	Unassigned   int64
 }
 
 // TicketRepository はチケット（段 1: 骨格）の永続化を担う。1 boundary = 1 fat interface
@@ -152,6 +168,9 @@ type TicketRepository interface {
 	// （domain.ParseTicketKey で分解した結果を渡す）。
 	ResolveTicketIDByKey(ctx context.Context, workspaceID, spaceKey string, number int64) (string, error)
 	ListTickets(ctx context.Context, in ListTicketsInput) ([]TicketWithAssignee, error)
+	// GetTicketCounts はサイドバー「保存した絞り込み」の件数バッジを 1 回で返す。
+	// myPrincipalID が nil なら AssignedToMe は 0 になる。
+	GetTicketCounts(ctx context.Context, workspaceID, spaceID string, myPrincipalID *string) (TicketCounts, error)
 	ListTicketChildren(ctx context.Context, workspaceID, spaceID, parentID string) ([]domain.Ticket, error)
 	UpdateTicket(ctx context.Context, workspaceID, ticketID string, fields TicketUpdateFields) (*domain.Ticket, error)
 	// ChangeTicketStatus は closedAt / resolution を usecase 側で

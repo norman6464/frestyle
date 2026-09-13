@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { expect, userEvent, within } from 'storybook/test';
 import { withApi, withRouter, withStore, withToast } from '../../../../.storybook/decorators';
-import { setCurrentKbSpace } from '@/entities/kb';
 import Header from './Header';
 
 /**
@@ -11,9 +10,8 @@ import Header from './Header';
  *
  * 狭い画面ではナビが畳まれ、三本線のボタンから縦に開く。検索は虫眼鏡アイコンに畳む。
  *
- * 素のリンクで表せる項目（ホーム）は `model/navigation.ts` の MAIN_NAV_ITEMS が持つ。
- * 「スペース ▾」「最近見たページ ▾」はドロップダウンを持つため専用コンポーネント
- * （HeaderSpacesNav・HeaderRecentPagesNav）で描画する。
+ * 行き先の一覧は 1 か所（`model/navigation.ts`）だけが持っていて、この帯・畳んだメニュー・
+ * サイドバーが同じものを読む。増やすときも 1 行足せば全部に出る。
  *
  * ワークスペース切替はここには無い（`KbSidebar` 先頭にある）。
  */
@@ -47,63 +45,19 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** ふだんの見え方。今いるスペースが分からない（KB のページを開いていない）ときは
- *  「スペース」が素のリンクになり、「作成」は出ない。 */
+/** ふだんの見え方。 */
 export const 既定: Story = {
   play: async ({ canvasElement }) => {
-    setCurrentKbSpace(null);
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('navigation', { name: 'メインナビゲーション' })).toBeVisible();
-    await expect(canvas.getByRole('link', { name: 'スペース' })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: /最近見たページ/ })).toBeVisible();
-    await expect(canvas.queryByRole('button', { name: /作成/ })).toBeNull();
+    await expect(canvas.getByRole('link', { name: 'ナレッジ' })).toBeVisible();
     await expect(await canvas.findByText('川野 拓馬')).toBeVisible();
-  },
-};
-
-/** ナレッジのページを開いていて「今いるスペース」が分かっているとき。
- *  「スペース」がドロップダウンになり、「作成」ボタンも出る。 */
-export const スペースが分かっているとき: Story = {
-  decorators: [
-    withApi({
-      '/profile/me': { displayName: '川野 拓馬', avatarUrl: null, email: 'takuma@example.com' },
-      '/notifications/unread-count': 0,
-      '/kb/workspaces/w-3f2a9c/me/spaces': [
-        { id: 's-1', name: '開発チーム', role: 'editor' },
-        { id: 's-2', name: '営業定例', role: 'viewer' },
-      ],
-      '/kb/me/recent-pages': [
-        {
-          pageId: 'p-1',
-          workspaceSlug: 'w-3f2a9c',
-          title: '設計メモ',
-          spaceId: 's-1',
-          spaceName: '開発チーム',
-          viewedAt: '2026-09-13T00:00:00Z',
-        },
-      ],
-      '/kb/workspaces': [
-        { slug: 'w-3f2a9c', name: '開発チーム', createdAt: '2026-01-01T00:00:00Z', canManage: true },
-      ],
-    }),
-  ],
-  play: async ({ canvasElement }) => {
-    setCurrentKbSpace({ workspaceSlug: 'w-3f2a9c', spaceId: 's-1' });
-    const canvas = within(canvasElement);
-    await expect(await canvas.findByRole('button', { name: /作成/ })).toBeVisible();
-
-    await userEvent.click(canvas.getByRole('button', { name: /^スペース/ }));
-    await expect(await canvas.findByRole('link', { name: '営業定例' })).toBeVisible();
-
-    await userEvent.click(canvas.getByRole('button', { name: /最近見たページ/ }));
-    await expect(await canvas.findByRole('link', { name: /設計メモ/ })).toBeVisible();
   },
 };
 
 /** 中央の検索ボタンを押すと onOpenSearch が呼ばれる。 */
 export const 検索ボタンを押す: Story = {
   play: async ({ canvasElement, args }) => {
-    setCurrentKbSpace(null);
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '検索' }));
     await expect(args.onOpenSearch).toHaveBeenCalledTimes(1);
@@ -120,7 +74,6 @@ export const 未読あり: Story = {
     }),
   ],
   play: async ({ canvasElement }) => {
-    setCurrentKbSpace(null);
     await expect(
       await within(canvasElement).findByRole('link', { name: '通知 (未読 5 件)' }),
     ).toBeVisible();
@@ -137,7 +90,6 @@ export const 未読が多い: Story = {
     }),
   ],
   play: async ({ canvasElement }) => {
-    setCurrentKbSpace(null);
     await expect(await within(canvasElement).findByText('99+')).toBeVisible();
   },
 };
@@ -146,7 +98,6 @@ export const 未読が多い: Story = {
 export const 情報が取れないとき: Story = {
   decorators: [withApi({ '/kb/workspaces': [] })],
   play: async ({ canvasElement }) => {
-    setCurrentKbSpace(null);
     const canvas = within(canvasElement);
     // ナビは出る。名前だけが既定の文言になる。
     await expect(canvas.getByRole('navigation', { name: 'メインナビゲーション' })).toBeVisible();
@@ -158,9 +109,33 @@ export const 情報が取れないとき: Story = {
 export const 狭い画面: Story = {
   globals: { viewport: { value: 'mobile1', isRotated: false } },
   play: async ({ canvasElement }) => {
-    setCurrentKbSpace(null);
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'メニュー' }));
     await expect(canvas.getByRole('navigation', { name: 'モバイルナビゲーション' })).toBeVisible();
+  },
+};
+
+/**
+ * デスクトップ幅の下限付近（md ブレークポイント直後・DevTools を開いた状態などでよく
+ * 起きる帯）。ナビはまだ畳まれないが幅は十分ではない — ここでラベルが文字単位で
+ * 折り返され「縦書きのように見える」崩れ方をしていた。
+ */
+export const デスクトップの下限付近_ナビが折り返さない: Story = {
+  decorators: [
+    // globals.viewport は Storybook manager 側のプレビュー iframe だけを縮める設定で、
+    // このテストランナー（vitest --project=storybook）では実際のブラウザ幅に反映されない
+    // （実測: window.innerWidth は常に 1200 のまま）。DOM 上の利用可能幅そのものを狭める。
+    (StoryFn) => (
+      <div style={{ width: '780px', overflow: 'hidden' }}>
+        <StoryFn />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // 1 行のままであることを高さで確かめる（折り返すと複数行ぶん高くなる）。
+    for (const label of ['ホーム', 'ナレッジ', 'バックログ']) {
+      await expect(canvas.getByRole('link', { name: label }).clientHeight).toBeLessThan(40);
+    }
   },
 };

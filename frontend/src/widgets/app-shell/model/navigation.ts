@@ -16,17 +16,18 @@ export interface NavItem {
 }
 
 /**
- * MAIN_NAV_ITEMS はアプリの主要ナビのうち、素のリンクで表せる項目（ホームだけ）。
- * 「スペース ▾」「最近見たページ ▾」はドロップダウンを持つため、この配列ではなく
- * Header.tsx が HeaderSpacesNav / HeaderRecentPagesNav として個別に描画する
- * （ナレッジ・バックログへの導線は、段4のスペース単位ナビの中の切替として扱う）。
+ * MAIN_NAV_ITEMS はアプリの主要ナビの正典（single source of truth）。
+ * 項目を増やすときはここへ 1 つ足せば、ヘッダー・サイドバー・モバイルメニューすべてに反映される。
  */
-export const MAIN_NAV_ITEMS: NavItem[] = [{ id: 'home', label: 'ホーム', to: '/', matchExact: true }];
-
-/** isKbPath は「スペース ▾」を光らせるべき経路か（ナレッジ・バックログの画面はすべて /kb 配下）。 */
-export function isKbPath(pathname: string): boolean {
-  return pathname === '/kb' || pathname.startsWith('/kb/');
-}
+export const MAIN_NAV_ITEMS: NavItem[] = [
+  { id: 'home', label: 'ホーム', to: '/', matchExact: true },
+  // ナレッジは共有される木（workspaces → spaces → pages）。to の /kb はページ未選択の入口で、
+  // resolveEntryPageId（pages/kb/model/resolveEntryPage.ts）が続きのページへ即座に移す。
+  { id: 'kb', label: 'ナレッジ', to: '/kb', matchPrefix: '/kb', excludePrefix: ['/kb/backlog', '/kb/tickets'] },
+  // バックログはチケットの一覧・詳細・状態/種別の管理。/kb/backlog はスペース未選択の入口
+  // （直近に見たスペースへ移す。ナレッジの入口解決と同じ形）。個票は /kb/tickets/:id。
+  { id: 'backlog', label: 'バックログ', to: '/kb/backlog', matchPrefix: ['/kb/backlog', '/kb/tickets'] },
+];
 
 /**
  * navActive は現在の pathname がその項目を指しているかを判定する。

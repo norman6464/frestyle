@@ -5,11 +5,12 @@ import { useToast } from '@/shared/lib/hooks/useToast';
 import { NameCreateForm } from '@/shared/ui';
 import { emitKbTreeEvent, type KbDropTarget, KbWorkspaceSwitcher } from '@/entities/kb';
 import { useKbTree } from '../model/useKbTree';
+import { useTicketSavedFilterCounts } from '../model/useTicketSavedFilterCounts';
 import { toDropTarget, type KbDropZone } from '../model/dropZone';
 import KbSpaceFace from './KbSpaceFace';
 import KbTreeList from './KbTreeList';
 import KbSearchDialog from './KbSearchDialog';
-import KbBacklogSection from './KbBacklogSection';
+import KbTicketSavedFilters from './KbTicketSavedFilters';
 
 export interface KbSidebarProps {
   /** URL が指しているワークスペース。未指定なら所属の先頭を開く。 */
@@ -26,10 +27,9 @@ export interface KbSidebarProps {
 /**
  * KbSidebar はナレッジの「場所を示す面」。
  *
- * 上から ワークスペースの切替 → 今いるスペースの顔（KbSpaceFace） → ページの木 →
- * バックログへの導線。常に 1 つの spaceId（今いるスペース）だけを表示する。
- * 他のスペースへの移動は KbSpaceFace 内の一時的な切替が担う
- * （W3 でヘッダーへ正式に移すまでの繋ぎ）。
+ * 上から ワークスペースの切替 → 今いるスペースの顔（KbSpaceFace。固定ナビにバックログを含む）
+ * → ページの木。常に 1 つの spaceId（今いるスペース）だけを表示する。他のスペースへの
+ * 移動はヘッダーの「スペース ▾」（HeaderSpacesNav）が持つ。
  */
 export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSidebarProps) {
   const navigate = useNavigate();
@@ -64,6 +64,9 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
 
   // 題名の検索。実体はサーバー（ツリーと同じ規則で、閲覧できるページだけが返る）。
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // バックログのバッジと「保存した絞り込み」の件数は同じ 1 回の問い合わせで賄う。
+  const ticketCounts = useTicketSavedFilterCounts(activeSlug ?? undefined, spaceId || undefined);
 
   // 作った直後のページは、そのまま題名を書き換えられる状態で出す
   // （「無題」のまま置き去りにされるのを減らす）。KbSpaceSection から引き上げた状態
@@ -245,13 +248,17 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
             workspaceSlug={activeSlug}
             workspaceCanManage={workspaceCanManage}
             archivedMode={archivedMode}
+            ticketCount={ticketCounts?.total ?? null}
             onCreatePage={() => void createRootPage()}
             onCreatedFromTemplate={(page) => {
               emitKbTreeEvent({ type: 'page-created', page });
               navigate(`/kb/${page.id}`);
             }}
             onRenameSpace={(name) => renameSpace(space.id, name)}
+            onCreateSpace={createSpace}
           />
+
+          {!archivedMode && <KbTicketSavedFilters spaceId={space.id} counts={ticketCounts} />}
 
           {!archivedMode && (
             <button
@@ -319,8 +326,6 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
               </p>
             )}
           </div>
-
-          {!archivedMode && <KbBacklogSection workspaceSlug={activeSlug} spaces={spaces} />}
         </>
       )}
 

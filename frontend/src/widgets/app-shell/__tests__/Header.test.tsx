@@ -6,7 +6,6 @@ import { configureStore } from '@reduxjs/toolkit';
 import authReducer from '@/entities/user/model/authSlice';
 import { ToastProvider } from '@/app/providers/ToastProvider';
 import { SecondaryPanel } from '@/widgets/secondary-panel';
-import { setCurrentKbSpace } from '@/entities/kb';
 import Header from '../ui/Header';
 
 // この環境の jsdom は localStorage を提供しないため、既存テストと同じ流儀でスタブする
@@ -60,9 +59,6 @@ describe('Header', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('localStorage', createMockStorage());
-    // entities/kb の共有値はモジュール単位で持ち越されるため、前のテストが確定させた
-    // 「今いるスペース」を引きずらないようにテストごとにリセットする。
-    setCurrentKbSpace(null);
   });
 
   afterEach(() => {
@@ -79,9 +75,7 @@ describe('Header', () => {
 
   it('テキストのナビ項目を表示する', () => {
     renderHeader();
-    expect(screen.getAllByText('ホーム').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('スペース').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('最近見たページ').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('ナレッジ').length).toBeGreaterThanOrEqual(1);
   });
 
   it('通知ベルとハンバーガー(メニュー)を表示する', () => {
@@ -104,10 +98,10 @@ describe('Header', () => {
   it('ハンバーガーでモバイルメニューが開き、設定/ログアウトが出る', () => {
     renderHeader();
     // 開く前はデスクトップ分のみ。
-    expect(screen.getAllByText('ホーム').length).toBe(1);
+    expect(screen.getAllByText('ナレッジ').length).toBe(1);
     fireEvent.click(screen.getByRole('button', { name: /メニュー/ }));
     // モバイルメニュー分が増え、設定 / ログアウトも出る。
-    expect(screen.getAllByText('ホーム').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('ナレッジ').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('設定')).toBeInTheDocument();
     expect(screen.getByText('ログアウト')).toBeInTheDocument();
   });

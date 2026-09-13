@@ -17,6 +17,13 @@ import (
 // 他のどのハンドラにとっても十分に緩い。個別に厳しい上限が要るハンドラは自分で重ねて呼べる。
 const defaultRequestBodyBytes = maxKnowledgeBaseBodyBytes
 
+// imagesBucketHint は IMAGES_BUCKET が設定済みなのに GCS の署名器を作れなかったときに
+// 添える一文。GCP の外では署名用のサービスアカウントをメタデータサーバーから引けず必ず
+// 失敗するため、ここで落ちた人が最初に確かめるべきことを書いておく（この一文が無いと、
+// compose の restart で無限に再起動するだけの状態になり、原因にたどり着けない）。
+const imagesBucketHint = "ローカルで画像を使わないなら IMAGES_BUCKET を空にする" +
+	"（空ならスタブに落ちる）。使うなら GCP の資格情報（gcloud auth application-default login 等）を用意する"
+
 // routeDeps はドメインごとの register*Routes 関数に渡す共通依存。
 type routeDeps struct {
 	db       *sql.DB

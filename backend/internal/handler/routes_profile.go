@@ -52,7 +52,7 @@ func newProfileImagePresignerOrFallback(deps *routeDeps) repository.ProfileImage
 	}
 	pre, err := infraGCS.NewPresigner(context.Background(), bucket)
 	if err != nil {
-		log.Fatalf("[profile] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v", bucket, err)
+		log.Fatalf("[profile] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v — %s", bucket, err, imagesBucketHint)
 	}
 	return persistence.NewProfileImagePresigner(pre)
 }

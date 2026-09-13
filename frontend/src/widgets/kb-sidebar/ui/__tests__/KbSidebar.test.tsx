@@ -1232,6 +1232,107 @@ describe('スペースの見出しの操作', () => {
   });
 });
 
+describe('スペースの切替（段14。W3でヘッダーへ正式に移すまでの繋ぎ）', () => {
+  it('開くと自分がアクセスできるスペース一覧が出る', async () => {
+    hoisted.fetchMySpaces.mockResolvedValue([
+      mySpace('space-1', '開発部'),
+      mySpace('space-2', '営業部'),
+    ]);
+    renderSidebar();
+    await screen.findByText('設計メモ');
+
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを切り替える' }));
+
+    expect(await screen.findByRole('link', { name: '営業部' })).toBeInTheDocument();
+    expect(hoisted.fetchMySpaces).toHaveBeenCalledWith('acme');
+  });
+
+  it('「スペースを作成」から作れる', async () => {
+    renderSidebar();
+    await screen.findByText('設計メモ');
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを切り替える' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'スペースを作成' }));
+    hoisted.createSpace.mockResolvedValue(space('space-2', '営業部'));
+    fireEvent.change(screen.getByLabelText('スペースの名前'), { target: { value: '営業部' } });
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを作る' }));
+
+    await waitFor(() =>
+      expect(hoisted.createSpace).toHaveBeenCalledWith('acme', { name: '営業部' }),
+    );
+  });
+
+  it('やめるでフォームを畳める（作らない）', async () => {
+    renderSidebar();
+    await screen.findByText('設計メモ');
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを切り替える' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'スペースを作成' }));
+    expect(screen.getByLabelText('スペースの名前')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'やめる' }));
+
+    expect(screen.queryByLabelText('スペースの名前')).not.toBeInTheDocument();
+    expect(hoisted.createSpace).not.toHaveBeenCalled();
+  });
+
+  it('失敗したら知らせを出し、入力は消さない', async () => {
+    hoisted.createSpace.mockRejectedValue(new Error('forbidden'));
+    renderSidebar();
+    await screen.findByText('設計メモ');
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを切り替える' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'スペースを作成' }));
+    fireEvent.change(screen.getByLabelText('スペースの名前'), { target: { value: '営業部' } });
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを作る' }));
+
+    await waitFor(() =>
+      expect(hoisted.showToast).toHaveBeenCalledWith('error', 'スペースを作成できませんでした'),
+    );
+    expect(screen.getByLabelText('スペースの名前')).toHaveValue('営業部');
+  });
+
+  it('「プライベートスペースを作成」から visibility=private で作る', async () => {
+    hoisted.createSpace.mockResolvedValue(space('space-9', '自分の下書き', 'private'));
+    renderSidebar();
+    await screen.findByText('設計メモ');
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを切り替える' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'プライベートスペースを作成' }));
+    fireEvent.change(screen.getByLabelText('プライベートスペースの名前'), {
+      target: { value: '自分の下書き' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'プライベートスペースを作る' }));
+
+    await waitFor(() =>
+      expect(hoisted.createSpace).toHaveBeenCalledWith('acme', {
+        name: '自分の下書き',
+        visibility: 'private',
+      }),
+    );
+  });
+
+  it('頼んだ見え方と違うスペースが返ったら失敗として知らせる', async () => {
+    // 列が届く前のサーバーが相手だと visibility を持たない応答が返る。そのまま
+    // 受け入れると、プライベートのつもりが全員に見えるスペースとして作られたまま
+    // 「成功」に見えてしまう。
+    hoisted.createSpace.mockResolvedValue(space('space-9', '自分の下書き'));
+    renderSidebar();
+    await screen.findByText('設計メモ');
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを切り替える' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'プライベートスペースを作成' }));
+    fireEvent.change(screen.getByLabelText('プライベートスペースの名前'), {
+      target: { value: '自分の下書き' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'プライベートスペースを作る' }));
+
+    await waitFor(() =>
+      expect(hoisted.showToast).toHaveBeenCalledWith('error', 'スペースを作成できませんでした'),
+    );
+  });
+});
+
 describe('ページ画面からの通知に木が追従する', () => {
   it('page-created で親を開き、そのスペースの木を取り直す', async () => {
     hoisted.fetchPageTree.mockResolvedValue(

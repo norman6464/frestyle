@@ -249,20 +249,6 @@ export interface KbMySpace {
 }
 
 /**
- * 自分が最近見たページ 1 件（段 2・段 3）。ヘッダーの「最近見たページ ▾」が使う。
- * ワークスペース横断で、新しい順に上限件数だけ返る。
- */
-export interface KbRecentPage {
-  pageId: string;
-  workspaceSlug: string;
-  title: string;
-  icon?: KbIcon | null;
-  spaceId: string;
-  spaceName: string;
-  viewedAt: string;
-}
-
-/**
  * スペースに届いている権限を人に解決した 1 件（段 9。読み取り専用）。
  * via はその役割がどの経路で届いたか（direct=本人への直接付与・group=所属グループ/
  * スペース全員経由・workspace=ワークスペース全体からの継承）。

@@ -175,6 +175,14 @@ func (m *mockTicketRepo) ListTickets(ctx context.Context, in repository.ListTick
 	return t, args.Error(1)
 }
 
+func (m *mockTicketRepo) GetTicketCounts(
+	ctx context.Context, workspaceID, spaceID string, myPrincipalID *string,
+) (repository.TicketCounts, error) {
+	args := m.Called(ctx, workspaceID, spaceID, myPrincipalID)
+	c, _ := args.Get(0).(repository.TicketCounts)
+	return c, args.Error(1)
+}
+
 func (m *mockTicketRepo) ListTicketChildren(ctx context.Context, workspaceID, spaceID, parentID string) ([]domain.Ticket, error) {
 	args := m.Called(ctx, workspaceID, spaceID, parentID)
 	t, _ := args.Get(0).([]domain.Ticket)

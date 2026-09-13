@@ -15,6 +15,7 @@ import type {
   TicketCommentEditWire,
   TicketCommentSegment,
   TicketCommentWire,
+  TicketCounts,
   TicketHierarchyLevel,
   TicketListFilter,
   TicketAttachment,
@@ -208,11 +209,22 @@ const TicketRepository = {
     if (filter.statusId) params.statusId = filter.statusId;
     if (filter.typeId) params.typeId = filter.typeId;
     if (filter.assigneePrincipalId) params.assigneePrincipalId = filter.assigneePrincipalId;
+    if (filter.labelId) params.label = filter.labelId;
     if (filter.archived) params.archived = 'true';
+    if (filter.unassigned) params.unassigned = 'true';
+    if (filter.assignedToMe) params.assignedToMe = 'true';
+    if (filter.overdue) params.overdue = 'true';
+    if (filter.q) params.q = filter.q;
     const res = await apiClient.get<{ tickets: TicketWire[] }>(TICKET_API.tickets(workspaceSlug, spaceId), {
       params,
     });
     return toArray<TicketWire>(res.data?.tickets).map(normalizeTicket);
+  },
+
+  /** サイドバー「保存した絞り込み」の件数バッジ。 */
+  async fetchTicketCounts(workspaceSlug: string, spaceId: string): Promise<TicketCounts> {
+    const res = await apiClient.get<TicketCounts>(TICKET_API.ticketCounts(workspaceSlug, spaceId));
+    return res.data;
   },
 
   /** 直下の子だけ（孫は含まない）。並び順は一覧と同じ position 準拠。 */

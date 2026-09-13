@@ -343,7 +343,11 @@ export default function RichTextEditor({
   // 自分の編集で親が value を更新した場合は現在値と一致するので setContent しない
   // （＝キャレットが飛ばず、無限ループにもならない）。
   useEffect(() => {
-    if (!editor) return;
+    // isDestroyed も見る。破棄済みの Editor は内部の commandManager を手放しており、
+    // editor.commands に触れた瞬間に "Cannot read properties of null (reading 'commands')"
+    // で落ちる。選択中のチケットが差し替わる・パネルが閉じるといった、エディタの破棄と
+    // value の更新がほぼ同時に起きる経路で実際に踏んだ。
+    if (!editor || editor.isDestroyed) return;
     // id を含めた完全な値でエディタの現在の中身と比較する（fullDocString のコメント参照）。
     // lastValueRef（id 除外）とは比較しない — id だけが違う別ページへの遷移を
     // 「変更なし」と見逃さないため。filledValue は useMemo で value ごとに 1 回だけ
@@ -360,7 +364,8 @@ export default function RichTextEditor({
 
   // editable の変更を反映する。
   useEffect(() => {
-    editor?.setEditable(editable);
+    if (!editor || editor.isDestroyed) return;
+    editor.setEditable(editable);
   }, [editor, editable]);
 
   // 「増えたときだけ」フォーカスを移す。マウント時の値では動かない — ページを
@@ -370,7 +375,7 @@ export default function RichTextEditor({
     // editor がまだ無いときは**合図を消費しない**。ここで見たことにすると、
     // 初期化中に題名で Enter を押した合図が捨てられ、本文へ移らないまま終わる。
     if (!editor) return;
-    if (focusSignal > seenFocusSignal.current) {
+    if (!editor.isDestroyed && focusSignal > seenFocusSignal.current) {
       editor.commands.focus('start');
     }
     seenFocusSignal.current = focusSignal;

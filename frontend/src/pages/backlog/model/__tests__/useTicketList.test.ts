@@ -88,6 +88,41 @@ describe('useTicketList', () => {
     expect(result.current.tickets).toHaveLength(1);
   });
 
+  it('保存した絞り込み(unassigned/assignedToMe/overdue/q)をそのまま渡す', async () => {
+    const { result } = renderHook(() =>
+      useTicketList(SLUG, SPACE, { archived: false, unassigned: true, overdue: true, q: '認証' }),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(hoisted.fetchTickets).toHaveBeenCalledWith(SLUG, SPACE, {
+      archived: false,
+      statusId: undefined,
+      typeId: undefined,
+      assigneePrincipalId: undefined,
+      labelId: undefined,
+      unassigned: true,
+      assignedToMe: undefined,
+      overdue: true,
+      q: '認証',
+    });
+  });
+
+  it('絞り込みが変わると取り直す(キーに含めている)', async () => {
+    const { result, rerender } = renderHook(
+      ({ assignedToMe }) => useTicketList(SLUG, SPACE, { archived: false, assignedToMe }),
+      { initialProps: { assignedToMe: false } },
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    hoisted.fetchTickets.mockClear();
+
+    rerender({ assignedToMe: true });
+    await waitFor(() => expect(hoisted.fetchTickets).toHaveBeenCalledTimes(1));
+    expect(hoisted.fetchTickets).toHaveBeenCalledWith(
+      SLUG,
+      SPACE,
+      expect.objectContaining({ assignedToMe: true }),
+    );
+  });
+
   it('スペースを素早く切り替えると、前のスペースの遅れた応答は捨てる', async () => {
     let resolveFirst: (tickets: Ticket[]) => void = () => {};
     const firstResponse = new Promise<Ticket[]>((resolve) => {

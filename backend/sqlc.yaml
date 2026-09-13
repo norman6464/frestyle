@@ -58,7 +58,7 @@ sql:
         package: "sqlcgen"
         out: "internal/adapter/persistence/sqlcgen"
         sql_package: "database/sql"
-        # sql_package を "pgx/v5" にはしない（2026-08 に検討したうえで見送った）。
+        # sql_package を "pgx/v5" にはしない（検討したうえで見送った）。
         # 同じ検討を誰かが一から繰り返さないよう、判断と再検討の条件をここに残す。
         #
         # pgx/v5 ネイティブにしたときの利点:
@@ -169,7 +169,7 @@ sql:
           # ずれる場所が無くなる（比較・大小は 'YYYY-MM-DD' の辞書順が日付順と一致する）。
           #
           # NULL 可の側は sql.NullString ではなく internal/adapter/persistence/pgtext.NullDate
-          # を使う。理由（2026-09-09・段 1 で実機発見）: pgx の stdlib（database/sql）互換層は
+          # を使う。理由（実機確認済み）: pgx の stdlib（database/sql）互換層は
           # date 型（OID 1082）を宛先の Go 型に関わらず内部で time.Time にデコードしてから
           # driver.Value として渡す（stdlib/sql.go の Rows.Next がこの OID をハードコードで
           # pgtype.Date に読み、.Value() で time.Time化する。TypeMap.RegisterType で OID の
@@ -187,8 +187,8 @@ sql:
           # due_date を持つ行の scan がそのまま失敗する。ドライバの型変換を信用しない
           # Scanner をここに置く方が、クエリを増やさずに 1 箇所で閉じる。
           #
-          # この設定は date 列が 1 つも無い時点（2026-09-09・チケットの段 0）で入れた。
-          # 生成物は変わらないが、段 1 で date 列を足した瞬間から効く。**列を足してから
+          # この設定は date 列が 1 つも無い時点で先回りして入れた。
+          # 生成物は変わらないが、date 列を足した瞬間から効く。**列を足してから
           # 気づく類の欠陥ではない**（ローカルと CI では最後まで再現しないため、
           # 本番で日付が 1 日ずれて初めて分かる）ので、列より先に置いている。
           - db_type: "date"

@@ -1998,9 +1998,14 @@ cand AS (
       AND pg.archived_at IS NULL
       AND (
         pg.title ILIKE ('%' || $3::text || '%')
+        OR word_similarity($3::text, pg.title) > 0.6
         OR EXISTS (
           SELECT 1 FROM page_search ps
-          WHERE ps.page_id = pg.id AND ps.body ILIKE ('%' || $3::text || '%')
+          WHERE ps.page_id = pg.id
+            AND (
+              ps.body ILIKE ('%' || $3::text || '%')
+              OR word_similarity($3::text, ps.body) > 0.6
+            )
         )
       )
     ORDER BY pg.title, pg.id
@@ -2103,10 +2108,9 @@ type SearchWorkspacePageViewFactsRow struct {
 // （LIKE の既定のエスケープ文字はバックスラッシュ）。生で渡すと「%」1 文字で全件一致になり、
 // 候補の天井まで無関係な行が埋まる。
 //
-// 索引について: 部分一致（中間一致）は B-tree では引けないため、この絞り込みは
-// workspace_id の索引で範囲を狭めたうえでの逐次比較になる。現状の規模（1 ワークスペース
-// 数百〜数千ページ）では十分速い。伸びたら pg_trgm の GIN を検討する（拡張が要るので
-// そのときに判断する）。
+// 索引について: title / page_search.body に pg_trgm の GIN トライグラム索引を張っている
+// （schema.hcl 冒頭の「pg_trgm 拡張について」参照）。ILIKE '%needle%' の高速化用で、
+// あいまい検索（word_similarity）は下の cand CTE で別途 OR している。
 //
 // 表の別名はクエリ全体で一意にしてある（pr / pg / spx / c …）。CTE ごとに同じ
 // 別名（p 等）を使い回すと sqlc の列解決が別の CTE の表に混線して
@@ -2116,9 +2120,13 @@ type SearchWorkspacePageViewFactsRow struct {
 // いない行（新規ページ・再構築前）は EXISTS が単に偽になるだけで、候補から漏れるだけ
 // ＝ フェイルセーフ（誤って見せることはない）。
 //
-// pg_trgm の GIN 索引は使わない（schema.hcl の page_search コメント参照 — Atlas v1.3.0 の
-// `extension` ブロックがログイン必須の Pro 限定機能で使えなかった）。ILIKE の中間一致は
-// 索引が効かず全表走査になるが、結果は正しい。現状の規模では許容する。
+// ILIKE '%needle%' は中間一致（needle を含む題名・本文）を確実に拾う。それだけでは
+// 表記ゆれ・打ち間違いを拾えないため、word_similarity(needle, 対象) > 0.6 を OR で足す
+// （schema.hcl 冒頭の「pg_trgm 拡張について」参照。しきい値は word_similarity の既定値を
+// 固定値で使う。GUC に頼らない理由も同所）。word_similarity は「対象の中で needle に最も
+// 近い部分文字列」を見るため、similarity() と違って対象が needle より長くても punished
+// されない（similarity('認証','認証コード') = 0.29 で既定しきい値 0.3 をわずかに割るが、
+// word_similarity ならこの手の中間一致寄りの短い needle でも正しく拾える）。
 // ページ付与は経路（自分と祖先）を辿るので page_id ごとに値が変わる。
 // 「最も近い段」は見ない — 付与に降格は無く、近い付与が遠い付与を弱めることはないため。
 //

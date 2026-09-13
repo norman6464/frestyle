@@ -40,6 +40,7 @@ export type {
   TicketResolution,
   TicketHierarchyLevel,
   TicketListFilter,
+  TicketCounts,
   TicketKey,
   ResolvedTicket,
   EnableTicketsResult,

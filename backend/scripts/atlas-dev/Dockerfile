@@ -1,0 +1,13 @@
+# Atlas の --dev-url 専用の使い捨てイメージ（backend/Makefile の ATLAS_DEV_URL）。
+#
+# schema.hcl は pg_trgm の GIN トライグラム索引（ops = gin_trgm_ops）を宣言するため、
+# 素の postgres イメージを dev-url にすると「operator class ... does not exist」で
+# schema-gen / schema-plan / schema-apply が落ちる。かといって schema.hcl 側で
+# `extension "pg_trgm" {}` は宣言できない（Atlas OSS 版 CLI は `extension` ブロックが
+# ログイン必須の Pro 限定機能。実測済み）。
+#
+# そこで dev-url にだけ、起動時に pg_trgm を作成済みの自前イメージを使う。
+# 01-extensions.sql は backend/scripts/local-db-init/ と全く同じファイル
+# （COPY で共有するだけで内容の複製はしない。文言がズレると気づけないため）。
+FROM public.ecr.aws/docker/library/postgres:17.6-alpine
+COPY local-db-init/01-extensions.sql /docker-entrypoint-initdb.d/01-extensions.sql

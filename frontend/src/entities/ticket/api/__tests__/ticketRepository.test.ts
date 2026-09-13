@@ -83,6 +83,20 @@ describe('TicketRepository.fetchTickets', () => {
     });
   });
 
+  it('保存した絞り込み(unassigned/assignedToMe/overdue/q/labelId)もクエリパラメータへ渡す', async () => {
+    mockGet.mockResolvedValue({ data: { tickets: [] } });
+    await TicketRepository.fetchTickets('acme', 's-1', {
+      labelId: 'l-1',
+      unassigned: true,
+      assignedToMe: true,
+      overdue: true,
+      q: '認証',
+    });
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/spaces/s-1/tickets', {
+      params: { label: 'l-1', unassigned: 'true', assignedToMe: 'true', overdue: 'true', q: '認証' },
+    });
+  });
+
   it('値がある omitempty フィールドはそのまま通す', async () => {
     mockGet.mockResolvedValue({
       data: { tickets: [wireTicket({ parentId: 't-0', assigneePrincipalId: 'p-1' })] },
@@ -90,6 +104,15 @@ describe('TicketRepository.fetchTickets', () => {
     const [ticket] = await TicketRepository.fetchTickets('acme', 's-1');
     expect(ticket.parentId).toBe('t-0');
     expect(ticket.assigneePrincipalId).toBe('p-1');
+  });
+});
+
+describe('TicketRepository.fetchTicketCounts', () => {
+  it('GET .../tickets/counts を叩き、応答をそのまま返す', async () => {
+    mockGet.mockResolvedValue({ data: { total: 10, assignedToMe: 3, overdue: 1, unassigned: 2 } });
+    const counts = await TicketRepository.fetchTicketCounts('acme', 's-1');
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/spaces/s-1/tickets/counts');
+    expect(counts).toEqual({ total: 10, assignedToMe: 3, overdue: 1, unassigned: 2 });
   });
 });
 
