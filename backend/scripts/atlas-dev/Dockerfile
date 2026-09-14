@@ -15,3 +15,8 @@
 FROM public.ecr.aws/docker/library/postgres:17.6-alpine
 COPY local-db-init/01-extensions.sql /docker-entrypoint-initdb.d/01-extensions.sql
 COPY atlas-dev/02-template1.sh /docker-entrypoint-initdb.d/02-template1.sh
+
+# 使い捨ての dev-url 専用イメージでも root では動かさない（trivy DS-0002）。
+# 公式イメージの entrypoint は非 root でも initdb まで通る（/var/lib/postgresql/data は
+# イメージ側で postgres 所有のため、匿名ボリュームもその所有を引き継ぐ）。
+USER postgres
