@@ -3276,9 +3276,6 @@ table "ticket_sprint_ranks" {
     on_update   = NO_ACTION
     on_delete   = CASCADE
   }
-  index "idx_ticket_sprint_ranks_sprint_position" {
-    columns = [column.workspace_id, column.sprint_id, column.position]
-  }
   # 同じスプリントの中で順位が重複しない。
   unique "uq_ticket_sprint_ranks_sprint_position" {
     columns = [column.workspace_id, column.sprint_id, column.position]
@@ -3572,6 +3569,15 @@ table "ticket_watchers" {
     on_update   = NO_ACTION
     on_delete   = CASCADE
   }
+  # 監視者が実在することを DB に守らせる（user_id を持つ他の表と同じ）。無いと、
+  # 居ないユーザーの監視行を作れてしまい、退会などで users の行が消えたときに
+  # 取り残される（件数が実際より多く出る・居ない人へ通知が向く）。
+  foreign_key "fk_ticket_watchers_user" {
+    columns     = [column.user_id]
+    ref_columns = [table.users.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
   # 「自分が監視しているチケット」を引くための索引。
   index "idx_ticket_watchers_user" {
     columns = [column.workspace_id, column.user_id]
@@ -3644,9 +3650,6 @@ table "ticket_backlog_ranks" {
     on_delete   = CASCADE
   }
   # 一覧はプロジェクト単位で position 順に引く。
-  index "idx_ticket_backlog_ranks_project_position" {
-    columns = [column.workspace_id, column.project_id, column.position]
-  }
   # 同じプロジェクトの中で順位が重複しない。同時に同じ場所へ移動したら片方が落ちる
   # （usecase 側が 1 回だけ位置を取り直して再試行する）。
   unique "uq_ticket_backlog_ranks_project_position" {
