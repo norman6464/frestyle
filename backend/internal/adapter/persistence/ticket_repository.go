@@ -149,6 +149,10 @@ func toDomainTicket(row sqlcgen.Ticket, rankPosition string) domain.Ticket {
 		id := row.ParentID.UUID.String()
 		t.ParentID = &id
 	}
+	if row.TeamID.Valid {
+		id := row.TeamID.UUID.String()
+		t.TeamID = &id
+	}
 	if row.StartDate.Valid {
 		s := row.StartDate.String
 		t.StartDate = &s
@@ -752,6 +756,7 @@ func ticketOfGetRow(row sqlcgen.GetTicketRow) sqlcgen.Ticket {
 		ID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID, Number: row.Number,
 		TypeID: row.TypeID, StatusID: row.StatusID, ParentID: row.ParentID, Title: row.Title,
 		Doc: row.Doc, PlainText: row.PlainText, Priority: row.Priority,
+		StoryPoints: row.StoryPoints, TeamID: row.TeamID,
 		StartDate: row.StartDate, DueDate: row.DueDate,
 		ClosedAt: row.ClosedAt, Resolution: row.Resolution,
 		CreatedByUserID: row.CreatedByUserID, ArchivedAt: row.ArchivedAt, DeletedAt: row.DeletedAt,
@@ -764,6 +769,7 @@ func ticketOfListRow(row sqlcgen.ListTicketsRow) sqlcgen.Ticket {
 		ID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID, Number: row.Number,
 		TypeID: row.TypeID, StatusID: row.StatusID, ParentID: row.ParentID, Title: row.Title,
 		Doc: row.Doc, PlainText: row.PlainText, Priority: row.Priority,
+		StoryPoints: row.StoryPoints, TeamID: row.TeamID,
 		StartDate: row.StartDate, DueDate: row.DueDate,
 		ClosedAt: row.ClosedAt, Resolution: row.Resolution,
 		CreatedByUserID: row.CreatedByUserID, ArchivedAt: row.ArchivedAt, DeletedAt: row.DeletedAt,
@@ -774,6 +780,7 @@ func ticketOfListRow(row sqlcgen.ListTicketsRow) sqlcgen.Ticket {
 // ticketOfParentChainRow は親チェーンの行を Ticket へ写す。space_id を選ばなくなったので
 // 素の型変換ではなく列ごとに詰める（ticketOfListRow と同じ形）。
 func ticketOfParentChainRow(row sqlcgen.ListTicketParentChainRow) sqlcgen.Ticket {
+	// 親チェーンはパンくず用で、見積り・担当チームは選んでいない（行型にも無い）。
 	return sqlcgen.Ticket{
 		ID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID, Number: row.Number,
 		TypeID: row.TypeID, StatusID: row.StatusID, ParentID: row.ParentID, Title: row.Title,
@@ -790,6 +797,7 @@ func ticketOfChildrenRow(row sqlcgen.ListTicketChildrenRow) sqlcgen.Ticket {
 		ID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID, Number: row.Number,
 		TypeID: row.TypeID, StatusID: row.StatusID, ParentID: row.ParentID, Title: row.Title,
 		Doc: row.Doc, PlainText: row.PlainText, Priority: row.Priority,
+		StoryPoints: row.StoryPoints, TeamID: row.TeamID,
 		StartDate: row.StartDate, DueDate: row.DueDate,
 		ClosedAt: row.ClosedAt, Resolution: row.Resolution,
 		CreatedByUserID: row.CreatedByUserID, ArchivedAt: row.ArchivedAt, DeletedAt: row.DeletedAt,

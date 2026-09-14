@@ -36,6 +36,11 @@ type Ticket struct {
 	// StoryPoints は見積りの大きさ。未見積りは nil（0 とは別物 —— 0 は「やることが無い」、
 	// nil は「まだ測っていない」）。刻み方は現場ごとなので値そのものは縛らない（上限だけ）。
 	StoryPoints *int `json:"storyPoints,omitempty"`
+
+	// TeamID は担当チーム（tickets.team_id）。未設定は nil。
+	// 担当（1 人・責任の所在）とは別で、こちらは「どの塊の仕事か」を表す。
+	// 選べるのは同じプロジェクトのチームだけ —— 複合 FK が DB 側で守る。
+	TeamID *string `json:"teamId,omitempty"`
 	// StartDate / DueDate は 'YYYY-MM-DD' の文字列（Ⅳ-K: time.Time だと本番の simple protocol
 	// で 1 日ずれるため）。
 	StartDate *string `json:"startDate,omitempty"`

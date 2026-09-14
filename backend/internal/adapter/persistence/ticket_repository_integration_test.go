@@ -784,6 +784,75 @@ func TestTicketRepository_Integration(t *testing.T) {
 	//
 	// 見積りは「未見積り（NULL）」と「0 ポイント」を別物として往復できること。番兵の 0 で
 	// 潰していないかは、実際に書いて読み直さないと分からない。
+	t.Run("見積りと担当チームは読み直しても消えない", func(t *testing.T) {
+		ws, project := setup(t)
+		statusID, typeID := seedTicketMasterViaRepo(ctx, t, repo, ws, project)
+		teams := persistence.NewTeamRepository(sqlDB)
+		team, err := teams.CreateTeam(ctx, ws, project, "基盤")
+		require.NoError(t, err)
+
+		parent, err := repo.CreateTicket(ctx, repository.TicketCreateInput{
+			WorkspaceID: ws, ProjectID: project, TypeID: typeID, StatusID: statusID,
+			Title: "親", Doc: []byte(`{"type":"doc","content":[]}`),
+			Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+		})
+		require.NoError(t, err)
+		child, err := repo.CreateTicket(ctx, repository.TicketCreateInput{
+			WorkspaceID: ws, ProjectID: project, TypeID: typeID, StatusID: statusID, ParentID: &parent.ID,
+			Title: "子", Doc: []byte(`{"type":"doc","content":[]}`),
+			Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+		})
+		require.NoError(t, err)
+
+		five := 5
+		// UpdateTicket は部分更新ではなく列をまとめて書くので、親も一緒に渡す
+		// （ParentID を省くと nil ＝「親を外す」になり、子の一覧から消える）。
+		_, err = repo.UpdateTicket(ctx, ws, child.ID, repository.TicketUpdateFields{
+			TypeID: typeID, ParentID: &parent.ID, Title: child.Title, Doc: child.Doc, PlainText: "",
+			Priority: domain.TicketPriorityDefault, StoryPoints: &five,
+		})
+		require.NoError(t, err)
+		withTeam, err := teams.SetTicketTeam(ctx, ws, child.ID, team.ID)
+		require.NoError(t, err)
+		require.NotNil(t, withTeam.TeamID, "付け替えた結果がその場で返ること")
+		assert.Equal(t, team.ID, *withTeam.TeamID)
+
+		// ここが本題。書いた直後の応答ではなく、**読み直したとき**に残っているか。
+		// 一覧・詳細・子の 3 経路は tickets の行型ではなく専用の行型を通るので、
+		// 写し取りで列を詰め忘れると、保存はできているのに画面から消える
+		// （実際に見積りと担当チームの両方が落ちていた）。
+		detail, err := repo.FindTicketWithAssignee(ctx, ws, child.ID)
+		require.NoError(t, err)
+		require.NotNil(t, detail.Ticket.StoryPoints, "詳細で見積りが消えないこと")
+		assert.Equal(t, 5, *detail.Ticket.StoryPoints)
+		require.NotNil(t, detail.Ticket.TeamID, "詳細で担当チームが消えないこと")
+		assert.Equal(t, team.ID, *detail.Ticket.TeamID)
+
+		list, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project})
+		require.NoError(t, err)
+		var listed *domain.Ticket
+		for i := range list {
+			if list[i].Ticket.ID == child.ID {
+				listed = &list[i].Ticket
+			}
+		}
+		require.NotNil(t, listed, "前提: 一覧に出ていること")
+		require.NotNil(t, listed.StoryPoints, "一覧で見積りが消えないこと")
+		assert.Equal(t, 5, *listed.StoryPoints)
+		require.NotNil(t, listed.TeamID, "一覧で担当チームが消えないこと")
+
+		children, err := repo.ListTicketChildren(ctx, ws, project, parent.ID)
+		require.NoError(t, err)
+		require.Len(t, children, 1)
+		require.NotNil(t, children[0].StoryPoints, "子の一覧で見積りが消えないこと")
+		require.NotNil(t, children[0].TeamID, "子の一覧で担当チームが消えないこと")
+
+		// 外すと未設定へ戻る（空文字は「外す」の意味）。
+		cleared, err := teams.SetTicketTeam(ctx, ws, child.ID, "")
+		require.NoError(t, err)
+		assert.Nil(t, cleared.TeamID)
+	})
+
 	t.Run("見積りは未設定と0を区別して往復する", func(t *testing.T) {
 		ws, project := setup(t)
 		statusID, typeID := seedTicketMasterViaRepo(ctx, t, repo, ws, project)

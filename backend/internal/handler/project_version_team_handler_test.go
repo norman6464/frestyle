@@ -246,8 +246,7 @@ func (f *teamFakeRepo) ListTeamMembers(_ context.Context, _, teamID string) ([]d
 	return out, nil
 }
 
-// SetTicketTeam は差し替えたチケットを返す。domain.Ticket は team を持たないので
-// （下の「担当チームは応答に出ない」参照）、返せるのは id までになる。
+// SetTicketTeam は差し替えたあとのチケットを返す（画面がその場で描けるように）。
 func (f *teamFakeRepo) SetTicketTeam(_ context.Context, _, ticketID, teamID string) (*domain.Ticket, error) {
 	if teamID == "" {
 		return &domain.Ticket{ID: ticketID}, nil
@@ -255,7 +254,7 @@ func (f *teamFakeRepo) SetTicketTeam(_ context.Context, _, ticketID, teamID stri
 	if _, ok := f.teams[teamID]; !ok {
 		return nil, repository.ErrTeamNotFound
 	}
-	return &domain.Ticket{ID: ticketID}, nil
+	return &domain.Ticket{ID: ticketID, TeamID: &teamID}, nil
 }
 
 type versionTeamFixture struct {
@@ -475,16 +474,15 @@ func Test_チケットの担当チーム_空なら外す(t *testing.T) {
 
 	w := f.do(t, http.MethodPut, ticketTeam, `{"teamId":""}`)
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "t-1", decodeJSON[domain.Ticket](t, w).ID)
+	assert.Nil(t, decodeJSON[domain.Ticket](t, w).TeamID, "外したら未設定で返る")
 
 	w = f.do(t, http.MethodPut, ticketTeam, `{"teamId":"居ない"}`)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-// 担当チームは **応答に出ない**。domain.Ticket に team の欄が無いため、付け替えは
-// 成功しても返ってくる JSON には出てこない（DB の tickets.team_id には入る）。
-// 画面が付け替えた結果をその場で描けないので、欄を足すまでは片道の操作になる。
-func Test_チケットの担当チーム_応答にはまだ出てこない(t *testing.T) {
+// 付け替えた結果は応答に出る。出ないと画面がその場で描けず、付け替えが
+// 片道の操作になる（domain.Ticket に欄が無く、実際にそうなっていた）。
+func Test_チケットの担当チーム_付け替えた結果が応答に出る(t *testing.T) {
 	f := newVersionTeamFixture(kbUserID, domain.GrantRoleAdmin)
 	w := f.do(t, http.MethodPost, teamBase, `{"name":"基盤"}`)
 	require.Equal(t, http.StatusCreated, w.Code)
@@ -492,8 +490,10 @@ func Test_チケットの担当チーム_応答にはまだ出てこない(t *te
 
 	w = f.do(t, http.MethodPut, pvWSBase+"/tickets/t-1/team", `{"teamId":"`+created.ID+`"}`)
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.NotContains(t, w.Body.String(), "teamId",
-		"欄を足したらこの検査は外して、付け替えた結果が返ることを見ること")
+	got := decodeJSON[domain.Ticket](t, w)
+	require.NotNil(t, got.TeamID)
+	assert.Equal(t, created.ID, *got.TeamID)
+	assert.Contains(t, w.Body.String(), `"teamId"`, "JSON の鍵はフロントが読む teamId")
 }
 
 func Test_チーム_作るのはadminだけ(t *testing.T) {
