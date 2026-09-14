@@ -755,8 +755,6 @@ CREATE TABLE "ticket_backlog_ranks" (
   CONSTRAINT "fk_ticket_backlog_ranks_ticket" FOREIGN KEY ("workspace_id", "ticket_id") REFERENCES "tickets" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT "ck_ticket_backlog_ranks_position_not_empty" CHECK ("position" <> ''::text)
 );
--- Create index "idx_ticket_backlog_ranks_project_position" to table: "ticket_backlog_ranks"
-CREATE INDEX "idx_ticket_backlog_ranks_project_position" ON "ticket_backlog_ranks" ("workspace_id", "project_id", "position");
 -- Create "ticket_change_groups" table
 CREATE TABLE "ticket_change_groups" (
   "id" uuid NOT NULL,
@@ -917,8 +915,6 @@ CREATE TABLE "ticket_sprint_ranks" (
   CONSTRAINT "fk_ticket_sprint_ranks_ticket" FOREIGN KEY ("workspace_id", "ticket_id") REFERENCES "tickets" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT "ck_ticket_sprint_ranks_position_not_empty" CHECK ("position" <> ''::text)
 );
--- Create index "idx_ticket_sprint_ranks_sprint_position" to table: "ticket_sprint_ranks"
-CREATE INDEX "idx_ticket_sprint_ranks_sprint_position" ON "ticket_sprint_ranks" ("workspace_id", "sprint_id", "position");
 -- Create "ticket_status_transitions" table
 CREATE TABLE "ticket_status_transitions" (
   "id" uuid NOT NULL,
@@ -958,7 +954,8 @@ CREATE TABLE "ticket_watchers" (
   "user_id" bigint NOT NULL,
   "created_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("workspace_id", "ticket_id", "user_id"),
-  CONSTRAINT "fk_ticket_watchers_ticket" FOREIGN KEY ("workspace_id", "ticket_id") REFERENCES "tickets" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT "fk_ticket_watchers_ticket" FOREIGN KEY ("workspace_id", "ticket_id") REFERENCES "tickets" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_ticket_watchers_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
 );
 -- Create index "idx_ticket_watchers_user" to table: "ticket_watchers"
 CREATE INDEX "idx_ticket_watchers_user" ON "ticket_watchers" ("workspace_id", "user_id");
