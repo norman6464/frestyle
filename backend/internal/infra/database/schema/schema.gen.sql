@@ -162,26 +162,6 @@ CREATE TABLE "comments" (
 );
 -- Create index "idx_comments_thread" to table: "comments"
 CREATE INDEX "idx_comments_thread" ON "comments" ("thread_id");
--- Create "labels" table
-CREATE TABLE "labels" (
-  "id" uuid NOT NULL,
-  "workspace_id" uuid NOT NULL,
-  "space_id" uuid NOT NULL,
-  "name" character varying(64) NOT NULL,
-  "name_key" character varying(64) NULL GENERATED ALWAYS AS (lower(btrim((name)::text))) STORED,
-  "color" character varying(7) NOT NULL,
-  "created_at" timestamptz NOT NULL DEFAULT now(),
-  "updated_at" timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY ("id"),
-  CONSTRAINT "uq_labels_workspace_id" UNIQUE ("workspace_id", "id"),
-  CONSTRAINT "fk_labels_space" FOREIGN KEY ("workspace_id", "space_id") REFERENCES "spaces" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "ck_labels_color_hex" CHECK ((color)::text ~ '^#[0-9a-f]{6}$'::text),
-  CONSTRAINT "ck_labels_name_trimmed" CHECK (((name)::text = btrim((name)::text)) AND ((name)::text <> ''::text))
-);
--- Create index "idx_labels_workspace_space" to table: "labels"
-CREATE INDEX "idx_labels_workspace_space" ON "labels" ("workspace_id", "space_id");
--- Create index "uq_labels_space_name" to table: "labels"
-CREATE UNIQUE INDEX "uq_labels_space_name" ON "labels" ("space_id", "name_key");
 -- Create "membership_events" table
 CREATE TABLE "membership_events" (
   "id" uuid NOT NULL,
@@ -280,6 +260,22 @@ CREATE TABLE "page_grants" (
 );
 -- Create index "idx_page_grants_principal" to table: "page_grants"
 CREATE INDEX "idx_page_grants_principal" ON "page_grants" ("workspace_id", "principal_id");
+-- Create "labels" table
+CREATE TABLE "labels" (
+  "id" uuid NOT NULL,
+  "workspace_id" uuid NOT NULL,
+  "name" character varying(64) NOT NULL,
+  "name_key" character varying(64) NULL GENERATED ALWAYS AS (lower(btrim((name)::text))) STORED,
+  "color" character varying(7) NOT NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "uq_labels_workspace_id" UNIQUE ("workspace_id", "id"),
+  CONSTRAINT "ck_labels_color_hex" CHECK ((color)::text ~ '^#[0-9a-f]{6}$'::text),
+  CONSTRAINT "ck_labels_name_trimmed" CHECK (((name)::text = btrim((name)::text)) AND ((name)::text <> ''::text))
+);
+-- Create index "uq_labels_workspace_name" to table: "labels"
+CREATE UNIQUE INDEX "uq_labels_workspace_name" ON "labels" ("workspace_id", "name_key");
 -- Create "page_labels" table
 CREATE TABLE "page_labels" (
   "workspace_id" uuid NOT NULL,
@@ -400,11 +396,27 @@ CREATE TABLE "page_templates" (
 );
 -- Create index "idx_page_templates_workspace_id" to table: "page_templates"
 CREATE INDEX "idx_page_templates_workspace_id" ON "page_templates" ("workspace_id");
+-- Create "projects" table
+CREATE TABLE "projects" (
+  "id" uuid NOT NULL,
+  "workspace_id" uuid NOT NULL,
+  "key" character varying(64) NOT NULL,
+  "name" character varying(200) NOT NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "uq_projects_workspace_id" UNIQUE ("workspace_id", "id"),
+  CONSTRAINT "uq_projects_workspace_key" UNIQUE ("workspace_id", "key"),
+  CONSTRAINT "fk_projects_workspace" FOREIGN KEY ("workspace_id") REFERENCES "workspaces" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "ck_projects_key_len" CHECK ((char_length((key)::text) >= 1) AND (char_length((key)::text) <= 64))
+);
+-- Create index "idx_projects_workspace_id" to table: "projects"
+CREATE INDEX "idx_projects_workspace_id" ON "projects" ("workspace_id");
 -- Create "ticket_statuses" table
 CREATE TABLE "ticket_statuses" (
   "id" uuid NOT NULL,
   "workspace_id" uuid NOT NULL,
-  "space_id" uuid NOT NULL,
+  "project_id" uuid NOT NULL,
   "name" character varying(50) NOT NULL,
   "name_lower" character varying(50) NULL GENERATED ALWAYS AS (lower((name)::text)) STORED,
   "category" character varying(16) NOT NULL,
@@ -416,27 +428,44 @@ CREATE TABLE "ticket_statuses" (
   "created_at" timestamptz NOT NULL DEFAULT now(),
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
-  CONSTRAINT "uq_ticket_statuses_workspace_space_id" UNIQUE ("workspace_id", "space_id", "id"),
-  CONSTRAINT "fk_ticket_statuses_space" FOREIGN KEY ("workspace_id", "space_id") REFERENCES "spaces" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "uq_ticket_statuses_workspace_project_id" UNIQUE ("workspace_id", "project_id", "id"),
+  CONSTRAINT "fk_ticket_statuses_project" FOREIGN KEY ("workspace_id", "project_id") REFERENCES "projects" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT "ck_ticket_statuses_category" CHECK ((category)::text = ANY (ARRAY[('todo'::character varying)::text, ('in_progress'::character varying)::text, ('done'::character varying)::text])),
   CONSTRAINT "ck_ticket_statuses_color_hex" CHECK ((color)::text ~ '^#[0-9a-f]{6}$'::text),
   CONSTRAINT "ck_ticket_statuses_initial_active" CHECK (NOT (is_initial AND (archived_at IS NOT NULL))),
   CONSTRAINT "ck_ticket_statuses_name_trimmed" CHECK (((name)::text = btrim((name)::text)) AND ((name)::text <> ''::text)),
   CONSTRAINT "ck_ticket_statuses_position_not_empty" CHECK ("position" <> ''::text)
 );
--- Create index "idx_ticket_statuses_workspace_space" to table: "ticket_statuses"
-CREATE INDEX "idx_ticket_statuses_workspace_space" ON "ticket_statuses" ("workspace_id", "space_id");
--- Create index "uq_ticket_statuses_space_initial" to table: "ticket_statuses"
-CREATE UNIQUE INDEX "uq_ticket_statuses_space_initial" ON "ticket_statuses" ("space_id") WHERE (is_initial AND (archived_at IS NULL) AND (deleted_at IS NULL));
--- Create index "uq_ticket_statuses_space_name" to table: "ticket_statuses"
-CREATE UNIQUE INDEX "uq_ticket_statuses_space_name" ON "ticket_statuses" ("space_id", "name_lower") WHERE ((archived_at IS NULL) AND (deleted_at IS NULL));
--- Create index "uq_ticket_statuses_space_position" to table: "ticket_statuses"
-CREATE UNIQUE INDEX "uq_ticket_statuses_space_position" ON "ticket_statuses" ("space_id", "position") WHERE ((archived_at IS NULL) AND (deleted_at IS NULL));
+-- Create index "idx_ticket_statuses_workspace_project" to table: "ticket_statuses"
+CREATE INDEX "idx_ticket_statuses_workspace_project" ON "ticket_statuses" ("workspace_id", "project_id");
+-- Create index "uq_ticket_statuses_project_initial" to table: "ticket_statuses"
+CREATE UNIQUE INDEX "uq_ticket_statuses_project_initial" ON "ticket_statuses" ("project_id") WHERE (is_initial AND (archived_at IS NULL) AND (deleted_at IS NULL));
+-- Create index "uq_ticket_statuses_project_name" to table: "ticket_statuses"
+CREATE UNIQUE INDEX "uq_ticket_statuses_project_name" ON "ticket_statuses" ("project_id", "name_lower") WHERE ((archived_at IS NULL) AND (deleted_at IS NULL));
+-- Create index "uq_ticket_statuses_project_position" to table: "ticket_statuses"
+CREATE UNIQUE INDEX "uq_ticket_statuses_project_position" ON "ticket_statuses" ("project_id", "position") WHERE ((archived_at IS NULL) AND (deleted_at IS NULL));
+-- Create "teams" table
+CREATE TABLE "teams" (
+  "id" uuid NOT NULL,
+  "workspace_id" uuid NOT NULL,
+  "project_id" uuid NOT NULL,
+  "name" character varying(60) NOT NULL,
+  "name_lower" character varying(60) NULL GENERATED ALWAYS AS (lower((name)::text)) STORED,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "uq_teams_workspace_id" UNIQUE ("workspace_id", "id"),
+  CONSTRAINT "uq_teams_workspace_project_id" UNIQUE ("workspace_id", "project_id", "id"),
+  CONSTRAINT "fk_teams_project" FOREIGN KEY ("workspace_id", "project_id") REFERENCES "projects" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "ck_teams_name_not_blank" CHECK (btrim((name)::text) <> ''::text)
+);
+-- Create index "uq_teams_project_name" to table: "teams"
+CREATE UNIQUE INDEX "uq_teams_project_name" ON "teams" ("project_id", "name_lower");
 -- Create "ticket_types" table
 CREATE TABLE "ticket_types" (
   "id" uuid NOT NULL,
   "workspace_id" uuid NOT NULL,
-  "space_id" uuid NOT NULL,
+  "project_id" uuid NOT NULL,
   "name" character varying(50) NOT NULL,
   "name_lower" character varying(50) NULL GENERATED ALWAYS AS (lower((name)::text)) STORED,
   "color" character varying(7) NOT NULL,
@@ -450,8 +479,8 @@ CREATE TABLE "ticket_types" (
   "created_at" timestamptz NOT NULL DEFAULT now(),
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
-  CONSTRAINT "uq_ticket_types_workspace_space_id" UNIQUE ("workspace_id", "space_id", "id"),
-  CONSTRAINT "fk_ticket_types_space" FOREIGN KEY ("workspace_id", "space_id") REFERENCES "spaces" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "uq_ticket_types_workspace_project_id" UNIQUE ("workspace_id", "project_id", "id"),
+  CONSTRAINT "fk_ticket_types_project" FOREIGN KEY ("workspace_id", "project_id") REFERENCES "projects" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT "ck_ticket_types_color_hex" CHECK ((color)::text ~ '^#[0-9a-f]{6}$'::text),
   CONSTRAINT "ck_ticket_types_default_active" CHECK (NOT (is_default AND (archived_at IS NOT NULL))),
   CONSTRAINT "ck_ticket_types_hierarchy_level" CHECK ((hierarchy_level >= '-1'::integer) AND (hierarchy_level <= 1)),
@@ -460,19 +489,19 @@ CREATE TABLE "ticket_types" (
   CONSTRAINT "ck_ticket_types_template_doc" CHECK ((template_doc IS NULL) OR ((jsonb_typeof(template_doc) = 'object'::text) AND ((template_doc ->> 'type'::text) = 'doc'::text))),
   CONSTRAINT "ck_ticket_types_template_title_not_blank" CHECK ((template_title IS NULL) OR (btrim((template_title)::text) <> ''::text))
 );
--- Create index "idx_ticket_types_workspace_space" to table: "ticket_types"
-CREATE INDEX "idx_ticket_types_workspace_space" ON "ticket_types" ("workspace_id", "space_id");
--- Create index "uq_ticket_types_space_default" to table: "ticket_types"
-CREATE UNIQUE INDEX "uq_ticket_types_space_default" ON "ticket_types" ("space_id") WHERE (is_default AND (archived_at IS NULL) AND (deleted_at IS NULL));
--- Create index "uq_ticket_types_space_name" to table: "ticket_types"
-CREATE UNIQUE INDEX "uq_ticket_types_space_name" ON "ticket_types" ("space_id", "name_lower") WHERE ((archived_at IS NULL) AND (deleted_at IS NULL));
--- Create index "uq_ticket_types_space_position" to table: "ticket_types"
-CREATE UNIQUE INDEX "uq_ticket_types_space_position" ON "ticket_types" ("space_id", "position") WHERE ((archived_at IS NULL) AND (deleted_at IS NULL));
+-- Create index "idx_ticket_types_workspace_project" to table: "ticket_types"
+CREATE INDEX "idx_ticket_types_workspace_project" ON "ticket_types" ("workspace_id", "project_id");
+-- Create index "uq_ticket_types_project_default" to table: "ticket_types"
+CREATE UNIQUE INDEX "uq_ticket_types_project_default" ON "ticket_types" ("project_id") WHERE (is_default AND (archived_at IS NULL) AND (deleted_at IS NULL));
+-- Create index "uq_ticket_types_project_name" to table: "ticket_types"
+CREATE UNIQUE INDEX "uq_ticket_types_project_name" ON "ticket_types" ("project_id", "name_lower") WHERE ((archived_at IS NULL) AND (deleted_at IS NULL));
+-- Create index "uq_ticket_types_project_position" to table: "ticket_types"
+CREATE UNIQUE INDEX "uq_ticket_types_project_position" ON "ticket_types" ("project_id", "position") WHERE ((archived_at IS NULL) AND (deleted_at IS NULL));
 -- Create "tickets" table
 CREATE TABLE "tickets" (
   "id" uuid NOT NULL,
   "workspace_id" uuid NOT NULL,
-  "space_id" uuid NOT NULL,
+  "project_id" uuid NOT NULL,
   "number" bigint NOT NULL,
   "type_id" uuid NOT NULL,
   "status_id" uuid NOT NULL,
@@ -481,9 +510,10 @@ CREATE TABLE "tickets" (
   "doc" jsonb NOT NULL,
   "plain_text" text NOT NULL DEFAULT '',
   "priority" integer NOT NULL DEFAULT 2,
+  "story_points" integer NULL,
+  "team_id" uuid NULL,
   "start_date" date NULL,
   "due_date" date NULL,
-  "position" text NOT NULL COLLATE "C",
   "closed_at" timestamptz NULL,
   "resolution" character varying(20) NULL,
   "created_by_user_id" bigint NOT NULL,
@@ -492,22 +522,23 @@ CREATE TABLE "tickets" (
   "created_at" timestamptz NOT NULL DEFAULT now(),
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
-  CONSTRAINT "uq_tickets_space_number" UNIQUE ("workspace_id", "space_id", "number"),
+  CONSTRAINT "uq_tickets_project_number" UNIQUE ("workspace_id", "project_id", "number"),
   CONSTRAINT "uq_tickets_workspace_id" UNIQUE ("workspace_id", "id"),
-  CONSTRAINT "uq_tickets_workspace_space_id" UNIQUE ("workspace_id", "space_id", "id"),
+  CONSTRAINT "uq_tickets_workspace_project_id" UNIQUE ("workspace_id", "project_id", "id"),
   CONSTRAINT "fk_tickets_created_by" FOREIGN KEY ("created_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
-  CONSTRAINT "fk_tickets_parent" FOREIGN KEY ("workspace_id", "space_id", "parent_id") REFERENCES "tickets" ("workspace_id", "space_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "fk_tickets_space" FOREIGN KEY ("workspace_id", "space_id") REFERENCES "spaces" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "fk_tickets_status" FOREIGN KEY ("workspace_id", "space_id", "status_id") REFERENCES "ticket_statuses" ("workspace_id", "space_id", "id") ON UPDATE NO ACTION ON DELETE NO ACTION,
-  CONSTRAINT "fk_tickets_type" FOREIGN KEY ("workspace_id", "space_id", "type_id") REFERENCES "ticket_types" ("workspace_id", "space_id", "id") ON UPDATE NO ACTION ON DELETE NO ACTION,
+  CONSTRAINT "fk_tickets_parent" FOREIGN KEY ("workspace_id", "project_id", "parent_id") REFERENCES "tickets" ("workspace_id", "project_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_tickets_project" FOREIGN KEY ("workspace_id", "project_id") REFERENCES "projects" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_tickets_status" FOREIGN KEY ("workspace_id", "project_id", "status_id") REFERENCES "ticket_statuses" ("workspace_id", "project_id", "id") ON UPDATE NO ACTION ON DELETE NO ACTION,
+  CONSTRAINT "fk_tickets_team" FOREIGN KEY ("workspace_id", "project_id", "team_id") REFERENCES "teams" ("workspace_id", "project_id", "id") ON UPDATE NO ACTION ON DELETE NO ACTION,
+  CONSTRAINT "fk_tickets_type" FOREIGN KEY ("workspace_id", "project_id", "type_id") REFERENCES "ticket_types" ("workspace_id", "project_id", "id") ON UPDATE NO ACTION ON DELETE NO ACTION,
   CONSTRAINT "ck_tickets_closed_pair" CHECK ((closed_at IS NULL) = (resolution IS NULL)),
   CONSTRAINT "ck_tickets_dates_ordered" CHECK ((start_date IS NULL) OR (due_date IS NULL) OR (start_date <= due_date)),
   CONSTRAINT "ck_tickets_doc" CHECK ((jsonb_typeof(doc) = 'object'::text) AND ((doc ->> 'type'::text) = 'doc'::text)),
   CONSTRAINT "ck_tickets_number_positive" CHECK (number > 0),
   CONSTRAINT "ck_tickets_parent_not_self" CHECK ((parent_id IS NULL) OR (parent_id <> id)),
-  CONSTRAINT "ck_tickets_position_not_empty" CHECK ("position" <> ''::text),
   CONSTRAINT "ck_tickets_priority" CHECK (priority = ANY (ARRAY[1, 2, 3])),
   CONSTRAINT "ck_tickets_resolution" CHECK ((resolution IS NULL) OR ((resolution)::text = ANY (ARRAY[('done'::character varying)::text, ('wont_do'::character varying)::text, ('invalid'::character varying)::text, ('duplicate'::character varying)::text, ('cannot_reproduce'::character varying)::text]))),
+  CONSTRAINT "ck_tickets_story_points_range" CHECK ((story_points IS NULL) OR ((story_points >= 0) AND (story_points <= 1000))),
   CONSTRAINT "ck_tickets_title_not_blank" CHECK (btrim((title)::text) <> ''::text)
 );
 -- Create index "idx_tickets_archived_at" to table: "tickets"
@@ -518,14 +549,12 @@ CREATE INDEX "idx_tickets_deleted_at" ON "tickets" ("deleted_at");
 CREATE INDEX "idx_tickets_parent_id" ON "tickets" ("parent_id");
 -- Create index "idx_tickets_plain_text_trgm" to table: "tickets"
 CREATE INDEX "idx_tickets_plain_text_trgm" ON "tickets" USING GIN ("plain_text" gin_trgm_ops);
--- Create index "idx_tickets_space_status" to table: "tickets"
-CREATE INDEX "idx_tickets_space_status" ON "tickets" ("workspace_id", "space_id", "status_id");
--- Create index "idx_tickets_space_type" to table: "tickets"
-CREATE INDEX "idx_tickets_space_type" ON "tickets" ("workspace_id", "space_id", "type_id");
+-- Create index "idx_tickets_project_status" to table: "tickets"
+CREATE INDEX "idx_tickets_project_status" ON "tickets" ("workspace_id", "project_id", "status_id");
+-- Create index "idx_tickets_project_type" to table: "tickets"
+CREATE INDEX "idx_tickets_project_type" ON "tickets" ("workspace_id", "project_id", "type_id");
 -- Create index "idx_tickets_title_trgm" to table: "tickets"
 CREATE INDEX "idx_tickets_title_trgm" ON "tickets" USING GIN ("title" gin_trgm_ops);
--- Create index "uq_tickets_space_position" to table: "tickets"
-CREATE UNIQUE INDEX "uq_tickets_space_position" ON "tickets" ("space_id", "position") WHERE ((archived_at IS NULL) AND (deleted_at IS NULL));
 -- Create "page_ticket_links" table
 CREATE TABLE "page_ticket_links" (
   "source_block_id" uuid NOT NULL,
@@ -576,6 +605,28 @@ CREATE TABLE "profiles" (
   PRIMARY KEY ("user_id"),
   CONSTRAINT "fk_profiles_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
 );
+-- Create "project_versions" table
+CREATE TABLE "project_versions" (
+  "id" uuid NOT NULL,
+  "workspace_id" uuid NOT NULL,
+  "project_id" uuid NOT NULL,
+  "name" character varying(60) NOT NULL,
+  "name_lower" character varying(60) NULL GENERATED ALWAYS AS (lower((name)::text)) STORED,
+  "released_at" timestamptz NULL,
+  "position" text NOT NULL COLLATE "C",
+  "archived_at" timestamptz NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "uq_project_versions_workspace_project_id" UNIQUE ("workspace_id", "project_id", "id"),
+  CONSTRAINT "fk_project_versions_project" FOREIGN KEY ("workspace_id", "project_id") REFERENCES "projects" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "ck_project_versions_name_not_blank" CHECK (btrim((name)::text) <> ''::text),
+  CONSTRAINT "ck_project_versions_position_not_empty" CHECK ("position" <> ''::text)
+);
+-- Create index "idx_project_versions_project_position" to table: "project_versions"
+CREATE INDEX "idx_project_versions_project_position" ON "project_versions" ("workspace_id", "project_id", "position");
+-- Create index "uq_project_versions_project_name" to table: "project_versions"
+CREATE UNIQUE INDEX "uq_project_versions_project_name" ON "project_versions" ("project_id", "name_lower") WHERE (archived_at IS NULL);
 -- Create "share_links" table
 CREATE TABLE "share_links" (
   "id" uuid NOT NULL,
@@ -620,6 +671,40 @@ CREATE TABLE "space_grants" (
 );
 -- Create index "idx_space_grants_principal" to table: "space_grants"
 CREATE INDEX "idx_space_grants_principal" ON "space_grants" ("workspace_id", "principal_id");
+-- Create "sprints" table
+CREATE TABLE "sprints" (
+  "id" uuid NOT NULL,
+  "workspace_id" uuid NOT NULL,
+  "project_id" uuid NOT NULL,
+  "name" character varying(200) NOT NULL,
+  "state" character varying(16) NOT NULL,
+  "start_date" date NULL,
+  "end_date" date NULL,
+  "position" text NOT NULL COLLATE "C",
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "uq_sprints_project_position" UNIQUE ("workspace_id", "project_id", "position"),
+  CONSTRAINT "uq_sprints_workspace_id" UNIQUE ("workspace_id", "id"),
+  CONSTRAINT "fk_sprints_project" FOREIGN KEY ("workspace_id", "project_id") REFERENCES "projects" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "ck_sprints_name_not_empty" CHECK (btrim((name)::text) <> ''::text),
+  CONSTRAINT "ck_sprints_period_order" CHECK ((start_date IS NULL) OR (end_date IS NULL) OR (start_date <= end_date)),
+  CONSTRAINT "ck_sprints_state" CHECK ((state)::text = ANY (ARRAY[('planned'::character varying)::text, ('active'::character varying)::text, ('completed'::character varying)::text]))
+);
+-- Create index "idx_sprints_project_position" to table: "sprints"
+CREATE INDEX "idx_sprints_project_position" ON "sprints" ("workspace_id", "project_id", "position");
+-- Create "team_members" table
+CREATE TABLE "team_members" (
+  "workspace_id" uuid NOT NULL,
+  "team_id" uuid NOT NULL,
+  "user_id" bigint NOT NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("workspace_id", "team_id", "user_id"),
+  CONSTRAINT "fk_team_members_team" FOREIGN KEY ("workspace_id", "team_id") REFERENCES "teams" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_team_members_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create index "idx_team_members_user" to table: "team_members"
+CREATE INDEX "idx_team_members_user" ON "team_members" ("user_id");
 -- Create "ticket_assignments" table
 CREATE TABLE "ticket_assignments" (
   "workspace_id" uuid NOT NULL,
@@ -656,6 +741,22 @@ CREATE TABLE "ticket_attachments" (
 );
 -- Create index "idx_ticket_attachments_ticket_created" to table: "ticket_attachments"
 CREATE INDEX "idx_ticket_attachments_ticket_created" ON "ticket_attachments" ("ticket_id", "created_at");
+-- Create "ticket_backlog_ranks" table
+CREATE TABLE "ticket_backlog_ranks" (
+  "workspace_id" uuid NOT NULL,
+  "project_id" uuid NOT NULL,
+  "ticket_id" uuid NOT NULL,
+  "position" text NOT NULL COLLATE "C",
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("workspace_id", "ticket_id"),
+  CONSTRAINT "uq_ticket_backlog_ranks_project_position" UNIQUE ("workspace_id", "project_id", "position"),
+  CONSTRAINT "fk_ticket_backlog_ranks_project" FOREIGN KEY ("workspace_id", "project_id") REFERENCES "projects" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_ticket_backlog_ranks_ticket" FOREIGN KEY ("workspace_id", "ticket_id") REFERENCES "tickets" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "ck_ticket_backlog_ranks_position_not_empty" CHECK ("position" <> ''::text)
+);
+-- Create index "idx_ticket_backlog_ranks_project_position" to table: "ticket_backlog_ranks"
+CREATE INDEX "idx_ticket_backlog_ranks_project_position" ON "ticket_backlog_ranks" ("workspace_id", "project_id", "position");
 -- Create "ticket_change_groups" table
 CREATE TABLE "ticket_change_groups" (
   "id" uuid NOT NULL,
@@ -742,14 +843,27 @@ CREATE TABLE "ticket_comment_reactions" (
 -- Create "ticket_counters" table
 CREATE TABLE "ticket_counters" (
   "workspace_id" uuid NOT NULL,
-  "space_id" uuid NOT NULL,
+  "project_id" uuid NOT NULL,
   "last_number" bigint NOT NULL,
   "updated_at" timestamptz NOT NULL DEFAULT now(),
   "deleted_at" timestamptz NULL,
-  PRIMARY KEY ("workspace_id", "space_id"),
-  CONSTRAINT "fk_ticket_counters_space" FOREIGN KEY ("workspace_id", "space_id") REFERENCES "spaces" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  PRIMARY KEY ("workspace_id", "project_id"),
+  CONSTRAINT "fk_ticket_counters_project" FOREIGN KEY ("workspace_id", "project_id") REFERENCES "projects" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT "ck_ticket_counters_last_number_positive" CHECK (last_number > 0)
 );
+-- Create "ticket_fix_versions" table
+CREATE TABLE "ticket_fix_versions" (
+  "workspace_id" uuid NOT NULL,
+  "project_id" uuid NOT NULL,
+  "ticket_id" uuid NOT NULL,
+  "version_id" uuid NOT NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("workspace_id", "ticket_id", "version_id"),
+  CONSTRAINT "fk_ticket_fix_versions_ticket" FOREIGN KEY ("workspace_id", "project_id", "ticket_id") REFERENCES "tickets" ("workspace_id", "project_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_ticket_fix_versions_version" FOREIGN KEY ("workspace_id", "project_id", "version_id") REFERENCES "project_versions" ("workspace_id", "project_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create index "idx_ticket_fix_versions_version" to table: "ticket_fix_versions"
+CREATE INDEX "idx_ticket_fix_versions_version" ON "ticket_fix_versions" ("workspace_id", "version_id");
 -- Create "ticket_labels" table
 CREATE TABLE "ticket_labels" (
   "workspace_id" uuid NOT NULL,
@@ -789,28 +903,27 @@ CREATE TABLE "ticket_paths" (
 CREATE INDEX "idx_ticket_paths_ancestor_id" ON "ticket_paths" ("ancestor_id");
 -- Create index "idx_ticket_paths_workspace_id" to table: "ticket_paths"
 CREATE INDEX "idx_ticket_paths_workspace_id" ON "ticket_paths" ("workspace_id");
--- Create "ticket_ranks" table
-CREATE TABLE "ticket_ranks" (
+-- Create "ticket_sprint_ranks" table
+CREATE TABLE "ticket_sprint_ranks" (
   "workspace_id" uuid NOT NULL,
+  "sprint_id" uuid NOT NULL,
   "ticket_id" uuid NOT NULL,
-  "context_kind" character varying(32) NOT NULL,
-  "context_id" uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   "position" text NOT NULL COLLATE "C",
   "created_at" timestamptz NOT NULL DEFAULT now(),
   "updated_at" timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY ("ticket_id", "context_kind", "context_id"),
-  CONSTRAINT "uq_ticket_ranks_context_position" UNIQUE ("context_kind", "context_id", "position"),
-  CONSTRAINT "fk_ticket_ranks_ticket" FOREIGN KEY ("workspace_id", "ticket_id") REFERENCES "tickets" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "ck_ticket_ranks_context_kind" CHECK ((context_kind)::text = ANY (ARRAY[('backlog'::character varying)::text])),
-  CONSTRAINT "ck_ticket_ranks_position_not_empty" CHECK ("position" <> ''::text)
+  PRIMARY KEY ("workspace_id", "ticket_id"),
+  CONSTRAINT "uq_ticket_sprint_ranks_sprint_position" UNIQUE ("workspace_id", "sprint_id", "position"),
+  CONSTRAINT "fk_ticket_sprint_ranks_sprint" FOREIGN KEY ("workspace_id", "sprint_id") REFERENCES "sprints" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_ticket_sprint_ranks_ticket" FOREIGN KEY ("workspace_id", "ticket_id") REFERENCES "tickets" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "ck_ticket_sprint_ranks_position_not_empty" CHECK ("position" <> ''::text)
 );
--- Create index "idx_ticket_ranks_workspace_ticket" to table: "ticket_ranks"
-CREATE INDEX "idx_ticket_ranks_workspace_ticket" ON "ticket_ranks" ("workspace_id", "ticket_id");
+-- Create index "idx_ticket_sprint_ranks_sprint_position" to table: "ticket_sprint_ranks"
+CREATE INDEX "idx_ticket_sprint_ranks_sprint_position" ON "ticket_sprint_ranks" ("workspace_id", "sprint_id", "position");
 -- Create "ticket_status_transitions" table
 CREATE TABLE "ticket_status_transitions" (
   "id" uuid NOT NULL,
   "workspace_id" uuid NOT NULL,
-  "space_id" uuid NOT NULL,
+  "project_id" uuid NOT NULL,
   "ticket_id" uuid NOT NULL,
   "from_status_id" uuid NOT NULL,
   "to_status_id" uuid NOT NULL,
@@ -818,9 +931,9 @@ CREATE TABLE "ticket_status_transitions" (
   "changed_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
   CONSTRAINT "fk_ticket_status_transitions_changed_by" FOREIGN KEY ("changed_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
-  CONSTRAINT "fk_ticket_status_transitions_from" FOREIGN KEY ("workspace_id", "space_id", "from_status_id") REFERENCES "ticket_statuses" ("workspace_id", "space_id", "id") ON UPDATE NO ACTION ON DELETE NO ACTION,
+  CONSTRAINT "fk_ticket_status_transitions_from" FOREIGN KEY ("workspace_id", "project_id", "from_status_id") REFERENCES "ticket_statuses" ("workspace_id", "project_id", "id") ON UPDATE NO ACTION ON DELETE NO ACTION,
   CONSTRAINT "fk_ticket_status_transitions_ticket" FOREIGN KEY ("workspace_id", "ticket_id") REFERENCES "tickets" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "fk_ticket_status_transitions_to" FOREIGN KEY ("workspace_id", "space_id", "to_status_id") REFERENCES "ticket_statuses" ("workspace_id", "space_id", "id") ON UPDATE NO ACTION ON DELETE NO ACTION,
+  CONSTRAINT "fk_ticket_status_transitions_to" FOREIGN KEY ("workspace_id", "project_id", "to_status_id") REFERENCES "ticket_statuses" ("workspace_id", "project_id", "id") ON UPDATE NO ACTION ON DELETE NO ACTION,
   CONSTRAINT "ck_ticket_status_transitions_distinct" CHECK (from_status_id <> to_status_id)
 );
 -- Create index "idx_ticket_status_transitions_ticket_changed" to table: "ticket_status_transitions"
@@ -838,6 +951,17 @@ CREATE TABLE "ticket_ticket_links" (
 );
 -- Create index "idx_ticket_ticket_links_target" to table: "ticket_ticket_links"
 CREATE INDEX "idx_ticket_ticket_links_target" ON "ticket_ticket_links" ("target_ticket_id");
+-- Create "ticket_watchers" table
+CREATE TABLE "ticket_watchers" (
+  "workspace_id" uuid NOT NULL,
+  "ticket_id" uuid NOT NULL,
+  "user_id" bigint NOT NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("workspace_id", "ticket_id", "user_id"),
+  CONSTRAINT "fk_ticket_watchers_ticket" FOREIGN KEY ("workspace_id", "ticket_id") REFERENCES "tickets" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create index "idx_ticket_watchers_user" to table: "ticket_watchers"
+CREATE INDEX "idx_ticket_watchers_user" ON "ticket_watchers" ("workspace_id", "user_id");
 -- Create "user_oidc_identities" table
 CREATE TABLE "user_oidc_identities" (
   "id" bigserial NOT NULL,

@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	tkWS     = "01a00000-0000-7000-8000-000000000001"
-	tkSpace  = "01a00000-0000-7000-8000-000000000002"
-	tkTicket = "01a00000-0000-7000-8000-000000000003"
+	tkWS      = "01a00000-0000-7000-8000-000000000001"
+	tkProject = "01a00000-0000-7000-8000-000000000002"
+	tkTicket  = "01a00000-0000-7000-8000-000000000003"
 )
 
 func tkGrantRole(r domain.GrantRole) *domain.GrantRole { return &r }
@@ -33,7 +33,7 @@ func Test_チケット権限確認_必須項目の検証(t *testing.T) {
 }
 
 // チケットが実在しなければ、権限の事実を集めるまでもなく ErrTicketNotFound をそのまま伝える。
-// テナント越え・非実在のどちらも同じ応答に畳む設計（Ⅳ-H）を、まずここで検証する。
+// テナント越え・非実在のどちらも同じ応答に畳む設計を、まずここで検証する。
 func Test_チケット権限確認_チケットが無ければそのまま伝える(t *testing.T) {
 	repo := &mockTicketRepo{}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(nil, repository.ErrTicketNotFound)
@@ -45,12 +45,13 @@ func Test_チケット権限確認_チケットが無ければそのまま伝え
 	})
 
 	require.ErrorIs(t, err, repository.ErrTicketNotFound)
-	permRepo.AssertNotCalled(t, "SpacePermissionFactsForUser")
+	permRepo.AssertNotCalled(t, "WorkspacePermissionFactsForUser")
 }
 
-// チケットが実在すれば、そのチケットが属するスペースの実効権限（domain.ResolveScopePermission）を
-// 返す。設計 Ⅳ-H: チケットの実効権限＝スペース単位の判定で、ticket 固有の権限テーブルは持たない。
-func Test_チケット権限確認_チケットの属するスペースの権限を返す(t *testing.T) {
+// チケットが実在すれば、ワークスペースの実効権限（domain.ResolveScopePermission）を返す。
+// バックログはナレッジのスペースから独立した製品なので、スペースの付与（space_grants）は
+// 引かない。ticket 固有の権限テーブルも持たない。
+func Test_チケット権限確認_ワークスペースの権限を返す(t *testing.T) {
 	cases := map[string]struct {
 		role                                    *domain.GrantRole
 		canView, canComment, canEdit, canManage bool
@@ -72,14 +73,16 @@ func Test_チケット権限確認_チケットの属するスペースの権限
 		t.Run(name, func(t *testing.T) {
 			repo := &mockTicketRepo{}
 			repo.On("FindTicket", mock.Anything, tkWS, tkTicket).
-				Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace}, nil)
+				Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject}, nil)
 			permRepo := &mockKBPermissionRepo{}
 			var roles []domain.GrantRole
 			if tc.role != nil {
 				roles = []domain.GrantRole{*tc.role}
 			}
-			permRepo.On("SpacePermissionFactsForUser", mock.Anything, tkWS, tkSpace, uint64(1)).
+			permRepo.On("WorkspacePermissionFactsForUser", mock.Anything, tkWS, uint64(1)).
 				Return(&domain.ScopeFacts{Roles: roles}, nil)
+			// スペースの付与は一切引かない（引いたらナレッジとの結び付きが権限側で復活する）。
+			permRepo.AssertNotCalled(t, "SpacePermissionFactsForUser")
 
 			got, err := ticket.NewCheckTicketPermissionUseCase(repo, permRepo).
 				Execute(context.Background(), ticket.CheckTicketPermissionInput{

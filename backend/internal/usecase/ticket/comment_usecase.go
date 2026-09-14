@@ -125,7 +125,7 @@ func (u *CreateTicketCommentUseCase) notify(ctx context.Context, in CreateTicket
 	}
 }
 
-// UpdateTicketCommentUseCase は発言の本文を書き換える。投稿者本人かスペースの CanManage
+// UpdateTicketCommentUseCase は発言の本文を書き換える。投稿者本人かワークスペースの CanManage
 // を持つ相手だけ可能（ActorCanManage は handler が権限判定済みの結果を渡す）。
 type UpdateTicketCommentUseCase struct {
 	repo      repository.TicketCommentRepository

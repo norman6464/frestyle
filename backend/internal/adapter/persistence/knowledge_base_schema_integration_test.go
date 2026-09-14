@@ -500,9 +500,11 @@ func TestKnowledgeBaseSchema_Integration(t *testing.T) {
 		createPageSnapshot(t, db, page)
 		createPageSearch(t, db, ws, page)
 		createPageLink(t, db, block, page)
-		ticketStatusID, ticketTypeID := seedTicketMaster(t, db, ws, space)
+		// チケットはプロジェクト（バックログの入れ物）に属する。ナレッジのスペースとは別の表。
+		project := createProject(t, db, ws, "eng")
+		ticketStatusID, ticketTypeID := seedTicketMaster(t, db, ws, project)
 		ticketID := newID()
-		require.NoError(t, insertTicketRaw(db, ticketID, ws, space, 1, "a0", ticketTypeID, ticketStatusID, nil, 2, nil, nil))
+		require.NoError(t, insertTicketRaw(db, ticketID, ws, project, 1, ticketTypeID, ticketStatusID, nil, 2, nil, nil))
 		createPageTicketLink(t, db, block, ticketID)
 		seedPermissionRows(t, db, ws, space, page)
 		// insertPage の created_by_user_id と同じ固定値（baseline のテストユーザー）を使う。
@@ -636,6 +638,23 @@ func createSpace(t *testing.T, db *sql.DB, workspaceID, key string) string {
 	t.Helper()
 	id := newID()
 	require.NoError(t, insertSpace(db, id, workspaceID, key))
+	return id
+}
+
+func insertProject(db *sql.DB, id, workspaceID, key string) error {
+	_, err := db.Exec(
+		`INSERT INTO projects (id, workspace_id, "key", name) VALUES ($1, $2, $3, $4)`,
+		id, workspaceID, key, key,
+	)
+	return err
+}
+
+// createProject はバックログの入れ物を 1 つ作る。スペース（ナレッジ）とは無関係な別の表で、
+// 参照も workspaces にしか張らない。
+func createProject(t *testing.T, db *sql.DB, workspaceID, key string) string {
+	t.Helper()
+	id := newID()
+	require.NoError(t, insertProject(db, id, workspaceID, key))
 	return id
 }
 

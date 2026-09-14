@@ -23,7 +23,7 @@ func NewGetTicketCountsUseCase(
 
 type GetTicketCountsInput struct {
 	WorkspaceID string
-	SpaceID     string
+	ProjectID   string
 	UserID      uint64
 }
 
@@ -31,8 +31,8 @@ func (u *GetTicketCountsUseCase) Execute(ctx context.Context, in GetTicketCounts
 	if in.WorkspaceID == "" {
 		return repository.TicketCounts{}, errors.New("workspaceID is required")
 	}
-	if in.SpaceID == "" {
-		return repository.TicketCounts{}, errors.New("spaceID is required")
+	if in.ProjectID == "" {
+		return repository.TicketCounts{}, errors.New("projectID is required")
 	}
 	if in.UserID == 0 {
 		return repository.TicketCounts{}, errors.New("userID is required")
@@ -41,5 +41,5 @@ func (u *GetTicketCountsUseCase) Execute(ctx context.Context, in GetTicketCounts
 	if err != nil {
 		return repository.TicketCounts{}, err
 	}
-	return u.repo.GetTicketCounts(ctx, in.WorkspaceID, in.SpaceID, &principal.ID)
+	return u.repo.GetTicketCounts(ctx, in.WorkspaceID, in.ProjectID, &principal.ID)
 }

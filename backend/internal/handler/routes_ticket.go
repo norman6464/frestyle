@@ -22,11 +22,16 @@ const (
 	ticketCreateCommentBurst     = 10
 )
 
-// registerTicketRoutes はチケットのエンドポイントを登録する。チケットは既存の spaces に
-// 属するので、URL は kb と同じ /kb/workspaces/:workspaceSlug 以下に置き、同じ
-// middleware.KnowledgeBaseWorkspace を通す。kb 側の routes_knowledge_base.go には触れず
-// 別ファイルとして独立させてある（usecase/ticket は usecase/kb を import しない境界だが、
-// handler 層は両方に依存してよい）。
+// registerTicketRoutes はチケットのエンドポイントを登録する。
+//
+// URL は **/kb の下に置かない**（registerProjectRoutes と同じ判断）。チケットはプロジェクトに
+// 属し、プロジェクトはワークスペースにしか属さないので、階層もそれを表す
+// （/workspaces/:workspaceSlug/projects/:projectId/tickets）。ワークスペースの解決だけは
+// middleware.KnowledgeBaseWorkspace を流用する — 名前は kb 由来だが、やっているのは
+// 「slug からワークスペースを引いて所属を確かめる」ことだけ。
+//
+// kb 側の routes_knowledge_base.go には触れず別ファイルとして独立させてある
+// （usecase/ticket は usecase/kb を import しない境界だが、handler 層は両方に依存してよい）。
 func registerTicketRoutes(g *gin.RouterGroup, deps *routeDeps) {
 	registerTicketRoutesWith(
 		g,
@@ -74,19 +79,24 @@ func registerTicketRoutesWith(
 	txManager repository.TxManager,
 	attachmentPresigner repository.TicketAttachmentPresigner,
 ) {
-	checkSpace := kb.NewCheckSpacePermissionUseCase(permissions)
+	// バックログの権限はワークスペース単位（スペースの付与は引かない。
+	// ticket.CheckTicketPermissionUseCase の doc コメント参照）。
+	checkWorkspace := kb.NewCheckWorkspacePermissionUseCase(permissions)
 	checkTicket := ticket.NewCheckTicketPermissionUseCase(tickets, permissions)
 
 	h := NewTicketHandler(
-		checkSpace,
+		checkWorkspace,
 		checkTicket,
 		ticket.NewResolveTicketKeyUseCase(tickets),
 		ticket.NewResolveTicketLocationUseCase(tickets, pages),
-		ticket.NewEnableTicketsForSpaceUseCase(tickets, txManager),
-		ticket.NewCreateTicketUseCase(tickets),
+		ticket.NewEnableTicketsForProjectUseCase(tickets, txManager),
+		ticket.NewCreateTicketUseCase(tickets, txManager),
 		ticket.NewGetTicketUseCase(tickets),
 		ticket.NewGetTicketAssignmentUseCase(tickets),
 		ticket.NewListTicketsUseCase(tickets, permissions),
+		ticket.NewListAssignedTicketsUseCase(tickets, permissions),
+		ticket.NewWatchTicketUseCase(tickets),
+		ticket.NewGetTicketWatchStateUseCase(tickets),
 		ticket.NewGetTicketCountsUseCase(tickets, permissions),
 		ticket.NewListTicketChildrenUseCase(tickets),
 		ticket.NewUpdateTicketUseCase(tickets),
@@ -108,7 +118,7 @@ func registerTicketRoutesWith(
 		user.NewLookupUserDisplayUseCase(users),
 	)
 	sh := NewTicketStatusHandler(
-		checkSpace,
+		checkWorkspace,
 		ticket.NewListTicketStatusesUseCase(tickets),
 		ticket.NewCreateTicketStatusUseCase(tickets),
 		ticket.NewUpdateTicketStatusUseCase(tickets),
@@ -117,7 +127,7 @@ func registerTicketRoutesWith(
 		ticket.NewRestoreTicketStatusUseCase(tickets),
 	)
 	th := NewTicketTypeHandler(
-		checkSpace,
+		checkWorkspace,
 		ticket.NewListTicketTypesUseCase(tickets),
 		ticket.NewCreateTicketTypeUseCase(tickets),
 		ticket.NewUpdateTicketTypeUseCase(tickets),
@@ -137,7 +147,7 @@ func registerTicketRoutesWith(
 		user.NewLookupUserDisplayUseCase(users),
 	)
 	lh := NewTicketLabelHandler(
-		checkSpace,
+		checkWorkspace,
 		checkTicket,
 		ticket.NewListLabelsUseCase(labels),
 		ticket.NewCreateLabelUseCase(labels),
@@ -157,76 +167,84 @@ func registerTicketRoutesWith(
 
 	// slug 無しの解決だけは middleware.KnowledgeBaseWorkspace を通さない（handler が ID から
 	// ワークスペースを解決し、その場で権限判定を通す。kb の /kb/pages/:pageId と同じ）。
-	g.GET("/kb/tickets/:ticketId", h.ResolveByID)
+	g.GET("/tickets/:ticketId", h.ResolveByID)
 
 	tkGroup := g.Group("", middleware.KnowledgeBaseWorkspace(
 		kb.NewResolveWorkspaceUseCase(pages, permissions),
 	))
 
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/tickets/enable", h.Enable)
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/spaces/:spaceId/tickets", h.List)
+	// 「自分の担当」。プロジェクトを横断するので URL にプロジェクトを取らない。誰の担当かは
+	// 常に呼び出した本人（他人の担当を覗く口にはしない。usecase のコメント参照）。
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/assigned", h.ListAssigned)
+
+	// 監視（自分の分だけ付け外しできる。見る権限があれば足りる）。
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/:ticketId/watch", h.GetWatchState)
+	tkGroup.PUT("/workspaces/:workspaceSlug/tickets/:ticketId/watch", h.Watch)
+
+	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/tickets/enable", h.Enable)
+	tkGroup.GET("/workspaces/:workspaceSlug/projects/:projectId/tickets", h.List)
 	// 保存した絞り込みの件数バッジ（自分の担当・期限切れ・未割り当て・総数）。
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/spaces/:spaceId/tickets/counts", h.Counts)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/tickets", h.Create)
-	// 表示キー（例 FRESTYLE-12）からの解決。キーはスペースの key を含む（domain.ParseTicketKey
-	// が最後のハイフンで割る）ので URL 側にスペースを取らない。/tickets/:ticketId と衝突しない
-	// よう /tickets/by-key/:key に独立させる。
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/tickets/by-key/:key", h.ResolveByKey)
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/tickets/:ticketId", h.Get)
+	tkGroup.GET("/workspaces/:workspaceSlug/projects/:projectId/tickets/counts", h.Counts)
+	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/tickets", h.Create)
+	// 表示キー（例 FRESTYLE-12）からの解決。キーはプロジェクトの key を含む
+	// （domain.ParseTicketKey が最後のハイフンで割る）ので URL 側にプロジェクトを取らない。
+	// /tickets/:ticketId と衝突しないよう /tickets/by-key/:key に独立させる。
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/by-key/:key", h.ResolveByKey)
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/:ticketId", h.Get)
 	// 直下の子の一覧（孫は含まない）。
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/tickets/:ticketId/children", h.ListChildren)
-	tkGroup.PUT("/kb/workspaces/:workspaceSlug/tickets/:ticketId", h.Update)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/tickets/:ticketId/move", h.Move)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/tickets/:ticketId/archive", h.Archive)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/tickets/:ticketId/restore", h.Restore)
-	tkGroup.DELETE("/kb/workspaces/:workspaceSlug/tickets/:ticketId", h.Delete)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/tickets/:ticketId/restore-deleted", h.RestoreDeleted)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/tickets/:ticketId/status", h.ChangeStatus)
-	tkGroup.PUT("/kb/workspaces/:workspaceSlug/tickets/:ticketId/parent", h.ChangeParent)
-	tkGroup.PUT("/kb/workspaces/:workspaceSlug/tickets/:ticketId/assignee", h.Assign)
-	tkGroup.DELETE("/kb/workspaces/:workspaceSlug/tickets/:ticketId/assignee", h.Unassign)
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/tickets/:ticketId/history", h.History)
-	// ページへのチケット埋め込みの逆参照（段 5）。
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/tickets/:ticketId/page-backlinks", h.PageBacklinks)
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/:ticketId/children", h.ListChildren)
+	tkGroup.PUT("/workspaces/:workspaceSlug/tickets/:ticketId", h.Update)
+	tkGroup.POST("/workspaces/:workspaceSlug/tickets/:ticketId/move", h.Move)
+	tkGroup.POST("/workspaces/:workspaceSlug/tickets/:ticketId/archive", h.Archive)
+	tkGroup.POST("/workspaces/:workspaceSlug/tickets/:ticketId/restore", h.Restore)
+	tkGroup.DELETE("/workspaces/:workspaceSlug/tickets/:ticketId", h.Delete)
+	tkGroup.POST("/workspaces/:workspaceSlug/tickets/:ticketId/restore-deleted", h.RestoreDeleted)
+	tkGroup.POST("/workspaces/:workspaceSlug/tickets/:ticketId/status", h.ChangeStatus)
+	tkGroup.PUT("/workspaces/:workspaceSlug/tickets/:ticketId/parent", h.ChangeParent)
+	tkGroup.PUT("/workspaces/:workspaceSlug/tickets/:ticketId/assignee", h.Assign)
+	tkGroup.DELETE("/workspaces/:workspaceSlug/tickets/:ticketId/assignee", h.Unassign)
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/:ticketId/history", h.History)
+	// ページへのチケット埋め込みの逆参照。
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/:ticketId/page-backlinks", h.PageBacklinks)
 
-	// 発言（段 3）。
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/tickets/:ticketId/comments", ch.List)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/tickets/:ticketId/comments",
+	// 発言。
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/:ticketId/comments", ch.List)
+	tkGroup.POST("/workspaces/:workspaceSlug/tickets/:ticketId/comments",
 		middleware.RateLimitPerMinutePerUser(ticketCreateCommentPerMinute, ticketCreateCommentBurst), ch.Create)
-	tkGroup.PUT("/kb/workspaces/:workspaceSlug/tickets/:ticketId/comments/:commentId", ch.Update)
-	tkGroup.DELETE("/kb/workspaces/:workspaceSlug/tickets/:ticketId/comments/:commentId", ch.Delete)
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/tickets/:ticketId/comments/:commentId/edits", ch.ListEdits)
-	tkGroup.PUT("/kb/workspaces/:workspaceSlug/tickets/:ticketId/comments/:commentId/reactions/:emoji", ch.AddReaction)
-	tkGroup.DELETE("/kb/workspaces/:workspaceSlug/tickets/:ticketId/comments/:commentId/reactions/:emoji", ch.RemoveReaction)
+	tkGroup.PUT("/workspaces/:workspaceSlug/tickets/:ticketId/comments/:commentId", ch.Update)
+	tkGroup.DELETE("/workspaces/:workspaceSlug/tickets/:ticketId/comments/:commentId", ch.Delete)
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/:ticketId/comments/:commentId/edits", ch.ListEdits)
+	tkGroup.PUT("/workspaces/:workspaceSlug/tickets/:ticketId/comments/:commentId/reactions/:emoji", ch.AddReaction)
+	tkGroup.DELETE("/workspaces/:workspaceSlug/tickets/:ticketId/comments/:commentId/reactions/:emoji", ch.RemoveReaction)
 
-	// ラベル（段 4）。管理はスペース単位、チケットへの付け外しはチケット単位。
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/spaces/:spaceId/labels", lh.List)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/labels", lh.Create)
-	tkGroup.PUT("/kb/workspaces/:workspaceSlug/spaces/:spaceId/labels/:labelId", lh.Update)
-	tkGroup.DELETE("/kb/workspaces/:workspaceSlug/spaces/:spaceId/labels/:labelId", lh.Delete)
-	tkGroup.PUT("/kb/workspaces/:workspaceSlug/tickets/:ticketId/labels/:labelId", lh.AddToTicket)
-	tkGroup.DELETE("/kb/workspaces/:workspaceSlug/tickets/:ticketId/labels/:labelId", lh.RemoveFromTicket)
+	// ラベル。語彙はワークスペース単位（ページとチケットで共有する）、付け外しはチケット単位。
+	tkGroup.GET("/workspaces/:workspaceSlug/labels", lh.List)
+	tkGroup.POST("/workspaces/:workspaceSlug/labels", lh.Create)
+	tkGroup.PUT("/workspaces/:workspaceSlug/labels/:labelId", lh.Update)
+	tkGroup.DELETE("/workspaces/:workspaceSlug/labels/:labelId", lh.Delete)
+	tkGroup.PUT("/workspaces/:workspaceSlug/tickets/:ticketId/labels/:labelId", lh.AddToTicket)
+	tkGroup.DELETE("/workspaces/:workspaceSlug/tickets/:ticketId/labels/:labelId", lh.RemoveFromTicket)
 
-	// 添付（段 4）。
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/tickets/:ticketId/attachments", ah.List)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/tickets/:ticketId/attachments/upload-url", ah.IssueUploadURL)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/tickets/:ticketId/attachments", ah.Create)
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/tickets/:ticketId/attachments/:attachmentId/download-url", ah.IssueDownloadURL)
-	tkGroup.DELETE("/kb/workspaces/:workspaceSlug/tickets/:ticketId/attachments/:attachmentId", ah.Delete)
+	// 添付。
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/:ticketId/attachments", ah.List)
+	tkGroup.POST("/workspaces/:workspaceSlug/tickets/:ticketId/attachments/upload-url", ah.IssueUploadURL)
+	tkGroup.POST("/workspaces/:workspaceSlug/tickets/:ticketId/attachments", ah.Create)
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/:ticketId/attachments/:attachmentId/download-url", ah.IssueDownloadURL)
+	tkGroup.DELETE("/workspaces/:workspaceSlug/tickets/:ticketId/attachments/:attachmentId", ah.Delete)
 
 	// 状態マスタ（管理画面）。
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-statuses", sh.List)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-statuses", sh.Create)
-	tkGroup.PUT("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-statuses/:statusId", sh.Update)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-statuses/:statusId/set-initial", sh.SetInitial)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-statuses/:statusId/archive", sh.Archive)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-statuses/:statusId/restore", sh.Restore)
+	tkGroup.GET("/workspaces/:workspaceSlug/projects/:projectId/ticket-statuses", sh.List)
+	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/ticket-statuses", sh.Create)
+	tkGroup.PUT("/workspaces/:workspaceSlug/projects/:projectId/ticket-statuses/:statusId", sh.Update)
+	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/ticket-statuses/:statusId/set-initial", sh.SetInitial)
+	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/ticket-statuses/:statusId/archive", sh.Archive)
+	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/ticket-statuses/:statusId/restore", sh.Restore)
 
 	// 種別マスタ（管理画面）。
-	tkGroup.GET("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-types", th.List)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-types", th.Create)
-	tkGroup.PUT("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-types/:typeId", th.Update)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-types/:typeId/set-default", th.SetDefault)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-types/:typeId/archive", th.Archive)
-	tkGroup.POST("/kb/workspaces/:workspaceSlug/spaces/:spaceId/ticket-types/:typeId/restore", th.Restore)
+	tkGroup.GET("/workspaces/:workspaceSlug/projects/:projectId/ticket-types", th.List)
+	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/ticket-types", th.Create)
+	tkGroup.PUT("/workspaces/:workspaceSlug/projects/:projectId/ticket-types/:typeId", th.Update)
+	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/ticket-types/:typeId/set-default", th.SetDefault)
+	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/ticket-types/:typeId/archive", th.Archive)
+	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/ticket-types/:typeId/restore", th.Restore)
 }

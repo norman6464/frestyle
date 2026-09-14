@@ -26,11 +26,11 @@ func TestTicketAttachmentRepository_Integration(t *testing.T) {
 		t.Helper()
 		testsupport.TruncateAll(t, sqlDB, kbTables...)
 		ws = createWorkspace(t, sqlDB, "tk-attachments")
-		space := createSpace(t, sqlDB, ws, "eng")
-		statusID, typeID := seedTicketMasterViaRepo(ctx, t, tickets, ws, space)
+		project := createProject(t, sqlDB, ws, "eng")
+		statusID, typeID := seedTicketMasterViaRepo(ctx, t, tickets, ws, project)
 		created, err := tickets.CreateTicket(ctx, repository.TicketCreateInput{
-			WorkspaceID: ws, SpaceID: space, TypeID: typeID, StatusID: statusID,
-			Title: "x", Doc: []byte(`{"type":"doc","content":[]}`), Position: "a0", Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+			WorkspaceID: ws, ProjectID: project, TypeID: typeID, StatusID: statusID,
+			Title: "x", Doc: []byte(`{"type":"doc","content":[]}`), Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
 		})
 		require.NoError(t, err)
 		return ws, created.ID
@@ -73,7 +73,7 @@ func TestTicketAttachmentRepository_Integration(t *testing.T) {
 		require.NoError(t, repo.CreateTicketAttachment(ctx, a))
 
 		_, err := repo.FindTicketAttachment(ctx, otherWs, ticketID, a.ID)
-		require.ErrorIs(t, err, repository.ErrTicketAttachmentNotFound, "別ワークスペースからは見えない")
+		require.ErrorIs(t, err, repository.ErrTicketAttachmentNotFound, "別ワークプロジェクトからは見えない")
 	})
 
 	t.Run("サイズは正でなければならない", func(t *testing.T) {

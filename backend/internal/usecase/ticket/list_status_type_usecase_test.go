@@ -16,20 +16,20 @@ func Test_状態一覧_必須項目の検証(t *testing.T) {
 	_, err := uc.Execute(context.Background(), ticket.ListTicketStatusesInput{})
 	require.Error(t, err, "workspaceID 必須")
 	_, err = uc.Execute(context.Background(), ticket.ListTicketStatusesInput{WorkspaceID: tkWS})
-	require.Error(t, err, "spaceID 必須")
+	require.Error(t, err, "projectID 必須")
 }
 
 // 管理画面は「使用中 N 件」を必ず出すので、一覧と件数は同じ 1 回の呼び出しで返す。
-// 件数はスペース 1 回の GROUP BY で取り、状態ごとに数えない（N+1 を作らない）。
+// 件数はプロジェクト 1 回の GROUP BY で取り、状態ごとに数えない（N+1 を作らない）。
 func Test_状態一覧_使用中の件数を添えて返す(t *testing.T) {
 	repo := &mockTicketRepo{}
-	repo.On("ListTicketStatuses", mock.Anything, tkWS, tkSpace, true).
+	repo.On("ListTicketStatuses", mock.Anything, tkWS, tkProject, true).
 		Return([]domain.TicketStatus{{ID: "s1"}, {ID: "s2"}}, nil)
-	repo.On("CountActiveTicketsByStatusForSpace", mock.Anything, tkWS, tkSpace).
+	repo.On("CountActiveTicketsByStatusForProject", mock.Anything, tkWS, tkProject).
 		Return(map[string]int64{"s1": 3}, nil)
 
 	got, err := ticket.NewListTicketStatusesUseCase(repo).Execute(context.Background(), ticket.ListTicketStatusesInput{
-		WorkspaceID: tkWS, SpaceID: tkSpace, IncludeArchived: true,
+		WorkspaceID: tkWS, ProjectID: tkProject, IncludeArchived: true,
 	})
 	require.NoError(t, err)
 	require.Len(t, got, 2)
@@ -39,7 +39,7 @@ func Test_状態一覧_使用中の件数を添えて返す(t *testing.T) {
 
 	// 状態ごとに数える経路（N+1）は通らない。
 	repo.AssertNotCalled(t, "CountActiveTicketsByStatus")
-	repo.AssertNumberOfCalls(t, "CountActiveTicketsByStatusForSpace", 1)
+	repo.AssertNumberOfCalls(t, "CountActiveTicketsByStatusForProject", 1)
 }
 
 func Test_種別一覧_必須項目の検証(t *testing.T) {
@@ -47,18 +47,18 @@ func Test_種別一覧_必須項目の検証(t *testing.T) {
 	_, err := uc.Execute(context.Background(), ticket.ListTicketTypesInput{})
 	require.Error(t, err, "workspaceID 必須")
 	_, err = uc.Execute(context.Background(), ticket.ListTicketTypesInput{WorkspaceID: tkWS})
-	require.Error(t, err, "spaceID 必須")
+	require.Error(t, err, "projectID 必須")
 }
 
 func Test_種別一覧_使用中の件数を添えて返す(t *testing.T) {
 	repo := &mockTicketRepo{}
-	repo.On("ListTicketTypes", mock.Anything, tkWS, tkSpace, false).
+	repo.On("ListTicketTypes", mock.Anything, tkWS, tkProject, false).
 		Return([]domain.TicketType{{ID: "t1"}}, nil)
-	repo.On("CountActiveTicketsByTypeForSpace", mock.Anything, tkWS, tkSpace).
+	repo.On("CountActiveTicketsByTypeForProject", mock.Anything, tkWS, tkProject).
 		Return(map[string]int64{"t1": 7}, nil)
 
 	got, err := ticket.NewListTicketTypesUseCase(repo).Execute(context.Background(), ticket.ListTicketTypesInput{
-		WorkspaceID: tkWS, SpaceID: tkSpace,
+		WorkspaceID: tkWS, ProjectID: tkProject,
 	})
 	require.NoError(t, err)
 	require.Len(t, got, 1)

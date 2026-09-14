@@ -37,17 +37,17 @@ func (q *Queries) ArchiveTicket(ctx context.Context, arg ArchiveTicketParams) (i
 const archiveTicketStatus = `-- name: ArchiveTicketStatus :execrows
 UPDATE ticket_statuses
 SET archived_at = now(), updated_at = now()
-WHERE workspace_id = $1 AND space_id = $2 AND id = $3 AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND id = $3 AND archived_at IS NULL
 `
 
 type ArchiveTicketStatusParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	ID          uuid.UUID
 }
 
 func (q *Queries) ArchiveTicketStatus(ctx context.Context, arg ArchiveTicketStatusParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, archiveTicketStatus, arg.WorkspaceID, arg.SpaceID, arg.ID)
+	result, err := q.db.ExecContext(ctx, archiveTicketStatus, arg.WorkspaceID, arg.ProjectID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -57,17 +57,17 @@ func (q *Queries) ArchiveTicketStatus(ctx context.Context, arg ArchiveTicketStat
 const archiveTicketType = `-- name: ArchiveTicketType :execrows
 UPDATE ticket_types
 SET archived_at = now(), updated_at = now()
-WHERE workspace_id = $1 AND space_id = $2 AND id = $3 AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND id = $3 AND archived_at IS NULL
 `
 
 type ArchiveTicketTypeParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	ID          uuid.UUID
 }
 
 func (q *Queries) ArchiveTicketType(ctx context.Context, arg ArchiveTicketTypeParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, archiveTicketType, arg.WorkspaceID, arg.SpaceID, arg.ID)
+	result, err := q.db.ExecContext(ctx, archiveTicketType, arg.WorkspaceID, arg.ProjectID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -102,7 +102,7 @@ const changeTicketStatus = `-- name: ChangeTicketStatus :one
 UPDATE tickets
 SET status_id = $3, closed_at = $4, resolution = $5, updated_at = now()
 WHERE workspace_id = $1 AND id = $2
-RETURNING id, workspace_id, space_id, number, type_id, status_id, parent_id, title, doc, plain_text, priority, start_date, due_date, position, closed_at, resolution, created_by_user_id, archived_at, deleted_at, created_at, updated_at
+RETURNING id, workspace_id, project_id, number, type_id, status_id, parent_id, title, doc, plain_text, priority, story_points, team_id, start_date, due_date, closed_at, resolution, created_by_user_id, archived_at, deleted_at, created_at, updated_at
 `
 
 type ChangeTicketStatusParams struct {
@@ -115,6 +115,7 @@ type ChangeTicketStatusParams struct {
 
 // closed_at / resolution は usecase が domain.ResolveTicketClosedFields で導出した値を
 // そのまま渡す（ここでは category との整合を判断しない）。
+// 並び順を返さない理由は UpdateTicket と同じ。
 func (q *Queries) ChangeTicketStatus(ctx context.Context, arg ChangeTicketStatusParams) (Ticket, error) {
 	row := q.db.QueryRowContext(ctx, changeTicketStatus,
 		arg.WorkspaceID,
@@ -127,7 +128,7 @@ func (q *Queries) ChangeTicketStatus(ctx context.Context, arg ChangeTicketStatus
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Number,
 		&i.TypeID,
 		&i.StatusID,
@@ -136,9 +137,10 @@ func (q *Queries) ChangeTicketStatus(ctx context.Context, arg ChangeTicketStatus
 		&i.Doc,
 		&i.PlainText,
 		&i.Priority,
+		&i.StoryPoints,
+		&i.TeamID,
 		&i.StartDate,
 		&i.DueDate,
-		&i.Position,
 		&i.ClosedAt,
 		&i.Resolution,
 		&i.CreatedByUserID,
@@ -153,19 +155,19 @@ func (q *Queries) ChangeTicketStatus(ctx context.Context, arg ChangeTicketStatus
 const clearTicketStatusInitial = `-- name: ClearTicketStatusInitial :execrows
 UPDATE ticket_statuses
 SET is_initial = false, updated_at = now()
-WHERE workspace_id = $1 AND space_id = $2 AND is_initial AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND is_initial AND archived_at IS NULL
 `
 
 type ClearTicketStatusInitialParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 }
 
 // SetInitialTicketStatus は「旧初期状態を先に false へ倒す → 新しい状態を true にする」の
 // 2 文で、usecase が同一トランザクションで呼ぶ（部分 UNIQUE のため同時に 2 つは作れない。
-// 旧初期状態が無いスペースでは 0 行更新で構わない）。
+// 旧初期状態が無いプロジェクトでは 0 行更新で構わない）。
 func (q *Queries) ClearTicketStatusInitial(ctx context.Context, arg ClearTicketStatusInitialParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, clearTicketStatusInitial, arg.WorkspaceID, arg.SpaceID)
+	result, err := q.db.ExecContext(ctx, clearTicketStatusInitial, arg.WorkspaceID, arg.ProjectID)
 	if err != nil {
 		return 0, err
 	}
@@ -175,16 +177,16 @@ func (q *Queries) ClearTicketStatusInitial(ctx context.Context, arg ClearTicketS
 const clearTicketTypeDefault = `-- name: ClearTicketTypeDefault :execrows
 UPDATE ticket_types
 SET is_default = false, updated_at = now()
-WHERE workspace_id = $1 AND space_id = $2 AND is_default AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND is_default AND archived_at IS NULL
 `
 
 type ClearTicketTypeDefaultParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 }
 
 func (q *Queries) ClearTicketTypeDefault(ctx context.Context, arg ClearTicketTypeDefaultParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, clearTicketTypeDefault, arg.WorkspaceID, arg.SpaceID)
+	result, err := q.db.ExecContext(ctx, clearTicketTypeDefault, arg.WorkspaceID, arg.ProjectID)
 	if err != nil {
 		return 0, err
 	}
@@ -210,17 +212,17 @@ func (q *Queries) CountActiveTicketChildren(ctx context.Context, arg CountActive
 
 const countActiveTicketsByStatus = `-- name: CountActiveTicketsByStatus :one
 SELECT count(*) FROM tickets
-WHERE workspace_id = $1 AND space_id = $2 AND status_id = $3 AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND status_id = $3 AND archived_at IS NULL
 `
 
 type CountActiveTicketsByStatusParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	StatusID    uuid.UUID
 }
 
 func (q *Queries) CountActiveTicketsByStatus(ctx context.Context, arg CountActiveTicketsByStatusParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countActiveTicketsByStatus, arg.WorkspaceID, arg.SpaceID, arg.StatusID)
+	row := q.db.QueryRowContext(ctx, countActiveTicketsByStatus, arg.WorkspaceID, arg.ProjectID, arg.StatusID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -228,17 +230,17 @@ func (q *Queries) CountActiveTicketsByStatus(ctx context.Context, arg CountActiv
 
 const countActiveTicketsByType = `-- name: CountActiveTicketsByType :one
 SELECT count(*) FROM tickets
-WHERE workspace_id = $1 AND space_id = $2 AND type_id = $3 AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND type_id = $3 AND archived_at IS NULL
 `
 
 type CountActiveTicketsByTypeParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	TypeID      uuid.UUID
 }
 
 func (q *Queries) CountActiveTicketsByType(ctx context.Context, arg CountActiveTicketsByTypeParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countActiveTicketsByType, arg.WorkspaceID, arg.SpaceID, arg.TypeID)
+	row := q.db.QueryRowContext(ctx, countActiveTicketsByType, arg.WorkspaceID, arg.ProjectID, arg.TypeID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -246,13 +248,13 @@ func (q *Queries) CountActiveTicketsByType(ctx context.Context, arg CountActiveT
 
 const countActiveTicketsGroupedByStatus = `-- name: CountActiveTicketsGroupedByStatus :many
 SELECT status_id, count(*)::bigint AS count FROM tickets
-WHERE workspace_id = $1 AND space_id = $2 AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND archived_at IS NULL
 GROUP BY status_id
 `
 
 type CountActiveTicketsGroupedByStatusParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 }
 
 type CountActiveTicketsGroupedByStatusRow struct {
@@ -265,7 +267,7 @@ type CountActiveTicketsGroupedByStatusRow struct {
 // 現役（archived_at IS NULL）だけを数えるのは、アーカイブ済みのチケットが
 // 状態のアーカイブを妨げないため（usecase の 409 判定と同じ範囲に揃える）。
 func (q *Queries) CountActiveTicketsGroupedByStatus(ctx context.Context, arg CountActiveTicketsGroupedByStatusParams) ([]CountActiveTicketsGroupedByStatusRow, error) {
-	rows, err := q.db.QueryContext(ctx, countActiveTicketsGroupedByStatus, arg.WorkspaceID, arg.SpaceID)
+	rows, err := q.db.QueryContext(ctx, countActiveTicketsGroupedByStatus, arg.WorkspaceID, arg.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -289,13 +291,13 @@ func (q *Queries) CountActiveTicketsGroupedByStatus(ctx context.Context, arg Cou
 
 const countActiveTicketsGroupedByType = `-- name: CountActiveTicketsGroupedByType :many
 SELECT type_id, count(*)::bigint AS count FROM tickets
-WHERE workspace_id = $1 AND space_id = $2 AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND archived_at IS NULL
 GROUP BY type_id
 `
 
 type CountActiveTicketsGroupedByTypeParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 }
 
 type CountActiveTicketsGroupedByTypeRow struct {
@@ -304,7 +306,7 @@ type CountActiveTicketsGroupedByTypeRow struct {
 }
 
 func (q *Queries) CountActiveTicketsGroupedByType(ctx context.Context, arg CountActiveTicketsGroupedByTypeParams) ([]CountActiveTicketsGroupedByTypeRow, error) {
-	rows, err := q.db.QueryContext(ctx, countActiveTicketsGroupedByType, arg.WorkspaceID, arg.SpaceID)
+	rows, err := q.db.QueryContext(ctx, countActiveTicketsGroupedByType, arg.WorkspaceID, arg.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -326,32 +328,48 @@ func (q *Queries) CountActiveTicketsGroupedByType(ctx context.Context, arg Count
 	return items, nil
 }
 
+const countTicketWatchers = `-- name: CountTicketWatchers :one
+SELECT count(*) FROM ticket_watchers WHERE workspace_id = $1 AND ticket_id = $2
+`
+
+type CountTicketWatchersParams struct {
+	WorkspaceID uuid.UUID
+	TicketID    uuid.UUID
+}
+
+func (q *Queries) CountTicketWatchers(ctx context.Context, arg CountTicketWatchersParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTicketWatchers, arg.WorkspaceID, arg.TicketID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createTicket = `-- name: CreateTicket :one
 
 WITH n AS (
-  INSERT INTO ticket_counters (workspace_id, space_id, last_number, updated_at)
+  INSERT INTO ticket_counters (workspace_id, project_id, last_number, updated_at)
   VALUES ($2, $3, 1, now())
-  ON CONFLICT (workspace_id, space_id)
+  ON CONFLICT (workspace_id, project_id)
   DO UPDATE SET last_number = ticket_counters.last_number + 1, updated_at = now()
   RETURNING last_number
 )
 INSERT INTO tickets
-  (id, workspace_id, space_id, number, type_id, status_id, parent_id, title, doc, plain_text,
-   priority, start_date, due_date, "position", created_by_user_id, created_at, updated_at)
+  (id, workspace_id, project_id, number, type_id, status_id, parent_id, title, doc, plain_text,
+   priority, start_date, due_date, created_by_user_id, created_at, updated_at)
 SELECT
   $1, $2, $3, n.last_number,
   $4, $5, $6, $7,
   $8, $9, $10,
-  $11::date, $12::date, $13,
-  $14, now(), now()
+  $11::date, $12::date,
+  $13, now(), now()
 FROM n
-RETURNING id, workspace_id, space_id, number, type_id, status_id, parent_id, title, doc, plain_text, priority, start_date, due_date, position, closed_at, resolution, created_by_user_id, archived_at, deleted_at, created_at, updated_at
+RETURNING id, workspace_id, project_id, number, type_id, status_id, parent_id, title, doc, plain_text, priority, story_points, team_id, start_date, due_date, closed_at, resolution, created_by_user_id, archived_at, deleted_at, created_at, updated_at
 `
 
 type CreateTicketParams struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID
-	SpaceID         uuid.UUID
+	ProjectID       uuid.UUID
 	TypeID          uuid.UUID
 	StatusID        uuid.UUID
 	ParentID        uuid.NullUUID
@@ -361,7 +379,6 @@ type CreateTicketParams struct {
 	Priority        int32
 	StartDate       pgtext.NullDate
 	DueDate         pgtext.NullDate
-	Position        string
 	CreatedByUserID int64
 }
 
@@ -375,7 +392,7 @@ func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) (Tic
 	row := q.db.QueryRowContext(ctx, createTicket,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.SpaceID,
+		arg.ProjectID,
 		arg.TypeID,
 		arg.StatusID,
 		arg.ParentID,
@@ -385,14 +402,13 @@ func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) (Tic
 		arg.Priority,
 		arg.StartDate,
 		arg.DueDate,
-		arg.Position,
 		arg.CreatedByUserID,
 	)
 	var i Ticket
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Number,
 		&i.TypeID,
 		&i.StatusID,
@@ -401,9 +417,10 @@ func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) (Tic
 		&i.Doc,
 		&i.PlainText,
 		&i.Priority,
+		&i.StoryPoints,
+		&i.TeamID,
 		&i.StartDate,
 		&i.DueDate,
-		&i.Position,
 		&i.ClosedAt,
 		&i.Resolution,
 		&i.CreatedByUserID,
@@ -524,6 +541,24 @@ func (q *Queries) DeleteTicketTicketLinksBySourceCascade(ctx context.Context, ar
 	return err
 }
 
+const deleteTicketWatcher = `-- name: DeleteTicketWatcher :execrows
+DELETE FROM ticket_watchers WHERE workspace_id = $1 AND ticket_id = $2 AND user_id = $3
+`
+
+type DeleteTicketWatcherParams struct {
+	WorkspaceID uuid.UUID
+	TicketID    uuid.UUID
+	UserID      int64
+}
+
+func (q *Queries) DeleteTicketWatcher(ctx context.Context, arg DeleteTicketWatcherParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteTicketWatcher, arg.WorkspaceID, arg.TicketID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const detachTicketPathSubtree = `-- name: DetachTicketPathSubtree :exec
 DELETE FROM ticket_paths
 WHERE ticket_paths.workspace_id = $1
@@ -550,28 +585,8 @@ func (q *Queries) DetachTicketPathSubtree(ctx context.Context, arg DetachTicketP
 	return err
 }
 
-const findActiveTicketPosition = `-- name: FindActiveTicketPosition :one
-SELECT "position" FROM tickets
-WHERE workspace_id = $1 AND space_id = $2 AND id = $3 AND archived_at IS NULL AND deleted_at IS NULL
-`
-
-type FindActiveTicketPositionParams struct {
-	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
-	ID          uuid.UUID
-}
-
-// move の before/after 指定チケットが現役かを確かめる（別スペース・アーカイブ済み・
-// 非実在はすべて 0 行に畳まれ、usecase は同じ拒否として扱う）。
-func (q *Queries) FindActiveTicketPosition(ctx context.Context, arg FindActiveTicketPositionParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, findActiveTicketPosition, arg.WorkspaceID, arg.SpaceID, arg.ID)
-	var position string
-	err := row.Scan(&position)
-	return position, err
-}
-
 const findDeletedTicket = `-- name: FindDeletedTicket :one
-SELECT id, workspace_id, space_id, number, type_id, status_id, parent_id, title, doc, plain_text, priority, start_date, due_date, position, closed_at, resolution, created_by_user_id, archived_at, deleted_at, created_at, updated_at FROM tickets
+SELECT id, workspace_id, project_id, number, type_id, status_id, parent_id, title, doc, plain_text, priority, story_points, team_id, start_date, due_date, closed_at, resolution, created_by_user_id, archived_at, deleted_at, created_at, updated_at FROM tickets
 WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NOT NULL
 `
 
@@ -588,7 +603,7 @@ func (q *Queries) FindDeletedTicket(ctx context.Context, arg FindDeletedTicketPa
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Number,
 		&i.TypeID,
 		&i.StatusID,
@@ -597,9 +612,10 @@ func (q *Queries) FindDeletedTicket(ctx context.Context, arg FindDeletedTicketPa
 		&i.Doc,
 		&i.PlainText,
 		&i.Priority,
+		&i.StoryPoints,
+		&i.TeamID,
 		&i.StartDate,
 		&i.DueDate,
-		&i.Position,
 		&i.ClosedAt,
 		&i.Resolution,
 		&i.CreatedByUserID,
@@ -612,22 +628,22 @@ func (q *Queries) FindDeletedTicket(ctx context.Context, arg FindDeletedTicketPa
 }
 
 const getDefaultTicketType = `-- name: GetDefaultTicketType :one
-SELECT id, workspace_id, space_id, name, name_lower, color, hierarchy_level, position, is_default, template_title, template_doc, archived_at, deleted_at, created_at, updated_at FROM ticket_types
-WHERE workspace_id = $1 AND space_id = $2 AND is_default AND archived_at IS NULL
+SELECT id, workspace_id, project_id, name, name_lower, color, hierarchy_level, position, is_default, template_title, template_doc, archived_at, deleted_at, created_at, updated_at FROM ticket_types
+WHERE workspace_id = $1 AND project_id = $2 AND is_default AND archived_at IS NULL
 `
 
 type GetDefaultTicketTypeParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 }
 
 func (q *Queries) GetDefaultTicketType(ctx context.Context, arg GetDefaultTicketTypeParams) (TicketType, error) {
-	row := q.db.QueryRowContext(ctx, getDefaultTicketType, arg.WorkspaceID, arg.SpaceID)
+	row := q.db.QueryRowContext(ctx, getDefaultTicketType, arg.WorkspaceID, arg.ProjectID)
 	var i TicketType
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Name,
 		&i.NameLower,
 		&i.Color,
@@ -645,22 +661,22 @@ func (q *Queries) GetDefaultTicketType(ctx context.Context, arg GetDefaultTicket
 }
 
 const getInitialTicketStatus = `-- name: GetInitialTicketStatus :one
-SELECT id, workspace_id, space_id, name, name_lower, category, color, position, is_initial, archived_at, deleted_at, created_at, updated_at FROM ticket_statuses
-WHERE workspace_id = $1 AND space_id = $2 AND is_initial AND archived_at IS NULL
+SELECT id, workspace_id, project_id, name, name_lower, category, color, position, is_initial, archived_at, deleted_at, created_at, updated_at FROM ticket_statuses
+WHERE workspace_id = $1 AND project_id = $2 AND is_initial AND archived_at IS NULL
 `
 
 type GetInitialTicketStatusParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 }
 
 func (q *Queries) GetInitialTicketStatus(ctx context.Context, arg GetInitialTicketStatusParams) (TicketStatus, error) {
-	row := q.db.QueryRowContext(ctx, getInitialTicketStatus, arg.WorkspaceID, arg.SpaceID)
+	row := q.db.QueryRowContext(ctx, getInitialTicketStatus, arg.WorkspaceID, arg.ProjectID)
 	var i TicketStatus
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Name,
 		&i.NameLower,
 		&i.Category,
@@ -676,8 +692,8 @@ func (q *Queries) GetInitialTicketStatus(ctx context.Context, arg GetInitialTick
 }
 
 const getTicket = `-- name: GetTicket :one
-SELECT t.id, t.workspace_id, t.space_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.start_date, t.due_date, t.position, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at, a.assignee_principal_id, COALESCE(r.position, t."position") AS rank_position FROM tickets t
-LEFT JOIN ticket_ranks r ON r.workspace_id = t.workspace_id AND r.ticket_id = t.id AND r.context_kind = 'backlog'
+SELECT t.id, t.workspace_id, t.project_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.story_points, t.team_id, t.start_date, t.due_date, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at, a.assignee_principal_id, COALESCE(r."position", '')::text AS rank_position FROM tickets t
+LEFT JOIN ticket_backlog_ranks r ON r.workspace_id = t.workspace_id AND r.ticket_id = t.id
 LEFT JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
 WHERE t.workspace_id = $1 AND t.id = $2 AND t.deleted_at IS NULL
 `
@@ -690,7 +706,7 @@ type GetTicketParams struct {
 type GetTicketRow struct {
 	ID                  uuid.UUID
 	WorkspaceID         uuid.UUID
-	SpaceID             uuid.UUID
+	ProjectID           uuid.UUID
 	Number              int64
 	TypeID              uuid.UUID
 	StatusID            uuid.UUID
@@ -699,9 +715,10 @@ type GetTicketRow struct {
 	Doc                 json.RawMessage
 	PlainText           string
 	Priority            int32
+	StoryPoints         sql.NullInt32
+	TeamID              uuid.NullUUID
 	StartDate           pgtext.NullDate
 	DueDate             pgtext.NullDate
-	Position            string
 	ClosedAt            sql.NullTime
 	Resolution          sql.NullString
 	CreatedByUserID     int64
@@ -717,12 +734,12 @@ type GetTicketRow struct {
 // チケット 1 件につき問い合わせを 2 回に分けない（設計 Ⅶ の「詳細（… 担当 …）」）。
 // 担当は 1 人（ticket_id が PK）なので、この JOIN で行が増えることはない。
 //
-// ticket_ranks（段 2）を LEFT JOIN して並び順を rank_position として添える。並び順の正本は
-// tickets.position から ticket_ranks.position へ移った（設計 Ⅳ-F）。tickets.position 列は
-// まだ残っているが（段 2 では DROP しない）。LEFT JOIN + COALESCE にしてあるのは、
-// CreateTicket と InsertTicketRank が別の 2 文（CreateTicketUseCase 参照）で、どちらかを
-// 単独で呼ぶ経路（結合テストの直接呼び出し等）があってもチケットが一覧から消えないようにする
-// ため。INNER JOIN だと ticket_ranks 側の行が無いだけでチケットが「無い」と誤認される。
+// ticket_backlog_ranks を LEFT JOIN して並び順を rank_position として添える。並び順の正本は
+// この表だけで、tickets.position 列は撤去済み。
+//
+// INNER JOIN にはしない。並び順の行が無いだけでチケットが「無い」と誤認され、画面から
+// 黙って消えるため（旧 ticket_ranks で実際に起きた壊れ方がこれ）。行が無ければ
+// rank_position は空文字になり、一覧では末尾に回る —— 消えるのではなく目に見える形で残す。
 //
 // deleted_at IS NOT NULL のチケットは「無い」と同じ扱いにする（設計 Ⅳ-J: 消えたことにする。
 // archived_at と違い戻す口を持たない）。削除済みチケットを個別に引く経路は
@@ -733,7 +750,7 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Number,
 		&i.TypeID,
 		&i.StatusID,
@@ -742,9 +759,10 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 		&i.Doc,
 		&i.PlainText,
 		&i.Priority,
+		&i.StoryPoints,
+		&i.TeamID,
 		&i.StartDate,
 		&i.DueDate,
-		&i.Position,
 		&i.ClosedAt,
 		&i.Resolution,
 		&i.CreatedByUserID,
@@ -759,14 +777,14 @@ func (q *Queries) GetTicket(ctx context.Context, arg GetTicketParams) (GetTicket
 }
 
 const getTicketAcrossWorkspaces = `-- name: GetTicketAcrossWorkspaces :one
-SELECT id, workspace_id, space_id FROM tickets
+SELECT id, workspace_id, project_id FROM tickets
 WHERE id = $1
 `
 
 type GetTicketAcrossWorkspacesRow struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 }
 
 // チケットを **ID だけ** で引く。/kb/tickets/{ticketId} の URL からワークスペースを
@@ -777,7 +795,7 @@ type GetTicketAcrossWorkspacesRow struct {
 func (q *Queries) GetTicketAcrossWorkspaces(ctx context.Context, id uuid.UUID) (GetTicketAcrossWorkspacesRow, error) {
 	row := q.db.QueryRowContext(ctx, getTicketAcrossWorkspaces, id)
 	var i GetTicketAcrossWorkspacesRow
-	err := row.Scan(&i.ID, &i.WorkspaceID, &i.SpaceID)
+	err := row.Scan(&i.ID, &i.WorkspaceID, &i.ProjectID)
 	return i, err
 }
 
@@ -817,14 +835,14 @@ SELECT
 FROM tickets t
 LEFT JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
 LEFT JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
-WHERE t.workspace_id = $2 AND t.space_id = $3
+WHERE t.workspace_id = $2 AND t.project_id = $3
   AND t.archived_at IS NULL AND t.deleted_at IS NULL
 `
 
 type GetTicketCountsParams struct {
 	MyPrincipalID uuid.NullUUID
 	WorkspaceID   uuid.UUID
-	SpaceID       uuid.UUID
+	ProjectID     uuid.UUID
 }
 
 type GetTicketCountsRow struct {
@@ -841,7 +859,7 @@ type GetTicketCountsRow struct {
 // （kind='user' の principal が無い＝そのワークスペースに所属していない相手からは
 // そもそもこの経路に来ない。ミドルウェアが弾く）。
 func (q *Queries) GetTicketCounts(ctx context.Context, arg GetTicketCountsParams) (GetTicketCountsRow, error) {
-	row := q.db.QueryRowContext(ctx, getTicketCounts, arg.MyPrincipalID, arg.WorkspaceID, arg.SpaceID)
+	row := q.db.QueryRowContext(ctx, getTicketCounts, arg.MyPrincipalID, arg.WorkspaceID, arg.ProjectID)
 	var i GetTicketCountsRow
 	err := row.Scan(
 		&i.Total,
@@ -853,7 +871,7 @@ func (q *Queries) GetTicketCounts(ctx context.Context, arg GetTicketCountsParams
 }
 
 const getTicketForUpdate = `-- name: GetTicketForUpdate :one
-SELECT id, workspace_id, space_id, number, type_id, status_id, parent_id, title, doc, plain_text, priority, start_date, due_date, position, closed_at, resolution, created_by_user_id, archived_at, deleted_at, created_at, updated_at FROM tickets
+SELECT id, workspace_id, project_id, number, type_id, status_id, parent_id, title, doc, plain_text, priority, story_points, team_id, start_date, due_date, closed_at, resolution, created_by_user_id, archived_at, deleted_at, created_at, updated_at FROM tickets
 WHERE workspace_id = $1 AND id = $2
 FOR UPDATE
 `
@@ -870,7 +888,7 @@ func (q *Queries) GetTicketForUpdate(ctx context.Context, arg GetTicketForUpdate
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Number,
 		&i.TypeID,
 		&i.StatusID,
@@ -879,9 +897,10 @@ func (q *Queries) GetTicketForUpdate(ctx context.Context, arg GetTicketForUpdate
 		&i.Doc,
 		&i.PlainText,
 		&i.Priority,
+		&i.StoryPoints,
+		&i.TeamID,
 		&i.StartDate,
 		&i.DueDate,
-		&i.Position,
 		&i.ClosedAt,
 		&i.Resolution,
 		&i.CreatedByUserID,
@@ -894,23 +913,23 @@ func (q *Queries) GetTicketForUpdate(ctx context.Context, arg GetTicketForUpdate
 }
 
 const getTicketStatus = `-- name: GetTicketStatus :one
-SELECT id, workspace_id, space_id, name, name_lower, category, color, position, is_initial, archived_at, deleted_at, created_at, updated_at FROM ticket_statuses
-WHERE workspace_id = $1 AND space_id = $2 AND id = $3
+SELECT id, workspace_id, project_id, name, name_lower, category, color, position, is_initial, archived_at, deleted_at, created_at, updated_at FROM ticket_statuses
+WHERE workspace_id = $1 AND project_id = $2 AND id = $3
 `
 
 type GetTicketStatusParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	ID          uuid.UUID
 }
 
 func (q *Queries) GetTicketStatus(ctx context.Context, arg GetTicketStatusParams) (TicketStatus, error) {
-	row := q.db.QueryRowContext(ctx, getTicketStatus, arg.WorkspaceID, arg.SpaceID, arg.ID)
+	row := q.db.QueryRowContext(ctx, getTicketStatus, arg.WorkspaceID, arg.ProjectID, arg.ID)
 	var i TicketStatus
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Name,
 		&i.NameLower,
 		&i.Category,
@@ -926,23 +945,23 @@ func (q *Queries) GetTicketStatus(ctx context.Context, arg GetTicketStatusParams
 }
 
 const getTicketType = `-- name: GetTicketType :one
-SELECT id, workspace_id, space_id, name, name_lower, color, hierarchy_level, position, is_default, template_title, template_doc, archived_at, deleted_at, created_at, updated_at FROM ticket_types
-WHERE workspace_id = $1 AND space_id = $2 AND id = $3
+SELECT id, workspace_id, project_id, name, name_lower, color, hierarchy_level, position, is_default, template_title, template_doc, archived_at, deleted_at, created_at, updated_at FROM ticket_types
+WHERE workspace_id = $1 AND project_id = $2 AND id = $3
 `
 
 type GetTicketTypeParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	ID          uuid.UUID
 }
 
 func (q *Queries) GetTicketType(ctx context.Context, arg GetTicketTypeParams) (TicketType, error) {
-	row := q.db.QueryRowContext(ctx, getTicketType, arg.WorkspaceID, arg.SpaceID, arg.ID)
+	row := q.db.QueryRowContext(ctx, getTicketType, arg.WorkspaceID, arg.ProjectID, arg.ID)
 	var i TicketType
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Name,
 		&i.NameLower,
 		&i.Color,
@@ -964,14 +983,14 @@ const hasActiveInitialTicketStatus = `-- name: HasActiveInitialTicketStatus :one
 
 SELECT EXISTS (
   SELECT 1 FROM ticket_statuses
-  WHERE workspace_id = $1 AND space_id = $2
+  WHERE workspace_id = $1 AND project_id = $2
     AND is_initial AND archived_at IS NULL
 ) AS exists
 `
 
 type HasActiveInitialTicketStatusParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 }
 
 // チケット（段 1: 骨格）のクエリ。knowledge_base.sql と同じ作法。
@@ -988,10 +1007,40 @@ type HasActiveInitialTicketStatusParams struct {
 // =============================================================================
 // 「有効化済み」の正本判定: 初期状態を持つ現役の状態が 1 つでもあるか。
 func (q *Queries) HasActiveInitialTicketStatus(ctx context.Context, arg HasActiveInitialTicketStatusParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, hasActiveInitialTicketStatus, arg.WorkspaceID, arg.SpaceID)
+	row := q.db.QueryRowContext(ctx, hasActiveInitialTicketStatus, arg.WorkspaceID, arg.ProjectID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const insertTicketBacklogRank = `-- name: InsertTicketBacklogRank :exec
+
+INSERT INTO ticket_backlog_ranks (workspace_id, project_id, ticket_id, "position", created_at, updated_at)
+VALUES ($1, $2, $3, $4, now(), now())
+`
+
+type InsertTicketBacklogRankParams struct {
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+	TicketID    uuid.UUID
+	Position    string
+}
+
+// =============================================================================
+// ticket_backlog_ranks（バックログの並び順。設計 Ⅳ-F）
+// =============================================================================
+// CreateTicket 成功直後に usecase が呼ぶ（tickets への INSERT とは別文。設計 Ⅳ-B の
+// 「tickets への INSERT は 1 本だけ」という縛りはこの表には及ばない）。
+// project_id を明示的に受け取る —— 並びの範囲がプロジェクトであることを、表の側にも
+// 書き込むため（旧 ticket_ranks はこれを持たず、一意制約が表全体に効いていた）。
+func (q *Queries) InsertTicketBacklogRank(ctx context.Context, arg InsertTicketBacklogRankParams) error {
+	_, err := q.db.ExecContext(ctx, insertTicketBacklogRank,
+		arg.WorkspaceID,
+		arg.ProjectID,
+		arg.TicketID,
+		arg.Position,
+	)
+	return err
 }
 
 const insertTicketChangeGroup = `-- name: InsertTicketChangeGroup :one
@@ -1117,39 +1166,17 @@ func (q *Queries) InsertTicketPathSelf(ctx context.Context, arg InsertTicketPath
 	return err
 }
 
-const insertTicketRank = `-- name: InsertTicketRank :exec
-
-INSERT INTO ticket_ranks (workspace_id, ticket_id, context_kind, context_id, "position", created_at, updated_at)
-VALUES ($1, $2, 'backlog', '00000000-0000-0000-0000-000000000000', $3, now(), now())
-`
-
-type InsertTicketRankParams struct {
-	WorkspaceID uuid.UUID
-	TicketID    uuid.UUID
-	Position    string
-}
-
-// =============================================================================
-// ticket_ranks（段 2: 並び順の正本。設計 Ⅳ-F）
-// =============================================================================
-// CreateTicket 成功直後に usecase が呼ぶ（tickets への INSERT とは別文。設計 Ⅳ-B の
-// 「tickets への INSERT は 1 本だけ」という縛りは ticket_ranks には及ばない）。
-func (q *Queries) InsertTicketRank(ctx context.Context, arg InsertTicketRankParams) error {
-	_, err := q.db.ExecContext(ctx, insertTicketRank, arg.WorkspaceID, arg.TicketID, arg.Position)
-	return err
-}
-
 const insertTicketStatus = `-- name: InsertTicketStatus :one
 INSERT INTO ticket_statuses
-  (id, workspace_id, space_id, name, category, color, "position", is_initial, created_at, updated_at)
+  (id, workspace_id, project_id, name, category, color, "position", is_initial, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
-RETURNING id, workspace_id, space_id, name, name_lower, category, color, position, is_initial, archived_at, deleted_at, created_at, updated_at
+RETURNING id, workspace_id, project_id, name, name_lower, category, color, position, is_initial, archived_at, deleted_at, created_at, updated_at
 `
 
 type InsertTicketStatusParams struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	Name        string
 	Category    string
 	Color       string
@@ -1161,7 +1188,7 @@ func (q *Queries) InsertTicketStatus(ctx context.Context, arg InsertTicketStatus
 	row := q.db.QueryRowContext(ctx, insertTicketStatus,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.SpaceID,
+		arg.ProjectID,
 		arg.Name,
 		arg.Category,
 		arg.Color,
@@ -1172,7 +1199,7 @@ func (q *Queries) InsertTicketStatus(ctx context.Context, arg InsertTicketStatus
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Name,
 		&i.NameLower,
 		&i.Category,
@@ -1207,16 +1234,16 @@ func (q *Queries) InsertTicketTicketLink(ctx context.Context, arg InsertTicketTi
 const insertTicketType = `-- name: InsertTicketType :one
 
 INSERT INTO ticket_types
-  (id, workspace_id, space_id, name, color, hierarchy_level, "position", is_default,
+  (id, workspace_id, project_id, name, color, hierarchy_level, "position", is_default,
    template_title, template_doc, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
-RETURNING id, workspace_id, space_id, name, name_lower, color, hierarchy_level, position, is_default, template_title, template_doc, archived_at, deleted_at, created_at, updated_at
+RETURNING id, workspace_id, project_id, name, name_lower, color, hierarchy_level, position, is_default, template_title, template_doc, archived_at, deleted_at, created_at, updated_at
 `
 
 type InsertTicketTypeParams struct {
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID
-	SpaceID        uuid.UUID
+	ProjectID      uuid.UUID
 	Name           string
 	Color          string
 	HierarchyLevel int32
@@ -1233,7 +1260,7 @@ func (q *Queries) InsertTicketType(ctx context.Context, arg InsertTicketTypePara
 	row := q.db.QueryRowContext(ctx, insertTicketType,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.SpaceID,
+		arg.ProjectID,
 		arg.Name,
 		arg.Color,
 		arg.HierarchyLevel,
@@ -1246,7 +1273,7 @@ func (q *Queries) InsertTicketType(ctx context.Context, arg InsertTicketTypePara
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Name,
 		&i.NameLower,
 		&i.Color,
@@ -1263,62 +1290,63 @@ func (q *Queries) InsertTicketType(ctx context.Context, arg InsertTicketTypePara
 	return i, err
 }
 
-const lastActiveTicketPosition = `-- name: LastActiveTicketPosition :one
-SELECT COALESCE(max("position"), '')::text AS "position" FROM tickets
-WHERE workspace_id = $1 AND space_id = $2 AND archived_at IS NULL AND deleted_at IS NULL
+const insertTicketWatcher = `-- name: InsertTicketWatcher :exec
+
+INSERT INTO ticket_watchers (workspace_id, ticket_id, user_id, created_at)
+VALUES ($1, $2, $3, now())
+ON CONFLICT (workspace_id, ticket_id, user_id) DO NOTHING
 `
 
-type LastActiveTicketPositionParams struct {
+type InsertTicketWatcherParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	TicketID    uuid.UUID
+	UserID      int64
 }
 
-// tickets.position 自体は段 2 で並び順の正本ではなくなったが、CreateTicket の INSERT が
-// NOT NULL 列を埋めるためにまだこれを呼ぶ（列は残す。読み手は誰も居ない・書き手だけ残る）。
-func (q *Queries) LastActiveTicketPosition(ctx context.Context, arg LastActiveTicketPositionParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, lastActiveTicketPosition, arg.WorkspaceID, arg.SpaceID)
-	var position string
-	err := row.Scan(&position)
-	return position, err
+// =============================================================================
+// ticket_watchers
+// =============================================================================
+// 二重に押しても落とさない（PK 衝突は「もう監視している」なので、成功と同じ扱いでよい）。
+func (q *Queries) InsertTicketWatcher(ctx context.Context, arg InsertTicketWatcherParams) error {
+	_, err := q.db.ExecContext(ctx, insertTicketWatcher, arg.WorkspaceID, arg.TicketID, arg.UserID)
+	return err
 }
 
-const lastActiveTicketRankPosition = `-- name: LastActiveTicketRankPosition :one
-SELECT COALESCE(max(r."position"), '')::text AS "position"
-FROM ticket_ranks r
-JOIN tickets t ON t.workspace_id = r.workspace_id AND t.id = r.ticket_id
-WHERE r.workspace_id = $1 AND t.space_id = $2 AND r.context_kind = 'backlog'
-  AND t.archived_at IS NULL AND t.deleted_at IS NULL
+const isTicketWatchedBy = `-- name: IsTicketWatchedBy :one
+SELECT EXISTS (
+  SELECT 1 FROM ticket_watchers
+  WHERE workspace_id = $1 AND ticket_id = $2 AND user_id = $3
+) AS watching
 `
 
-type LastActiveTicketRankPositionParams struct {
+type IsTicketWatchedByParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	TicketID    uuid.UUID
+	UserID      int64
 }
 
-// ticket_ranks 自体は space_id を持たないので、対象スペースへの絞り込みは tickets への
-// JOIN で行う（LastActiveTicketPosition の ticket_ranks 版）。
-func (q *Queries) LastActiveTicketRankPosition(ctx context.Context, arg LastActiveTicketRankPositionParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, lastActiveTicketRankPosition, arg.WorkspaceID, arg.SpaceID)
-	var position string
-	err := row.Scan(&position)
-	return position, err
+func (q *Queries) IsTicketWatchedBy(ctx context.Context, arg IsTicketWatchedByParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, isTicketWatchedBy, arg.WorkspaceID, arg.TicketID, arg.UserID)
+	var watching bool
+	err := row.Scan(&watching)
+	return watching, err
 }
 
 const lastActiveTicketStatusPosition = `-- name: LastActiveTicketStatusPosition :one
 SELECT COALESCE(max("position"), '')::text AS "position" FROM ticket_statuses
-WHERE workspace_id = $1 AND space_id = $2 AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND archived_at IS NULL
 `
 
 type LastActiveTicketStatusPositionParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 }
 
 // 現役の状態のうち最後（position 最大）のもの。復元・新規作成の末尾採番に使う。
 // 1 件も無ければ空文字（sqlc は :one で 0 行だと sql.ErrNoRows を返すため、
 // COALESCE で空文字に畳んで「0 行エラー」を避ける）。
 func (q *Queries) LastActiveTicketStatusPosition(ctx context.Context, arg LastActiveTicketStatusPositionParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, lastActiveTicketStatusPosition, arg.WorkspaceID, arg.SpaceID)
+	row := q.db.QueryRowContext(ctx, lastActiveTicketStatusPosition, arg.WorkspaceID, arg.ProjectID)
 	var position string
 	err := row.Scan(&position)
 	return position, err
@@ -1326,19 +1354,178 @@ func (q *Queries) LastActiveTicketStatusPosition(ctx context.Context, arg LastAc
 
 const lastActiveTicketTypePosition = `-- name: LastActiveTicketTypePosition :one
 SELECT COALESCE(max("position"), '')::text AS "position" FROM ticket_types
-WHERE workspace_id = $1 AND space_id = $2 AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND archived_at IS NULL
 `
 
 type LastActiveTicketTypePositionParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 }
 
 func (q *Queries) LastActiveTicketTypePosition(ctx context.Context, arg LastActiveTicketTypePositionParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, lastActiveTicketTypePosition, arg.WorkspaceID, arg.SpaceID)
+	row := q.db.QueryRowContext(ctx, lastActiveTicketTypePosition, arg.WorkspaceID, arg.ProjectID)
 	var position string
 	err := row.Scan(&position)
 	return position, err
+}
+
+const lastTicketBacklogRankPosition = `-- name: LastTicketBacklogRankPosition :one
+SELECT COALESCE(max("position"), '')::text AS "position"
+FROM ticket_backlog_ranks
+WHERE workspace_id = $1 AND project_id = $2
+`
+
+type LastTicketBacklogRankPositionParams struct {
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+}
+
+// 末尾へ足すときの「いま一番後ろの鍵」。表が project_id を持つので、対象プロジェクトの
+// 絞り込みに tickets への JOIN は要らない。
+//
+// **現役の行だけに絞ってはいけない。** 一意制約は表の行すべてに効くので、アーカイブ済み・
+// 削除済みの行を無視して最大値を取ると、その鍵を後から作り直して重複で落ちる
+// （末尾のチケットを 1 件アーカイブしてから新しく作ると必ず踏む）。
+// 見えない行も含めて「一番後ろ」を取ることが、採番が衝突しない条件そのもの。
+func (q *Queries) LastTicketBacklogRankPosition(ctx context.Context, arg LastTicketBacklogRankPositionParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, lastTicketBacklogRankPosition, arg.WorkspaceID, arg.ProjectID)
+	var position string
+	err := row.Scan(&position)
+	return position, err
+}
+
+const listAssignedTicketsForPrincipal = `-- name: ListAssignedTicketsForPrincipal :many
+SELECT
+  t.id, t.workspace_id, t.project_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.story_points, t.team_id, t.start_date, t.due_date, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at,
+  a.assignee_principal_id,
+  p.key AS project_key,
+  p.name AS project_name,
+  s.name AS status_name,
+  s.category AS status_category,
+  s.color AS status_color,
+  s."position" AS status_position,
+  ty.name AS type_name
+FROM tickets t
+JOIN ticket_assignments a
+  ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
+JOIN projects p
+  ON p.id = t.project_id
+JOIN ticket_statuses s
+  ON s.workspace_id = t.workspace_id AND s.id = t.status_id
+JOIN ticket_types ty
+  ON ty.workspace_id = t.workspace_id AND ty.id = t.type_id
+WHERE t.workspace_id = $1
+  AND a.assignee_principal_id = $2
+  AND t.archived_at IS NULL
+  AND t.deleted_at IS NULL
+ORDER BY
+  CASE s.category WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END,
+  s."position",
+  t.due_date ASC NULLS LAST,
+  t.created_at ASC
+`
+
+type ListAssignedTicketsForPrincipalParams struct {
+	WorkspaceID         uuid.UUID
+	AssigneePrincipalID uuid.UUID
+}
+
+type ListAssignedTicketsForPrincipalRow struct {
+	ID                  uuid.UUID
+	WorkspaceID         uuid.UUID
+	ProjectID           uuid.UUID
+	Number              int64
+	TypeID              uuid.UUID
+	StatusID            uuid.UUID
+	ParentID            uuid.NullUUID
+	Title               string
+	Doc                 json.RawMessage
+	PlainText           string
+	Priority            int32
+	StoryPoints         sql.NullInt32
+	TeamID              uuid.NullUUID
+	StartDate           pgtext.NullDate
+	DueDate             pgtext.NullDate
+	ClosedAt            sql.NullTime
+	Resolution          sql.NullString
+	CreatedByUserID     int64
+	ArchivedAt          sql.NullTime
+	DeletedAt           sql.NullTime
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	AssigneePrincipalID uuid.UUID
+	ProjectKey          string
+	ProjectName         string
+	StatusName          string
+	StatusCategory      string
+	StatusColor         string
+	StatusPosition      string
+	TypeName            string
+}
+
+// 「自分の担当」の画面向け。ワークスペース**全体**（プロジェクトを横断）で、その人に
+// 割り当たっている現役のチケットを返す。
+//
+// ListTickets との違いは 2 つ。
+//  1. project_id で絞らない。この画面は「どのプロジェクトの仕事か」も込みで一覧にする。
+//  2. 表示に要る隣の表の値（プロジェクトの key / 名前、状態の名前・枠・色、種別の名前）を
+//     同じ行で返す。1 件ずつ引き直すと行数分の往復になるため。
+//
+// 並びは「状態の枠 → 状態の並び → 期限の近い順 → 作成の古い順」。枠で束ねて出す画面なので、
+// SQL の時点で束の順に並べておけば、画面側は境目を見て見出しを挟むだけで済む。
+// 期限が無い行は最後（NULLS LAST）。
+func (q *Queries) ListAssignedTicketsForPrincipal(ctx context.Context, arg ListAssignedTicketsForPrincipalParams) ([]ListAssignedTicketsForPrincipalRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAssignedTicketsForPrincipal, arg.WorkspaceID, arg.AssigneePrincipalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAssignedTicketsForPrincipalRow{}
+	for rows.Next() {
+		var i ListAssignedTicketsForPrincipalRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ProjectID,
+			&i.Number,
+			&i.TypeID,
+			&i.StatusID,
+			&i.ParentID,
+			&i.Title,
+			&i.Doc,
+			&i.PlainText,
+			&i.Priority,
+			&i.StoryPoints,
+			&i.TeamID,
+			&i.StartDate,
+			&i.DueDate,
+			&i.ClosedAt,
+			&i.Resolution,
+			&i.CreatedByUserID,
+			&i.ArchivedAt,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AssigneePrincipalID,
+			&i.ProjectKey,
+			&i.ProjectName,
+			&i.StatusName,
+			&i.StatusCategory,
+			&i.StatusColor,
+			&i.StatusPosition,
+			&i.TypeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listExistingPageIDsInWorkspace = `-- name: ListExistingPageIDsInWorkspace :many
@@ -1416,7 +1603,7 @@ func (q *Queries) ListExistingTicketIDsInWorkspace(ctx context.Context, arg List
 }
 
 const listTicketAncestors = `-- name: ListTicketAncestors :many
-SELECT t.id, t.workspace_id, t.space_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.start_date, t.due_date, t.position, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at FROM ticket_paths tp
+SELECT t.id, t.workspace_id, t.project_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.story_points, t.team_id, t.start_date, t.due_date, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at FROM ticket_paths tp
 JOIN tickets t ON t.workspace_id = tp.workspace_id AND t.id = tp.ancestor_id
 WHERE tp.workspace_id = $1 AND tp.ticket_id = $2 AND tp.depth > 0 AND t.deleted_at IS NULL
 ORDER BY tp.depth DESC
@@ -1450,7 +1637,7 @@ func (q *Queries) ListTicketAncestors(ctx context.Context, arg ListTicketAncesto
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
+			&i.ProjectID,
 			&i.Number,
 			&i.TypeID,
 			&i.StatusID,
@@ -1459,9 +1646,10 @@ func (q *Queries) ListTicketAncestors(ctx context.Context, arg ListTicketAncesto
 			&i.Doc,
 			&i.PlainText,
 			&i.Priority,
+			&i.StoryPoints,
+			&i.TeamID,
 			&i.StartDate,
 			&i.DueDate,
-			&i.Position,
 			&i.ClosedAt,
 			&i.Resolution,
 			&i.CreatedByUserID,
@@ -1573,23 +1761,23 @@ func (q *Queries) ListTicketChangeItemsByGroupIDs(ctx context.Context, arg ListT
 }
 
 const listTicketChildren = `-- name: ListTicketChildren :many
-SELECT t.id, t.workspace_id, t.space_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.start_date, t.due_date, t.position, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at, COALESCE(r.position, t."position") AS rank_position FROM tickets t
-LEFT JOIN ticket_ranks r ON r.workspace_id = t.workspace_id AND r.ticket_id = t.id AND r.context_kind = 'backlog'
-WHERE t.workspace_id = $1 AND t.space_id = $2 AND t.parent_id = $3
+SELECT t.id, t.workspace_id, t.project_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.story_points, t.team_id, t.start_date, t.due_date, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at, COALESCE(r."position", '')::text AS rank_position FROM tickets t
+LEFT JOIN ticket_backlog_ranks r ON r.workspace_id = t.workspace_id AND r.ticket_id = t.id
+WHERE t.workspace_id = $1 AND t.project_id = $2 AND t.parent_id = $3
   AND t.archived_at IS NULL AND t.deleted_at IS NULL
-ORDER BY COALESCE(r.position, t."position")
+ORDER BY r."position"
 `
 
 type ListTicketChildrenParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	ParentID    uuid.NullUUID
 }
 
 type ListTicketChildrenRow struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID
-	SpaceID         uuid.UUID
+	ProjectID       uuid.UUID
 	Number          int64
 	TypeID          uuid.UUID
 	StatusID        uuid.UUID
@@ -1598,9 +1786,10 @@ type ListTicketChildrenRow struct {
 	Doc             json.RawMessage
 	PlainText       string
 	Priority        int32
+	StoryPoints     sql.NullInt32
+	TeamID          uuid.NullUUID
 	StartDate       pgtext.NullDate
 	DueDate         pgtext.NullDate
-	Position        string
 	ClosedAt        sql.NullTime
 	Resolution      sql.NullString
 	CreatedByUserID int64
@@ -1611,9 +1800,9 @@ type ListTicketChildrenRow struct {
 	RankPosition    string
 }
 
-// ticket_ranks を LEFT JOIN + COALESCE で並び順を rank_position として返す（同上）。
+// ticket_backlog_ranks を LEFT JOIN で並び順を rank_position として返す（同上）。
 func (q *Queries) ListTicketChildren(ctx context.Context, arg ListTicketChildrenParams) ([]ListTicketChildrenRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTicketChildren, arg.WorkspaceID, arg.SpaceID, arg.ParentID)
+	rows, err := q.db.QueryContext(ctx, listTicketChildren, arg.WorkspaceID, arg.ProjectID, arg.ParentID)
 	if err != nil {
 		return nil, err
 	}
@@ -1624,7 +1813,7 @@ func (q *Queries) ListTicketChildren(ctx context.Context, arg ListTicketChildren
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
+			&i.ProjectID,
 			&i.Number,
 			&i.TypeID,
 			&i.StatusID,
@@ -1633,9 +1822,10 @@ func (q *Queries) ListTicketChildren(ctx context.Context, arg ListTicketChildren
 			&i.Doc,
 			&i.PlainText,
 			&i.Priority,
+			&i.StoryPoints,
+			&i.TeamID,
 			&i.StartDate,
 			&i.DueDate,
-			&i.Position,
 			&i.ClosedAt,
 			&i.Resolution,
 			&i.CreatedByUserID,
@@ -1698,17 +1888,17 @@ func (q *Queries) ListTicketPageLinksBySource(ctx context.Context, arg ListTicke
 
 const listTicketParentChain = `-- name: ListTicketParentChain :many
 WITH RECURSIVE chain AS (
-  SELECT t.id, t.workspace_id, t.space_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.start_date, t.due_date, t.position, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at, 0 AS depth
+  SELECT t.id, t.workspace_id, t.project_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.story_points, t.team_id, t.start_date, t.due_date, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at, 0 AS depth
   FROM tickets t
   WHERE t.workspace_id = $1 AND t.id = $2
   UNION ALL
-  SELECT p.id, p.workspace_id, p.space_id, p.number, p.type_id, p.status_id, p.parent_id, p.title, p.doc, p.plain_text, p.priority, p.start_date, p.due_date, p.position, p.closed_at, p.resolution, p.created_by_user_id, p.archived_at, p.deleted_at, p.created_at, p.updated_at, c.depth + 1
+  SELECT p.id, p.workspace_id, p.project_id, p.number, p.type_id, p.status_id, p.parent_id, p.title, p.doc, p.plain_text, p.priority, p.story_points, p.team_id, p.start_date, p.due_date, p.closed_at, p.resolution, p.created_by_user_id, p.archived_at, p.deleted_at, p.created_at, p.updated_at, c.depth + 1
   FROM tickets p
   JOIN chain c ON p.workspace_id = c.workspace_id AND p.id = c.parent_id
   WHERE c.depth < 10
 )
-SELECT id, workspace_id, space_id, number, type_id, status_id, parent_id, title, doc,
-  plain_text, priority, start_date, due_date, "position", closed_at, resolution,
+SELECT id, workspace_id, project_id, number, type_id, status_id, parent_id, title, doc,
+  plain_text, priority, start_date, due_date, closed_at, resolution,
   created_by_user_id, archived_at, deleted_at, created_at, updated_at
 FROM chain
 WHERE depth > 0
@@ -1723,7 +1913,7 @@ type ListTicketParentChainParams struct {
 type ListTicketParentChainRow struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID
-	SpaceID         uuid.UUID
+	ProjectID       uuid.UUID
 	Number          int64
 	TypeID          uuid.UUID
 	StatusID        uuid.UUID
@@ -1734,7 +1924,6 @@ type ListTicketParentChainRow struct {
 	Priority        int32
 	StartDate       pgtext.NullDate
 	DueDate         pgtext.NullDate
-	Position        string
 	ClosedAt        sql.NullTime
 	Resolution      sql.NullString
 	CreatedByUserID int64
@@ -1759,7 +1948,7 @@ func (q *Queries) ListTicketParentChain(ctx context.Context, arg ListTicketParen
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
+			&i.ProjectID,
 			&i.Number,
 			&i.TypeID,
 			&i.StatusID,
@@ -1770,7 +1959,6 @@ func (q *Queries) ListTicketParentChain(ctx context.Context, arg ListTicketParen
 			&i.Priority,
 			&i.StartDate,
 			&i.DueDate,
-			&i.Position,
 			&i.ClosedAt,
 			&i.Resolution,
 			&i.CreatedByUserID,
@@ -1793,22 +1981,22 @@ func (q *Queries) ListTicketParentChain(ctx context.Context, arg ListTicketParen
 }
 
 const listTicketStatuses = `-- name: ListTicketStatuses :many
-SELECT id, workspace_id, space_id, name, name_lower, category, color, position, is_initial, archived_at, deleted_at, created_at, updated_at FROM ticket_statuses
-WHERE workspace_id = $1 AND space_id = $2
+SELECT id, workspace_id, project_id, name, name_lower, category, color, position, is_initial, archived_at, deleted_at, created_at, updated_at FROM ticket_statuses
+WHERE workspace_id = $1 AND project_id = $2
   AND (archived_at IS NOT NULL) = $3::boolean
 ORDER BY "position"
 `
 
 type ListTicketStatusesParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	Archived    bool
 }
 
 // sqlc.narg(archived) は bool。呼び出し側は「現役だけ」か「アーカイブ済みだけ」かを
 // 明示的に渡す（NULL で「両方」は扱わない — 管理画面のタブ切り替えに 1 対 1 対応させる）。
 func (q *Queries) ListTicketStatuses(ctx context.Context, arg ListTicketStatusesParams) ([]TicketStatus, error) {
-	rows, err := q.db.QueryContext(ctx, listTicketStatuses, arg.WorkspaceID, arg.SpaceID, arg.Archived)
+	rows, err := q.db.QueryContext(ctx, listTicketStatuses, arg.WorkspaceID, arg.ProjectID, arg.Archived)
 	if err != nil {
 		return nil, err
 	}
@@ -1819,7 +2007,7 @@ func (q *Queries) ListTicketStatuses(ctx context.Context, arg ListTicketStatuses
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
+			&i.ProjectID,
 			&i.Name,
 			&i.NameLower,
 			&i.Category,
@@ -1883,20 +2071,20 @@ func (q *Queries) ListTicketTicketLinksBySource(ctx context.Context, arg ListTic
 }
 
 const listTicketTypes = `-- name: ListTicketTypes :many
-SELECT id, workspace_id, space_id, name, name_lower, color, hierarchy_level, position, is_default, template_title, template_doc, archived_at, deleted_at, created_at, updated_at FROM ticket_types
-WHERE workspace_id = $1 AND space_id = $2
+SELECT id, workspace_id, project_id, name, name_lower, color, hierarchy_level, position, is_default, template_title, template_doc, archived_at, deleted_at, created_at, updated_at FROM ticket_types
+WHERE workspace_id = $1 AND project_id = $2
   AND (archived_at IS NOT NULL) = $3::boolean
 ORDER BY "position"
 `
 
 type ListTicketTypesParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	Archived    bool
 }
 
 func (q *Queries) ListTicketTypes(ctx context.Context, arg ListTicketTypesParams) ([]TicketType, error) {
-	rows, err := q.db.QueryContext(ctx, listTicketTypes, arg.WorkspaceID, arg.SpaceID, arg.Archived)
+	rows, err := q.db.QueryContext(ctx, listTicketTypes, arg.WorkspaceID, arg.ProjectID, arg.Archived)
 	if err != nil {
 		return nil, err
 	}
@@ -1907,7 +2095,7 @@ func (q *Queries) ListTicketTypes(ctx context.Context, arg ListTicketTypesParams
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
+			&i.ProjectID,
 			&i.Name,
 			&i.NameLower,
 			&i.Color,
@@ -1935,11 +2123,11 @@ func (q *Queries) ListTicketTypes(ctx context.Context, arg ListTicketTypesParams
 }
 
 const listTickets = `-- name: ListTickets :many
-SELECT t.id, t.workspace_id, t.space_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.start_date, t.due_date, t.position, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at, a.assignee_principal_id, COALESCE(r.position, t."position") AS rank_position FROM tickets t
-LEFT JOIN ticket_ranks r ON r.workspace_id = t.workspace_id AND r.ticket_id = t.id AND r.context_kind = 'backlog'
+SELECT t.id, t.workspace_id, t.project_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.story_points, t.team_id, t.start_date, t.due_date, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at, a.assignee_principal_id, COALESCE(r."position", '')::text AS rank_position FROM tickets t
+LEFT JOIN ticket_backlog_ranks r ON r.workspace_id = t.workspace_id AND r.ticket_id = t.id
 LEFT JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
 LEFT JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
-WHERE t.workspace_id = $1 AND t.space_id = $2
+WHERE t.workspace_id = $1 AND t.project_id = $2
   AND t.deleted_at IS NULL
   AND (t.archived_at IS NOT NULL) = $3::boolean
   AND ($4::uuid IS NULL OR t.status_id = $4::uuid)
@@ -1970,12 +2158,12 @@ WHERE t.workspace_id = $1 AND t.space_id = $2
     OR word_similarity($13::text, t.title) > 0.6
     OR word_similarity($13::text, t.plain_text) > 0.6
   )
-ORDER BY COALESCE(r.position, t."position")
+ORDER BY r."position"
 `
 
 type ListTicketsParams struct {
 	WorkspaceID             uuid.UUID
-	SpaceID                 uuid.UUID
+	ProjectID               uuid.UUID
 	IncludeArchived         bool
 	StatusID                uuid.NullUUID
 	TypeID                  uuid.NullUUID
@@ -1992,7 +2180,7 @@ type ListTicketsParams struct {
 type ListTicketsRow struct {
 	ID                  uuid.UUID
 	WorkspaceID         uuid.UUID
-	SpaceID             uuid.UUID
+	ProjectID           uuid.UUID
 	Number              int64
 	TypeID              uuid.UUID
 	StatusID            uuid.UUID
@@ -2001,9 +2189,10 @@ type ListTicketsRow struct {
 	Doc                 json.RawMessage
 	PlainText           string
 	Priority            int32
+	StoryPoints         sql.NullInt32
+	TeamID              uuid.NullUUID
 	StartDate           pgtext.NullDate
 	DueDate             pgtext.NullDate
-	Position            string
 	ClosedAt            sql.NullTime
 	Resolution          sql.NullString
 	CreatedByUserID     int64
@@ -2029,12 +2218,12 @@ type ListTicketsRow struct {
 // q は題名（title）・本文の素テキスト写し（plain_text）の両方を対象にする。ILIKE の
 // 中間一致に加えて word_similarity(q, 対象) > 0.6 を OR し、表記ゆれ・打ち間違いも拾う
 // （KB ページ検索の SearchPages と同じ考え方。schema.hcl 冒頭の「pg_trgm 拡張について」参照）。
-// ticket_ranks を LEFT JOIN + COALESCE で並び順を rank_position として返す（GetTicket と同じ理由）。
+// ticket_backlog_ranks を LEFT JOIN で並び順を rank_position として返す（GetTicket と同じ理由）。
 // deleted_at IS NULL は常に付ける（include_archived の有無に関わらず、削除済みは一覧に出さない）。
 func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]ListTicketsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listTickets,
 		arg.WorkspaceID,
-		arg.SpaceID,
+		arg.ProjectID,
 		arg.IncludeArchived,
 		arg.StatusID,
 		arg.TypeID,
@@ -2057,7 +2246,7 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
+			&i.ProjectID,
 			&i.Number,
 			&i.TypeID,
 			&i.StatusID,
@@ -2066,9 +2255,10 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 			&i.Doc,
 			&i.PlainText,
 			&i.Priority,
+			&i.StoryPoints,
+			&i.TeamID,
 			&i.StartDate,
 			&i.DueDate,
-			&i.Position,
 			&i.ClosedAt,
 			&i.Resolution,
 			&i.CreatedByUserID,
@@ -2093,7 +2283,7 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 }
 
 const listTicketsAssignedToPrincipal = `-- name: ListTicketsAssignedToPrincipal :many
-SELECT t.id, t.workspace_id, t.space_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.start_date, t.due_date, t.position, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at FROM tickets t
+SELECT t.id, t.workspace_id, t.project_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.story_points, t.team_id, t.start_date, t.due_date, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at FROM tickets t
 JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
 WHERE t.workspace_id = $1 AND a.assignee_principal_id = $2
   AND t.archived_at IS NULL AND t.deleted_at IS NULL
@@ -2116,7 +2306,7 @@ func (q *Queries) ListTicketsAssignedToPrincipal(ctx context.Context, arg ListTi
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
+			&i.ProjectID,
 			&i.Number,
 			&i.TypeID,
 			&i.StatusID,
@@ -2125,9 +2315,10 @@ func (q *Queries) ListTicketsAssignedToPrincipal(ctx context.Context, arg ListTi
 			&i.Doc,
 			&i.PlainText,
 			&i.Priority,
+			&i.StoryPoints,
+			&i.TeamID,
 			&i.StartDate,
 			&i.DueDate,
-			&i.Position,
 			&i.ClosedAt,
 			&i.Resolution,
 			&i.CreatedByUserID,
@@ -2150,7 +2341,7 @@ func (q *Queries) ListTicketsAssignedToPrincipal(ctx context.Context, arg ListTi
 }
 
 const listTicketsReferencingPage = `-- name: ListTicketsReferencingPage :many
-SELECT t.id, t.workspace_id, t.space_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.start_date, t.due_date, t.position, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at FROM ticket_page_links tpl
+SELECT t.id, t.workspace_id, t.project_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.story_points, t.team_id, t.start_date, t.due_date, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at FROM ticket_page_links tpl
 JOIN tickets t ON t.workspace_id = tpl.workspace_id AND t.id = tpl.source_ticket_id
 WHERE tpl.workspace_id = $1 AND tpl.target_page_id = $2
   AND tpl.deleted_at IS NULL AND t.deleted_at IS NULL
@@ -2182,7 +2373,7 @@ func (q *Queries) ListTicketsReferencingPage(ctx context.Context, arg ListTicket
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
+			&i.ProjectID,
 			&i.Number,
 			&i.TypeID,
 			&i.StatusID,
@@ -2191,9 +2382,10 @@ func (q *Queries) ListTicketsReferencingPage(ctx context.Context, arg ListTicket
 			&i.Doc,
 			&i.PlainText,
 			&i.Priority,
+			&i.StoryPoints,
+			&i.TeamID,
 			&i.StartDate,
 			&i.DueDate,
-			&i.Position,
 			&i.ClosedAt,
 			&i.Resolution,
 			&i.CreatedByUserID,
@@ -2254,20 +2446,20 @@ func (q *Queries) ListTicketsReferencingTicket(ctx context.Context, arg ListTick
 	return items, nil
 }
 
-const moveTicketRank = `-- name: MoveTicketRank :execrows
-UPDATE ticket_ranks
+const moveTicketBacklogRank = `-- name: MoveTicketBacklogRank :execrows
+UPDATE ticket_backlog_ranks
 SET "position" = $3, updated_at = now()
-WHERE workspace_id = $1 AND ticket_id = $2 AND context_kind = 'backlog'
+WHERE workspace_id = $1 AND ticket_id = $2
 `
 
-type MoveTicketRankParams struct {
+type MoveTicketBacklogRankParams struct {
 	WorkspaceID uuid.UUID
 	TicketID    uuid.UUID
 	Position    string
 }
 
-func (q *Queries) MoveTicketRank(ctx context.Context, arg MoveTicketRankParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, moveTicketRank, arg.WorkspaceID, arg.TicketID, arg.Position)
+func (q *Queries) MoveTicketBacklogRank(ctx context.Context, arg MoveTicketBacklogRankParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, moveTicketBacklogRank, arg.WorkspaceID, arg.TicketID, arg.Position)
 	if err != nil {
 		return 0, err
 	}
@@ -2276,15 +2468,15 @@ func (q *Queries) MoveTicketRank(ctx context.Context, arg MoveTicketRankParams) 
 
 const resolveTicketIDByKey = `-- name: ResolveTicketIDByKey :one
 SELECT t.id, t.workspace_id FROM tickets t
-JOIN spaces s ON s.workspace_id = t.workspace_id AND s.id = t.space_id
+JOIN projects p ON p.workspace_id = t.workspace_id AND p.id = t.project_id
 WHERE t.workspace_id = $1
-  AND lower(s."key") = $2
+  AND lower(p."key") = $2
   AND t.number = $3
 `
 
 type ResolveTicketIDByKeyParams struct {
 	WorkspaceID uuid.UUID
-	SpaceKey    string
+	ProjectKey  string
 	Number      int64
 }
 
@@ -2295,7 +2487,7 @@ type ResolveTicketIDByKeyRow struct {
 
 // spaceKey（小文字。domain.ParseTicketKey が返す）+ number からチケットを引く。
 func (q *Queries) ResolveTicketIDByKey(ctx context.Context, arg ResolveTicketIDByKeyParams) (ResolveTicketIDByKeyRow, error) {
-	row := q.db.QueryRowContext(ctx, resolveTicketIDByKey, arg.WorkspaceID, arg.SpaceKey, arg.Number)
+	row := q.db.QueryRowContext(ctx, resolveTicketIDByKey, arg.WorkspaceID, arg.ProjectKey, arg.Number)
 	var i ResolveTicketIDByKeyRow
 	err := row.Scan(&i.ID, &i.WorkspaceID)
 	return i, err
@@ -2303,20 +2495,19 @@ func (q *Queries) ResolveTicketIDByKey(ctx context.Context, arg ResolveTicketIDB
 
 const restoreDeletedTicket = `-- name: RestoreDeletedTicket :execrows
 UPDATE tickets
-SET deleted_at = NULL, "position" = $3, updated_at = now()
+SET deleted_at = NULL, updated_at = now()
 WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NOT NULL
 `
 
 type RestoreDeletedTicketParams struct {
 	WorkspaceID uuid.UUID
 	ID          uuid.UUID
-	Position    string
 }
 
-// position は末尾へ付け直す（RestoreTicket と同じ理由。削除されていた間に他のチケットの
-// 並びが進んでいる可能性があるため、元の位置は復元しない）。
+// 並び順は末尾へ付け直す（削除されていた間に他のチケットの並びが進んでいる可能性が
+// あるため、元の位置は復元しない）。付け直しは呼び出し側の UpsertTicketBacklogRank。
 func (q *Queries) RestoreDeletedTicket(ctx context.Context, arg RestoreDeletedTicketParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, restoreDeletedTicket, arg.WorkspaceID, arg.ID, arg.Position)
+	result, err := q.db.ExecContext(ctx, restoreDeletedTicket, arg.WorkspaceID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -2325,18 +2516,19 @@ func (q *Queries) RestoreDeletedTicket(ctx context.Context, arg RestoreDeletedTi
 
 const restoreTicket = `-- name: RestoreTicket :execrows
 UPDATE tickets
-SET archived_at = NULL, "position" = $3, updated_at = now()
+SET archived_at = NULL, updated_at = now()
 WHERE workspace_id = $1 AND id = $2 AND archived_at IS NOT NULL AND deleted_at IS NULL
 `
 
 type RestoreTicketParams struct {
 	WorkspaceID uuid.UUID
 	ID          uuid.UUID
-	Position    string
 }
 
+// 並び順の付け直しはこの文では行わない。呼び出し側（RestoreTicketUseCase）が
+// UpsertTicketBacklogRank で末尾へ置き直す。
 func (q *Queries) RestoreTicket(ctx context.Context, arg RestoreTicketParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, restoreTicket, arg.WorkspaceID, arg.ID, arg.Position)
+	result, err := q.db.ExecContext(ctx, restoreTicket, arg.WorkspaceID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -2346,12 +2538,12 @@ func (q *Queries) RestoreTicket(ctx context.Context, arg RestoreTicketParams) (i
 const restoreTicketStatus = `-- name: RestoreTicketStatus :execrows
 UPDATE ticket_statuses
 SET archived_at = NULL, "position" = $4, updated_at = now()
-WHERE workspace_id = $1 AND space_id = $2 AND id = $3 AND archived_at IS NOT NULL
+WHERE workspace_id = $1 AND project_id = $2 AND id = $3 AND archived_at IS NOT NULL
 `
 
 type RestoreTicketStatusParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	ID          uuid.UUID
 	Position    string
 }
@@ -2361,7 +2553,7 @@ type RestoreTicketStatusParams struct {
 func (q *Queries) RestoreTicketStatus(ctx context.Context, arg RestoreTicketStatusParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, restoreTicketStatus,
 		arg.WorkspaceID,
-		arg.SpaceID,
+		arg.ProjectID,
 		arg.ID,
 		arg.Position,
 	)
@@ -2374,12 +2566,12 @@ func (q *Queries) RestoreTicketStatus(ctx context.Context, arg RestoreTicketStat
 const restoreTicketType = `-- name: RestoreTicketType :execrows
 UPDATE ticket_types
 SET archived_at = NULL, "position" = $4, updated_at = now()
-WHERE workspace_id = $1 AND space_id = $2 AND id = $3 AND archived_at IS NOT NULL
+WHERE workspace_id = $1 AND project_id = $2 AND id = $3 AND archived_at IS NOT NULL
 `
 
 type RestoreTicketTypeParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	ID          uuid.UUID
 	Position    string
 }
@@ -2387,7 +2579,7 @@ type RestoreTicketTypeParams struct {
 func (q *Queries) RestoreTicketType(ctx context.Context, arg RestoreTicketTypeParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, restoreTicketType,
 		arg.WorkspaceID,
-		arg.SpaceID,
+		arg.ProjectID,
 		arg.ID,
 		arg.Position,
 	)
@@ -2400,17 +2592,17 @@ func (q *Queries) RestoreTicketType(ctx context.Context, arg RestoreTicketTypePa
 const setTicketStatusInitial = `-- name: SetTicketStatusInitial :execrows
 UPDATE ticket_statuses
 SET is_initial = true, updated_at = now()
-WHERE workspace_id = $1 AND space_id = $2 AND id = $3 AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND id = $3 AND archived_at IS NULL
 `
 
 type SetTicketStatusInitialParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	ID          uuid.UUID
 }
 
 func (q *Queries) SetTicketStatusInitial(ctx context.Context, arg SetTicketStatusInitialParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, setTicketStatusInitial, arg.WorkspaceID, arg.SpaceID, arg.ID)
+	result, err := q.db.ExecContext(ctx, setTicketStatusInitial, arg.WorkspaceID, arg.ProjectID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -2420,17 +2612,17 @@ func (q *Queries) SetTicketStatusInitial(ctx context.Context, arg SetTicketStatu
 const setTicketTypeDefault = `-- name: SetTicketTypeDefault :execrows
 UPDATE ticket_types
 SET is_default = true, updated_at = now()
-WHERE workspace_id = $1 AND space_id = $2 AND id = $3 AND archived_at IS NULL
+WHERE workspace_id = $1 AND project_id = $2 AND id = $3 AND archived_at IS NULL
 `
 
 type SetTicketTypeDefaultParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	ID          uuid.UUID
 }
 
 func (q *Queries) SetTicketTypeDefault(ctx context.Context, arg SetTicketTypeDefaultParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, setTicketTypeDefault, arg.WorkspaceID, arg.SpaceID, arg.ID)
+	result, err := q.db.ExecContext(ctx, setTicketTypeDefault, arg.WorkspaceID, arg.ProjectID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -2441,10 +2633,14 @@ const updateTicket = `-- name: UpdateTicket :one
 UPDATE tickets
 SET type_id = $1, parent_id = $2, title = $3,
     doc = $4, plain_text = $5, priority = $6,
-    start_date = $7::date, due_date = $8::date,
+    -- ::bigint で受ける（列は integer）。::integer だと sqlc が int32 で生成し、
+    -- 範囲外の値が Go 側で黙って負数へ折り返す。bigint で渡せば、範囲外は
+    -- PostgreSQL が "integer out of range" で弾く（縮小を DB に判定させる）。
+    story_points = $7::bigint,
+    start_date = $8::date, due_date = $9::date,
     updated_at = now()
-WHERE workspace_id = $9 AND id = $10
-RETURNING id, workspace_id, space_id, number, type_id, status_id, parent_id, title, doc, plain_text, priority, start_date, due_date, position, closed_at, resolution, created_by_user_id, archived_at, deleted_at, created_at, updated_at
+WHERE workspace_id = $10 AND id = $11
+RETURNING id, workspace_id, project_id, number, type_id, status_id, parent_id, title, doc, plain_text, priority, story_points, team_id, start_date, due_date, closed_at, resolution, created_by_user_id, archived_at, deleted_at, created_at, updated_at
 `
 
 type UpdateTicketParams struct {
@@ -2454,12 +2650,18 @@ type UpdateTicketParams struct {
 	Doc         json.RawMessage
 	PlainText   string
 	Priority    int32
+	StoryPoints sql.NullInt64
 	StartDate   pgtext.NullDate
 	DueDate     pgtext.NullDate
 	WorkspaceID uuid.UUID
 	ID          uuid.UUID
 }
 
+// 並び順（rank_position）は返さない。RETURNING に JOIN は書けず、CTE で繋ぐ形も
+// RETURNING の中の相関副問い合わせも、sqlc の解析器が RETURNING * の列を追えずに
+// 「workspace_id が曖昧」で落ちる（PostgreSQL 自体は通す文なのに、生成が通らない）。
+// 更新は並び順に触らないので、呼び出し側は position を空のまま受け取り、並びが要る画面は
+// 一覧（ListTickets）を読み直す。詳しくは toDomainTicket の doc を参照。
 func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (Ticket, error) {
 	row := q.db.QueryRowContext(ctx, updateTicket,
 		arg.TypeID,
@@ -2468,6 +2670,7 @@ func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (Tic
 		arg.Doc,
 		arg.PlainText,
 		arg.Priority,
+		arg.StoryPoints,
 		arg.StartDate,
 		arg.DueDate,
 		arg.WorkspaceID,
@@ -2477,7 +2680,7 @@ func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (Tic
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Number,
 		&i.TypeID,
 		&i.StatusID,
@@ -2486,9 +2689,10 @@ func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (Tic
 		&i.Doc,
 		&i.PlainText,
 		&i.Priority,
+		&i.StoryPoints,
+		&i.TeamID,
 		&i.StartDate,
 		&i.DueDate,
-		&i.Position,
 		&i.ClosedAt,
 		&i.Resolution,
 		&i.CreatedByUserID,
@@ -2503,13 +2707,13 @@ func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (Tic
 const updateTicketStatus = `-- name: UpdateTicketStatus :one
 UPDATE ticket_statuses
 SET name = $4, category = $5, color = $6, updated_at = now()
-WHERE workspace_id = $1 AND space_id = $2 AND id = $3
-RETURNING id, workspace_id, space_id, name, name_lower, category, color, position, is_initial, archived_at, deleted_at, created_at, updated_at
+WHERE workspace_id = $1 AND project_id = $2 AND id = $3
+RETURNING id, workspace_id, project_id, name, name_lower, category, color, position, is_initial, archived_at, deleted_at, created_at, updated_at
 `
 
 type UpdateTicketStatusParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	ID          uuid.UUID
 	Name        string
 	Category    string
@@ -2519,7 +2723,7 @@ type UpdateTicketStatusParams struct {
 func (q *Queries) UpdateTicketStatus(ctx context.Context, arg UpdateTicketStatusParams) (TicketStatus, error) {
 	row := q.db.QueryRowContext(ctx, updateTicketStatus,
 		arg.WorkspaceID,
-		arg.SpaceID,
+		arg.ProjectID,
 		arg.ID,
 		arg.Name,
 		arg.Category,
@@ -2529,7 +2733,7 @@ func (q *Queries) UpdateTicketStatus(ctx context.Context, arg UpdateTicketStatus
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Name,
 		&i.NameLower,
 		&i.Category,
@@ -2548,13 +2752,13 @@ const updateTicketType = `-- name: UpdateTicketType :one
 UPDATE ticket_types
 SET name = $4, color = $5, hierarchy_level = $6,
     template_title = $7, template_doc = $8, updated_at = now()
-WHERE workspace_id = $1 AND space_id = $2 AND id = $3
-RETURNING id, workspace_id, space_id, name, name_lower, color, hierarchy_level, position, is_default, template_title, template_doc, archived_at, deleted_at, created_at, updated_at
+WHERE workspace_id = $1 AND project_id = $2 AND id = $3
+RETURNING id, workspace_id, project_id, name, name_lower, color, hierarchy_level, position, is_default, template_title, template_doc, archived_at, deleted_at, created_at, updated_at
 `
 
 type UpdateTicketTypeParams struct {
 	WorkspaceID    uuid.UUID
-	SpaceID        uuid.UUID
+	ProjectID      uuid.UUID
 	ID             uuid.UUID
 	Name           string
 	Color          string
@@ -2566,7 +2770,7 @@ type UpdateTicketTypeParams struct {
 func (q *Queries) UpdateTicketType(ctx context.Context, arg UpdateTicketTypeParams) (TicketType, error) {
 	row := q.db.QueryRowContext(ctx, updateTicketType,
 		arg.WorkspaceID,
-		arg.SpaceID,
+		arg.ProjectID,
 		arg.ID,
 		arg.Name,
 		arg.Color,
@@ -2578,7 +2782,7 @@ func (q *Queries) UpdateTicketType(ctx context.Context, arg UpdateTicketTypePara
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
+		&i.ProjectID,
 		&i.Name,
 		&i.NameLower,
 		&i.Color,
@@ -2638,4 +2842,34 @@ func (q *Queries) UpsertTicketAssignment(ctx context.Context, arg UpsertTicketAs
 		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const upsertTicketBacklogRank = `-- name: UpsertTicketBacklogRank :exec
+INSERT INTO ticket_backlog_ranks (workspace_id, project_id, ticket_id, "position", created_at, updated_at)
+VALUES ($1, $2, $3, $4, now(), now())
+ON CONFLICT (workspace_id, ticket_id)
+DO UPDATE SET "position" = EXCLUDED."position", updated_at = now()
+`
+
+type UpsertTicketBacklogRankParams struct {
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+	TicketID    uuid.UUID
+	Position    string
+}
+
+// 復元（アーカイブ解除・削除取り消し）で末尾へ置き直すときに使う。
+//
+// 素の UPDATE ではなく upsert にしてあるのは、並び順の行が無いチケットが有り得るため
+// —— この表より前に作られたチケットは、移行で現役の分だけに行を入れた（撤去済みだった
+// tickets.position から写した）。当時アーカイブ済み・削除済みだった分には行が無い。
+// UPDATE だけだと、そういうチケットを復元したときに 0 行で失敗する。
+func (q *Queries) UpsertTicketBacklogRank(ctx context.Context, arg UpsertTicketBacklogRankParams) error {
+	_, err := q.db.ExecContext(ctx, upsertTicketBacklogRank,
+		arg.WorkspaceID,
+		arg.ProjectID,
+		arg.TicketID,
+		arg.Position,
+	)
+	return err
 }

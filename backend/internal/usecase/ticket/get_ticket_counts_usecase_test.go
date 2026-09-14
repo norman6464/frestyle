@@ -16,8 +16,8 @@ func Test_チケット件数_必須項目の検証(t *testing.T) {
 	_, err := uc.Execute(context.Background(), ticket.GetTicketCountsInput{})
 	require.Error(t, err, "workspaceID 必須")
 	_, err = uc.Execute(context.Background(), ticket.GetTicketCountsInput{WorkspaceID: tkWS})
-	require.Error(t, err, "spaceID 必須")
-	_, err = uc.Execute(context.Background(), ticket.GetTicketCountsInput{WorkspaceID: tkWS, SpaceID: tkSpace})
+	require.Error(t, err, "projectID 必須")
+	_, err = uc.Execute(context.Background(), ticket.GetTicketCountsInput{WorkspaceID: tkWS, ProjectID: tkProject})
 	require.Error(t, err, "userID 必須")
 }
 
@@ -26,11 +26,11 @@ func Test_チケット件数_UserIDからprincipalを解決してrepositoryへ�
 	perms := &mockKBPermissionRepo{}
 	perms.On("FindUserPrincipal", mock.Anything, tkWS, uint64(42)).
 		Return(&domain.Principal{ID: "principal-me"}, nil)
-	repo.On("GetTicketCounts", mock.Anything, tkWS, tkSpace, strPtr("principal-me")).
+	repo.On("GetTicketCounts", mock.Anything, tkWS, tkProject, strPtr("principal-me")).
 		Return(repository.TicketCounts{Total: 10, AssignedToMe: 3, Overdue: 2, Unassigned: 1}, nil)
 
 	got, err := ticket.NewGetTicketCountsUseCase(repo, perms).Execute(context.Background(), ticket.GetTicketCountsInput{
-		WorkspaceID: tkWS, SpaceID: tkSpace, UserID: 42,
+		WorkspaceID: tkWS, ProjectID: tkProject, UserID: 42,
 	})
 	require.NoError(t, err)
 	require.Equal(t, repository.TicketCounts{Total: 10, AssignedToMe: 3, Overdue: 2, Unassigned: 1}, got)
@@ -44,7 +44,7 @@ func Test_チケット件数_principal解決に失敗したらエラーを伝え
 		Return(nil, repository.ErrPrincipalNotFound)
 
 	_, err := ticket.NewGetTicketCountsUseCase(&mockTicketRepo{}, perms).Execute(context.Background(), ticket.GetTicketCountsInput{
-		WorkspaceID: tkWS, SpaceID: tkSpace, UserID: 42,
+		WorkspaceID: tkWS, ProjectID: tkProject, UserID: 42,
 	})
 	require.ErrorIs(t, err, repository.ErrPrincipalNotFound)
 }

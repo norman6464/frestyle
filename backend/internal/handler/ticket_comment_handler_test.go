@@ -20,7 +20,7 @@ func ticketFixtureSameRepo(t *testing.T, base ticketFixture, uid uint64, role do
 	t.Helper()
 	base.perms.addMember(kbWorkspaceID, uid)
 	if role != "" {
-		base.perms.setScopeRole(kbSpaceID, uid, role)
+		base.perms.setScopeRole(kbWorkspaceID, uid, role)
 	}
 	users := newKbFakeUsers()
 	r := gin.New()
@@ -40,7 +40,7 @@ func ticketFixtureSameRepo(t *testing.T, base ticketFixture, uid uint64, role do
 // 応答の形）に絞る。
 func Test_チケット発言一式_投稿一覧編集履歴削除反応(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-comments-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "対象チケット"})
+	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-comments-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "対象チケット"})
 
 	// 1) 投稿。
 	w := f.do(t, http.MethodPost, ticketAPIBase+"/tickets/"+target.ID+"/comments",
@@ -110,7 +110,7 @@ func Test_チケット発言一式_投稿一覧編集履歴削除反応(t *testi
 
 func Test_チケット発言_閲覧のみでは投稿403だが一覧は見える(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
-	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-comments-viewer", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x"})
+	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-comments-viewer", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x"})
 
 	w := f.do(t, http.MethodPost, ticketAPIBase+"/tickets/"+target.ID+"/comments", `{"body":[{"type":"text","text":"x"}]}`)
 	assert.Equal(t, http.StatusForbidden, w.Code)
@@ -123,7 +123,7 @@ func Test_チケット発言_閲覧のみでは投稿403だが一覧は見える
 // （GrantRoleAdmin）なら他人の発言も編集・削除できる。
 func Test_チケット発言_他人の発言は本人かCanManageでなければ編集削除できない(t *testing.T) {
 	author := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	target := author.tickets.addTicket(domain.Ticket{ID: "ticket-comments-authz", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x"})
+	target := author.tickets.addTicket(domain.Ticket{ID: "ticket-comments-authz", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x"})
 	w := author.do(t, http.MethodPost, ticketAPIBase+"/tickets/"+target.ID+"/comments", `{"body":[{"type":"text","text":"本人の発言"}]}`)
 	require.Equal(t, http.StatusCreated, w.Code)
 	created := decodeJSON[map[string]any](t, w)

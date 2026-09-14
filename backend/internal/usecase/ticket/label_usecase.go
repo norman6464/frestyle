@@ -23,7 +23,7 @@ func validateLabel(name, color string) (string, string, error) {
 	return name, color, nil
 }
 
-// CreateLabelUseCase はスペースにラベルを 1 つ追加する。
+// CreateLabelUseCase はワークスペースにラベルを 1 つ追加する。
 type CreateLabelUseCase struct {
 	repo repository.LabelRepository
 }
@@ -34,20 +34,19 @@ func NewCreateLabelUseCase(r repository.LabelRepository) *CreateLabelUseCase {
 
 type CreateLabelInput struct {
 	WorkspaceID string
-	SpaceID     string
 	Name        string
 	Color       string
 }
 
 func (u *CreateLabelUseCase) Execute(ctx context.Context, in CreateLabelInput) (*domain.Label, error) {
-	if in.WorkspaceID == "" || in.SpaceID == "" {
-		return nil, errors.New("workspaceID and spaceID are required")
+	if in.WorkspaceID == "" {
+		return nil, errors.New("workspaceID is required")
 	}
 	name, color, err := validateLabel(in.Name, in.Color)
 	if err != nil {
 		return nil, err
 	}
-	label := &domain.Label{WorkspaceID: in.WorkspaceID, SpaceID: in.SpaceID, Name: name, Color: color}
+	label := &domain.Label{WorkspaceID: in.WorkspaceID, Name: name, Color: color}
 	if err := u.repo.CreateLabel(ctx, label); err != nil {
 		return nil, err
 	}
@@ -65,31 +64,21 @@ func NewUpdateLabelUseCase(r repository.LabelRepository) *UpdateLabelUseCase {
 
 type UpdateLabelInput struct {
 	WorkspaceID string
-	// SpaceID は呼び出し側が権限を確かめた URL のスペース。ラベルの所属と食い違えば
-	// ErrLabelNotFound として拒む（AddTicketLabelUseCase と同じ形）。
-	SpaceID string
-	LabelID string
-	Name    string
-	Color   string
+	LabelID     string
+	Name        string
+	Color       string
 }
 
 func (u *UpdateLabelUseCase) Execute(ctx context.Context, in UpdateLabelInput) (*domain.Label, error) {
-	if in.WorkspaceID == "" || in.SpaceID == "" || in.LabelID == "" {
-		return nil, errors.New("workspaceID, spaceID and labelID are required")
+	if in.WorkspaceID == "" || in.LabelID == "" {
+		return nil, errors.New("workspaceID and labelID are required")
 	}
 	name, color, err := validateLabel(in.Name, in.Color)
 	if err != nil {
 		return nil, err
 	}
-	current, err := u.repo.FindLabel(ctx, in.WorkspaceID, in.LabelID)
-	if err != nil {
-		return nil, err
-	}
-	if current.SpaceID != in.SpaceID {
-		return nil, repository.ErrLabelNotFound
-	}
 	label := &domain.Label{
-		ID: in.LabelID, WorkspaceID: in.WorkspaceID, SpaceID: in.SpaceID, Name: name, Color: color,
+		ID: in.LabelID, WorkspaceID: in.WorkspaceID, Name: name, Color: color,
 	}
 	if err := u.repo.UpdateLabel(ctx, label); err != nil {
 		return nil, err
@@ -107,22 +96,14 @@ func NewDeleteLabelUseCase(r repository.LabelRepository) *DeleteLabelUseCase {
 	return &DeleteLabelUseCase{repo: r}
 }
 
-// spaceID は呼び出し側が権限を確かめた URL のスペース。食い違えば ErrLabelNotFound で拒む。
-func (u *DeleteLabelUseCase) Execute(ctx context.Context, workspaceID, spaceID, labelID string) error {
-	if workspaceID == "" || spaceID == "" || labelID == "" {
-		return errors.New("workspaceID, spaceID and labelID are required")
+func (u *DeleteLabelUseCase) Execute(ctx context.Context, workspaceID, labelID string) error {
+	if workspaceID == "" || labelID == "" {
+		return errors.New("workspaceID and labelID are required")
 	}
-	label, err := u.repo.FindLabel(ctx, workspaceID, labelID)
-	if err != nil {
-		return err
-	}
-	if label.SpaceID != spaceID {
-		return repository.ErrLabelNotFound
-	}
-	return u.repo.DeleteLabel(ctx, workspaceID, spaceID, labelID)
+	return u.repo.DeleteLabel(ctx, workspaceID, labelID)
 }
 
-// ListLabelsUseCase はスペースのラベル一覧を返す。
+// ListLabelsUseCase はワークスペースのラベル一覧を返す。
 type ListLabelsUseCase struct {
 	repo repository.LabelRepository
 }
@@ -131,16 +112,17 @@ func NewListLabelsUseCase(r repository.LabelRepository) *ListLabelsUseCase {
 	return &ListLabelsUseCase{repo: r}
 }
 
-func (u *ListLabelsUseCase) Execute(ctx context.Context, workspaceID, spaceID string) ([]domain.Label, error) {
-	if workspaceID == "" || spaceID == "" {
-		return nil, errors.New("workspaceID and spaceID are required")
+func (u *ListLabelsUseCase) Execute(ctx context.Context, workspaceID string) ([]domain.Label, error) {
+	if workspaceID == "" {
+		return nil, errors.New("workspaceID is required")
 	}
-	return u.repo.ListLabels(ctx, workspaceID, spaceID)
+	return u.repo.ListLabels(ctx, workspaceID)
 }
 
-// AddTicketLabelUseCase はチケットにラベルを付ける（付け外しは冪等）。ラベルはスペースごとで、
-// チケットと違うスペースのラベルなら repository.ErrLabelNotFound として拒む（他スペースの
-// ラベル ID が実在するかをここで漏らさない、既存の「見えない=存在しない」方針）。
+// AddTicketLabelUseCase はチケットにラベルを付ける（付け外しは冪等）。ラベルはワークスペース
+// ごとの語彙で、別ワークスペースのラベル ID は FindLabel の時点で repository.ErrLabelNotFound に
+// なる（他ワークスペースのラベル ID が実在するかをここで漏らさない、既存の
+// 「見えない=存在しない」方針）。
 type AddTicketLabelUseCase struct {
 	labels  repository.LabelRepository
 	tickets repository.TicketRepository
@@ -160,23 +142,18 @@ func (u *AddTicketLabelUseCase) Execute(ctx context.Context, in AddTicketLabelIn
 	if in.WorkspaceID == "" || in.TicketID == "" || in.LabelID == "" {
 		return errors.New("workspaceID, ticketID and labelID are required")
 	}
-	t, err := u.tickets.FindTicket(ctx, in.WorkspaceID, in.TicketID)
-	if err != nil {
+	if _, err := u.tickets.FindTicket(ctx, in.WorkspaceID, in.TicketID); err != nil {
 		return err
 	}
-	label, err := u.labels.FindLabel(ctx, in.WorkspaceID, in.LabelID)
-	if err != nil {
+	if _, err := u.labels.FindLabel(ctx, in.WorkspaceID, in.LabelID); err != nil {
 		return err
-	}
-	if label.SpaceID != t.SpaceID {
-		return repository.ErrLabelNotFound
 	}
 	return u.labels.AddTicketLabel(ctx, in.WorkspaceID, in.TicketID, in.LabelID)
 }
 
 // RemoveTicketLabelUseCase はチケットからラベルを外す（付いていなくても冪等）。DELETE 自体が
-// workspace_id/ticket_id/label_id で絞るため、他スペースのラベル ID でも単に 0 行で終わり、
-// Add と違いスペースの一致確認は不要。
+// workspace_id/ticket_id/label_id で絞るため、無関係なラベル ID でも単に 0 行で終わり、
+// Add と違い存在確認は不要。
 type RemoveTicketLabelUseCase struct {
 	repo repository.LabelRepository
 }

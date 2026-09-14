@@ -144,3 +144,60 @@ func Test_錨検証(t *testing.T) {
 		})
 	}
 }
+
+// Test_コメント本文検証_塊 は、発言に箇条書きを書けるようにしたことで増えた
+// 「塊（content を持つノード）」の境界を固定する。
+//
+// 変異確認: validateCommentNodes の再帰（len(node.Content) > 0 の分岐）を外すと
+// 「段落の中の空白だけの text は拒否」が緑のまま通ってしまう — このテストが捕まえる。
+func Test_コメント本文検証_塊(t *testing.T) {
+	cases := []struct {
+		name    string
+		raw     string
+		wantErr bool
+	}{
+		{
+			name:    "段落の塊はOK",
+			raw:     `[{"type":"paragraph","content":[{"type":"text","text":"あ"}]}]`,
+			wantErr: false,
+		},
+		{
+			name: "箇条書きの入れ子もOK",
+			raw: `[{"type":"bulletList","content":[{"type":"listItem","content":[` +
+				`{"type":"paragraph","content":[{"type":"text","text":"あ"}]}]}]}]`,
+			wantErr: false,
+		},
+		{
+			name:    "古い一列の本文はそのまま通る",
+			raw:     `[{"type":"text","text":"あ"},{"type":"mention","attrs":{"userId":"1"}}]`,
+			wantErr: false,
+		},
+		{
+			name:    "段落の中の空白だけのtextは拒否（抜け道を作らない）",
+			raw:     `[{"type":"paragraph","content":[{"type":"text","text":"   "}]}]`,
+			wantErr: true,
+		},
+		{
+			name:    "段落の中のtypeの無いノードは拒否",
+			raw:     `[{"type":"paragraph","content":[{}]}]`,
+			wantErr: true,
+		},
+		{
+			name: "深すぎる入れ子は拒否",
+			raw: `[{"type":"a","content":[{"type":"b","content":[{"type":"c","content":[` +
+				`{"type":"d","content":[{"type":"e","content":[{"type":"f","content":[` +
+				`{"type":"g","content":[{"type":"text","text":"深い"}]}]}]}]}]}]}]`,
+			wantErr: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := domain.ValidateCommentBody(tc.raw)
+			if tc.wantErr {
+				assert.ErrorIs(t, err, domain.ErrInvalidCommentBody)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}

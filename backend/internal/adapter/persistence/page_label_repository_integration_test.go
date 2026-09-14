@@ -15,7 +15,7 @@ import (
 )
 
 // TestLabelRepository_ページ版_Integration は labelRepository のページ版メソッド
-// （段 13。AddPageLabel/RemovePageLabel/ListLabelsByPage/ListLabelsByPageIDs）を実 Postgres で
+// （AddPageLabel/RemovePageLabel/ListLabelsByPage/ListLabelsByPageIDs）を実 Postgres で
 // 検証する。CRUD（Create/Find/List/Update/Delete）は labels 表そのものを共有しており、
 // TestLabelRepository_Integration が既に検証済みなのでここでは触らない。
 func TestLabelRepository_ページ版_Integration(t *testing.T) {
@@ -33,8 +33,8 @@ func TestLabelRepository_ページ版_Integration(t *testing.T) {
 	}
 
 	t.Run("付け外しは冪等", func(t *testing.T) {
-		ws, space, pageID := setup(t)
-		l := &domain.Label{WorkspaceID: ws, SpaceID: space, Name: "重要", Color: "#4a90d9"}
+		ws, _, pageID := setup(t)
+		l := &domain.Label{WorkspaceID: ws, Name: "重要", Color: "#4a90d9"}
 		require.NoError(t, repo.CreateLabel(ctx, l))
 
 		require.NoError(t, repo.AddPageLabel(ctx, ws, pageID, l.ID))
@@ -51,20 +51,20 @@ func TestLabelRepository_ページ版_Integration(t *testing.T) {
 	})
 
 	t.Run("削除でpage_labelsも一緒に消える", func(t *testing.T) {
-		ws, space, pageID := setup(t)
-		l := &domain.Label{WorkspaceID: ws, SpaceID: space, Name: "重要", Color: "#4a90d9"}
+		ws, _, pageID := setup(t)
+		l := &domain.Label{WorkspaceID: ws, Name: "重要", Color: "#4a90d9"}
 		require.NoError(t, repo.CreateLabel(ctx, l))
 		require.NoError(t, repo.AddPageLabel(ctx, ws, pageID, l.ID))
 
-		require.NoError(t, repo.DeleteLabel(ctx, ws, space, l.ID))
+		require.NoError(t, repo.DeleteLabel(ctx, ws, l.ID))
 		labels, err := repo.ListLabelsByPage(ctx, ws, pageID)
 		require.NoError(t, err)
 		assert.Empty(t, labels, "ON DELETE CASCADE でpage_labelsの行も消える")
 	})
 
 	t.Run("ページを削除するとpage_labelsも一緒に消える", func(t *testing.T) {
-		ws, space, pageID := setup(t)
-		l := &domain.Label{WorkspaceID: ws, SpaceID: space, Name: "重要", Color: "#4a90d9"}
+		ws, _, pageID := setup(t)
+		l := &domain.Label{WorkspaceID: ws, Name: "重要", Color: "#4a90d9"}
 		require.NoError(t, repo.CreateLabel(ctx, l))
 		require.NoError(t, repo.AddPageLabel(ctx, ws, pageID, l.ID))
 
@@ -80,9 +80,9 @@ func TestLabelRepository_ページ版_Integration(t *testing.T) {
 		ws, space, pageA := setup(t)
 		pageB := mustCreatePage(ctx, t, newKbUseCases(sqlDB), ws, space, nil, "対象ページ2").ID
 
-		l1 := &domain.Label{WorkspaceID: ws, SpaceID: space, Name: "重要", Color: "#4a90d9"}
+		l1 := &domain.Label{WorkspaceID: ws, Name: "重要", Color: "#4a90d9"}
 		require.NoError(t, repo.CreateLabel(ctx, l1))
-		l2 := &domain.Label{WorkspaceID: ws, SpaceID: space, Name: "レビュー待ち", Color: "#d94a4a"}
+		l2 := &domain.Label{WorkspaceID: ws, Name: "レビュー待ち", Color: "#d94a4a"}
 		require.NoError(t, repo.CreateLabel(ctx, l2))
 		require.NoError(t, repo.AddPageLabel(ctx, ws, pageA, l1.ID))
 		require.NoError(t, repo.AddPageLabel(ctx, ws, pageB, l2.ID))

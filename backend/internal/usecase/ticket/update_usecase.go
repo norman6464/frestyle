@@ -29,6 +29,8 @@ type UpdateTicketInput struct {
 	Doc         string
 	TypeID      string
 	Priority    domain.TicketPriority
+	// StoryPoints は見積り。nil は「未見積りにする」（0 にするのとは別物）。
+	StoryPoints *int
 	StartDate   *string
 	DueDate     *string
 	ActorUserID uint64
@@ -37,6 +39,9 @@ type UpdateTicketInput struct {
 func (u *UpdateTicketUseCase) Execute(ctx context.Context, in UpdateTicketInput) (*domain.Ticket, error) {
 	if in.WorkspaceID == "" {
 		return nil, errors.New("workspaceID is required")
+	}
+	if !domain.ValidTicketStoryPoints(in.StoryPoints) {
+		return nil, ErrInvalidStoryPoints
 	}
 	if in.TicketID == "" {
 		return nil, errors.New("ticketID is required")
@@ -86,13 +91,14 @@ func (u *UpdateTicketUseCase) Execute(ctx context.Context, in UpdateTicketInput)
 	}
 
 	updated, err := u.repo.UpdateTicket(ctx, in.WorkspaceID, in.TicketID, repository.TicketUpdateFields{
-		TypeID:    in.TypeID,
-		Title:     in.Title,
-		Doc:       stripped,
-		PlainText: plainText,
-		Priority:  in.Priority,
-		StartDate: in.StartDate,
-		DueDate:   in.DueDate,
+		TypeID:      in.TypeID,
+		Title:       in.Title,
+		Doc:         stripped,
+		PlainText:   plainText,
+		Priority:    in.Priority,
+		StoryPoints: in.StoryPoints,
+		StartDate:   in.StartDate,
+		DueDate:     in.DueDate,
 	})
 	if err != nil {
 		return nil, err
@@ -118,7 +124,7 @@ func (u *UpdateTicketUseCase) Execute(ctx context.Context, in UpdateTicketInput)
 func (u *UpdateTicketUseCase) validateTypeChange(
 	ctx context.Context, workspaceID string, before *domain.Ticket, newTypeID string,
 ) error {
-	newType, err := u.repo.FindTicketType(ctx, workspaceID, before.SpaceID, newTypeID)
+	newType, err := u.repo.FindTicketType(ctx, workspaceID, before.ProjectID, newTypeID)
 	if err != nil {
 		return err
 	}
@@ -136,7 +142,7 @@ func (u *UpdateTicketUseCase) validateTypeChange(
 		if err != nil {
 			return err
 		}
-		parentType, err := u.repo.FindTicketType(ctx, workspaceID, before.SpaceID, parent.TypeID)
+		parentType, err := u.repo.FindTicketType(ctx, workspaceID, before.ProjectID, parent.TypeID)
 		if err != nil {
 			return err
 		}

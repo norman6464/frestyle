@@ -104,13 +104,13 @@ func Test_チケット状態変更_チケットが無ければそのまま伝え
 	require.ErrorIs(t, err, repository.ErrTicketNotFound)
 }
 
-// 状態自体が別スペースに属していれば FindTicketStatus が ErrTicketStatusNotFound を返す
-// （spaceID はチケットから引く。呼び出し側の入力にスペース ID は要らない）。
-func Test_チケット状態変更_状態が別スペースなら404相当(t *testing.T) {
+// 状態自体が別プロジェクトに属していれば FindTicketStatus が ErrTicketStatusNotFound を返す
+// （projectID はチケットから引く。呼び出し側の入力にプロジェクト ID は要らない）。
+func Test_チケット状態変更_状態が別プロジェクトなら404相当(t *testing.T) {
 	repo := &mockTicketRepo{}
-	before := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace, StatusID: "status-todo"}
+	before := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, StatusID: "status-todo"}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(before, nil)
-	repo.On("FindTicketStatus", mock.Anything, tkWS, tkSpace, "status-other").
+	repo.On("FindTicketStatus", mock.Anything, tkWS, tkProject, "status-other").
 		Return(nil, repository.ErrTicketStatusNotFound)
 
 	_, err := ticket.NewChangeTicketStatusUseCase(repo).Execute(context.Background(), ticket.ChangeTicketStatusInput{

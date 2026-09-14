@@ -74,8 +74,8 @@ func (u *DeleteTicketUseCase) Execute(ctx context.Context, in DeleteTicketInput)
 	return recordDeletedChange(ctx, u.repo, in.WorkspaceID, in.TicketID, in.ActorUserID, &deletedFalse, &deletedTrue)
 }
 
-// FindDeletedTicketUseCase は削除済みチケットの所属スペースを解決する。
-// RestoreDeletedTicketUseCase の直前、権限判定（スペース単位）が対象のスペース ID を
+// FindDeletedTicketUseCase は削除済みチケットの所属プロジェクトを解決する。
+// RestoreDeletedTicketUseCase の直前、権限判定（プロジェクト単位）が対象のプロジェクト ID を
 // 要るために使う（CreateTicketUseCase の Enable と同じ「対象がまだ見えない操作」の形）。
 type FindDeletedTicketUseCase struct {
 	repo repository.TicketRepository
@@ -122,7 +122,13 @@ func (u *RestoreDeletedTicketUseCase) Execute(ctx context.Context, in RestoreDel
 	if err != nil {
 		return nil, err
 	}
-	last, err := u.repo.LastActiveTicketPosition(ctx, in.WorkspaceID, t.SpaceID)
+	if err := u.repo.RestoreDeletedTicket(ctx, in.WorkspaceID, in.TicketID); err != nil {
+		return nil, err
+	}
+	// 並び順は末尾へ付け直す（削除されていた間に他のチケットの並びが進んでいる可能性が
+	// あるため、元の位置は復元しない）。upsert なのは、この表より前に作られて削除済み
+	// だったチケットには並び順の行が無いため（移行では現役の分だけ入れた）。
+	last, err := u.repo.LastTicketRankPosition(ctx, in.WorkspaceID, t.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -130,18 +136,7 @@ func (u *RestoreDeletedTicketUseCase) Execute(ctx context.Context, in RestoreDel
 	if err != nil {
 		return nil, err
 	}
-	if err := u.repo.RestoreDeletedTicket(ctx, in.WorkspaceID, in.TicketID, pos); err != nil {
-		return nil, err
-	}
-	lastRank, err := u.repo.LastActiveTicketRankPosition(ctx, in.WorkspaceID, t.SpaceID)
-	if err != nil {
-		return nil, err
-	}
-	rankPos, err := fracindex.Between(lastRank, "")
-	if err != nil {
-		return nil, err
-	}
-	if err := u.repo.MoveTicketRank(ctx, in.WorkspaceID, in.TicketID, rankPos); err != nil {
+	if err := u.repo.UpsertTicketRank(ctx, in.WorkspaceID, t.ProjectID, in.TicketID, pos); err != nil {
 		return nil, err
 	}
 	if err := recordDeletedChange(ctx, u.repo, in.WorkspaceID, in.TicketID, in.ActorUserID, &deletedTrue, &deletedFalse); err != nil {

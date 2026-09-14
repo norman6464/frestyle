@@ -24,8 +24,9 @@ type ticketFakeRepo struct {
 	changes     map[string][]domain.TicketChangeGroup // ticketID -> グループ（追加順）
 	pageLinks   map[string][]string                   // ticketID -> pageID
 	ticketLinks map[string][]string                   // ticketID -> ticketID
+	watchers    map[string]map[uint64]bool            // ticketID -> userID の集合
 	nextID      int
-	// numbers はスペースごとの採番カウンタ（本番の ticket_counters の代わり）。
+	// numbers はプロジェクトごとの採番カウンタ（本番の ticket_counters の代わり）。
 	numbers map[string]int64
 
 	// 段 3: 発言・編集履歴・反応（TicketCommentRepository も同じ struct に実装する。
@@ -98,9 +99,9 @@ func (f *ticketFakeRepo) addTicket(t domain.Ticket) *domain.Ticket {
 
 // --- 状態 ---
 
-func (f *ticketFakeRepo) HasActiveInitialTicketStatus(_ context.Context, workspaceID, spaceID string) (bool, error) {
+func (f *ticketFakeRepo) HasActiveInitialTicketStatus(_ context.Context, workspaceID, projectID string) (bool, error) {
 	for _, s := range f.statuses {
-		if s.WorkspaceID == workspaceID && s.SpaceID == spaceID && s.IsInitial && s.ArchivedAt == nil {
+		if s.WorkspaceID == workspaceID && s.ProjectID == projectID && s.IsInitial && s.ArchivedAt == nil {
 			return true, nil
 		}
 	}
@@ -109,7 +110,7 @@ func (f *ticketFakeRepo) HasActiveInitialTicketStatus(_ context.Context, workspa
 
 func (f *ticketFakeRepo) InsertTicketStatus(_ context.Context, s *domain.TicketStatus) error {
 	for _, other := range f.statuses {
-		if other.WorkspaceID == s.WorkspaceID && other.SpaceID == s.SpaceID && other.ArchivedAt == nil &&
+		if other.WorkspaceID == s.WorkspaceID && other.ProjectID == s.ProjectID && other.ArchivedAt == nil &&
 			strings.EqualFold(other.Name, s.Name) {
 			return repository.ErrTicketStatusNameTaken
 		}
@@ -121,19 +122,19 @@ func (f *ticketFakeRepo) InsertTicketStatus(_ context.Context, s *domain.TicketS
 	return nil
 }
 
-func (f *ticketFakeRepo) FindTicketStatus(_ context.Context, workspaceID, spaceID, statusID string) (*domain.TicketStatus, error) {
+func (f *ticketFakeRepo) FindTicketStatus(_ context.Context, workspaceID, projectID, statusID string) (*domain.TicketStatus, error) {
 	s, ok := f.statuses[statusID]
-	if !ok || s.WorkspaceID != workspaceID || s.SpaceID != spaceID {
+	if !ok || s.WorkspaceID != workspaceID || s.ProjectID != projectID {
 		return nil, repository.ErrTicketStatusNotFound
 	}
 	cp := *s
 	return &cp, nil
 }
 
-func (f *ticketFakeRepo) ListTicketStatuses(_ context.Context, workspaceID, spaceID string, includeArchived bool) ([]domain.TicketStatus, error) {
+func (f *ticketFakeRepo) ListTicketStatuses(_ context.Context, workspaceID, projectID string, includeArchived bool) ([]domain.TicketStatus, error) {
 	var out []domain.TicketStatus
 	for _, s := range f.statuses {
-		if s.WorkspaceID != workspaceID || s.SpaceID != spaceID {
+		if s.WorkspaceID != workspaceID || s.ProjectID != projectID {
 			continue
 		}
 		if s.ArchivedAt != nil && !includeArchived {
@@ -148,9 +149,9 @@ func (f *ticketFakeRepo) ListTicketStatuses(_ context.Context, workspaceID, spac
 	return out, nil
 }
 
-func (f *ticketFakeRepo) GetInitialTicketStatus(_ context.Context, workspaceID, spaceID string) (*domain.TicketStatus, error) {
+func (f *ticketFakeRepo) GetInitialTicketStatus(_ context.Context, workspaceID, projectID string) (*domain.TicketStatus, error) {
 	for _, s := range f.statuses {
-		if s.WorkspaceID == workspaceID && s.SpaceID == spaceID && s.IsInitial && s.ArchivedAt == nil {
+		if s.WorkspaceID == workspaceID && s.ProjectID == projectID && s.IsInitial && s.ArchivedAt == nil {
 			cp := *s
 			return &cp, nil
 		}
@@ -160,11 +161,11 @@ func (f *ticketFakeRepo) GetInitialTicketStatus(_ context.Context, workspaceID, 
 
 func (f *ticketFakeRepo) UpdateTicketStatus(_ context.Context, s *domain.TicketStatus) error {
 	existing, ok := f.statuses[s.ID]
-	if !ok || existing.WorkspaceID != s.WorkspaceID || existing.SpaceID != s.SpaceID {
+	if !ok || existing.WorkspaceID != s.WorkspaceID || existing.ProjectID != s.ProjectID {
 		return repository.ErrTicketStatusNotFound
 	}
 	for _, other := range f.statuses {
-		if other.ID != s.ID && other.WorkspaceID == s.WorkspaceID && other.SpaceID == s.SpaceID &&
+		if other.ID != s.ID && other.WorkspaceID == s.WorkspaceID && other.ProjectID == s.ProjectID &&
 			other.ArchivedAt == nil && strings.EqualFold(other.Name, s.Name) {
 			return repository.ErrTicketStatusNameTaken
 		}
@@ -175,13 +176,13 @@ func (f *ticketFakeRepo) UpdateTicketStatus(_ context.Context, s *domain.TicketS
 	return nil
 }
 
-func (f *ticketFakeRepo) SetTicketStatusInitial(_ context.Context, workspaceID, spaceID, statusID string) error {
+func (f *ticketFakeRepo) SetTicketStatusInitial(_ context.Context, workspaceID, projectID, statusID string) error {
 	s, ok := f.statuses[statusID]
-	if !ok || s.WorkspaceID != workspaceID || s.SpaceID != spaceID {
+	if !ok || s.WorkspaceID != workspaceID || s.ProjectID != projectID {
 		return repository.ErrTicketStatusNotFound
 	}
 	for _, other := range f.statuses {
-		if other.WorkspaceID == workspaceID && other.SpaceID == spaceID {
+		if other.WorkspaceID == workspaceID && other.ProjectID == projectID {
 			other.IsInitial = false
 		}
 	}
@@ -189,9 +190,9 @@ func (f *ticketFakeRepo) SetTicketStatusInitial(_ context.Context, workspaceID, 
 	return nil
 }
 
-func (f *ticketFakeRepo) ArchiveTicketStatus(_ context.Context, workspaceID, spaceID, statusID string) error {
+func (f *ticketFakeRepo) ArchiveTicketStatus(_ context.Context, workspaceID, projectID, statusID string) error {
 	s, ok := f.statuses[statusID]
-	if !ok || s.WorkspaceID != workspaceID || s.SpaceID != spaceID {
+	if !ok || s.WorkspaceID != workspaceID || s.ProjectID != projectID {
 		return repository.ErrTicketStatusNotFound
 	}
 	now := time.Now()
@@ -199,13 +200,13 @@ func (f *ticketFakeRepo) ArchiveTicketStatus(_ context.Context, workspaceID, spa
 	return nil
 }
 
-func (f *ticketFakeRepo) RestoreTicketStatus(_ context.Context, workspaceID, spaceID, statusID, position string) error {
+func (f *ticketFakeRepo) RestoreTicketStatus(_ context.Context, workspaceID, projectID, statusID, position string) error {
 	s, ok := f.statuses[statusID]
-	if !ok || s.WorkspaceID != workspaceID || s.SpaceID != spaceID {
+	if !ok || s.WorkspaceID != workspaceID || s.ProjectID != projectID {
 		return repository.ErrTicketStatusNotFound
 	}
 	for _, other := range f.statuses {
-		if other.ID != statusID && other.WorkspaceID == workspaceID && other.SpaceID == spaceID &&
+		if other.ID != statusID && other.WorkspaceID == workspaceID && other.ProjectID == projectID &&
 			other.ArchivedAt == nil && strings.EqualFold(other.Name, s.Name) {
 			return repository.ErrTicketStatusNameTaken
 		}
@@ -215,40 +216,40 @@ func (f *ticketFakeRepo) RestoreTicketStatus(_ context.Context, workspaceID, spa
 	return nil
 }
 
-func (f *ticketFakeRepo) CountActiveTicketsByStatus(_ context.Context, workspaceID, spaceID, statusID string) (int64, error) {
+func (f *ticketFakeRepo) CountActiveTicketsByStatus(_ context.Context, workspaceID, projectID, statusID string) (int64, error) {
 	var n int64
 	for _, t := range f.tickets {
-		if t.WorkspaceID == workspaceID && t.SpaceID == spaceID && t.StatusID == statusID && t.ArchivedAt == nil {
+		if t.WorkspaceID == workspaceID && t.ProjectID == projectID && t.StatusID == statusID && t.ArchivedAt == nil {
 			n++
 		}
 	}
 	return n, nil
 }
 
-func (f *ticketFakeRepo) CountActiveTicketsByStatusForSpace(_ context.Context, workspaceID, spaceID string) (map[string]int64, error) {
+func (f *ticketFakeRepo) CountActiveTicketsByStatusForProject(_ context.Context, workspaceID, projectID string) (map[string]int64, error) {
 	out := map[string]int64{}
 	for _, t := range f.tickets {
-		if t.WorkspaceID == workspaceID && t.SpaceID == spaceID && t.ArchivedAt == nil {
+		if t.WorkspaceID == workspaceID && t.ProjectID == projectID && t.ArchivedAt == nil {
 			out[t.StatusID]++
 		}
 	}
 	return out, nil
 }
 
-func (f *ticketFakeRepo) CountActiveTicketsByTypeForSpace(_ context.Context, workspaceID, spaceID string) (map[string]int64, error) {
+func (f *ticketFakeRepo) CountActiveTicketsByTypeForProject(_ context.Context, workspaceID, projectID string) (map[string]int64, error) {
 	out := map[string]int64{}
 	for _, t := range f.tickets {
-		if t.WorkspaceID == workspaceID && t.SpaceID == spaceID && t.ArchivedAt == nil {
+		if t.WorkspaceID == workspaceID && t.ProjectID == projectID && t.ArchivedAt == nil {
 			out[t.TypeID]++
 		}
 	}
 	return out, nil
 }
 
-func (f *ticketFakeRepo) LastActiveTicketStatusPosition(_ context.Context, workspaceID, spaceID string) (string, error) {
+func (f *ticketFakeRepo) LastActiveTicketStatusPosition(_ context.Context, workspaceID, projectID string) (string, error) {
 	last := ""
 	for _, s := range f.statuses {
-		if s.WorkspaceID == workspaceID && s.SpaceID == spaceID && s.ArchivedAt == nil && s.Position > last {
+		if s.WorkspaceID == workspaceID && s.ProjectID == projectID && s.ArchivedAt == nil && s.Position > last {
 			last = s.Position
 		}
 	}
@@ -259,7 +260,7 @@ func (f *ticketFakeRepo) LastActiveTicketStatusPosition(_ context.Context, works
 
 func (f *ticketFakeRepo) InsertTicketType(_ context.Context, t *domain.TicketType) error {
 	for _, other := range f.types {
-		if other.WorkspaceID == t.WorkspaceID && other.SpaceID == t.SpaceID && other.ArchivedAt == nil &&
+		if other.WorkspaceID == t.WorkspaceID && other.ProjectID == t.ProjectID && other.ArchivedAt == nil &&
 			strings.EqualFold(other.Name, t.Name) {
 			return repository.ErrTicketTypeNameTaken
 		}
@@ -271,19 +272,19 @@ func (f *ticketFakeRepo) InsertTicketType(_ context.Context, t *domain.TicketTyp
 	return nil
 }
 
-func (f *ticketFakeRepo) FindTicketType(_ context.Context, workspaceID, spaceID, typeID string) (*domain.TicketType, error) {
+func (f *ticketFakeRepo) FindTicketType(_ context.Context, workspaceID, projectID, typeID string) (*domain.TicketType, error) {
 	t, ok := f.types[typeID]
-	if !ok || t.WorkspaceID != workspaceID || t.SpaceID != spaceID {
+	if !ok || t.WorkspaceID != workspaceID || t.ProjectID != projectID {
 		return nil, repository.ErrTicketTypeNotFound
 	}
 	cp := *t
 	return &cp, nil
 }
 
-func (f *ticketFakeRepo) ListTicketTypes(_ context.Context, workspaceID, spaceID string, includeArchived bool) ([]domain.TicketType, error) {
+func (f *ticketFakeRepo) ListTicketTypes(_ context.Context, workspaceID, projectID string, includeArchived bool) ([]domain.TicketType, error) {
 	var out []domain.TicketType
 	for _, t := range f.types {
-		if t.WorkspaceID != workspaceID || t.SpaceID != spaceID {
+		if t.WorkspaceID != workspaceID || t.ProjectID != projectID {
 			continue
 		}
 		if t.ArchivedAt != nil && !includeArchived {
@@ -295,9 +296,9 @@ func (f *ticketFakeRepo) ListTicketTypes(_ context.Context, workspaceID, spaceID
 	return out, nil
 }
 
-func (f *ticketFakeRepo) GetDefaultTicketType(_ context.Context, workspaceID, spaceID string) (*domain.TicketType, error) {
+func (f *ticketFakeRepo) GetDefaultTicketType(_ context.Context, workspaceID, projectID string) (*domain.TicketType, error) {
 	for _, t := range f.types {
-		if t.WorkspaceID == workspaceID && t.SpaceID == spaceID && t.IsDefault && t.ArchivedAt == nil {
+		if t.WorkspaceID == workspaceID && t.ProjectID == projectID && t.IsDefault && t.ArchivedAt == nil {
 			cp := *t
 			return &cp, nil
 		}
@@ -307,11 +308,11 @@ func (f *ticketFakeRepo) GetDefaultTicketType(_ context.Context, workspaceID, sp
 
 func (f *ticketFakeRepo) UpdateTicketType(_ context.Context, t *domain.TicketType) error {
 	existing, ok := f.types[t.ID]
-	if !ok || existing.WorkspaceID != t.WorkspaceID || existing.SpaceID != t.SpaceID {
+	if !ok || existing.WorkspaceID != t.WorkspaceID || existing.ProjectID != t.ProjectID {
 		return repository.ErrTicketTypeNotFound
 	}
 	for _, other := range f.types {
-		if other.ID != t.ID && other.WorkspaceID == t.WorkspaceID && other.SpaceID == t.SpaceID &&
+		if other.ID != t.ID && other.WorkspaceID == t.WorkspaceID && other.ProjectID == t.ProjectID &&
 			other.ArchivedAt == nil && strings.EqualFold(other.Name, t.Name) {
 			return repository.ErrTicketTypeNameTaken
 		}
@@ -322,13 +323,13 @@ func (f *ticketFakeRepo) UpdateTicketType(_ context.Context, t *domain.TicketTyp
 	return nil
 }
 
-func (f *ticketFakeRepo) SetTicketTypeDefault(_ context.Context, workspaceID, spaceID, typeID string) error {
+func (f *ticketFakeRepo) SetTicketTypeDefault(_ context.Context, workspaceID, projectID, typeID string) error {
 	t, ok := f.types[typeID]
-	if !ok || t.WorkspaceID != workspaceID || t.SpaceID != spaceID {
+	if !ok || t.WorkspaceID != workspaceID || t.ProjectID != projectID {
 		return repository.ErrTicketTypeNotFound
 	}
 	for _, other := range f.types {
-		if other.WorkspaceID == workspaceID && other.SpaceID == spaceID {
+		if other.WorkspaceID == workspaceID && other.ProjectID == projectID {
 			other.IsDefault = false
 		}
 	}
@@ -336,9 +337,9 @@ func (f *ticketFakeRepo) SetTicketTypeDefault(_ context.Context, workspaceID, sp
 	return nil
 }
 
-func (f *ticketFakeRepo) ArchiveTicketType(_ context.Context, workspaceID, spaceID, typeID string) error {
+func (f *ticketFakeRepo) ArchiveTicketType(_ context.Context, workspaceID, projectID, typeID string) error {
 	t, ok := f.types[typeID]
-	if !ok || t.WorkspaceID != workspaceID || t.SpaceID != spaceID {
+	if !ok || t.WorkspaceID != workspaceID || t.ProjectID != projectID {
 		return repository.ErrTicketTypeNotFound
 	}
 	now := time.Now()
@@ -346,13 +347,13 @@ func (f *ticketFakeRepo) ArchiveTicketType(_ context.Context, workspaceID, space
 	return nil
 }
 
-func (f *ticketFakeRepo) RestoreTicketType(_ context.Context, workspaceID, spaceID, typeID, position string) error {
+func (f *ticketFakeRepo) RestoreTicketType(_ context.Context, workspaceID, projectID, typeID, position string) error {
 	t, ok := f.types[typeID]
-	if !ok || t.WorkspaceID != workspaceID || t.SpaceID != spaceID {
+	if !ok || t.WorkspaceID != workspaceID || t.ProjectID != projectID {
 		return repository.ErrTicketTypeNotFound
 	}
 	for _, other := range f.types {
-		if other.ID != typeID && other.WorkspaceID == workspaceID && other.SpaceID == spaceID &&
+		if other.ID != typeID && other.WorkspaceID == workspaceID && other.ProjectID == projectID &&
 			other.ArchivedAt == nil && strings.EqualFold(other.Name, t.Name) {
 			return repository.ErrTicketTypeNameTaken
 		}
@@ -362,20 +363,20 @@ func (f *ticketFakeRepo) RestoreTicketType(_ context.Context, workspaceID, space
 	return nil
 }
 
-func (f *ticketFakeRepo) CountActiveTicketsByType(_ context.Context, workspaceID, spaceID, typeID string) (int64, error) {
+func (f *ticketFakeRepo) CountActiveTicketsByType(_ context.Context, workspaceID, projectID, typeID string) (int64, error) {
 	var n int64
 	for _, t := range f.tickets {
-		if t.WorkspaceID == workspaceID && t.SpaceID == spaceID && t.TypeID == typeID && t.ArchivedAt == nil {
+		if t.WorkspaceID == workspaceID && t.ProjectID == projectID && t.TypeID == typeID && t.ArchivedAt == nil {
 			n++
 		}
 	}
 	return n, nil
 }
 
-func (f *ticketFakeRepo) LastActiveTicketTypePosition(_ context.Context, workspaceID, spaceID string) (string, error) {
+func (f *ticketFakeRepo) LastActiveTicketTypePosition(_ context.Context, workspaceID, projectID string) (string, error) {
 	last := ""
 	for _, t := range f.types {
-		if t.WorkspaceID == workspaceID && t.SpaceID == spaceID && t.ArchivedAt == nil && t.Position > last {
+		if t.WorkspaceID == workspaceID && t.ProjectID == projectID && t.ArchivedAt == nil && t.Position > last {
 			last = t.Position
 		}
 	}
@@ -385,12 +386,15 @@ func (f *ticketFakeRepo) LastActiveTicketTypePosition(_ context.Context, workspa
 // --- チケット本体 ---
 
 func (f *ticketFakeRepo) CreateTicket(_ context.Context, in repository.TicketCreateInput) (*domain.Ticket, error) {
-	f.numbers[in.SpaceID]++
+	f.numbers[in.ProjectID]++
 	t := &domain.Ticket{
-		ID: f.newID("ticket"), WorkspaceID: in.WorkspaceID, SpaceID: in.SpaceID,
-		Number: f.numbers[in.SpaceID], TypeID: in.TypeID, StatusID: in.StatusID, ParentID: in.ParentID,
+		ID: f.newID("ticket"), WorkspaceID: in.WorkspaceID, ProjectID: in.ProjectID,
+		Number: f.numbers[in.ProjectID], TypeID: in.TypeID, StatusID: in.StatusID, ParentID: in.ParentID,
 		Title: in.Title, Doc: in.Doc, PlainText: in.PlainText, Priority: in.Priority,
-		StartDate: in.StartDate, DueDate: in.DueDate, Position: in.Position,
+		StartDate: in.StartDate, DueDate: in.DueDate,
+		// Position は作らない。並び順は tickets ではなく ticket_backlog_ranks 側にあり、
+		// 本物と同じく usecase が続けて InsertTicketRank で入れる（この fake ではそれが
+		// Ticket.Position を埋める）。
 		CreatedByUserID: in.CreatedByUserID, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	stored := *t
@@ -429,15 +433,15 @@ func (f *ticketFakeRepo) FindTicketWorkspaceID(_ context.Context, ticketID strin
 	return t.WorkspaceID, nil
 }
 
-func (f *ticketFakeRepo) ResolveTicketIDByKey(_ context.Context, workspaceID, spaceKey string, number int64) (string, error) {
+func (f *ticketFakeRepo) ResolveTicketIDByKey(_ context.Context, workspaceID, projectKey string, number int64) (string, error) {
 	for _, t := range f.tickets {
 		if t.WorkspaceID != workspaceID || t.Number != number {
 			continue
 		}
-		// fake ではスペースの key をスペース ID と同一視する（addSpace が Key: spaceID で
-		// 作っているため。ResolveTicketIDByKey は spaceKey → spaceID の解決を本番では
+		// fake ではプロジェクトの key をプロジェクト ID と同一視する（本番の
+		// ResolveTicketIDByKey は projectKey → projectID の解決を
 		// SQL の JOIN が担うが、fake はこの対応だけで足りる）。
-		if t.SpaceID == spaceKey {
+		if t.ProjectID == projectKey {
 			return t.ID, nil
 		}
 	}
@@ -457,7 +461,7 @@ func (f *ticketFakeRepo) isOverdue(t *domain.Ticket) bool {
 func (f *ticketFakeRepo) ListTickets(_ context.Context, in repository.ListTicketsInput) ([]repository.TicketWithAssignee, error) {
 	var out []repository.TicketWithAssignee
 	for _, t := range f.tickets {
-		if t.WorkspaceID != in.WorkspaceID || t.SpaceID != in.SpaceID {
+		if t.WorkspaceID != in.WorkspaceID || t.ProjectID != in.ProjectID {
 			continue
 		}
 		if t.DeletedAt != nil {
@@ -532,11 +536,11 @@ func (f *ticketFakeRepo) ListTickets(_ context.Context, in repository.ListTicket
 }
 
 func (f *ticketFakeRepo) GetTicketCounts(
-	_ context.Context, workspaceID, spaceID string, myPrincipalID *string,
+	_ context.Context, workspaceID, projectID string, myPrincipalID *string,
 ) (repository.TicketCounts, error) {
 	var c repository.TicketCounts
 	for _, t := range f.tickets {
-		if t.WorkspaceID != workspaceID || t.SpaceID != spaceID || t.ArchivedAt != nil || t.DeletedAt != nil {
+		if t.WorkspaceID != workspaceID || t.ProjectID != projectID || t.ArchivedAt != nil || t.DeletedAt != nil {
 			continue
 		}
 		c.Total++
@@ -554,10 +558,10 @@ func (f *ticketFakeRepo) GetTicketCounts(
 	return c, nil
 }
 
-func (f *ticketFakeRepo) ListTicketChildren(_ context.Context, workspaceID, spaceID, parentID string) ([]domain.Ticket, error) {
+func (f *ticketFakeRepo) ListTicketChildren(_ context.Context, workspaceID, projectID, parentID string) ([]domain.Ticket, error) {
 	var out []domain.Ticket
 	for _, t := range f.tickets {
-		if t.WorkspaceID == workspaceID && t.SpaceID == spaceID && t.ParentID != nil && *t.ParentID == parentID &&
+		if t.WorkspaceID == workspaceID && t.ProjectID == projectID && t.ParentID != nil && *t.ParentID == parentID &&
 			t.ArchivedAt == nil && t.DeletedAt == nil {
 			out = append(out, *t)
 		}
@@ -606,13 +610,12 @@ func (f *ticketFakeRepo) ArchiveTicket(_ context.Context, workspaceID, ticketID 
 	return nil
 }
 
-func (f *ticketFakeRepo) RestoreTicket(_ context.Context, workspaceID, ticketID, position string) error {
+func (f *ticketFakeRepo) RestoreTicket(_ context.Context, workspaceID, ticketID string) error {
 	t, ok := f.tickets[ticketID]
 	if !ok || t.WorkspaceID != workspaceID || t.ArchivedAt == nil || t.DeletedAt != nil {
 		return repository.ErrTicketNotFound
 	}
 	t.ArchivedAt = nil
-	t.Position = position
 	return nil
 }
 
@@ -635,17 +638,16 @@ func (f *ticketFakeRepo) FindDeletedTicket(_ context.Context, workspaceID, ticke
 	return &cp, nil
 }
 
-func (f *ticketFakeRepo) RestoreDeletedTicket(_ context.Context, workspaceID, ticketID, position string) error {
+func (f *ticketFakeRepo) RestoreDeletedTicket(_ context.Context, workspaceID, ticketID string) error {
 	t, ok := f.tickets[ticketID]
 	if !ok || t.WorkspaceID != workspaceID || t.DeletedAt == nil {
 		return repository.ErrTicketNotDeleted
 	}
 	t.DeletedAt = nil
-	t.Position = position
 	return nil
 }
 
-func (f *ticketFakeRepo) InsertTicketRank(_ context.Context, workspaceID, ticketID, position string) error {
+func (f *ticketFakeRepo) InsertTicketRank(_ context.Context, workspaceID, _, ticketID, position string) error {
 	t, ok := f.tickets[ticketID]
 	if !ok || t.WorkspaceID != workspaceID {
 		return repository.ErrTicketNotFound
@@ -663,8 +665,25 @@ func (f *ticketFakeRepo) MoveTicketRank(_ context.Context, workspaceID, ticketID
 	return nil
 }
 
-func (f *ticketFakeRepo) LastActiveTicketRankPosition(ctx context.Context, workspaceID, spaceID string) (string, error) {
-	return f.LastActiveTicketPosition(ctx, workspaceID, spaceID)
+func (f *ticketFakeRepo) UpsertTicketRank(_ context.Context, workspaceID, _, ticketID, position string) error {
+	t, ok := f.tickets[ticketID]
+	if !ok || t.WorkspaceID != workspaceID {
+		return repository.ErrTicketNotFound
+	}
+	t.Position = position
+	return nil
+}
+
+// LastTicketRankPosition は本物と同じく「見えない行も含めた最大値」を返す
+// （アーカイブ済み・削除済みを除くと、その鍵を作り直して一意制約で落ちる）。
+func (f *ticketFakeRepo) LastTicketRankPosition(_ context.Context, workspaceID, projectID string) (string, error) {
+	last := ""
+	for _, t := range f.tickets {
+		if t.WorkspaceID == workspaceID && t.ProjectID == projectID && t.Position > last {
+			last = t.Position
+		}
+	}
+	return last, nil
 }
 
 func (f *ticketFakeRepo) CountActiveTicketChildren(_ context.Context, workspaceID, ticketID string) (int64, error) {
@@ -717,24 +736,6 @@ func (f *ticketFakeRepo) ListTicketAncestors(ctx context.Context, workspaceID, t
 	return f.ListTicketParentChain(ctx, workspaceID, ticketID)
 }
 
-func (f *ticketFakeRepo) LastActiveTicketPosition(_ context.Context, workspaceID, spaceID string) (string, error) {
-	last := ""
-	for _, t := range f.tickets {
-		if t.WorkspaceID == workspaceID && t.SpaceID == spaceID && t.ArchivedAt == nil && t.DeletedAt == nil && t.Position > last {
-			last = t.Position
-		}
-	}
-	return last, nil
-}
-
-func (f *ticketFakeRepo) FindActiveTicketPosition(_ context.Context, workspaceID, spaceID, ticketID string) (string, bool, error) {
-	t, ok := f.tickets[ticketID]
-	if !ok || t.WorkspaceID != workspaceID || t.SpaceID != spaceID || t.ArchivedAt != nil || t.DeletedAt != nil {
-		return "", false, nil
-	}
-	return t.Position, true, nil
-}
-
 // --- 担当 ---
 
 func (f *ticketFakeRepo) UpsertTicketAssignment(_ context.Context, a *domain.TicketAssignment) error {
@@ -775,6 +776,61 @@ func (f *ticketFakeRepo) FindTicketAssignment(_ context.Context, workspaceID, ti
 	return &cp, nil
 }
 
+// ListAssignedTickets は handler の検査用。隣の表の値（プロジェクト・状態・種別）は
+// fake が持つ表から引き、引けなければ空のまま返す（行そのものは落とさない）。
+func (f *ticketFakeRepo) ListAssignedTickets(_ context.Context, workspaceID, principalID string) ([]domain.AssignedTicket, error) {
+	var out []domain.AssignedTicket
+	for ticketID, a := range f.assignments {
+		if a.WorkspaceID != workspaceID || a.AssigneePrincipalID != principalID {
+			continue
+		}
+		t, ok := f.tickets[ticketID]
+		if !ok || t.ArchivedAt != nil || t.DeletedAt != nil {
+			continue
+		}
+		row := domain.AssignedTicket{Ticket: *t}
+		if s, ok := f.statuses[t.StatusID]; ok {
+			row.StatusName, row.StatusCategory, row.StatusColor = s.Name, s.Category, s.Color
+		}
+		if ty, ok := f.types[t.TypeID]; ok {
+			row.TypeName = ty.Name
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
+// 監視は「誰が・どのチケットを」の集合だけで足りる（fake は表ではなく map で持つ）。
+func (f *ticketFakeRepo) AddTicketWatcher(_ context.Context, workspaceID, ticketID string, userID uint64) error {
+	if f.watchers == nil {
+		f.watchers = map[string]map[uint64]bool{}
+	}
+	t, ok := f.tickets[ticketID]
+	if !ok || t.WorkspaceID != workspaceID {
+		return repository.ErrTicketNotFound
+	}
+	if f.watchers[ticketID] == nil {
+		f.watchers[ticketID] = map[uint64]bool{}
+	}
+	f.watchers[ticketID][userID] = true
+	return nil
+}
+
+func (f *ticketFakeRepo) RemoveTicketWatcher(_ context.Context, _, ticketID string, userID uint64) error {
+	if f.watchers != nil {
+		delete(f.watchers[ticketID], userID)
+	}
+	return nil
+}
+
+func (f *ticketFakeRepo) CountTicketWatchers(_ context.Context, _, ticketID string) (int64, error) {
+	return int64(len(f.watchers[ticketID])), nil
+}
+
+func (f *ticketFakeRepo) IsTicketWatchedBy(_ context.Context, _, ticketID string, userID uint64) (bool, error) {
+	return f.watchers[ticketID][userID], nil
+}
+
 func (f *ticketFakeRepo) ListTicketsAssignedToPrincipal(_ context.Context, workspaceID, principalID string) ([]domain.Ticket, error) {
 	var out []domain.Ticket
 	for ticketID, a := range f.assignments {
@@ -802,7 +858,7 @@ func (f *ticketFakeRepo) InsertTicketChangeGroup(_ context.Context, g *domain.Ti
 }
 
 func (f *ticketFakeRepo) InsertTicketStatusTransition(
-	_ context.Context, workspaceID, spaceID, ticketID, fromStatusID, toStatusID string, changedByUserID uint64,
+	_ context.Context, workspaceID, projectID, ticketID, fromStatusID, toStatusID string, changedByUserID uint64,
 ) error {
 	// テストではこの表を検証しない（handler テストは status 変更の応答だけを見る）ので、
 	// 何もせず成功扱いにする。
@@ -991,11 +1047,11 @@ func (f *ticketFakeRepo) ListTicketCommentReactions(_ context.Context, workspace
 
 var _ repository.TicketCommentRepository = (*ticketFakeRepo)(nil)
 
-// --- 段 4: ラベル ---
+// --- ラベル（語彙はワークスペース単位） ---
 
 func (f *ticketFakeRepo) CreateLabel(_ context.Context, l *domain.Label) error {
 	for _, other := range f.labels {
-		if other.WorkspaceID == l.WorkspaceID && other.SpaceID == l.SpaceID &&
+		if other.WorkspaceID == l.WorkspaceID &&
 			strings.EqualFold(strings.TrimSpace(other.Name), strings.TrimSpace(l.Name)) {
 			return repository.ErrLabelNameTaken
 		}
@@ -1017,10 +1073,10 @@ func (f *ticketFakeRepo) FindLabel(_ context.Context, workspaceID, labelID strin
 	return &cp, nil
 }
 
-func (f *ticketFakeRepo) ListLabels(_ context.Context, workspaceID, spaceID string) ([]domain.Label, error) {
+func (f *ticketFakeRepo) ListLabels(_ context.Context, workspaceID string) ([]domain.Label, error) {
 	var out []domain.Label
 	for _, l := range f.labels {
-		if l.WorkspaceID == workspaceID && l.SpaceID == spaceID {
+		if l.WorkspaceID == workspaceID {
 			out = append(out, *l)
 		}
 	}
@@ -1030,16 +1086,15 @@ func (f *ticketFakeRepo) ListLabels(_ context.Context, workspaceID, spaceID stri
 
 func (f *ticketFakeRepo) UpdateLabel(_ context.Context, l *domain.Label) error {
 	existing, ok := f.labels[l.ID]
-	if !ok || existing.WorkspaceID != l.WorkspaceID || existing.SpaceID != l.SpaceID {
+	if !ok || existing.WorkspaceID != l.WorkspaceID {
 		return repository.ErrLabelNotFound
 	}
 	for _, other := range f.labels {
-		if other.ID != l.ID && other.WorkspaceID == l.WorkspaceID && other.SpaceID == existing.SpaceID &&
+		if other.ID != l.ID && other.WorkspaceID == l.WorkspaceID &&
 			strings.EqualFold(strings.TrimSpace(other.Name), strings.TrimSpace(l.Name)) {
 			return repository.ErrLabelNameTaken
 		}
 	}
-	l.SpaceID = existing.SpaceID
 	l.CreatedAt = existing.CreatedAt
 	l.UpdatedAt = time.Now()
 	stored := *l
@@ -1047,9 +1102,9 @@ func (f *ticketFakeRepo) UpdateLabel(_ context.Context, l *domain.Label) error {
 	return nil
 }
 
-func (f *ticketFakeRepo) DeleteLabel(_ context.Context, workspaceID, spaceID, labelID string) error {
+func (f *ticketFakeRepo) DeleteLabel(_ context.Context, workspaceID, labelID string) error {
 	l, ok := f.labels[labelID]
-	if !ok || l.WorkspaceID != workspaceID || l.SpaceID != spaceID {
+	if !ok || l.WorkspaceID != workspaceID {
 		return repository.ErrLabelNotFound
 	}
 	delete(f.labels, labelID)

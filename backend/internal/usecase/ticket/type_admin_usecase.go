@@ -10,7 +10,7 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 )
 
-// CreateTicketTypeUseCase はスペースに種別を 1 つ追加する。雛形（TemplateTitle/TemplateDoc）は
+// CreateTicketTypeUseCase はプロジェクトに種別を 1 つ追加する。雛形（TemplateTitle/TemplateDoc）は
 // 「雛形から作る」機能そのものが段 1 の対象外のため、この入口では受け付けない
 // （列自体は骨格スキーマに含めてあるので、後の段で無停止のまま usecase を足せる）。
 type CreateTicketTypeUseCase struct {
@@ -23,7 +23,7 @@ func NewCreateTicketTypeUseCase(r repository.TicketRepository) *CreateTicketType
 
 type CreateTicketTypeInput struct {
 	WorkspaceID    string
-	SpaceID        string
+	ProjectID      string
 	Name           string
 	HierarchyLevel int
 	Color          string
@@ -33,8 +33,8 @@ func (u *CreateTicketTypeUseCase) Execute(ctx context.Context, in CreateTicketTy
 	if in.WorkspaceID == "" {
 		return nil, errors.New("workspaceID is required")
 	}
-	if in.SpaceID == "" {
-		return nil, errors.New("spaceID is required")
+	if in.ProjectID == "" {
+		return nil, errors.New("projectID is required")
 	}
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
@@ -48,7 +48,7 @@ func (u *CreateTicketTypeUseCase) Execute(ctx context.Context, in CreateTicketTy
 		return nil, domain.ErrInvalidTicketColor
 	}
 
-	last, err := u.repo.LastActiveTicketTypePosition(ctx, in.WorkspaceID, in.SpaceID)
+	last, err := u.repo.LastActiveTicketTypePosition(ctx, in.WorkspaceID, in.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (u *CreateTicketTypeUseCase) Execute(ctx context.Context, in CreateTicketTy
 	}
 
 	t := &domain.TicketType{
-		WorkspaceID: in.WorkspaceID, SpaceID: in.SpaceID,
+		WorkspaceID: in.WorkspaceID, ProjectID: in.ProjectID,
 		Name: name, HierarchyLevel: in.HierarchyLevel, Color: color, Position: pos,
 	}
 	if err := u.repo.InsertTicketType(ctx, t); err != nil {
@@ -83,7 +83,7 @@ func NewUpdateTicketTypeUseCase(r repository.TicketRepository) *UpdateTicketType
 
 type UpdateTicketTypeInput struct {
 	WorkspaceID    string
-	SpaceID        string
+	ProjectID      string
 	TypeID         string
 	Name           string
 	HierarchyLevel int
@@ -91,8 +91,8 @@ type UpdateTicketTypeInput struct {
 }
 
 func (u *UpdateTicketTypeUseCase) Execute(ctx context.Context, in UpdateTicketTypeInput) (*domain.TicketType, error) {
-	if in.WorkspaceID == "" || in.SpaceID == "" || in.TypeID == "" {
-		return nil, errors.New("workspaceID, spaceID and typeID are required")
+	if in.WorkspaceID == "" || in.ProjectID == "" || in.TypeID == "" {
+		return nil, errors.New("workspaceID, projectID and typeID are required")
 	}
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
@@ -106,7 +106,7 @@ func (u *UpdateTicketTypeUseCase) Execute(ctx context.Context, in UpdateTicketTy
 		return nil, domain.ErrInvalidTicketColor
 	}
 	t := &domain.TicketType{
-		ID: in.TypeID, WorkspaceID: in.WorkspaceID, SpaceID: in.SpaceID,
+		ID: in.TypeID, WorkspaceID: in.WorkspaceID, ProjectID: in.ProjectID,
 		Name: name, HierarchyLevel: in.HierarchyLevel, Color: color,
 	}
 	if err := u.repo.UpdateTicketType(ctx, t); err != nil {
@@ -126,15 +126,15 @@ func NewSetDefaultTicketTypeUseCase(r repository.TicketRepository) *SetDefaultTi
 
 type SetDefaultTicketTypeInput struct {
 	WorkspaceID string
-	SpaceID     string
+	ProjectID   string
 	TypeID      string
 }
 
 func (u *SetDefaultTicketTypeUseCase) Execute(ctx context.Context, in SetDefaultTicketTypeInput) error {
-	if in.WorkspaceID == "" || in.SpaceID == "" || in.TypeID == "" {
-		return errors.New("workspaceID, spaceID and typeID are required")
+	if in.WorkspaceID == "" || in.ProjectID == "" || in.TypeID == "" {
+		return errors.New("workspaceID, projectID and typeID are required")
 	}
-	return u.repo.SetTicketTypeDefault(ctx, in.WorkspaceID, in.SpaceID, in.TypeID)
+	return u.repo.SetTicketTypeDefault(ctx, in.WorkspaceID, in.ProjectID, in.TypeID)
 }
 
 // ArchiveTicketTypeUseCase は種別をアーカイブする。現役のチケットが参照していれば拒否する。
@@ -148,22 +148,22 @@ func NewArchiveTicketTypeUseCase(r repository.TicketRepository) *ArchiveTicketTy
 
 type ArchiveTicketTypeInput struct {
 	WorkspaceID string
-	SpaceID     string
+	ProjectID   string
 	TypeID      string
 }
 
 func (u *ArchiveTicketTypeUseCase) Execute(ctx context.Context, in ArchiveTicketTypeInput) error {
-	if in.WorkspaceID == "" || in.SpaceID == "" || in.TypeID == "" {
-		return errors.New("workspaceID, spaceID and typeID are required")
+	if in.WorkspaceID == "" || in.ProjectID == "" || in.TypeID == "" {
+		return errors.New("workspaceID, projectID and typeID are required")
 	}
-	count, err := u.repo.CountActiveTicketsByType(ctx, in.WorkspaceID, in.SpaceID, in.TypeID)
+	count, err := u.repo.CountActiveTicketsByType(ctx, in.WorkspaceID, in.ProjectID, in.TypeID)
 	if err != nil {
 		return err
 	}
 	if count > 0 {
 		return ErrTicketTypeInUse
 	}
-	return u.repo.ArchiveTicketType(ctx, in.WorkspaceID, in.SpaceID, in.TypeID)
+	return u.repo.ArchiveTicketType(ctx, in.WorkspaceID, in.ProjectID, in.TypeID)
 }
 
 // RestoreTicketTypeUseCase はアーカイブ済み種別を現役へ戻す。position は末尾へ付け直す。
@@ -177,15 +177,15 @@ func NewRestoreTicketTypeUseCase(r repository.TicketRepository) *RestoreTicketTy
 
 type RestoreTicketTypeInput struct {
 	WorkspaceID string
-	SpaceID     string
+	ProjectID   string
 	TypeID      string
 }
 
 func (u *RestoreTicketTypeUseCase) Execute(ctx context.Context, in RestoreTicketTypeInput) error {
-	if in.WorkspaceID == "" || in.SpaceID == "" || in.TypeID == "" {
-		return errors.New("workspaceID, spaceID and typeID are required")
+	if in.WorkspaceID == "" || in.ProjectID == "" || in.TypeID == "" {
+		return errors.New("workspaceID, projectID and typeID are required")
 	}
-	last, err := u.repo.LastActiveTicketTypePosition(ctx, in.WorkspaceID, in.SpaceID)
+	last, err := u.repo.LastActiveTicketTypePosition(ctx, in.WorkspaceID, in.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -193,5 +193,5 @@ func (u *RestoreTicketTypeUseCase) Execute(ctx context.Context, in RestoreTicket
 	if err != nil {
 		return err
 	}
-	return u.repo.RestoreTicketType(ctx, in.WorkspaceID, in.SpaceID, in.TypeID, pos)
+	return u.repo.RestoreTicketType(ctx, in.WorkspaceID, in.ProjectID, in.TypeID, pos)
 }

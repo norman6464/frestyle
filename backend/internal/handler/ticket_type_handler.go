@@ -9,23 +9,23 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/usecase/ticket"
 )
 
-// TicketTypeHandler はスペースの種別マスタの管理を受ける（一覧・作成・更新・既定種別の
-// 切り替え・アーカイブ・復元）。判定はすべてスペース単位（TicketStatusHandler と同じ形）。
+// TicketTypeHandler はプロジェクトの種別マスタの管理を受ける（一覧・作成・更新・既定種別の
+// 切り替え・アーカイブ・復元）。判定はすべてワークスペース単位（TicketStatusHandler と同じ形）。
 //
 // 雛形（TemplateTitle/TemplateDoc）はこの口では受け付けない — 「雛形から作る」機能そのものが
 // 段 1 の対象外（CreateTicketTypeUseCase の doc 参照）。
 type TicketTypeHandler struct {
-	checkSpace *kb.CheckSpacePermissionUseCase
-	list       *ticket.ListTicketTypesUseCase
-	create     *ticket.CreateTicketTypeUseCase
-	update     *ticket.UpdateTicketTypeUseCase
-	setDefault *ticket.SetDefaultTicketTypeUseCase
-	archive    *ticket.ArchiveTicketTypeUseCase
-	restore    *ticket.RestoreTicketTypeUseCase
+	checkWorkspace *kb.CheckWorkspacePermissionUseCase
+	list           *ticket.ListTicketTypesUseCase
+	create         *ticket.CreateTicketTypeUseCase
+	update         *ticket.UpdateTicketTypeUseCase
+	setDefault     *ticket.SetDefaultTicketTypeUseCase
+	archive        *ticket.ArchiveTicketTypeUseCase
+	restore        *ticket.RestoreTicketTypeUseCase
 }
 
 func NewTicketTypeHandler(
-	checkSpace *kb.CheckSpacePermissionUseCase,
+	checkWorkspace *kb.CheckWorkspacePermissionUseCase,
 	list *ticket.ListTicketTypesUseCase,
 	create *ticket.CreateTicketTypeUseCase,
 	update *ticket.UpdateTicketTypeUseCase,
@@ -34,15 +34,15 @@ func NewTicketTypeHandler(
 	restore *ticket.RestoreTicketTypeUseCase,
 ) *TicketTypeHandler {
 	return &TicketTypeHandler{
-		checkSpace: checkSpace, list: list, create: create, update: update,
+		checkWorkspace: checkWorkspace, list: list, create: create, update: update,
 		setDefault: setDefault, archive: archive, restore: restore,
 	}
 }
 
-func (h *TicketTypeHandler) requireSpacePermission(
-	c *gin.Context, scope kbRequestScope, spaceID string, capability domain.Capability,
+func (h *TicketTypeHandler) requireWorkspacePermission(
+	c *gin.Context, scope kbRequestScope, capability domain.Capability,
 ) bool {
-	return requireTicketSpacePermissionWith(c, h.checkSpace, scope, spaceID, capability)
+	return requireTicketWorkspacePermissionWith(c, h.checkWorkspace, scope, capability)
 }
 
 // ticketTypeResponse は種別 1 件の返却形（ticketStatusResponse と同じ形）。
@@ -57,18 +57,18 @@ type ticketTypeListResponse struct {
 	Types []ticketTypeResponse `json:"types"`
 }
 
-// List はスペースの種別一覧を返す（閲覧権限が要る）。
+// List はプロジェクトの種別一覧を返す（閲覧権限が要る）。
 func (h *TicketTypeHandler) List(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityView) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityView) {
 		return
 	}
 	types, err := h.list.Execute(c.Request.Context(), ticket.ListTicketTypesInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID,
+		WorkspaceID: scope.workspaceID, ProjectID: projectID,
 		IncludeArchived: c.Query("archived") == "true",
 	})
 	if err != nil {
@@ -89,14 +89,14 @@ type ticketTypeRequest struct {
 	Color          string `json:"color" binding:"required"`
 }
 
-// Create はスペースに種別を 1 つ追加する（編集権限が要る）。
+// Create はプロジェクトに種別を 1 つ追加する（編集権限が要る）。
 func (h *TicketTypeHandler) Create(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	var req ticketTypeRequest
@@ -105,7 +105,7 @@ func (h *TicketTypeHandler) Create(c *gin.Context) {
 		return
 	}
 	t, err := h.create.Execute(c.Request.Context(), ticket.CreateTicketTypeInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID,
+		WorkspaceID: scope.workspaceID, ProjectID: projectID,
 		Name: req.Name, HierarchyLevel: req.HierarchyLevel, Color: req.Color,
 	})
 	if err != nil {
@@ -121,8 +121,8 @@ func (h *TicketTypeHandler) Update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	var req ticketTypeRequest
@@ -131,7 +131,7 @@ func (h *TicketTypeHandler) Update(c *gin.Context) {
 		return
 	}
 	t, err := h.update.Execute(c.Request.Context(), ticket.UpdateTicketTypeInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, TypeID: c.Param("typeId"),
+		WorkspaceID: scope.workspaceID, ProjectID: projectID, TypeID: c.Param("typeId"),
 		Name: req.Name, HierarchyLevel: req.HierarchyLevel, Color: req.Color,
 	})
 	if err != nil {
@@ -147,12 +147,12 @@ func (h *TicketTypeHandler) SetDefault(c *gin.Context) {
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	if err := h.setDefault.Execute(c.Request.Context(), ticket.SetDefaultTicketTypeInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, TypeID: c.Param("typeId"),
+		WorkspaceID: scope.workspaceID, ProjectID: projectID, TypeID: c.Param("typeId"),
 	}); err != nil {
 		respondTicketErr(c, err)
 		return
@@ -166,12 +166,12 @@ func (h *TicketTypeHandler) Archive(c *gin.Context) {
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	if err := h.archive.Execute(c.Request.Context(), ticket.ArchiveTicketTypeInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, TypeID: c.Param("typeId"),
+		WorkspaceID: scope.workspaceID, ProjectID: projectID, TypeID: c.Param("typeId"),
 	}); err != nil {
 		respondTicketErr(c, err)
 		return
@@ -185,12 +185,12 @@ func (h *TicketTypeHandler) Restore(c *gin.Context) {
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	if err := h.restore.Execute(c.Request.Context(), ticket.RestoreTicketTypeInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, TypeID: c.Param("typeId"),
+		WorkspaceID: scope.workspaceID, ProjectID: projectID, TypeID: c.Param("typeId"),
 	}); err != nil {
 		respondTicketErr(c, err)
 		return

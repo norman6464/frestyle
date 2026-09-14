@@ -23,10 +23,10 @@ func (fakeTxManager) DoInTx(ctx context.Context, fn func(ctx context.Context) er
 // （初期状態を持つ現役の状態が 1 つでもあるか）を検証する。
 func Test_チケット有効化_既に有効なら拒否(t *testing.T) {
 	repo := &mockTicketRepo{}
-	repo.On("HasActiveInitialTicketStatus", mock.Anything, tkWS, tkSpace).Return(true, nil)
+	repo.On("HasActiveInitialTicketStatus", mock.Anything, tkWS, tkProject).Return(true, nil)
 
-	_, err := ticket.NewEnableTicketsForSpaceUseCase(repo, fakeTxManager{}).
-		Execute(context.Background(), ticket.EnableTicketsForSpaceInput{WorkspaceID: tkWS, SpaceID: tkSpace})
+	_, err := ticket.NewEnableTicketsForProjectUseCase(repo, fakeTxManager{}).
+		Execute(context.Background(), ticket.EnableTicketsForProjectInput{WorkspaceID: tkWS, ProjectID: tkProject})
 
 	require.ErrorIs(t, err, repository.ErrTicketsAlreadyEnabled)
 	repo.AssertNotCalled(t, "InsertTicketStatus")
@@ -38,7 +38,7 @@ func Test_チケット有効化_既に有効なら拒否(t *testing.T) {
 // 有効化後はいつでも管理画面で足せる・変えられるので、ここでの選択は初期値でしかない。
 func Test_チケット有効化_既定の雛形を作る(t *testing.T) {
 	repo := &mockTicketRepo{}
-	repo.On("HasActiveInitialTicketStatus", mock.Anything, tkWS, tkSpace).Return(false, nil)
+	repo.On("HasActiveInitialTicketStatus", mock.Anything, tkWS, tkProject).Return(false, nil)
 
 	var insertedStatuses []*domain.TicketStatus
 	repo.On("InsertTicketStatus", mock.Anything, mock.AnythingOfType("*domain.TicketStatus")).
@@ -57,8 +57,8 @@ func Test_チケット有効化_既定の雛形を作る(t *testing.T) {
 		}).Return(nil)
 
 	err := func() error {
-		_, err := ticket.NewEnableTicketsForSpaceUseCase(repo, fakeTxManager{}).
-			Execute(context.Background(), ticket.EnableTicketsForSpaceInput{WorkspaceID: tkWS, SpaceID: tkSpace})
+		_, err := ticket.NewEnableTicketsForProjectUseCase(repo, fakeTxManager{}).
+			Execute(context.Background(), ticket.EnableTicketsForProjectInput{WorkspaceID: tkWS, ProjectID: tkProject})
 		return err
 	}()
 	require.NoError(t, err)
@@ -67,7 +67,7 @@ func Test_チケット有効化_既定の雛形を作る(t *testing.T) {
 	byCategory := map[domain.TicketStatusCategory]*domain.TicketStatus{}
 	for _, s := range insertedStatuses {
 		require.Equal(t, tkWS, s.WorkspaceID)
-		require.Equal(t, tkSpace, s.SpaceID)
+		require.Equal(t, tkProject, s.ProjectID)
 		require.True(t, domain.ValidHexColor(s.Color), "色は正規化済みで保存する: %s", s.Color)
 		require.NotEmpty(t, s.Position)
 		byCategory[s.Category] = s
@@ -106,7 +106,7 @@ func Test_チケット有効化_既定の雛形を作る(t *testing.T) {
 	seenTypePos := map[string]bool{}
 	for _, ty := range insertedTypes {
 		require.Equal(t, tkWS, ty.WorkspaceID)
-		require.Equal(t, tkSpace, ty.SpaceID)
+		require.Equal(t, tkProject, ty.ProjectID)
 		require.True(t, domain.ValidHexColor(ty.Color), "色は正規化済みで保存する: %s", ty.Color)
 		require.NotEmpty(t, ty.Position)
 		require.False(t, seenTypePos[ty.Position], "位置が重複している: %s", ty.Position)
@@ -122,13 +122,13 @@ func Test_チケット有効化_既定の雛形を作る(t *testing.T) {
 	require.Equal(t, 1, defaultCount, "既定の種別は 1 つだけ")
 }
 
-// sourceSpaceId を指定すると、そのスペースの現役の状態・種別をそのまま複製する
-// （設計 Ⅵ「別スペースの構成を複製できる」）。複製元にも参照権限があることは
+// sourceProjectId を指定すると、そのプロジェクトの現役の状態・種別をそのまま複製する
+// （別プロジェクトの構成を複製できる）。
 // handler/呼び出し側が別途確かめる前提（このユースケースは複製そのものだけを担う）。
 func Test_チケット有効化_複製元を指定すると現役の構成を複製する(t *testing.T) {
 	sourceSpace := "01a00000-0000-7000-8000-000000000099"
 	repo := &mockTicketRepo{}
-	repo.On("HasActiveInitialTicketStatus", mock.Anything, tkWS, tkSpace).Return(false, nil)
+	repo.On("HasActiveInitialTicketStatus", mock.Anything, tkWS, tkProject).Return(false, nil)
 	repo.On("ListTicketStatuses", mock.Anything, tkWS, sourceSpace, false).Return([]domain.TicketStatus{
 		{Name: "未対応", Category: domain.TicketStatusCategoryTodo, Color: "#5b6b7a", Position: "a0", IsInitial: true},
 		{Name: "対応中", Category: domain.TicketStatusCategoryInProgress, Color: "#a0661a", Position: "a1"},
@@ -155,9 +155,9 @@ func Test_チケット有効化_複製元を指定すると現役の構成を複
 			insertedTypes = append(insertedTypes, &cp)
 		}).Return(nil)
 
-	_, err := ticket.NewEnableTicketsForSpaceUseCase(repo, fakeTxManager{}).
-		Execute(context.Background(), ticket.EnableTicketsForSpaceInput{
-			WorkspaceID: tkWS, SpaceID: tkSpace, SourceSpaceID: &sourceSpace,
+	_, err := ticket.NewEnableTicketsForProjectUseCase(repo, fakeTxManager{}).
+		Execute(context.Background(), ticket.EnableTicketsForProjectInput{
+			WorkspaceID: tkWS, ProjectID: tkProject, SourceProjectID: &sourceSpace,
 		})
 	require.NoError(t, err)
 
@@ -166,7 +166,7 @@ func Test_チケット有効化_複製元を指定すると現役の構成を複
 	names := map[string]bool{}
 	for _, s := range insertedStatuses {
 		names[s.Name] = true
-		require.Equal(t, tkSpace, s.SpaceID, "複製先のスペースに作る（複製元ではない）")
+		require.Equal(t, tkProject, s.ProjectID, "複製先のプロジェクトに作る（複製元ではない）")
 	}
 	require.True(t, names["却下"], "複製元の状態名をそのまま使う")
 }

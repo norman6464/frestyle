@@ -69,7 +69,7 @@ func toDomainTicketStatus(row sqlcgen.TicketStatus) domain.TicketStatus {
 	s := domain.TicketStatus{
 		ID:          row.ID.String(),
 		WorkspaceID: row.WorkspaceID.String(),
-		SpaceID:     row.SpaceID.String(),
+		ProjectID:   row.ProjectID.String(),
 		Name:        row.Name,
 		Category:    domain.TicketStatusCategory(row.Category),
 		Color:       row.Color,
@@ -89,7 +89,7 @@ func toDomainTicketType(row sqlcgen.TicketType) domain.TicketType {
 	t := domain.TicketType{
 		ID:             row.ID.String(),
 		WorkspaceID:    row.WorkspaceID.String(),
-		SpaceID:        row.SpaceID.String(),
+		ProjectID:      row.ProjectID.String(),
 		Name:           row.Name,
 		Color:          row.Color,
 		HierarchyLevel: int(row.HierarchyLevel),
@@ -112,11 +112,26 @@ func toDomainTicketType(row sqlcgen.TicketType) domain.TicketType {
 	return t
 }
 
-func toDomainTicket(row sqlcgen.Ticket) domain.Ticket {
+// toDomainTicket は tickets の行を domain.Ticket へ写す。
+//
+// 並び順（Position）は行から取れない —— tickets.position は撤去され、正本は
+// ticket_backlog_ranks だけになった。そこで呼び出し側が rankPosition を渡す。
+//
+// 並び順を JOIN で引いている経路（GetTicket / ListTickets / ListTicketChildren）は
+// その値を渡す。渡さない（空文字の）経路は次の 2 種類で、どちらも「並び順に意味が無い」:
+//
+//   - 並びではなく系統を返す一覧（祖先・親チェーン・参照元・担当者の担当一覧）
+//   - 書き換えの応答（UpdateTicket / ChangeTicketStatus / FindDeletedTicket）。
+//     更新は並び順に触らないが、RETURNING に JOIN を足すと sqlc の生成が通らない
+//     （queries/ticket.sql の UpdateTicket の doc 参照）。並びが要る画面は一覧を読み直す。
+//
+// 空文字を「先頭」と解釈して並べ替えに使ってはいけない。並べ替えは DB 側の
+// ORDER BY ticket_backlog_ranks.position が唯一の拠り所。
+func toDomainTicket(row sqlcgen.Ticket, rankPosition string) domain.Ticket {
 	t := domain.Ticket{
 		ID:              row.ID.String(),
 		WorkspaceID:     row.WorkspaceID.String(),
-		SpaceID:         row.SpaceID.String(),
+		ProjectID:       row.ProjectID.String(),
 		Number:          row.Number,
 		TypeID:          row.TypeID.String(),
 		StatusID:        row.StatusID.String(),
@@ -124,7 +139,8 @@ func toDomainTicket(row sqlcgen.Ticket) domain.Ticket {
 		Doc:             row.Doc,
 		PlainText:       row.PlainText,
 		Priority:        domain.TicketPriority(row.Priority),
-		Position:        row.Position,
+		StoryPoints:     fromNullInt32(row.StoryPoints),
+		Position:        rankPosition,
 		CreatedByUserID: uint64(row.CreatedByUserID),
 		CreatedAt:       row.CreatedAt,
 		UpdatedAt:       row.UpdatedAt,
@@ -207,29 +223,29 @@ func toDomainTicketChangeItem(row sqlcgen.TicketChangeItem) domain.TicketChangeI
 
 // --- ticket_statuses ---
 
-func (r *ticketRepository) HasActiveInitialTicketStatus(ctx context.Context, workspaceID, spaceID string) (bool, error) {
+func (r *ticketRepository) HasActiveInitialTicketStatus(ctx context.Context, workspaceID, projectID string) (bool, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	if !ok || !ok2 {
 		return false, nil
 	}
 	return r.queries(ctx).HasActiveInitialTicketStatus(ctx, sqlcgen.HasActiveInitialTicketStatusParams{
-		WorkspaceID: wsID, SpaceID: spID,
+		WorkspaceID: wsID, ProjectID: pjID,
 	})
 }
 
 func (r *ticketRepository) InsertTicketStatus(ctx context.Context, s *domain.TicketStatus) error {
 	wsID, ok := kbParseID(s.WorkspaceID)
-	spID, ok2 := kbParseID(s.SpaceID)
+	pjID, ok2 := kbParseID(s.ProjectID)
 	if !ok || !ok2 {
-		return repository.ErrSpaceNotFound
+		return repository.ErrProjectNotFound
 	}
 	id, err := ticketNewID()
 	if err != nil {
 		return err
 	}
 	row, err := r.queries(ctx).InsertTicketStatus(ctx, sqlcgen.InsertTicketStatusParams{
-		ID: id, WorkspaceID: wsID, SpaceID: spID,
+		ID: id, WorkspaceID: wsID, ProjectID: pjID,
 		Name: s.Name, Category: string(s.Category), Color: s.Color,
 		Position: s.Position, IsInitial: s.IsInitial,
 	})
@@ -238,7 +254,7 @@ func (r *ticketRepository) InsertTicketStatus(ctx context.Context, s *domain.Tic
 			return repository.ErrTicketStatusNameTaken
 		}
 		if isForeignKeyViolation(err) {
-			return repository.ErrSpaceNotFound
+			return repository.ErrProjectNotFound
 		}
 		return err
 	}
@@ -246,15 +262,15 @@ func (r *ticketRepository) InsertTicketStatus(ctx context.Context, s *domain.Tic
 	return nil
 }
 
-func (r *ticketRepository) FindTicketStatus(ctx context.Context, workspaceID, spaceID, statusID string) (*domain.TicketStatus, error) {
+func (r *ticketRepository) FindTicketStatus(ctx context.Context, workspaceID, projectID, statusID string) (*domain.TicketStatus, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	stID, ok3 := kbParseID(statusID)
 	if !ok || !ok2 || !ok3 {
 		return nil, repository.ErrTicketStatusNotFound
 	}
 	row, err := r.queries(ctx).GetTicketStatus(ctx, sqlcgen.GetTicketStatusParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: stID,
+		WorkspaceID: wsID, ProjectID: pjID, ID: stID,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, repository.ErrTicketStatusNotFound
@@ -266,14 +282,14 @@ func (r *ticketRepository) FindTicketStatus(ctx context.Context, workspaceID, sp
 	return &s, nil
 }
 
-func (r *ticketRepository) ListTicketStatuses(ctx context.Context, workspaceID, spaceID string, includeArchived bool) ([]domain.TicketStatus, error) {
+func (r *ticketRepository) ListTicketStatuses(ctx context.Context, workspaceID, projectID string, includeArchived bool) ([]domain.TicketStatus, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	if !ok || !ok2 {
 		return nil, nil
 	}
 	rows, err := r.queries(ctx).ListTicketStatuses(ctx, sqlcgen.ListTicketStatusesParams{
-		WorkspaceID: wsID, SpaceID: spID, Archived: includeArchived,
+		WorkspaceID: wsID, ProjectID: pjID, Archived: includeArchived,
 	})
 	if err != nil {
 		return nil, err
@@ -285,14 +301,14 @@ func (r *ticketRepository) ListTicketStatuses(ctx context.Context, workspaceID, 
 	return out, nil
 }
 
-func (r *ticketRepository) GetInitialTicketStatus(ctx context.Context, workspaceID, spaceID string) (*domain.TicketStatus, error) {
+func (r *ticketRepository) GetInitialTicketStatus(ctx context.Context, workspaceID, projectID string) (*domain.TicketStatus, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	if !ok || !ok2 {
 		return nil, repository.ErrTicketStatusNotFound
 	}
 	row, err := r.queries(ctx).GetInitialTicketStatus(ctx, sqlcgen.GetInitialTicketStatusParams{
-		WorkspaceID: wsID, SpaceID: spID,
+		WorkspaceID: wsID, ProjectID: pjID,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, repository.ErrTicketStatusNotFound
@@ -306,13 +322,13 @@ func (r *ticketRepository) GetInitialTicketStatus(ctx context.Context, workspace
 
 func (r *ticketRepository) UpdateTicketStatus(ctx context.Context, s *domain.TicketStatus) error {
 	wsID, ok := kbParseID(s.WorkspaceID)
-	spID, ok2 := kbParseID(s.SpaceID)
+	pjID, ok2 := kbParseID(s.ProjectID)
 	stID, ok3 := kbParseID(s.ID)
 	if !ok || !ok2 || !ok3 {
 		return repository.ErrTicketStatusNotFound
 	}
 	row, err := r.queries(ctx).UpdateTicketStatus(ctx, sqlcgen.UpdateTicketStatusParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: stID,
+		WorkspaceID: wsID, ProjectID: pjID, ID: stID,
 		Name: s.Name, Category: string(s.Category), Color: s.Color,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
@@ -328,9 +344,9 @@ func (r *ticketRepository) UpdateTicketStatus(ctx context.Context, s *domain.Tic
 	return nil
 }
 
-func (r *ticketRepository) SetTicketStatusInitial(ctx context.Context, workspaceID, spaceID, statusID string) error {
+func (r *ticketRepository) SetTicketStatusInitial(ctx context.Context, workspaceID, projectID, statusID string) error {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	stID, ok3 := kbParseID(statusID)
 	if !ok || !ok2 || !ok3 {
 		return repository.ErrTicketStatusNotFound
@@ -339,12 +355,12 @@ func (r *ticketRepository) SetTicketStatusInitial(ctx context.Context, workspace
 	// 作れない）。呼び出し側（usecase）が同一トランザクションで両方の repository 呼び出しを
 	// くるむ想定だが、ここでも 2 文の順序自体はこの関数が保証する。
 	if _, err := r.queries(ctx).ClearTicketStatusInitial(ctx, sqlcgen.ClearTicketStatusInitialParams{
-		WorkspaceID: wsID, SpaceID: spID,
+		WorkspaceID: wsID, ProjectID: pjID,
 	}); err != nil {
 		return err
 	}
 	n, err := r.queries(ctx).SetTicketStatusInitial(ctx, sqlcgen.SetTicketStatusInitialParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: stID,
+		WorkspaceID: wsID, ProjectID: pjID, ID: stID,
 	})
 	if err != nil {
 		return err
@@ -355,15 +371,15 @@ func (r *ticketRepository) SetTicketStatusInitial(ctx context.Context, workspace
 	return nil
 }
 
-func (r *ticketRepository) ArchiveTicketStatus(ctx context.Context, workspaceID, spaceID, statusID string) error {
+func (r *ticketRepository) ArchiveTicketStatus(ctx context.Context, workspaceID, projectID, statusID string) error {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	stID, ok3 := kbParseID(statusID)
 	if !ok || !ok2 || !ok3 {
 		return repository.ErrTicketStatusNotFound
 	}
 	n, err := r.queries(ctx).ArchiveTicketStatus(ctx, sqlcgen.ArchiveTicketStatusParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: stID,
+		WorkspaceID: wsID, ProjectID: pjID, ID: stID,
 	})
 	if err != nil {
 		return err
@@ -374,15 +390,15 @@ func (r *ticketRepository) ArchiveTicketStatus(ctx context.Context, workspaceID,
 	return nil
 }
 
-func (r *ticketRepository) RestoreTicketStatus(ctx context.Context, workspaceID, spaceID, statusID, position string) error {
+func (r *ticketRepository) RestoreTicketStatus(ctx context.Context, workspaceID, projectID, statusID, position string) error {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	stID, ok3 := kbParseID(statusID)
 	if !ok || !ok2 || !ok3 {
 		return repository.ErrTicketStatusNotFound
 	}
 	n, err := r.queries(ctx).RestoreTicketStatus(ctx, sqlcgen.RestoreTicketStatusParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: stID, Position: position,
+		WorkspaceID: wsID, ProjectID: pjID, ID: stID, Position: position,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -396,26 +412,26 @@ func (r *ticketRepository) RestoreTicketStatus(ctx context.Context, workspaceID,
 	return nil
 }
 
-func (r *ticketRepository) CountActiveTicketsByStatus(ctx context.Context, workspaceID, spaceID, statusID string) (int64, error) {
+func (r *ticketRepository) CountActiveTicketsByStatus(ctx context.Context, workspaceID, projectID, statusID string) (int64, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	stID, ok3 := kbParseID(statusID)
 	if !ok || !ok2 || !ok3 {
 		return 0, nil
 	}
 	return r.queries(ctx).CountActiveTicketsByStatus(ctx, sqlcgen.CountActiveTicketsByStatusParams{
-		WorkspaceID: wsID, SpaceID: spID, StatusID: stID,
+		WorkspaceID: wsID, ProjectID: pjID, StatusID: stID,
 	})
 }
 
-func (r *ticketRepository) CountActiveTicketsByStatusForSpace(ctx context.Context, workspaceID, spaceID string) (map[string]int64, error) {
+func (r *ticketRepository) CountActiveTicketsByStatusForProject(ctx context.Context, workspaceID, projectID string) (map[string]int64, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	if !ok || !ok2 {
 		return map[string]int64{}, nil
 	}
 	rows, err := r.queries(ctx).CountActiveTicketsGroupedByStatus(ctx, sqlcgen.CountActiveTicketsGroupedByStatusParams{
-		WorkspaceID: wsID, SpaceID: spID,
+		WorkspaceID: wsID, ProjectID: pjID,
 	})
 	if err != nil {
 		return nil, err
@@ -427,14 +443,14 @@ func (r *ticketRepository) CountActiveTicketsByStatusForSpace(ctx context.Contex
 	return out, nil
 }
 
-func (r *ticketRepository) CountActiveTicketsByTypeForSpace(ctx context.Context, workspaceID, spaceID string) (map[string]int64, error) {
+func (r *ticketRepository) CountActiveTicketsByTypeForProject(ctx context.Context, workspaceID, projectID string) (map[string]int64, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	if !ok || !ok2 {
 		return map[string]int64{}, nil
 	}
 	rows, err := r.queries(ctx).CountActiveTicketsGroupedByType(ctx, sqlcgen.CountActiveTicketsGroupedByTypeParams{
-		WorkspaceID: wsID, SpaceID: spID,
+		WorkspaceID: wsID, ProjectID: pjID,
 	})
 	if err != nil {
 		return nil, err
@@ -446,14 +462,14 @@ func (r *ticketRepository) CountActiveTicketsByTypeForSpace(ctx context.Context,
 	return out, nil
 }
 
-func (r *ticketRepository) LastActiveTicketStatusPosition(ctx context.Context, workspaceID, spaceID string) (string, error) {
+func (r *ticketRepository) LastActiveTicketStatusPosition(ctx context.Context, workspaceID, projectID string) (string, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	if !ok || !ok2 {
 		return "", nil
 	}
 	return r.queries(ctx).LastActiveTicketStatusPosition(ctx, sqlcgen.LastActiveTicketStatusPositionParams{
-		WorkspaceID: wsID, SpaceID: spID,
+		WorkspaceID: wsID, ProjectID: pjID,
 	})
 }
 
@@ -461,9 +477,9 @@ func (r *ticketRepository) LastActiveTicketStatusPosition(ctx context.Context, w
 
 func (r *ticketRepository) InsertTicketType(ctx context.Context, t *domain.TicketType) error {
 	wsID, ok := kbParseID(t.WorkspaceID)
-	spID, ok2 := kbParseID(t.SpaceID)
+	pjID, ok2 := kbParseID(t.ProjectID)
 	if !ok || !ok2 {
-		return repository.ErrSpaceNotFound
+		return repository.ErrProjectNotFound
 	}
 	id, err := ticketNewID()
 	if err != nil {
@@ -478,7 +494,7 @@ func (r *ticketRepository) InsertTicketType(ctx context.Context, t *domain.Ticke
 		return outOfRangeInt32Error("hierarchy_level", t.HierarchyLevel)
 	}
 	row, err := r.queries(ctx).InsertTicketType(ctx, sqlcgen.InsertTicketTypeParams{
-		ID: id, WorkspaceID: wsID, SpaceID: spID,
+		ID: id, WorkspaceID: wsID, ProjectID: pjID,
 		Name: t.Name, Color: t.Color, HierarchyLevel: level,
 		Position: t.Position, IsDefault: t.IsDefault,
 		TemplateTitle: nullString(t.TemplateTitle), TemplateDoc: templateDoc,
@@ -488,7 +504,7 @@ func (r *ticketRepository) InsertTicketType(ctx context.Context, t *domain.Ticke
 			return repository.ErrTicketTypeNameTaken
 		}
 		if isForeignKeyViolation(err) {
-			return repository.ErrSpaceNotFound
+			return repository.ErrProjectNotFound
 		}
 		return err
 	}
@@ -496,15 +512,15 @@ func (r *ticketRepository) InsertTicketType(ctx context.Context, t *domain.Ticke
 	return nil
 }
 
-func (r *ticketRepository) FindTicketType(ctx context.Context, workspaceID, spaceID, typeID string) (*domain.TicketType, error) {
+func (r *ticketRepository) FindTicketType(ctx context.Context, workspaceID, projectID, typeID string) (*domain.TicketType, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	tyID, ok3 := kbParseID(typeID)
 	if !ok || !ok2 || !ok3 {
 		return nil, repository.ErrTicketTypeNotFound
 	}
 	row, err := r.queries(ctx).GetTicketType(ctx, sqlcgen.GetTicketTypeParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: tyID,
+		WorkspaceID: wsID, ProjectID: pjID, ID: tyID,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, repository.ErrTicketTypeNotFound
@@ -516,14 +532,14 @@ func (r *ticketRepository) FindTicketType(ctx context.Context, workspaceID, spac
 	return &t, nil
 }
 
-func (r *ticketRepository) ListTicketTypes(ctx context.Context, workspaceID, spaceID string, includeArchived bool) ([]domain.TicketType, error) {
+func (r *ticketRepository) ListTicketTypes(ctx context.Context, workspaceID, projectID string, includeArchived bool) ([]domain.TicketType, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	if !ok || !ok2 {
 		return nil, nil
 	}
 	rows, err := r.queries(ctx).ListTicketTypes(ctx, sqlcgen.ListTicketTypesParams{
-		WorkspaceID: wsID, SpaceID: spID, Archived: includeArchived,
+		WorkspaceID: wsID, ProjectID: pjID, Archived: includeArchived,
 	})
 	if err != nil {
 		return nil, err
@@ -535,14 +551,14 @@ func (r *ticketRepository) ListTicketTypes(ctx context.Context, workspaceID, spa
 	return out, nil
 }
 
-func (r *ticketRepository) GetDefaultTicketType(ctx context.Context, workspaceID, spaceID string) (*domain.TicketType, error) {
+func (r *ticketRepository) GetDefaultTicketType(ctx context.Context, workspaceID, projectID string) (*domain.TicketType, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	if !ok || !ok2 {
 		return nil, repository.ErrTicketTypeNotFound
 	}
 	row, err := r.queries(ctx).GetDefaultTicketType(ctx, sqlcgen.GetDefaultTicketTypeParams{
-		WorkspaceID: wsID, SpaceID: spID,
+		WorkspaceID: wsID, ProjectID: pjID,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, repository.ErrTicketTypeNotFound
@@ -556,7 +572,7 @@ func (r *ticketRepository) GetDefaultTicketType(ctx context.Context, workspaceID
 
 func (r *ticketRepository) UpdateTicketType(ctx context.Context, t *domain.TicketType) error {
 	wsID, ok := kbParseID(t.WorkspaceID)
-	spID, ok2 := kbParseID(t.SpaceID)
+	pjID, ok2 := kbParseID(t.ProjectID)
 	tyID, ok3 := kbParseID(t.ID)
 	if !ok || !ok2 || !ok3 {
 		return repository.ErrTicketTypeNotFound
@@ -570,7 +586,7 @@ func (r *ticketRepository) UpdateTicketType(ctx context.Context, t *domain.Ticke
 		return outOfRangeInt32Error("hierarchy_level", t.HierarchyLevel)
 	}
 	row, err := r.queries(ctx).UpdateTicketType(ctx, sqlcgen.UpdateTicketTypeParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: tyID,
+		WorkspaceID: wsID, ProjectID: pjID, ID: tyID,
 		Name: t.Name, Color: t.Color, HierarchyLevel: level,
 		TemplateTitle: nullString(t.TemplateTitle), TemplateDoc: templateDoc,
 	})
@@ -587,20 +603,20 @@ func (r *ticketRepository) UpdateTicketType(ctx context.Context, t *domain.Ticke
 	return nil
 }
 
-func (r *ticketRepository) SetTicketTypeDefault(ctx context.Context, workspaceID, spaceID, typeID string) error {
+func (r *ticketRepository) SetTicketTypeDefault(ctx context.Context, workspaceID, projectID, typeID string) error {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	tyID, ok3 := kbParseID(typeID)
 	if !ok || !ok2 || !ok3 {
 		return repository.ErrTicketTypeNotFound
 	}
 	if _, err := r.queries(ctx).ClearTicketTypeDefault(ctx, sqlcgen.ClearTicketTypeDefaultParams{
-		WorkspaceID: wsID, SpaceID: spID,
+		WorkspaceID: wsID, ProjectID: pjID,
 	}); err != nil {
 		return err
 	}
 	n, err := r.queries(ctx).SetTicketTypeDefault(ctx, sqlcgen.SetTicketTypeDefaultParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: tyID,
+		WorkspaceID: wsID, ProjectID: pjID, ID: tyID,
 	})
 	if err != nil {
 		return err
@@ -611,15 +627,15 @@ func (r *ticketRepository) SetTicketTypeDefault(ctx context.Context, workspaceID
 	return nil
 }
 
-func (r *ticketRepository) ArchiveTicketType(ctx context.Context, workspaceID, spaceID, typeID string) error {
+func (r *ticketRepository) ArchiveTicketType(ctx context.Context, workspaceID, projectID, typeID string) error {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	tyID, ok3 := kbParseID(typeID)
 	if !ok || !ok2 || !ok3 {
 		return repository.ErrTicketTypeNotFound
 	}
 	n, err := r.queries(ctx).ArchiveTicketType(ctx, sqlcgen.ArchiveTicketTypeParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: tyID,
+		WorkspaceID: wsID, ProjectID: pjID, ID: tyID,
 	})
 	if err != nil {
 		return err
@@ -630,15 +646,15 @@ func (r *ticketRepository) ArchiveTicketType(ctx context.Context, workspaceID, s
 	return nil
 }
 
-func (r *ticketRepository) RestoreTicketType(ctx context.Context, workspaceID, spaceID, typeID, position string) error {
+func (r *ticketRepository) RestoreTicketType(ctx context.Context, workspaceID, projectID, typeID, position string) error {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	tyID, ok3 := kbParseID(typeID)
 	if !ok || !ok2 || !ok3 {
 		return repository.ErrTicketTypeNotFound
 	}
 	n, err := r.queries(ctx).RestoreTicketType(ctx, sqlcgen.RestoreTicketTypeParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: tyID, Position: position,
+		WorkspaceID: wsID, ProjectID: pjID, ID: tyID, Position: position,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -652,26 +668,26 @@ func (r *ticketRepository) RestoreTicketType(ctx context.Context, workspaceID, s
 	return nil
 }
 
-func (r *ticketRepository) CountActiveTicketsByType(ctx context.Context, workspaceID, spaceID, typeID string) (int64, error) {
+func (r *ticketRepository) CountActiveTicketsByType(ctx context.Context, workspaceID, projectID, typeID string) (int64, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	tyID, ok3 := kbParseID(typeID)
 	if !ok || !ok2 || !ok3 {
 		return 0, nil
 	}
 	return r.queries(ctx).CountActiveTicketsByType(ctx, sqlcgen.CountActiveTicketsByTypeParams{
-		WorkspaceID: wsID, SpaceID: spID, TypeID: tyID,
+		WorkspaceID: wsID, ProjectID: pjID, TypeID: tyID,
 	})
 }
 
-func (r *ticketRepository) LastActiveTicketTypePosition(ctx context.Context, workspaceID, spaceID string) (string, error) {
+func (r *ticketRepository) LastActiveTicketTypePosition(ctx context.Context, workspaceID, projectID string) (string, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	if !ok || !ok2 {
 		return "", nil
 	}
 	return r.queries(ctx).LastActiveTicketTypePosition(ctx, sqlcgen.LastActiveTicketTypePositionParams{
-		WorkspaceID: wsID, SpaceID: spID,
+		WorkspaceID: wsID, ProjectID: pjID,
 	})
 }
 
@@ -679,11 +695,11 @@ func (r *ticketRepository) LastActiveTicketTypePosition(ctx context.Context, wor
 
 func (r *ticketRepository) CreateTicket(ctx context.Context, in repository.TicketCreateInput) (*domain.Ticket, error) {
 	wsID, ok := kbParseID(in.WorkspaceID)
-	spID, ok2 := kbParseID(in.SpaceID)
+	pjID, ok2 := kbParseID(in.ProjectID)
 	tyID, ok3 := kbParseID(in.TypeID)
 	stID, ok4 := kbParseID(in.StatusID)
 	if !ok || !ok2 || !ok3 || !ok4 {
-		return nil, repository.ErrSpaceNotFound
+		return nil, repository.ErrProjectNotFound
 	}
 	parentID, ok5 := kbNullID(in.ParentID)
 	if !ok5 {
@@ -702,27 +718,26 @@ func (r *ticketRepository) CreateTicket(ctx context.Context, in repository.Ticke
 		return nil, outOfRangeIDError("created_by_user_id", in.CreatedByUserID)
 	}
 	row, err := r.queries(ctx).CreateTicket(ctx, sqlcgen.CreateTicketParams{
-		ID: id, WorkspaceID: wsID, SpaceID: spID,
+		ID: id, WorkspaceID: wsID, ProjectID: pjID,
 		TypeID: tyID, StatusID: stID, ParentID: parentID,
 		Title: in.Title, Doc: in.Doc, PlainText: in.PlainText,
 		Priority:        priority,
 		StartDate:       nullDate(in.StartDate),
 		DueDate:         nullDate(in.DueDate),
-		Position:        in.Position,
 		CreatedByUserID: createdBy,
 	})
 	if err != nil {
 		// created_by_user_id への FK は space/type/status/parent への FK とは意味が違う（入力の
-		// user が居ない、であって「スペースが無い」ではない）ため、名前を見て振り分ける。
+		// user が居ない、であって「プロジェクトが無い」ではない）ため、名前を見て振り分ける。
 		if constraint, ok := foreignKeyViolationConstraint(err); ok {
 			if constraint == "fk_tickets_created_by" {
 				return nil, repository.ErrUserNotFound
 			}
-			return nil, repository.ErrSpaceNotFound
+			return nil, repository.ErrProjectNotFound
 		}
 		return nil, err
 	}
-	t := toDomainTicket(row)
+	t := toDomainTicket(row, "")
 	return &t, nil
 }
 
@@ -730,15 +745,14 @@ func (r *ticketRepository) CreateTicket(ctx context.Context, in repository.Ticke
 // tickets の行型ではなく専用の行型を生成する。tickets 由来の列だけを取り出して既存の
 // toDomainTicket に渡すための写し取り（変換規則は 1 箇所に保つ）。
 //
-// Position には row.Position（tickets.position、段 2 で正本ではなくなった古い列）ではなく
-// row.RankPosition（ticket_ranks.position、段 2 からの正本）を積む。API 応答の position の
-// 意味は変わらず、中身の出どころが変わっただけ。
+// 並び順は sqlcgen.Ticket には入らない（tickets に列が無い）。呼び出し側が
+// row.RankPosition を toDomainTicket の第 2 引数へ渡す。
 func ticketOfGetRow(row sqlcgen.GetTicketRow) sqlcgen.Ticket {
 	return sqlcgen.Ticket{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, SpaceID: row.SpaceID, Number: row.Number,
+		ID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID, Number: row.Number,
 		TypeID: row.TypeID, StatusID: row.StatusID, ParentID: row.ParentID, Title: row.Title,
 		Doc: row.Doc, PlainText: row.PlainText, Priority: row.Priority,
-		StartDate: row.StartDate, DueDate: row.DueDate, Position: row.RankPosition,
+		StartDate: row.StartDate, DueDate: row.DueDate,
 		ClosedAt: row.ClosedAt, Resolution: row.Resolution,
 		CreatedByUserID: row.CreatedByUserID, ArchivedAt: row.ArchivedAt, DeletedAt: row.DeletedAt,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
@@ -747,10 +761,24 @@ func ticketOfGetRow(row sqlcgen.GetTicketRow) sqlcgen.Ticket {
 
 func ticketOfListRow(row sqlcgen.ListTicketsRow) sqlcgen.Ticket {
 	return sqlcgen.Ticket{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, SpaceID: row.SpaceID, Number: row.Number,
+		ID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID, Number: row.Number,
 		TypeID: row.TypeID, StatusID: row.StatusID, ParentID: row.ParentID, Title: row.Title,
 		Doc: row.Doc, PlainText: row.PlainText, Priority: row.Priority,
-		StartDate: row.StartDate, DueDate: row.DueDate, Position: row.RankPosition,
+		StartDate: row.StartDate, DueDate: row.DueDate,
+		ClosedAt: row.ClosedAt, Resolution: row.Resolution,
+		CreatedByUserID: row.CreatedByUserID, ArchivedAt: row.ArchivedAt, DeletedAt: row.DeletedAt,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}
+}
+
+// ticketOfParentChainRow は親チェーンの行を Ticket へ写す。space_id を選ばなくなったので
+// 素の型変換ではなく列ごとに詰める（ticketOfListRow と同じ形）。
+func ticketOfParentChainRow(row sqlcgen.ListTicketParentChainRow) sqlcgen.Ticket {
+	return sqlcgen.Ticket{
+		ID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID, Number: row.Number,
+		TypeID: row.TypeID, StatusID: row.StatusID, ParentID: row.ParentID, Title: row.Title,
+		Doc: row.Doc, PlainText: row.PlainText, Priority: row.Priority,
+		StartDate: row.StartDate, DueDate: row.DueDate,
 		ClosedAt: row.ClosedAt, Resolution: row.Resolution,
 		CreatedByUserID: row.CreatedByUserID, ArchivedAt: row.ArchivedAt, DeletedAt: row.DeletedAt,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
@@ -759,10 +787,10 @@ func ticketOfListRow(row sqlcgen.ListTicketsRow) sqlcgen.Ticket {
 
 func ticketOfChildrenRow(row sqlcgen.ListTicketChildrenRow) sqlcgen.Ticket {
 	return sqlcgen.Ticket{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, SpaceID: row.SpaceID, Number: row.Number,
+		ID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID, Number: row.Number,
 		TypeID: row.TypeID, StatusID: row.StatusID, ParentID: row.ParentID, Title: row.Title,
 		Doc: row.Doc, PlainText: row.PlainText, Priority: row.Priority,
-		StartDate: row.StartDate, DueDate: row.DueDate, Position: row.RankPosition,
+		StartDate: row.StartDate, DueDate: row.DueDate,
 		ClosedAt: row.ClosedAt, Resolution: row.Resolution,
 		CreatedByUserID: row.CreatedByUserID, ArchivedAt: row.ArchivedAt, DeletedAt: row.DeletedAt,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
@@ -801,7 +829,7 @@ func (r *ticketRepository) FindTicketWithAssignee(ctx context.Context, workspace
 		return nil, err
 	}
 	return &repository.TicketWithAssignee{
-		Ticket:              toDomainTicket(ticketOfGetRow(row)),
+		Ticket:              toDomainTicket(ticketOfGetRow(row), row.RankPosition),
 		AssigneePrincipalID: nullUUIDString(row.AssigneePrincipalID),
 	}, nil
 }
@@ -810,7 +838,7 @@ func (r *ticketRepository) FindTicketWithAssignee(ctx context.Context, workspace
 // ChangeTicketStatus / ChangeTicketParent 等の「読んでから書く」操作は現状ロックなしで、真に
 // 同時に来た更新どうしの間で行自体は壊れないが（最後の書き込みが勝つ）、履歴の old→new の
 // 並びが実際の順序とずれ得る（親変更の周期検出は複数チケットにまたがるため単一行ロックでは
-// 防げず、スペース単位のアドバイザリロック等より大きい仕組みが要る）。クエリは残し、既知の
+// 防げず、プロジェクト単位のアドバイザリロック等より大きい仕組みが要る）。クエリは残し、既知の
 // ギャップとして後続で配線する。
 
 // FindTicketWorkspaceID はチケットを ID だけで引く（詳細は port のコメント）。
@@ -829,13 +857,13 @@ func (r *ticketRepository) FindTicketWorkspaceID(ctx context.Context, ticketID s
 	return row.WorkspaceID.String(), nil
 }
 
-func (r *ticketRepository) ResolveTicketIDByKey(ctx context.Context, workspaceID, spaceKey string, number int64) (string, error) {
+func (r *ticketRepository) ResolveTicketIDByKey(ctx context.Context, workspaceID, projectKey string, number int64) (string, error) {
 	wsID, ok := kbParseID(workspaceID)
 	if !ok {
 		return "", repository.ErrTicketNotFound
 	}
 	row, err := r.queries(ctx).ResolveTicketIDByKey(ctx, sqlcgen.ResolveTicketIDByKeyParams{
-		WorkspaceID: wsID, SpaceKey: spaceKey, Number: number,
+		WorkspaceID: wsID, ProjectKey: projectKey, Number: number,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", repository.ErrTicketNotFound
@@ -848,7 +876,7 @@ func (r *ticketRepository) ResolveTicketIDByKey(ctx context.Context, workspaceID
 
 func (r *ticketRepository) ListTickets(ctx context.Context, in repository.ListTicketsInput) ([]repository.TicketWithAssignee, error) {
 	wsID, ok := kbParseID(in.WorkspaceID)
-	spID, ok2 := kbParseID(in.SpaceID)
+	pjID, ok2 := kbParseID(in.ProjectID)
 	if !ok || !ok2 {
 		return nil, nil
 	}
@@ -861,7 +889,7 @@ func (r *ticketRepository) ListTickets(ctx context.Context, in repository.ListTi
 		return nil, nil
 	}
 	rows, err := r.queries(ctx).ListTickets(ctx, sqlcgen.ListTicketsParams{
-		WorkspaceID: wsID, SpaceID: spID, IncludeArchived: in.IncludeArchived,
+		WorkspaceID: wsID, ProjectID: pjID, IncludeArchived: in.IncludeArchived,
 		StatusID: statusID, TypeID: typeID, AssigneePrincipalID: assigneeID,
 		Unassigned: in.Unassigned, AssignedToMePrincipalID: assignedToMeID,
 		LabelID: labelID, DueBefore: nullDate(in.DueBefore), StartAfter: nullDate(in.StartAfter),
@@ -873,7 +901,7 @@ func (r *ticketRepository) ListTickets(ctx context.Context, in repository.ListTi
 	out := make([]repository.TicketWithAssignee, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, repository.TicketWithAssignee{
-			Ticket:              toDomainTicket(ticketOfListRow(row)),
+			Ticket:              toDomainTicket(ticketOfListRow(row), row.RankPosition),
 			AssigneePrincipalID: nullUUIDString(row.AssigneePrincipalID),
 		})
 	}
@@ -881,10 +909,10 @@ func (r *ticketRepository) ListTickets(ctx context.Context, in repository.ListTi
 }
 
 func (r *ticketRepository) GetTicketCounts(
-	ctx context.Context, workspaceID, spaceID string, myPrincipalID *string,
+	ctx context.Context, workspaceID, projectID string, myPrincipalID *string,
 ) (repository.TicketCounts, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	if !ok || !ok2 {
 		return repository.TicketCounts{}, nil
 	}
@@ -893,7 +921,7 @@ func (r *ticketRepository) GetTicketCounts(
 		return repository.TicketCounts{}, nil
 	}
 	row, err := r.queries(ctx).GetTicketCounts(ctx, sqlcgen.GetTicketCountsParams{
-		WorkspaceID: wsID, SpaceID: spID, MyPrincipalID: myID,
+		WorkspaceID: wsID, ProjectID: pjID, MyPrincipalID: myID,
 	})
 	if err != nil {
 		return repository.TicketCounts{}, err
@@ -903,22 +931,22 @@ func (r *ticketRepository) GetTicketCounts(
 	}, nil
 }
 
-func (r *ticketRepository) ListTicketChildren(ctx context.Context, workspaceID, spaceID, parentID string) ([]domain.Ticket, error) {
+func (r *ticketRepository) ListTicketChildren(ctx context.Context, workspaceID, projectID, parentID string) ([]domain.Ticket, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	pID, ok3 := kbParseID(parentID)
 	if !ok || !ok2 || !ok3 {
 		return nil, nil
 	}
 	rows, err := r.queries(ctx).ListTicketChildren(ctx, sqlcgen.ListTicketChildrenParams{
-		WorkspaceID: wsID, SpaceID: spID, ParentID: uuid.NullUUID{UUID: pID, Valid: true},
+		WorkspaceID: wsID, ProjectID: pjID, ParentID: uuid.NullUUID{UUID: pID, Valid: true},
 	})
 	if err != nil {
 		return nil, err
 	}
 	out := make([]domain.Ticket, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toDomainTicket(ticketOfChildrenRow(row)))
+		out = append(out, toDomainTicket(ticketOfChildrenRow(row), row.RankPosition))
 	}
 	return out, nil
 }
@@ -938,12 +966,17 @@ func (r *ticketRepository) UpdateTicket(ctx context.Context, workspaceID, ticket
 	if !okPriority {
 		return nil, outOfRangeInt32Error("priority", int(fields.Priority))
 	}
+	// 未見積り（nil）と 0 を分けて運ぶ。列は integer だが渡すのは bigint —— int32 へ
+	// 縮めて渡すと範囲外が黙って負数へ折り返すため、範囲の判定は PostgreSQL に任せる
+	// （範囲外は "integer out of range"、1000 超は ck_tickets_story_points_range で落ちる）。
+	storyPoints := nullInt64(fields.StoryPoints)
 	row, err := r.queries(ctx).UpdateTicket(ctx, sqlcgen.UpdateTicketParams{
 		WorkspaceID: wsID, ID: tID, TypeID: tyID, ParentID: parentID,
 		Title: fields.Title, Doc: fields.Doc, PlainText: fields.PlainText,
-		Priority:  priority,
-		StartDate: nullDate(fields.StartDate),
-		DueDate:   nullDate(fields.DueDate),
+		Priority:    priority,
+		StoryPoints: storyPoints,
+		StartDate:   nullDate(fields.StartDate),
+		DueDate:     nullDate(fields.DueDate),
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, repository.ErrTicketNotFound
@@ -954,7 +987,7 @@ func (r *ticketRepository) UpdateTicket(ctx context.Context, workspaceID, ticket
 		}
 		return nil, err
 	}
-	t := toDomainTicket(row)
+	t := toDomainTicket(row, "")
 	return &t, nil
 }
 
@@ -989,7 +1022,7 @@ func (r *ticketRepository) ChangeTicketStatus(
 		}
 		return nil, err
 	}
-	t := toDomainTicket(row)
+	t := toDomainTicket(row, "")
 	return &t, nil
 }
 
@@ -1009,14 +1042,14 @@ func (r *ticketRepository) ArchiveTicket(ctx context.Context, workspaceID, ticke
 	return nil
 }
 
-func (r *ticketRepository) RestoreTicket(ctx context.Context, workspaceID, ticketID, position string) error {
+func (r *ticketRepository) RestoreTicket(ctx context.Context, workspaceID, ticketID string) error {
 	wsID, ok := kbParseID(workspaceID)
 	tID, ok2 := kbParseID(ticketID)
 	if !ok || !ok2 {
 		return repository.ErrTicketNotFound
 	}
 	n, err := r.queries(ctx).RestoreTicket(ctx, sqlcgen.RestoreTicketParams{
-		WorkspaceID: wsID, ID: tID, Position: position,
+		WorkspaceID: wsID, ID: tID,
 	})
 	if err != nil {
 		return err
@@ -1056,18 +1089,18 @@ func (r *ticketRepository) FindDeletedTicket(ctx context.Context, workspaceID, t
 	if err != nil {
 		return nil, err
 	}
-	t := toDomainTicket(row)
+	t := toDomainTicket(row, "")
 	return &t, nil
 }
 
-func (r *ticketRepository) RestoreDeletedTicket(ctx context.Context, workspaceID, ticketID, position string) error {
+func (r *ticketRepository) RestoreDeletedTicket(ctx context.Context, workspaceID, ticketID string) error {
 	wsID, ok := kbParseID(workspaceID)
 	tID, ok2 := kbParseID(ticketID)
 	if !ok || !ok2 {
 		return repository.ErrTicketNotDeleted
 	}
 	n, err := r.queries(ctx).RestoreDeletedTicket(ctx, sqlcgen.RestoreDeletedTicketParams{
-		WorkspaceID: wsID, ID: tID, Position: position,
+		WorkspaceID: wsID, ID: tID,
 	})
 	if err != nil {
 		return err
@@ -1100,16 +1133,17 @@ func (r *ticketRepository) DeleteTicketTicketLinksBySourceCascade(ctx context.Co
 	})
 }
 
-// --- 並び順（ticket_ranks。段 2） ---
+// --- 並び順（ticket_backlog_ranks） ---
 
-func (r *ticketRepository) InsertTicketRank(ctx context.Context, workspaceID, ticketID, position string) error {
+func (r *ticketRepository) InsertTicketRank(ctx context.Context, workspaceID, projectID, ticketID, position string) error {
 	wsID, ok := kbParseID(workspaceID)
-	tID, ok2 := kbParseID(ticketID)
-	if !ok || !ok2 {
+	pID, ok2 := kbParseID(projectID)
+	tID, ok3 := kbParseID(ticketID)
+	if !ok || !ok2 || !ok3 {
 		return repository.ErrTicketNotFound
 	}
-	return r.queries(ctx).InsertTicketRank(ctx, sqlcgen.InsertTicketRankParams{
-		WorkspaceID: wsID, TicketID: tID, Position: position,
+	return r.queries(ctx).InsertTicketBacklogRank(ctx, sqlcgen.InsertTicketBacklogRankParams{
+		WorkspaceID: wsID, ProjectID: pID, TicketID: tID, Position: position,
 	})
 }
 
@@ -1119,7 +1153,7 @@ func (r *ticketRepository) MoveTicketRank(ctx context.Context, workspaceID, tick
 	if !ok || !ok2 {
 		return repository.ErrTicketNotFound
 	}
-	n, err := r.queries(ctx).MoveTicketRank(ctx, sqlcgen.MoveTicketRankParams{
+	n, err := r.queries(ctx).MoveTicketBacklogRank(ctx, sqlcgen.MoveTicketBacklogRankParams{
 		WorkspaceID: wsID, TicketID: tID, Position: position,
 	})
 	if err != nil {
@@ -1131,14 +1165,28 @@ func (r *ticketRepository) MoveTicketRank(ctx context.Context, workspaceID, tick
 	return nil
 }
 
-func (r *ticketRepository) LastActiveTicketRankPosition(ctx context.Context, workspaceID, spaceID string) (string, error) {
+func (r *ticketRepository) LastTicketRankPosition(ctx context.Context, workspaceID, projectID string) (string, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	if !ok || !ok2 {
-		return "", repository.ErrSpaceNotFound
+		return "", repository.ErrProjectNotFound
 	}
-	return r.queries(ctx).LastActiveTicketRankPosition(ctx, sqlcgen.LastActiveTicketRankPositionParams{
-		WorkspaceID: wsID, SpaceID: spID,
+	return r.queries(ctx).LastTicketBacklogRankPosition(ctx, sqlcgen.LastTicketBacklogRankPositionParams{
+		WorkspaceID: wsID, ProjectID: pjID,
+	})
+}
+
+// UpsertTicketRank は復元で末尾へ置き直す。行が無いチケット（この表より前に作られ、
+// 移行の時点でアーカイブ済み・削除済みだった分）にも効くよう upsert にしてある。
+func (r *ticketRepository) UpsertTicketRank(ctx context.Context, workspaceID, projectID, ticketID, position string) error {
+	wsID, ok := kbParseID(workspaceID)
+	pID, ok2 := kbParseID(projectID)
+	tID, ok3 := kbParseID(ticketID)
+	if !ok || !ok2 || !ok3 {
+		return repository.ErrTicketNotFound
+	}
+	return r.queries(ctx).UpsertTicketBacklogRank(ctx, sqlcgen.UpsertTicketBacklogRankParams{
+		WorkspaceID: wsID, ProjectID: pID, TicketID: tID, Position: position,
 	})
 }
 
@@ -1167,7 +1215,7 @@ func (r *ticketRepository) ListTicketParentChain(ctx context.Context, workspaceI
 	}
 	out := make([]domain.Ticket, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toDomainTicket(sqlcgen.Ticket(row)))
+		out = append(out, toDomainTicket(ticketOfParentChainRow(row), ""))
 	}
 	return out, nil
 }
@@ -1232,39 +1280,9 @@ func (r *ticketRepository) ListTicketAncestors(ctx context.Context, workspaceID,
 	}
 	out := make([]domain.Ticket, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toDomainTicket(row))
+		out = append(out, toDomainTicket(row, ""))
 	}
 	return out, nil
-}
-
-func (r *ticketRepository) LastActiveTicketPosition(ctx context.Context, workspaceID, spaceID string) (string, error) {
-	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
-	if !ok || !ok2 {
-		return "", nil
-	}
-	return r.queries(ctx).LastActiveTicketPosition(ctx, sqlcgen.LastActiveTicketPositionParams{
-		WorkspaceID: wsID, SpaceID: spID,
-	})
-}
-
-func (r *ticketRepository) FindActiveTicketPosition(ctx context.Context, workspaceID, spaceID, ticketID string) (string, bool, error) {
-	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
-	tID, ok3 := kbParseID(ticketID)
-	if !ok || !ok2 || !ok3 {
-		return "", false, nil
-	}
-	pos, err := r.queries(ctx).FindActiveTicketPosition(ctx, sqlcgen.FindActiveTicketPositionParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: tID,
-	})
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", false, nil
-	}
-	if err != nil {
-		return "", false, err
-	}
-	return pos, true, nil
 }
 
 // --- ticket_assignments ---
@@ -1351,18 +1369,115 @@ func (r *ticketRepository) ListTicketsAssignedToPrincipal(ctx context.Context, w
 	}
 	out := make([]domain.Ticket, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toDomainTicket(row))
+		out = append(out, toDomainTicket(row, ""))
 	}
 	return out, nil
+}
+
+func (r *ticketRepository) ListAssignedTickets(ctx context.Context, workspaceID, principalID string) ([]domain.AssignedTicket, error) {
+	wsID, ok := kbParseID(workspaceID)
+	pID, ok2 := kbParseID(principalID)
+	if !ok || !ok2 {
+		return nil, nil
+	}
+	rows, err := r.queries(ctx).ListAssignedTicketsForPrincipal(ctx, sqlcgen.ListAssignedTicketsForPrincipalParams{
+		WorkspaceID: wsID, AssigneePrincipalID: pID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.AssignedTicket, 0, len(rows))
+	for _, row := range rows {
+		// 生成された行型は tickets の全列に隣の表の値を足した別の型なので、tickets の部分だけを
+		// sqlcgen.Ticket へ詰め直して既存の変換を通す（変換の規則を 2 か所に分けない）。
+		out = append(out, domain.AssignedTicket{
+			Ticket: toDomainTicket(sqlcgen.Ticket{
+				ID: row.ID, WorkspaceID: row.WorkspaceID, ProjectID: row.ProjectID, Number: row.Number,
+				TypeID: row.TypeID, StatusID: row.StatusID, ParentID: row.ParentID, Title: row.Title,
+				Doc: row.Doc, PlainText: row.PlainText, Priority: row.Priority, StartDate: row.StartDate,
+				DueDate: row.DueDate, ClosedAt: row.ClosedAt, Resolution: row.Resolution,
+				CreatedByUserID: row.CreatedByUserID, ArchivedAt: row.ArchivedAt, DeletedAt: row.DeletedAt,
+				CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+			}, ""),
+			ProjectKey:     row.ProjectKey,
+			ProjectName:    row.ProjectName,
+			StatusName:     row.StatusName,
+			StatusCategory: domain.TicketStatusCategory(row.StatusCategory),
+			StatusColor:    row.StatusColor,
+			TypeName:       row.TypeName,
+		})
+	}
+	return out, nil
+}
+
+// fromNullInt32 は列の NULL を nil に戻す。
+// nullInt64 は *int を sql.NullInt64 へ畳む（nil は NULL）。int は 64bit なので取りこぼしは無い。
+func nullInt64(v *int) sql.NullInt64 {
+	if v == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(*v), Valid: true}
+}
+
+func fromNullInt32(v sql.NullInt32) *int {
+	if !v.Valid {
+		return nil
+	}
+	n := int(v.Int32)
+	return &n
+}
+
+func (r *ticketRepository) AddTicketWatcher(ctx context.Context, workspaceID, ticketID string, userID uint64) error {
+	wsID, ok := kbParseID(workspaceID)
+	tID, ok2 := kbParseID(ticketID)
+	if !ok || !ok2 {
+		return repository.ErrTicketNotFound
+	}
+	return r.queries(ctx).InsertTicketWatcher(ctx, sqlcgen.InsertTicketWatcherParams{
+		WorkspaceID: wsID, TicketID: tID, UserID: int64(userID),
+	})
+}
+
+func (r *ticketRepository) RemoveTicketWatcher(ctx context.Context, workspaceID, ticketID string, userID uint64) error {
+	wsID, ok := kbParseID(workspaceID)
+	tID, ok2 := kbParseID(ticketID)
+	if !ok || !ok2 {
+		return repository.ErrTicketNotFound
+	}
+	// 監視していない人が押しても落とさない（結果はどちらも「監視していない」）。
+	_, err := r.queries(ctx).DeleteTicketWatcher(ctx, sqlcgen.DeleteTicketWatcherParams{
+		WorkspaceID: wsID, TicketID: tID, UserID: int64(userID),
+	})
+	return err
+}
+
+func (r *ticketRepository) CountTicketWatchers(ctx context.Context, workspaceID, ticketID string) (int64, error) {
+	wsID, ok := kbParseID(workspaceID)
+	tID, ok2 := kbParseID(ticketID)
+	if !ok || !ok2 {
+		return 0, nil
+	}
+	return r.queries(ctx).CountTicketWatchers(ctx, sqlcgen.CountTicketWatchersParams{WorkspaceID: wsID, TicketID: tID})
+}
+
+func (r *ticketRepository) IsTicketWatchedBy(ctx context.Context, workspaceID, ticketID string, userID uint64) (bool, error) {
+	wsID, ok := kbParseID(workspaceID)
+	tID, ok2 := kbParseID(ticketID)
+	if !ok || !ok2 {
+		return false, nil
+	}
+	return r.queries(ctx).IsTicketWatchedBy(ctx, sqlcgen.IsTicketWatchedByParams{
+		WorkspaceID: wsID, TicketID: tID, UserID: int64(userID),
+	})
 }
 
 // --- 変更履歴 ---
 
 func (r *ticketRepository) InsertTicketStatusTransition(
-	ctx context.Context, workspaceID, spaceID, ticketID, fromStatusID, toStatusID string, changedByUserID uint64,
+	ctx context.Context, workspaceID, projectID, ticketID, fromStatusID, toStatusID string, changedByUserID uint64,
 ) error {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
+	pjID, ok2 := kbParseID(projectID)
 	tID, ok3 := kbParseID(ticketID)
 	fromID, ok4 := kbParseID(fromStatusID)
 	toID, ok5 := kbParseID(toStatusID)
@@ -1378,7 +1493,7 @@ func (r *ticketRepository) InsertTicketStatusTransition(
 		return outOfRangeIDError("changed_by_user_id", changedByUserID)
 	}
 	if err := r.queries(ctx).InsertTicketStatusTransition(ctx, sqlcgen.InsertTicketStatusTransitionParams{
-		ID: id, WorkspaceID: wsID, SpaceID: spID, TicketID: tID,
+		ID: id, WorkspaceID: wsID, ProjectID: pjID, TicketID: tID,
 		FromStatusID: fromID, ToStatusID: toID, ChangedByUserID: changedBy,
 	}); err != nil {
 		if constraint, ok := foreignKeyViolationConstraint(err); ok {
@@ -1621,7 +1736,7 @@ func (r *ticketRepository) ListTicketsReferencingPage(ctx context.Context, works
 	}
 	out := make([]domain.Ticket, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toDomainTicket(row))
+		out = append(out, toDomainTicket(row, ""))
 	}
 	return out, nil
 }

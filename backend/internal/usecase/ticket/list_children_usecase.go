@@ -10,8 +10,8 @@ import (
 
 // ListTicketChildrenUseCase は 1 件の直下の子（孫は含まない）を並び順で返す。
 //
-// ListTicketsUseCase と分けているのは、対象がスペースではなく親チケット 1 件で、
-// 権限判定もスペース単位ではなく親チケット単位（requireTicketPermission と同じ経路）に
+// ListTicketsUseCase と分けているのは、対象がプロジェクトではなく親チケット 1 件で、
+// 権限判定もプロジェクト単位ではなく親チケット単位（requireTicketPermission と同じ経路）に
 // なるため。担当のバッチ引きはしない（一覧の子表示は件数が少なく、いまは付けない —
 // 要る場面が出たら ListTicketsUseCase と同じ形へ寄せる）。
 type ListTicketChildrenUseCase struct {
@@ -39,5 +39,5 @@ func (u *ListTicketChildrenUseCase) Execute(ctx context.Context, in ListTicketCh
 	if err != nil {
 		return nil, err
 	}
-	return u.repo.ListTicketChildren(ctx, in.WorkspaceID, parent.SpaceID, in.ParentTicketID)
+	return u.repo.ListTicketChildren(ctx, in.WorkspaceID, parent.ProjectID, in.ParentTicketID)
 }

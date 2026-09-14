@@ -2273,8 +2273,8 @@ table "share_links" {
 #
 # 共通の作法（既存表と同じ）:
 #   - 全表が workspace_id を持ち、親への FK は (workspace_id, …, id) の複合 FK。
-#   - 同一スペース内でしか参照できない列（種別 / 状態 / 親）は (workspace_id, space_id, id) の
-#     複合 FK にする。
+#   - 同一プロジェクト内でしか参照できない列（種別 / 状態 / 親）は
+#     (workspace_id, project_id, id) の複合 FK にする。
 #   - 「人」を指す列は 2 種類。本人の行為の記録（created_by / actor / assigned_by / editor）は
 #     users.id を bigint で持ち記録として FK を張る（RESTRICT。冒頭の users テーブル直後の
 #     FK 方針コメント参照。反応だけは本人の持ち物として CASCADE）。他人を指名する列
@@ -2294,7 +2294,70 @@ table "share_links" {
 #   - 並び順は分数インデックス（fracindex）の text COLLATE "C"。DEFAULT は置かない。
 # =====================================================================
 
-# ticket_counters: スペースごとのチケット番号カウンタ。
+# projects: バックログの入れ物。ワークスペースだけを参照する。
+#
+# **spaces（ナレッジの入れ物）への外部キーは持たない。** バックログとナレッジは別の製品で、
+# 一方の入れ物を消したらもう一方が道連れになる関係を作らないため（持たせると結合が
+# 一段上に移るだけで独立にならない）。共有とメンバー招待はワークスペース単位に一本化し、
+# チケットの実効権限もワークスペースの役割で決める（spaces の付与は見ない）。
+#
+# key はチケットの表示キーの接頭辞（FRESTYLE-12 の FRESTYLE）。ワークスペース内で一意。
+# 形は spaces.key / workspaces.slug と同じ（domain.ValidProjectKey）。
+table "projects" {
+  schema = schema.public
+  column "id" {
+    null = false
+    type = uuid
+  }
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  column "key" {
+    null = false
+    type = character_varying(64)
+  }
+  column "name" {
+    null = false
+    type = character_varying(200)
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  column "updated_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  # ワークスペースの物理削除で配下も消える（spaces と同じ扱い）。
+  foreign_key "fk_projects_workspace" {
+    columns     = [column.workspace_id]
+    ref_columns = [table.workspaces.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  index "idx_projects_workspace_id" {
+    columns = [column.workspace_id]
+  }
+  unique "uq_projects_workspace_key" {
+    columns = [column.workspace_id, column.key]
+  }
+  # チケット系からの複合 FK（テナント越えを DB で塞ぐ）の参照先。spaces の
+  # uq_spaces_workspace_id と同じ足場。
+  unique "uq_projects_workspace_id" {
+    columns = [column.workspace_id, column.id]
+  }
+  check "ck_projects_key_len" {
+    expr = "(char_length((key)::text) >= 1) AND (char_length((key)::text) <= 64)"
+  }
+}
+
+# ticket_counters: プロジェクトごとのチケット番号カウンタ。
 #
 # tickets.number の MAX+1 で採番すると同時作成が同じ番号を取り合い UNIQUE で片方が落ちる。
 # 採番と tickets への INSERT は必ず 1 文の CTE にまとめる（CreateTicket クエリ 1 本だけがこの表と
@@ -2306,7 +2369,8 @@ table "ticket_counters" {
     null = false
     type = uuid
   }
-  column "space_id" {
+  # 採番の単位。プロジェクト 1 つにつき 1 行（主キーの片方）。
+  column "project_id" {
     null = false
     type = uuid
   }
@@ -2320,17 +2384,17 @@ table "ticket_counters" {
     type    = timestamptz
     default = sql("now()")
   }
-  # スペースが在る限りこの行も在る（削除概念を持たない）。9 表一律の方針に合わせて列だけ足す。
+  # プロジェクトが在る限りこの行も在る（削除概念を持たない）。9 表一律の方針に合わせて列だけ足す。
   column "deleted_at" {
     null = true
     type = timestamptz
   }
   primary_key {
-    columns = [column.workspace_id, column.space_id]
+    columns = [column.workspace_id, column.project_id]
   }
-  foreign_key "fk_ticket_counters_space" {
-    columns     = [column.workspace_id, column.space_id]
-    ref_columns = [table.spaces.column.workspace_id, table.spaces.column.id]
+  foreign_key "fk_ticket_counters_project" {
+    columns     = [column.workspace_id, column.project_id]
+    ref_columns = [table.projects.column.workspace_id, table.projects.column.id]
     on_update   = NO_ACTION
     on_delete   = CASCADE
   }
@@ -2339,7 +2403,7 @@ table "ticket_counters" {
   }
 }
 
-# ticket_statuses: スペースごとの状態。名前は自由、category は 3 枠（todo/in_progress/done）で
+# ticket_statuses: プロジェクトごとの状態。名前は自由、category は 3 枠（todo/in_progress/done）で
 # 固定（domain.TicketStatusCategory）。遷移規則の表は持たない（誰でもどの状態にも変えられる）。
 table "ticket_statuses" {
   schema = schema.public
@@ -2351,7 +2415,8 @@ table "ticket_statuses" {
     null = false
     type = uuid
   }
-  column "space_id" {
+  # 所属プロジェクト（バックログの入れ物）。
+  column "project_id" {
     null = false
     type = uuid
   }
@@ -2410,31 +2475,31 @@ table "ticket_statuses" {
     columns = [column.id]
   }
   # tickets.status_id からの複合 FK の参照先。
-  unique "uq_ticket_statuses_workspace_space_id" {
-    columns = [column.workspace_id, column.space_id, column.id]
+  unique "uq_ticket_statuses_workspace_project_id" {
+    columns = [column.workspace_id, column.project_id, column.id]
   }
-  foreign_key "fk_ticket_statuses_space" {
-    columns     = [column.workspace_id, column.space_id]
-    ref_columns = [table.spaces.column.workspace_id, table.spaces.column.id]
+  foreign_key "fk_ticket_statuses_project" {
+    columns     = [column.workspace_id, column.project_id]
+    ref_columns = [table.projects.column.workspace_id, table.projects.column.id]
     on_update   = NO_ACTION
     on_delete   = CASCADE
   }
-  index "idx_ticket_statuses_workspace_space" {
-    columns = [column.workspace_id, column.space_id]
+  index "idx_ticket_statuses_workspace_project" {
+    columns = [column.workspace_id, column.project_id]
   }
-  index "uq_ticket_statuses_space_name" {
+  index "uq_ticket_statuses_project_name" {
     unique  = true
-    columns = [column.space_id, column.name_lower]
+    columns = [column.project_id, column.name_lower]
     where   = "((archived_at IS NULL) AND (deleted_at IS NULL))"
   }
-  index "uq_ticket_statuses_space_position" {
+  index "uq_ticket_statuses_project_position" {
     unique  = true
-    columns = [column.space_id, column.position]
+    columns = [column.project_id, column.position]
     where   = "((archived_at IS NULL) AND (deleted_at IS NULL))"
   }
-  index "uq_ticket_statuses_space_initial" {
+  index "uq_ticket_statuses_project_initial" {
     unique  = true
-    columns = [column.space_id]
+    columns = [column.project_id]
     where   = "(is_initial AND (archived_at IS NULL) AND (deleted_at IS NULL))"
   }
   check "ck_ticket_statuses_category" {
@@ -2454,7 +2519,7 @@ table "ticket_statuses" {
   }
 }
 
-# ticket_types: スペースごとの種別。hierarchy_level は階層の段（1=束ね/0=標準/-1=小作業）。
+# ticket_types: プロジェクトごとの種別。hierarchy_level は階層の段（1=束ね/0=標準/-1=小作業）。
 # 親子規則（行をまたぐ）は CHECK では書けないので usecase が親チェーンを読んでから検査する。
 table "ticket_types" {
   schema = schema.public
@@ -2466,7 +2531,8 @@ table "ticket_types" {
     null = false
     type = uuid
   }
-  column "space_id" {
+  # 所属プロジェクト（バックログの入れ物）。
+  column "project_id" {
     null = false
     type = uuid
   }
@@ -2532,31 +2598,31 @@ table "ticket_types" {
   primary_key {
     columns = [column.id]
   }
-  unique "uq_ticket_types_workspace_space_id" {
-    columns = [column.workspace_id, column.space_id, column.id]
+  unique "uq_ticket_types_workspace_project_id" {
+    columns = [column.workspace_id, column.project_id, column.id]
   }
-  foreign_key "fk_ticket_types_space" {
-    columns     = [column.workspace_id, column.space_id]
-    ref_columns = [table.spaces.column.workspace_id, table.spaces.column.id]
+  foreign_key "fk_ticket_types_project" {
+    columns     = [column.workspace_id, column.project_id]
+    ref_columns = [table.projects.column.workspace_id, table.projects.column.id]
     on_update   = NO_ACTION
     on_delete   = CASCADE
   }
-  index "idx_ticket_types_workspace_space" {
-    columns = [column.workspace_id, column.space_id]
+  index "idx_ticket_types_workspace_project" {
+    columns = [column.workspace_id, column.project_id]
   }
-  index "uq_ticket_types_space_name" {
+  index "uq_ticket_types_project_name" {
     unique  = true
-    columns = [column.space_id, column.name_lower]
+    columns = [column.project_id, column.name_lower]
     where   = "((archived_at IS NULL) AND (deleted_at IS NULL))"
   }
-  index "uq_ticket_types_space_position" {
+  index "uq_ticket_types_project_position" {
     unique  = true
-    columns = [column.space_id, column.position]
+    columns = [column.project_id, column.position]
     where   = "((archived_at IS NULL) AND (deleted_at IS NULL))"
   }
-  index "uq_ticket_types_space_default" {
+  index "uq_ticket_types_project_default" {
     unique  = true
-    columns = [column.space_id]
+    columns = [column.project_id]
     where   = "(is_default AND (archived_at IS NULL) AND (deleted_at IS NULL))"
   }
   check "ck_ticket_types_hierarchy_level" {
@@ -2583,7 +2649,7 @@ table "ticket_types" {
 }
 
 # tickets: チケット本体。表示キー（FRESTYLE-12）は保存しない派生値
-# （domain.FormatTicketKey が upper(spaces.key) || '-' || number を Go 側で組み立てる）。
+# （domain.FormatTicketKey が upper(projects.key) || '-' || number を Go 側で組み立てる）。
 # 本文は ProseMirror doc の jsonb を NOT NULL で持つ（blocks には分解しない）。
 # closed_at / resolution は状態変更 usecase が category から必ず導く（引数から直接受けない）。
 table "tickets" {
@@ -2596,7 +2662,8 @@ table "tickets" {
     null = false
     type = uuid
   }
-  column "space_id" {
+  # 所属プロジェクト（バックログの入れ物）。
+  column "project_id" {
     null = false
     type = uuid
   }
@@ -2636,6 +2703,19 @@ table "tickets" {
     type    = integer
     default = 2
   }
+  # 見積りの大きさ。未見積りは NULL（0 とは別物 —— 0 は「やることが無い」、NULL は
+  # 「まだ測っていない」。番兵の 0 で潰すと集計で 2 つが混ざる）。
+  # 刻み方（フィボナッチ等）は現場ごとなので DB では縛らず、上限だけ置く。
+  column "story_points" {
+    null = true
+    type = integer
+  }
+  # 担当チーム。未設定は NULL。プロジェクト単位のチームなので、複合 FK で
+  # 「同じプロジェクトのチームしか付かない」ことを DB に守らせる（下の fk_tickets_team）。
+  column "team_id" {
+    null = true
+    type = uuid
+  }
   # Go 側で 'YYYY-MM-DD' 文字列として運ぶ（sqlc.yaml の date override。冒頭の作法参照）。
   column "start_date" {
     null = true
@@ -2644,11 +2724,6 @@ table "tickets" {
   column "due_date" {
     null = true
     type = date
-  }
-  column "position" {
-    null    = false
-    type    = text
-    collate = "C"
   }
   column "closed_at" {
     null = true
@@ -2689,39 +2764,51 @@ table "tickets" {
   unique "uq_tickets_workspace_id" {
     columns = [column.workspace_id, column.id]
   }
-  # 親子（同一スペース内でしか参照できない子表）の足場。
-  unique "uq_tickets_workspace_space_id" {
-    columns = [column.workspace_id, column.space_id, column.id]
+  # 親子（同一プロジェクト内でしか参照できない子表）の足場。
+  unique "uq_tickets_workspace_project_id" {
+    columns = [column.workspace_id, column.project_id, column.id]
   }
-  # 番号はスペース内で一意。表示キーが 1 件を指すことをここで保証する。
-  unique "uq_tickets_space_number" {
-    columns = [column.workspace_id, column.space_id, column.number]
+  # 番号はプロジェクト内で一意。表示キーが 1 件を指すことをここで保証する。
+  unique "uq_tickets_project_number" {
+    columns = [column.workspace_id, column.project_id, column.number]
   }
-  foreign_key "fk_tickets_space" {
-    columns     = [column.workspace_id, column.space_id]
-    ref_columns = [table.spaces.column.workspace_id, table.spaces.column.id]
+  foreign_key "fk_tickets_project" {
+    columns     = [column.workspace_id, column.project_id]
+    ref_columns = [table.projects.column.workspace_id, table.projects.column.id]
     on_update   = NO_ACTION
     on_delete   = CASCADE
   }
   foreign_key "fk_tickets_type" {
-    columns     = [column.workspace_id, column.space_id, column.type_id]
-    ref_columns = [table.ticket_types.column.workspace_id, table.ticket_types.column.space_id, table.ticket_types.column.id]
+    columns     = [column.workspace_id, column.project_id, column.type_id]
+    ref_columns = [table.ticket_types.column.workspace_id, table.ticket_types.column.project_id, table.ticket_types.column.id]
     on_update   = NO_ACTION
     on_delete   = NO_ACTION
   }
   foreign_key "fk_tickets_status" {
-    columns     = [column.workspace_id, column.space_id, column.status_id]
-    ref_columns = [table.ticket_statuses.column.workspace_id, table.ticket_statuses.column.space_id, table.ticket_statuses.column.id]
+    columns     = [column.workspace_id, column.project_id, column.status_id]
+    ref_columns = [table.ticket_statuses.column.workspace_id, table.ticket_statuses.column.project_id, table.ticket_statuses.column.id]
     on_update   = NO_ACTION
     on_delete   = NO_ACTION
   }
-  # 親は同じスペースのチケットに限る。親が消えれば子も消える（入れ物の削除に伴う場合だけ。
+  # 親は同じプロジェクトのチケットに限る。親が消えれば子も消える（入れ物の削除に伴う場合だけ。
   # 通常運用の削除は無くアーカイブで隠す）。
   foreign_key "fk_tickets_parent" {
-    columns     = [column.workspace_id, column.space_id, column.parent_id]
-    ref_columns = [table.tickets.column.workspace_id, table.tickets.column.space_id, table.tickets.column.id]
+    columns     = [column.workspace_id, column.project_id, column.parent_id]
+    ref_columns = [table.tickets.column.workspace_id, table.tickets.column.project_id, table.tickets.column.id]
     on_update   = NO_ACTION
     on_delete   = CASCADE
+  }
+  # チームは同じプロジェクトのものだけ。team_id が NULL の行は FK の対象外になる
+  # （複合 FK は列のどれかが NULL なら検査されない。MATCH SIMPLE の既定）。
+  #
+  # on_delete は NO_ACTION。**SET_NULL は使えない** —— PostgreSQL は FK を構成する列を
+  # すべて NULL にするので、workspace_id / project_id まで NULL になって NOT NULL 違反で
+  # 落ちる（実測）。チームを消すときは、先にチケットから外す（ClearTicketsTeam）。
+  foreign_key "fk_tickets_team" {
+    columns     = [column.workspace_id, column.project_id, column.team_id]
+    ref_columns = [table.teams.column.workspace_id, table.teams.column.project_id, table.teams.column.id]
+    on_update   = NO_ACTION
+    on_delete   = NO_ACTION
   }
   foreign_key "fk_tickets_created_by" {
     columns     = [column.created_by_user_id]
@@ -2729,17 +2816,11 @@ table "tickets" {
     on_update   = NO_ACTION
     on_delete   = RESTRICT
   }
-  # 現役のチケットで順位が重複しない。
-  index "uq_tickets_space_position" {
-    unique  = true
-    columns = [column.space_id, column.position]
-    where   = "((archived_at IS NULL) AND (deleted_at IS NULL))"
+  index "idx_tickets_project_status" {
+    columns = [column.workspace_id, column.project_id, column.status_id]
   }
-  index "idx_tickets_space_status" {
-    columns = [column.workspace_id, column.space_id, column.status_id]
-  }
-  index "idx_tickets_space_type" {
-    columns = [column.workspace_id, column.space_id, column.type_id]
+  index "idx_tickets_project_type" {
+    columns = [column.workspace_id, column.project_id, column.type_id]
   }
   index "idx_tickets_parent_id" {
     columns = [column.parent_id]
@@ -2775,11 +2856,11 @@ table "tickets" {
   check "ck_tickets_doc" {
     expr = "(jsonb_typeof(doc) = 'object'::text) AND ((doc ->> 'type'::text) = 'doc'::text)"
   }
+  check "ck_tickets_story_points_range" {
+    expr = "story_points IS NULL OR (story_points >= 0 AND story_points <= 1000)"
+  }
   check "ck_tickets_priority" {
     expr = "priority = ANY (ARRAY[1, 2, 3])"
-  }
-  check "ck_tickets_position_not_empty" {
-    expr = "position <> ''::text"
   }
   check "ck_tickets_parent_not_self" {
     expr = "(parent_id IS NULL) OR (parent_id <> id)"
@@ -3059,34 +3140,45 @@ table "ticket_ticket_links" {
     expr = "source_ticket_id <> target_ticket_id"
   }
 }
-
-# ticket_ranks: 並び順を文脈ごとに独立させた表（設計 Ⅳ-F）。段 1 は tickets.position 1 本だけで
-# 始めたが、スプリント内・ボードの列内のような別文脈の並びが増えたときに 1 本をどう分配するかを
-# 決められなくなるため、段 2 で先出しする。当面は context_kind = 'backlog' の 1 種類のみ使う
-# （tickets.position の値をここへ移送する。tickets.position 自体はこの段では DROP しない）。
-table "ticket_ranks" {
+# sprints: バックログの仕事を「いつやるか」でまとめる区切り。
+#
+# プロジェクトに属する（ワークスペース単位ではない）。スプリントはチームの作業の単位で、
+# 案件が違えば期間も別々に回るため。
+table "sprints" {
   schema = schema.public
+  column "id" {
+    null = false
+    type = uuid
+  }
   column "workspace_id" {
     null = false
     type = uuid
   }
-  column "ticket_id" {
+  column "project_id" {
     null = false
     type = uuid
   }
-  # 'backlog' 固定（段 2 時点）。将来 'sprint' / 'board_column' 等を追加する想定の判別列。
-  column "context_kind" {
+  column "name" {
     null = false
-    type = character_varying(32)
+    type = character_varying(200)
   }
-  # context_kind='backlog' のときは空文字固定（スペース単位で 1 系列なので、区別する ID を持たない）。
-  # 将来 'board_column' 等を足したときにその列 id / スプリント id を入れる。
-  column "context_id" {
-    null    = false
-    type    = uuid
-    default = "00000000-0000-0000-0000-000000000000"
+  # planned（まだ始めていない）/ active（進行中）/ completed（終わった）の 3 つだけ。
+  # 状態の名前を利用者に足させない —— 期間の進み方は業務で変わらないため（チケットの
+  # 状態が自由に足せるのとは性質が違う）。
+  column "state" {
+    null = false
+    type = character_varying(16)
   }
-  # tickets.position と同じ辞書順文字列（fracindex 作法）。照合順序は環境に依存させない。
+  # 期間。計画中は未定のことがあるので両方 NULL 可。開始したのに終わりが未定はありうる。
+  column "start_date" {
+    null = true
+    type = date
+  }
+  column "end_date" {
+    null = true
+    type = date
+  }
+  # プロジェクト内での並び（fracindex）。照合順序は環境に依存させない。
   column "position" {
     null    = false
     type    = text
@@ -3103,27 +3195,465 @@ table "ticket_ranks" {
     default = sql("now()")
   }
   primary_key {
-    columns = [column.ticket_id, column.context_kind, column.context_id]
+    columns = [column.id]
   }
-  foreign_key "fk_ticket_ranks_ticket" {
+  # チケット系からの複合 FK の参照先。
+  unique "uq_sprints_workspace_id" {
+    columns = [column.workspace_id, column.id]
+  }
+  foreign_key "fk_sprints_project" {
+    columns     = [column.workspace_id, column.project_id]
+    ref_columns = [table.projects.column.workspace_id, table.projects.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  index "idx_sprints_project_position" {
+    columns = [column.workspace_id, column.project_id, column.position]
+  }
+  unique "uq_sprints_project_position" {
+    columns = [column.workspace_id, column.project_id, column.position]
+  }
+  check "ck_sprints_state" {
+    expr = "(state)::text = ANY (ARRAY[('planned'::character varying)::text, ('active'::character varying)::text, ('completed'::character varying)::text])"
+  }
+  check "ck_sprints_name_not_empty" {
+    expr = "btrim((name)::text) <> ''::text"
+  }
+  # 終わりが始まりより前になっている行を作らせない。片方 NULL のときは比較しない。
+  check "ck_sprints_period_order" {
+    expr = "start_date IS NULL OR end_date IS NULL OR start_date <= end_date"
+  }
+}
+
+# ticket_sprint_ranks: スプリントに入れたチケットと、その中での並び。
+#
+# 旧 ticket_ranks のように 1 表へ文脈を詰め込まず、**文脈ごとに表を分ける**
+# （ticket_backlog_ranks のコメント参照）。分けたことで sprint_id へ実際に FK を張れる。
+#
+# PK が (workspace_id, ticket_id) なので、1 件のチケットが同時に 2 つのスプリントへ
+# 入ることはない。表の形でそう決める。
+table "ticket_sprint_ranks" {
+  schema = schema.public
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  column "sprint_id" {
+    null = false
+    type = uuid
+  }
+  column "ticket_id" {
+    null = false
+    type = uuid
+  }
+  column "position" {
+    null    = false
+    type    = text
+    collate = "C"
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  column "updated_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.workspace_id, column.ticket_id]
+  }
+  foreign_key "fk_ticket_sprint_ranks_ticket" {
     columns     = [column.workspace_id, column.ticket_id]
     ref_columns = [table.tickets.column.workspace_id, table.tickets.column.id]
     on_update   = NO_ACTION
     on_delete   = CASCADE
   }
-  index "idx_ticket_ranks_workspace_ticket" {
-    columns = [column.workspace_id, column.ticket_id]
+  foreign_key "fk_ticket_sprint_ranks_sprint" {
+    columns     = [column.workspace_id, column.sprint_id]
+    ref_columns = [table.sprints.column.workspace_id, table.sprints.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
   }
-  # 同じ文脈内で順位が重複しない。同時に同じ場所へ移動したら片方が落ちる
-  # （usecase 側が 1 回だけ位置を取り直して再試行する）。
-  unique "uq_ticket_ranks_context_position" {
-    columns = [column.context_kind, column.context_id, column.position]
+  index "idx_ticket_sprint_ranks_sprint_position" {
+    columns = [column.workspace_id, column.sprint_id, column.position]
   }
-  check "ck_ticket_ranks_position_not_empty" {
+  # 同じスプリントの中で順位が重複しない。
+  unique "uq_ticket_sprint_ranks_sprint_position" {
+    columns = [column.workspace_id, column.sprint_id, column.position]
+  }
+  check "ck_ticket_sprint_ranks_position_not_empty" {
     expr = "position <> ''::text"
   }
-  check "ck_ticket_ranks_context_kind" {
-    expr = "(context_kind)::text = ANY (ARRAY[('backlog'::character varying)::text])"
+}
+
+# ticket_watchers: そのチケットの動きを追いたい人。
+#
+# 「担当」とは別物。担当は 1 人（責任の所在）、監視は何人でも（気にしている人）。
+# 表を分けているのはそのため —— 同じ表に役割の列を足すと、担当を外した拍子に監視も
+# 消えるような書き方ができてしまう。
+#
+# users への FK は張らない（pages / tickets の created_by_user_id と同じ分担。
+# 利用者の削除はアプリ側の手順で扱う）。
+# =============================================================================
+# リリース版（修正バージョン）とチーム
+# =============================================================================
+
+# project_versions はプロジェクトのリリース版。チケットの「修正バージョン」の選択肢になる。
+#
+# プロジェクト単位にするのは、版が製品ごとの概念だから（同じワークスペースでも別製品の
+# 「1.2.0」は別物）。ticket_statuses / ticket_types と同じ足場を持たせてある。
+table "project_versions" {
+  schema = schema.public
+  column "id" {
+    null = false
+    type = uuid
+  }
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  column "project_id" {
+    null = false
+    type = uuid
+  }
+  column "name" {
+    null = false
+    type = character_varying(60)
+  }
+  # FK / 索引の足場としてだけ使う生成列（冒頭の作法を参照）。
+  column "name_lower" {
+    null = true
+    type = character_varying(60)
+    as {
+      expr = "lower((name)::text)"
+      type = STORED
+    }
+  }
+  # リリース済みになった時刻。NULL は「まだ出していない」。
+  column "released_at" {
+    null = true
+    type = timestamptz
+  }
+  # 並び順（fracindex）。版は番号順に並べたいが、番号の付け方は現場ごとなので
+  # 文字列として比べる（ticket_statuses.position と同じ作法）。
+  column "position" {
+    null    = false
+    type    = text
+    collate = "C"
+  }
+  column "archived_at" {
+    null = true
+    type = timestamptz
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  column "updated_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  # ticket_fix_versions からの複合 FK の参照先。プロジェクトまで含めることで、
+  # 別プロジェクトの版をチケットに付けられなくする。
+  unique "uq_project_versions_workspace_project_id" {
+    columns = [column.workspace_id, column.project_id, column.id]
+  }
+  foreign_key "fk_project_versions_project" {
+    columns     = [column.workspace_id, column.project_id]
+    ref_columns = [table.projects.column.workspace_id, table.projects.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  # 同じプロジェクトで同じ名前の版は作れない（大文字小文字の違いも同じ扱い）。
+  # アーカイブ済みは対象から外す（版名を再利用できるように）。
+  index "uq_project_versions_project_name" {
+    unique  = true
+    columns = [column.project_id, column.name_lower]
+    where   = "(archived_at IS NULL)"
+  }
+  index "idx_project_versions_project_position" {
+    columns = [column.workspace_id, column.project_id, column.position]
+  }
+  check "ck_project_versions_name_not_blank" {
+    expr = "btrim((name)::text) <> ''::text"
+  }
+  check "ck_project_versions_position_not_empty" {
+    expr = "position <> ''::text"
+  }
+}
+
+# ticket_fix_versions はチケットと修正バージョンの組（多対多）。
+#
+# project_id を持つのは飾りではない。**チケットと版が同じプロジェクトに属することを
+# DB に守らせる**ための鍵で、両方の FK にこの列を含める。持たせないと、別プロジェクトの
+# 版を付ける組が作れてしまう（旧 ticket_ranks が範囲を鍵に書かずに壊れたのと同じ形）。
+table "ticket_fix_versions" {
+  schema = schema.public
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  column "project_id" {
+    null = false
+    type = uuid
+  }
+  column "ticket_id" {
+    null = false
+    type = uuid
+  }
+  column "version_id" {
+    null = false
+    type = uuid
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.workspace_id, column.ticket_id, column.version_id]
+  }
+  foreign_key "fk_ticket_fix_versions_ticket" {
+    columns     = [column.workspace_id, column.project_id, column.ticket_id]
+    ref_columns = [table.tickets.column.workspace_id, table.tickets.column.project_id, table.tickets.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  foreign_key "fk_ticket_fix_versions_version" {
+    columns     = [column.workspace_id, column.project_id, column.version_id]
+    ref_columns = [table.project_versions.column.workspace_id, table.project_versions.column.project_id, table.project_versions.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  index "idx_ticket_fix_versions_version" {
+    columns = [column.workspace_id, column.version_id]
+  }
+}
+
+# teams はプロジェクトのチーム。チケットの「Team」の選択肢になる。
+table "teams" {
+  schema = schema.public
+  column "id" {
+    null = false
+    type = uuid
+  }
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  column "project_id" {
+    null = false
+    type = uuid
+  }
+  column "name" {
+    null = false
+    type = character_varying(60)
+  }
+  column "name_lower" {
+    null = true
+    type = character_varying(60)
+    as {
+      expr = "lower((name)::text)"
+      type = STORED
+    }
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  column "updated_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  # tickets.team_id からの複合 FK の参照先（別プロジェクトのチームを付けさせない）。
+  unique "uq_teams_workspace_project_id" {
+    columns = [column.workspace_id, column.project_id, column.id]
+  }
+  # team_members からの複合 FK の参照先。
+  unique "uq_teams_workspace_id" {
+    columns = [column.workspace_id, column.id]
+  }
+  foreign_key "fk_teams_project" {
+    columns     = [column.workspace_id, column.project_id]
+    ref_columns = [table.projects.column.workspace_id, table.projects.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  index "uq_teams_project_name" {
+    unique  = true
+    columns = [column.project_id, column.name_lower]
+  }
+  check "ck_teams_name_not_blank" {
+    expr = "btrim((name)::text) <> ''::text"
+  }
+}
+
+# team_members はチームに属する人。
+#
+# users への FK は RESTRICT にしない（CASCADE）。人が消えたら所属も消えるのが自然で、
+# 所属が残っていることを理由に利用者の削除を止める理由が無いため。
+table "team_members" {
+  schema = schema.public
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  column "team_id" {
+    null = false
+    type = uuid
+  }
+  column "user_id" {
+    null = false
+    type = bigint
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.workspace_id, column.team_id, column.user_id]
+  }
+  foreign_key "fk_team_members_team" {
+    columns     = [column.workspace_id, column.team_id]
+    ref_columns = [table.teams.column.workspace_id, table.teams.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  foreign_key "fk_team_members_user" {
+    columns     = [column.user_id]
+    ref_columns = [table.users.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  index "idx_team_members_user" {
+    columns = [column.user_id]
+  }
+}
+
+table "ticket_watchers" {
+  schema = schema.public
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  column "ticket_id" {
+    null = false
+    type = uuid
+  }
+  column "user_id" {
+    null = false
+    type = bigint
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  # 同じ人が同じチケットを二重に監視することはない。
+  primary_key {
+    columns = [column.workspace_id, column.ticket_id, column.user_id]
+  }
+  foreign_key "fk_ticket_watchers_ticket" {
+    columns     = [column.workspace_id, column.ticket_id]
+    ref_columns = [table.tickets.column.workspace_id, table.tickets.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  # 「自分が監視しているチケット」を引くための索引。
+  index "idx_ticket_watchers_user" {
+    columns = [column.workspace_id, column.user_id]
+  }
+}
+
+# ticket_backlog_ranks: バックログの並び順（設計 Ⅳ-F）。
+#
+# 旧 ticket_ranks（context_kind / context_id で文脈を判別する 1 表）から置き換えた。旧設計は
+# 2 つの問題を抱えていた。
+#
+# 1. **一意制約が効く範囲が壊れていた。** UNIQUE は (context_kind, context_id, position) で、
+#    backlog では context_id がゼロ UUID 固定だったため「position が表全体で一意」の意味に
+#    なっていた。2 つ目のプロジェクトが最初のチケットを作ると必ず position が衝突し、
+#    本番でも実際に起きていた（あるスペースのチケットだけ rank 行が 1 件も無い状態）。
+# 2. **外部キーが張れなかった。** context_id は context_kind 次第で sprints.id にも
+#    board_columns.id にもなる想定で、参照先が定まらないため FK を宣言できない。存在しない
+#    ID を指す行を DB が止められない（このリポジトリが EAV を禁じている理由と同じ）。
+#
+# 文脈が増えたら**表を増やす**（スプリントなら ticket_sprint_ranks）。表ごとに参照先が 1 つに
+# 定まるので FK が張れ、一意制約もその文脈の正しい範囲に書ける。
+table "ticket_backlog_ranks" {
+  schema = schema.public
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  # project_id を持つのが旧設計との決定的な違い。並びは「プロジェクト 1 つの中の 1 系列」
+  # なので、その範囲を鍵に書けなければ一意制約が意味を成さない。
+  column "project_id" {
+    null = false
+    type = uuid
+  }
+  column "ticket_id" {
+    null = false
+    type = uuid
+  }
+  # 並び順の正本。辞書順で比べる文字列（fracindex 作法）で、照合順序は環境に依存させない。
+  # かつて tickets.position が同じ役目を持っていたが、並びの範囲（プロジェクト）を
+  # 表せない場所に順序を置いていたので、この表へ移してから落とした。
+  column "position" {
+    null    = false
+    type    = text
+    collate = "C"
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  column "updated_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  # チケット 1 件はバックログの並びに 1 回だけ現れる。
+  primary_key {
+    columns = [column.workspace_id, column.ticket_id]
+  }
+  foreign_key "fk_ticket_backlog_ranks_ticket" {
+    columns     = [column.workspace_id, column.ticket_id]
+    ref_columns = [table.tickets.column.workspace_id, table.tickets.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  foreign_key "fk_ticket_backlog_ranks_project" {
+    columns     = [column.workspace_id, column.project_id]
+    ref_columns = [table.projects.column.workspace_id, table.projects.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  # 一覧はプロジェクト単位で position 順に引く。
+  index "idx_ticket_backlog_ranks_project_position" {
+    columns = [column.workspace_id, column.project_id, column.position]
+  }
+  # 同じプロジェクトの中で順位が重複しない。同時に同じ場所へ移動したら片方が落ちる
+  # （usecase 側が 1 回だけ位置を取り直して再試行する）。
+  unique "uq_ticket_backlog_ranks_project_position" {
+    columns = [column.workspace_id, column.project_id, column.position]
+  }
+  check "ck_ticket_backlog_ranks_position_not_empty" {
+    expr = "position <> ''::text"
   }
 }
 
@@ -3143,9 +3673,10 @@ table "ticket_status_transitions" {
     null = false
     type = uuid
   }
-  # ticket_statuses への複合 FK（workspace_id, space_id, id）に要る。tickets 経由で
+  # ticket_statuses への複合 FK（workspace_id, project_id, id）に要る。tickets 経由で
   # 辿ればわかる値だが、集計クエリと FK の両方でこの表単体から要るので非正規化して持つ。
-  column "space_id" {
+  # projects への FK は張らない（集計専用のログで、入れ物の実在は tickets 側が保証する）。
+  column "project_id" {
     null = false
     type = uuid
   }
@@ -3181,14 +3712,14 @@ table "ticket_status_transitions" {
     on_delete   = CASCADE
   }
   foreign_key "fk_ticket_status_transitions_from" {
-    columns     = [column.workspace_id, column.space_id, column.from_status_id]
-    ref_columns = [table.ticket_statuses.column.workspace_id, table.ticket_statuses.column.space_id, table.ticket_statuses.column.id]
+    columns     = [column.workspace_id, column.project_id, column.from_status_id]
+    ref_columns = [table.ticket_statuses.column.workspace_id, table.ticket_statuses.column.project_id, table.ticket_statuses.column.id]
     on_update   = NO_ACTION
     on_delete   = NO_ACTION
   }
   foreign_key "fk_ticket_status_transitions_to" {
-    columns     = [column.workspace_id, column.space_id, column.to_status_id]
-    ref_columns = [table.ticket_statuses.column.workspace_id, table.ticket_statuses.column.space_id, table.ticket_statuses.column.id]
+    columns     = [column.workspace_id, column.project_id, column.to_status_id]
+    ref_columns = [table.ticket_statuses.column.workspace_id, table.ticket_statuses.column.project_id, table.ticket_statuses.column.id]
     on_update   = NO_ACTION
     on_delete   = NO_ACTION
   }
@@ -3401,10 +3932,14 @@ table "ticket_comment_reactions" {
   }
 }
 
-# labels: スペースごとのラベル（名前 + 色）。同名は空白・大文字小文字違いも含めてスペース内で
-# 作れない（uq_labels_space_name の部分一意。ticket_statuses/ticket_types の name_lower と
-# 同じ「索引の足場としてだけ使う生成列」の作法だが、ここは trim も畳む — 空白違いだけの
-# 重複も同じラベル扱いにするため）。段 4・設計 Ⅵ。
+# labels: ワークスペースごとのラベル（名前 + 色）。同名は空白・大文字小文字違いも含めて
+# ワークスペース内で作れない（uq_labels_workspace_name の一意。ticket_statuses/ticket_types の
+# name_lower と同じ「索引の足場としてだけ使う生成列」の作法だが、ここは trim も畳む — 空白違い
+# だけの重複も同じラベル扱いにするため）。
+#
+# ラベルはページ（page_labels）とチケット（ticket_labels）の両方が引く唯一の語彙で、どちらか
+# 一方の入れ物（スペース / プロジェクト）に属させると、もう一方から引けない。ワークスペースを
+# 語彙の単位にすることで、ナレッジとバックログを切り離したまま共有できる。
 table "labels" {
   schema = schema.public
   column "id" {
@@ -3412,10 +3947,6 @@ table "labels" {
     type = uuid
   }
   column "workspace_id" {
-    null = false
-    type = uuid
-  }
-  column "space_id" {
     null = false
     type = uuid
   }
@@ -3452,18 +3983,9 @@ table "labels" {
   unique "uq_labels_workspace_id" {
     columns = [column.workspace_id, column.id]
   }
-  foreign_key "fk_labels_space" {
-    columns     = [column.workspace_id, column.space_id]
-    ref_columns = [table.spaces.column.workspace_id, table.spaces.column.id]
-    on_update   = NO_ACTION
-    on_delete   = CASCADE
-  }
-  index "idx_labels_workspace_space" {
-    columns = [column.workspace_id, column.space_id]
-  }
-  index "uq_labels_space_name" {
+  index "uq_labels_workspace_name" {
     unique  = true
-    columns = [column.space_id, column.name_key]
+    columns = [column.workspace_id, column.name_key]
   }
   check "ck_labels_name_trimmed" {
     expr = "((name)::text = btrim((name)::text)) AND ((name)::text <> ''::text)"
@@ -3516,10 +4038,8 @@ table "ticket_labels" {
 
 # page_labels: ページとラベルの多対多。ticket_labels と同じ形（付け外しは冪等・
 # 複合主キーが重複を吸収する）。labels 表そのものはチケット由来だが語彙は共有する
-# （ページ専用の labels は作らない）。ticket_labels と同じく、ラベルの所属スペースが
-# ページの所属スペースと一致するかは DB の FK では強制しない（fk_page_labels_label は
-# workspace_id 単位の一致だけを見る）— 一致の検証は usecase 側（AddPageLabelUseCase）が
-# ticket 側の AddTicketLabelUseCase と同じ形で行う。
+# （ページ専用の labels は作らない）。語彙はワークスペース単位なので、ページ・チケット
+# どちらから引いても同じ行を指す。
 table "page_labels" {
   schema = schema.public
   column "workspace_id" {

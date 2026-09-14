@@ -9,22 +9,22 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/usecase/ticket"
 )
 
-// TicketStatusHandler はスペースの状態マスタの管理を受ける（一覧・作成・更新・初期状態の
-// 切り替え・アーカイブ・復元）。判定はすべてスペース単位（対象がまだ存在しない・
-// 状態そのものにはページのような個票の権限が無いため、TicketHandler.requireTicketSpacePermission
+// TicketStatusHandler はプロジェクトの状態マスタの管理を受ける（一覧・作成・更新・初期状態の
+// 切り替え・アーカイブ・復元）。判定はすべてワークスペース単位（対象がまだ存在しない・
+// 状態そのものにはページのような個票の権限が無いため、TicketHandler.requireTicketWorkspacePermission
 // と同じ形を使う）。
 type TicketStatusHandler struct {
-	checkSpace *kb.CheckSpacePermissionUseCase
-	list       *ticket.ListTicketStatusesUseCase
-	create     *ticket.CreateTicketStatusUseCase
-	update     *ticket.UpdateTicketStatusUseCase
-	setInitial *ticket.SetInitialTicketStatusUseCase
-	archive    *ticket.ArchiveTicketStatusUseCase
-	restore    *ticket.RestoreTicketStatusUseCase
+	checkWorkspace *kb.CheckWorkspacePermissionUseCase
+	list           *ticket.ListTicketStatusesUseCase
+	create         *ticket.CreateTicketStatusUseCase
+	update         *ticket.UpdateTicketStatusUseCase
+	setInitial     *ticket.SetInitialTicketStatusUseCase
+	archive        *ticket.ArchiveTicketStatusUseCase
+	restore        *ticket.RestoreTicketStatusUseCase
 }
 
 func NewTicketStatusHandler(
-	checkSpace *kb.CheckSpacePermissionUseCase,
+	checkWorkspace *kb.CheckWorkspacePermissionUseCase,
 	list *ticket.ListTicketStatusesUseCase,
 	create *ticket.CreateTicketStatusUseCase,
 	update *ticket.UpdateTicketStatusUseCase,
@@ -33,15 +33,15 @@ func NewTicketStatusHandler(
 	restore *ticket.RestoreTicketStatusUseCase,
 ) *TicketStatusHandler {
 	return &TicketStatusHandler{
-		checkSpace: checkSpace, list: list, create: create, update: update,
+		checkWorkspace: checkWorkspace, list: list, create: create, update: update,
 		setInitial: setInitial, archive: archive, restore: restore,
 	}
 }
 
-func (h *TicketStatusHandler) requireSpacePermission(
-	c *gin.Context, scope kbRequestScope, spaceID string, capability domain.Capability,
+func (h *TicketStatusHandler) requireWorkspacePermission(
+	c *gin.Context, scope kbRequestScope, capability domain.Capability,
 ) bool {
-	return requireTicketSpacePermissionWith(c, h.checkSpace, scope, spaceID, capability)
+	return requireTicketWorkspacePermissionWith(c, h.checkWorkspace, scope, capability)
 }
 
 // ticketStatusResponse は状態 1 件の返却形。domain.TicketStatus をそのまま埋め込み
@@ -58,18 +58,18 @@ type ticketStatusListResponse struct {
 	Statuses []ticketStatusResponse `json:"statuses"`
 }
 
-// List はスペースの状態一覧を返す（閲覧権限が要る）。
+// List はプロジェクトの状態一覧を返す（閲覧権限が要る）。
 func (h *TicketStatusHandler) List(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityView) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityView) {
 		return
 	}
 	statuses, err := h.list.Execute(c.Request.Context(), ticket.ListTicketStatusesInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID,
+		WorkspaceID: scope.workspaceID, ProjectID: projectID,
 		IncludeArchived: c.Query("archived") == "true",
 	})
 	if err != nil {
@@ -90,14 +90,14 @@ type ticketStatusRequest struct {
 	Color    string `json:"color" binding:"required"`
 }
 
-// Create はスペースに状態を 1 つ追加する（編集権限が要る）。
+// Create はプロジェクトに状態を 1 つ追加する（編集権限が要る）。
 func (h *TicketStatusHandler) Create(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	var req ticketStatusRequest
@@ -106,7 +106,7 @@ func (h *TicketStatusHandler) Create(c *gin.Context) {
 		return
 	}
 	status, err := h.create.Execute(c.Request.Context(), ticket.CreateTicketStatusInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID,
+		WorkspaceID: scope.workspaceID, ProjectID: projectID,
 		Name: req.Name, Category: domain.TicketStatusCategory(req.Category), Color: req.Color,
 	})
 	if err != nil {
@@ -122,8 +122,8 @@ func (h *TicketStatusHandler) Update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	var req ticketStatusRequest
@@ -132,7 +132,7 @@ func (h *TicketStatusHandler) Update(c *gin.Context) {
 		return
 	}
 	status, err := h.update.Execute(c.Request.Context(), ticket.UpdateTicketStatusInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, StatusID: c.Param("statusId"),
+		WorkspaceID: scope.workspaceID, ProjectID: projectID, StatusID: c.Param("statusId"),
 		Name: req.Name, Category: domain.TicketStatusCategory(req.Category), Color: req.Color,
 	})
 	if err != nil {
@@ -148,12 +148,12 @@ func (h *TicketStatusHandler) SetInitial(c *gin.Context) {
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	if err := h.setInitial.Execute(c.Request.Context(), ticket.SetInitialTicketStatusInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, StatusID: c.Param("statusId"),
+		WorkspaceID: scope.workspaceID, ProjectID: projectID, StatusID: c.Param("statusId"),
 	}); err != nil {
 		respondTicketErr(c, err)
 		return
@@ -167,12 +167,12 @@ func (h *TicketStatusHandler) Archive(c *gin.Context) {
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	if err := h.archive.Execute(c.Request.Context(), ticket.ArchiveTicketStatusInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, StatusID: c.Param("statusId"),
+		WorkspaceID: scope.workspaceID, ProjectID: projectID, StatusID: c.Param("statusId"),
 	}); err != nil {
 		respondTicketErr(c, err)
 		return
@@ -186,12 +186,12 @@ func (h *TicketStatusHandler) Restore(c *gin.Context) {
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	if err := h.restore.Execute(c.Request.Context(), ticket.RestoreTicketStatusInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, StatusID: c.Param("statusId"),
+		WorkspaceID: scope.workspaceID, ProjectID: projectID, StatusID: c.Param("statusId"),
 	}); err != nil {
 		respondTicketErr(c, err)
 		return

@@ -24,7 +24,7 @@ type TicketTypeWithUsage struct {
 	ActiveTicketCount int64
 }
 
-// ListTicketStatusesUseCase はスペースの状態一覧を、使用中の件数と一緒に返す
+// ListTicketStatusesUseCase はプロジェクトの状態一覧を、使用中の件数と一緒に返す
 // （管理画面の表・作成フォームの選択肢）。
 type ListTicketStatusesUseCase struct {
 	repo repository.TicketRepository
@@ -36,7 +36,7 @@ func NewListTicketStatusesUseCase(r repository.TicketRepository) *ListTicketStat
 
 type ListTicketStatusesInput struct {
 	WorkspaceID     string
-	SpaceID         string
+	ProjectID       string
 	IncludeArchived bool
 }
 
@@ -44,15 +44,15 @@ func (u *ListTicketStatusesUseCase) Execute(ctx context.Context, in ListTicketSt
 	if in.WorkspaceID == "" {
 		return nil, errors.New("workspaceID is required")
 	}
-	if in.SpaceID == "" {
-		return nil, errors.New("spaceID is required")
+	if in.ProjectID == "" {
+		return nil, errors.New("projectID is required")
 	}
-	statuses, err := u.repo.ListTicketStatuses(ctx, in.WorkspaceID, in.SpaceID, in.IncludeArchived)
+	statuses, err := u.repo.ListTicketStatuses(ctx, in.WorkspaceID, in.ProjectID, in.IncludeArchived)
 	if err != nil {
 		return nil, err
 	}
-	// 件数はスペース 1 回の GROUP BY。状態ごとに数えると N+1 になる。
-	counts, err := u.repo.CountActiveTicketsByStatusForSpace(ctx, in.WorkspaceID, in.SpaceID)
+	// 件数はプロジェクト 1 回の GROUP BY。状態ごとに数えると N+1 になる。
+	counts, err := u.repo.CountActiveTicketsByStatusForProject(ctx, in.WorkspaceID, in.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (u *ListTicketStatusesUseCase) Execute(ctx context.Context, in ListTicketSt
 	return out, nil
 }
 
-// ListTicketTypesUseCase はスペースの種別一覧を、使用中の件数と一緒に返す。
+// ListTicketTypesUseCase はプロジェクトの種別一覧を、使用中の件数と一緒に返す。
 type ListTicketTypesUseCase struct {
 	repo repository.TicketRepository
 }
@@ -74,7 +74,7 @@ func NewListTicketTypesUseCase(r repository.TicketRepository) *ListTicketTypesUs
 
 type ListTicketTypesInput struct {
 	WorkspaceID     string
-	SpaceID         string
+	ProjectID       string
 	IncludeArchived bool
 }
 
@@ -82,14 +82,14 @@ func (u *ListTicketTypesUseCase) Execute(ctx context.Context, in ListTicketTypes
 	if in.WorkspaceID == "" {
 		return nil, errors.New("workspaceID is required")
 	}
-	if in.SpaceID == "" {
-		return nil, errors.New("spaceID is required")
+	if in.ProjectID == "" {
+		return nil, errors.New("projectID is required")
 	}
-	types, err := u.repo.ListTicketTypes(ctx, in.WorkspaceID, in.SpaceID, in.IncludeArchived)
+	types, err := u.repo.ListTicketTypes(ctx, in.WorkspaceID, in.ProjectID, in.IncludeArchived)
 	if err != nil {
 		return nil, err
 	}
-	counts, err := u.repo.CountActiveTicketsByTypeForSpace(ctx, in.WorkspaceID, in.SpaceID)
+	counts, err := u.repo.CountActiveTicketsByTypeForProject(ctx, in.WorkspaceID, in.ProjectID)
 	if err != nil {
 		return nil, err
 	}

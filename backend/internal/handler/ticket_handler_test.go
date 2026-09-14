@@ -17,8 +17,9 @@ import (
 )
 
 // ticketFixture は fake repository と、本番と同じ wiring で組んだルータの組。
-// ワークスペース・スペースは kb_page_handler_test.go の定数（kbWorkspaceID 等）を
-// そのまま使う（同じ package handler のテストなので再宣言しない）。
+// ワークスペースは kb_page_handler_test.go の定数（kbWorkspaceID 等）をそのまま使う
+// （同じ package handler のテストなので再宣言しない）。プロジェクトはバックログ側の
+// 入れ物なので、ここで独自に持つ。
 type ticketFixture struct {
 	tickets *ticketFakeRepo
 	pages   *kbFakePages
@@ -26,21 +27,23 @@ type ticketFixture struct {
 	router  *gin.Engine
 }
 
-// newTicketFixture はワークスペース 2 つ・スペース 1 つの下ごしらえをして、
-// registerTicketRoutesWith で本番と同じルートを張る。uid が 0 なら current user を
-// 注入せず未認証を再現する。role が空なら kbUserID にはどの役割も届かない
-// （CanView すら false — kbFakePerms.rolesAt は明示的な setScopeRole が無ければ空集合を返す）。
+// newTicketFixture はワークスペース 2 つの下ごしらえをして、registerTicketRoutesWith で
+// 本番と同じルートを張る。uid が 0 なら current user を注入せず未認証を再現する。role が
+// 空なら kbUserID にはどの役割も届かない（CanView すら false — kbFakePerms.rolesAt は
+// 明示的な setScopeRole が無ければ空集合を返す）。
+//
+// 役割はワークスペースに付ける。バックログの実効権限はワークスペース単位で、ナレッジの
+// スペース付与（space_grants）は一切引かない（ticket.CheckTicketPermissionUseCase 参照）。
 func newTicketFixture(uid uint64, role domain.GrantRole) ticketFixture {
 	gin.SetMode(gin.TestMode)
 	pages := newKbFakePages()
 	pages.addWorkspace(kbWorkspaceID, kbWorkspaceSlug)
 	pages.addWorkspace(kbOtherWorkspaceID, kbOtherWorkspaceSlug)
-	pages.addSpace(kbWorkspaceID, kbSpaceID)
 
 	perms := newKbFakePerms(pages, domain.PagePermission{})
 	perms.addMember(kbWorkspaceID, kbUserID)
 	if role != "" {
-		perms.setScopeRole(kbSpaceID, kbUserID, role)
+		perms.setScopeRole(kbWorkspaceID, kbUserID, role)
 	}
 
 	tickets := newTicketFakeRepo()
@@ -77,7 +80,13 @@ func (f ticketFixture) do(t *testing.T, method, path, body string) *httptest.Res
 	return w
 }
 
-const ticketAPIBase = "/api/v2/kb/workspaces/" + kbWorkspaceSlug
+// tkProjectID はバックログの入れ物（projects.id）。ナレッジの kbSpaceID とは無関係。
+const tkProjectID = "01a00000-0000-7000-8000-0000000000b1"
+
+const (
+	ticketAPIBase     = "/api/v2/workspaces/" + kbWorkspaceSlug
+	ticketProjectBase = ticketAPIBase + "/projects/" + tkProjectID
+)
 
 func decodeJSON[T any](t *testing.T, w *httptest.ResponseRecorder) T {
 	t.Helper()
@@ -87,15 +96,15 @@ func decodeJSON[T any](t *testing.T, w *httptest.ResponseRecorder) T {
 }
 
 // --- 権限の撃ち分け（Get と Create の 2 入口で確かめれば、requireTicketPermission /
-// requireTicketSpacePermission という共有ヘルパーの正しさとしては十分。同じヘルパーを
+// requireTicketWorkspacePermission という共有ヘルパーの正しさとしては十分。同じヘルパーを
 // 他の全エンドポイントも通る） ---
 
 func Test_チケット取得_役割が無いメンバーは404(t *testing.T) {
-	// メンバーではあるが、このスペースにどの役割も届いていない（setScopeRole 未設定 —
+	// メンバーではあるが、このワークスペースにどの役割も届いていない（setScopeRole 未設定 —
 	// newKbFakePerms の既定は「役割 0 件」で、addMember だけでは CanView にならない）。
 	f := newTicketFixture(kbUserID, "")
 	ticket := f.tickets.addTicket(domain.Ticket{
-		ID: "ticket-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x",
+		ID: "ticket-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x",
 	})
 
 	w := f.do(t, http.MethodGet, ticketAPIBase+"/tickets/"+ticket.ID, "")
@@ -105,7 +114,7 @@ func Test_チケット取得_役割が無いメンバーは404(t *testing.T) {
 func Test_チケット取得_閲覧のみで200(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
 	ticketID := f.tickets.addTicket(domain.Ticket{
-		ID: "ticket-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "本文", Number: 1,
+		ID: "ticket-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "本文", Number: 1,
 	}).ID
 
 	w := f.do(t, http.MethodGet, ticketAPIBase+"/tickets/"+ticketID, "")
@@ -120,10 +129,10 @@ func Test_チケット取得_閲覧のみで200(t *testing.T) {
 func Test_チケットslug無し解決_workspaceSlugを返す(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
 	tk := f.tickets.addTicket(domain.Ticket{
-		ID: "ticket-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "解決される", Number: 1,
+		ID: "ticket-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "解決される", Number: 1,
 	})
 
-	w := f.do(t, http.MethodGet, "/api/v2/kb/tickets/"+tk.ID, "")
+	w := f.do(t, http.MethodGet, "/api/v2/tickets/"+tk.ID, "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	got := decodeJSON[map[string]any](t, w)
 	assert.Equal(t, kbWorkspaceSlug, got["workspaceSlug"])
@@ -134,13 +143,13 @@ func Test_チケットslug無し解決_workspaceSlugを返す(t *testing.T) {
 }
 
 func Test_チケットslug無し解決_閲覧できなければ404(t *testing.T) {
-	// メンバーではあるが、このスペースにどの役割も届いていない。
+	// メンバーではあるが、このワークスペースにどの役割も届いていない。
 	f := newTicketFixture(kbUserID, "")
 	tk := f.tickets.addTicket(domain.Ticket{
-		ID: "ticket-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "見えない",
+		ID: "ticket-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "見えない",
 	})
 
-	w := f.do(t, http.MethodGet, "/api/v2/kb/tickets/"+tk.ID, "")
+	w := f.do(t, http.MethodGet, "/api/v2/tickets/"+tk.ID, "")
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
@@ -154,17 +163,17 @@ func Test_チケットslug無し解決_閲覧できなければ404(t *testing.T)
 func Test_チケットslug無し解決_停止中ワークスペースは404(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
 	tk := f.tickets.addTicket(domain.Ticket{
-		ID: "ticket-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "停止後",
+		ID: "ticket-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "停止後",
 	})
 	f.pages.workspaces[kbWorkspaceSlug].IsActive = false
 
-	w := f.do(t, http.MethodGet, "/api/v2/kb/tickets/"+tk.ID, "")
+	w := f.do(t, http.MethodGet, "/api/v2/tickets/"+tk.ID, "")
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func Test_チケット取得_他ワークスペースのチケットは404(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	other := f.tickets.addTicket(domain.Ticket{ID: "ticket-x", WorkspaceID: kbOtherWorkspaceID, SpaceID: "other-space", Title: "x"})
+	other := f.tickets.addTicket(domain.Ticket{ID: "ticket-x", WorkspaceID: kbOtherWorkspaceID, ProjectID: "other-space", Title: "x"})
 
 	w := f.do(t, http.MethodGet, ticketAPIBase+"/tickets/"+other.ID, "")
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -172,16 +181,16 @@ func Test_チケット取得_他ワークスペースのチケットは404(t *te
 
 func Test_チケット作成_閲覧だけでは403(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
-	f.tickets.addType(domain.TicketType{ID: "type-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "タスク", IsDefault: true})
-	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
+	f.tickets.addType(domain.TicketType{ID: "type-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "タスク", IsDefault: true})
+	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
 
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", `{"title":"新規"}`)
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/tickets", `{"title":"新規"}`)
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
 func Test_チケット削除_閲覧だけでは403(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
-	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-del", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x"})
+	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-del", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x"})
 
 	w := f.do(t, http.MethodDelete, ticketAPIBase+"/tickets/"+target.ID, "")
 	assert.Equal(t, http.StatusForbidden, w.Code)
@@ -189,19 +198,19 @@ func Test_チケット削除_閲覧だけでは403(t *testing.T) {
 
 func Test_チケット削除_他ワークスペースのチケットは404(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	other := f.tickets.addTicket(domain.Ticket{ID: "ticket-other-del", WorkspaceID: kbOtherWorkspaceID, SpaceID: "other-space", Title: "x"})
+	other := f.tickets.addTicket(domain.Ticket{ID: "ticket-other-del", WorkspaceID: kbOtherWorkspaceID, ProjectID: "other-space", Title: "x"})
 
 	w := f.do(t, http.MethodDelete, ticketAPIBase+"/tickets/"+other.ID, "")
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 // RestoreDeleted は requireTicketPermission（FindTicket 経由）を使わない別経路
-// （FindDeletedTicketUseCase → requireTicketSpacePermission）なので、境界を独立して確かめる。
+// （FindDeletedTicketUseCase → requireTicketWorkspacePermission）なので、境界を独立して確かめる。
 func Test_復元削除_他ワークスペースの削除済みチケットは404(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
 	now := time.Now()
 	other := f.tickets.addTicket(domain.Ticket{
-		ID: "ticket-other-restore", WorkspaceID: kbOtherWorkspaceID, SpaceID: "other-space",
+		ID: "ticket-other-restore", WorkspaceID: kbOtherWorkspaceID, ProjectID: "other-space",
 		Title: "x", DeletedAt: &now,
 	})
 
@@ -213,7 +222,7 @@ func Test_復元削除_閲覧だけでは403(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
 	now := time.Now()
 	target := f.tickets.addTicket(domain.Ticket{
-		ID: "ticket-restore-viewer", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID,
+		ID: "ticket-restore-viewer", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID,
 		Title: "x", DeletedAt: &now,
 	})
 
@@ -227,22 +236,22 @@ func Test_チケット一式_有効化から作成取得一覧更新状態変更
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
 
 	// 1) 有効化（既定の雛形）。
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets/enable", "")
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/tickets/enable", "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	statuses, err := f.tickets.ListTicketStatuses(context.Background(), kbWorkspaceID, kbSpaceID, false)
+	statuses, err := f.tickets.ListTicketStatuses(context.Background(), kbWorkspaceID, tkProjectID, false)
 	require.NoError(t, err)
 	require.Len(t, statuses, 5)
-	types, err := f.tickets.ListTicketTypes(context.Background(), kbWorkspaceID, kbSpaceID, false)
+	types, err := f.tickets.ListTicketTypes(context.Background(), kbWorkspaceID, tkProjectID, false)
 	require.NoError(t, err)
 	require.Len(t, types, 3)
 
 	// 2 度目の有効化は 409。
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets/enable", "")
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/tickets/enable", "")
 	assert.Equal(t, http.StatusConflict, w.Code)
 
 	// 2) 作成（既定の種別・状態を解決）。
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", `{"title":"最初のチケット"}`)
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/tickets", `{"title":"最初のチケット"}`)
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	created := decodeJSON[domain.Ticket](t, w)
 	assert.Equal(t, "最初のチケット", created.Title)
@@ -257,13 +266,13 @@ func Test_チケット一式_有効化から作成取得一覧更新状態変更
 	assert.Equal(t, kbUserID, withCreatedBy.CreatedBy.UserID)
 	assert.Equal(t, "テストユーザー", withCreatedBy.CreatedBy.Name)
 
-	// キーからの解決（FRESTYLE-1 相当。キー自体がスペースを含むので URL にスペースを取らない。
-	// spaceKey はこの fake では spaceID と同一視する）。
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/tickets/by-key/"+strings.ToUpper(kbSpaceID)+"-1", "")
+	// 表示キーからの解決。キー自体がプロジェクトの key を含むので URL にプロジェクトを取らない
+	// （projectKey はこの fake では projectID と同一視する）。
+	w = f.do(t, http.MethodGet, ticketAPIBase+"/tickets/by-key/"+strings.ToUpper(tkProjectID)+"-1", "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	// 4) 一覧。
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets", "")
 	require.Equal(t, http.StatusOK, w.Code)
 	list := decodeJSON[ticketListResponse](t, w)
 	require.Len(t, list.Tickets, 1)
@@ -286,7 +295,7 @@ func Test_チケット一式_有効化から作成取得一覧更新状態変更
 	assert.Equal(t, "テストユーザー", hist.Groups[0].Actor.Name)
 
 	// 6) 状態変更。
-	doneStatus, err := f.tickets.FindTicketStatus(context.Background(), kbWorkspaceID, kbSpaceID, statusIDByCategory(statuses, domain.TicketStatusCategoryDone))
+	doneStatus, err := f.tickets.FindTicketStatus(context.Background(), kbWorkspaceID, tkProjectID, statusIDByCategory(statuses, domain.TicketStatusCategoryDone))
 	require.NoError(t, err)
 	w = f.do(t, http.MethodPost, ticketAPIBase+"/tickets/"+created.ID+"/status", `{"statusId":"`+doneStatus.ID+`"}`)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -296,7 +305,7 @@ func Test_チケット一式_有効化から作成取得一覧更新状態変更
 	assert.Equal(t, domain.TicketResolutionDone, *closed.Resolution)
 
 	// 7) 2 件目を作って並び替え（1 件目の直後へ）。
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", `{"title":"2件目"}`)
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/tickets", `{"title":"2件目"}`)
 	require.Equal(t, http.StatusCreated, w.Code)
 	second := decodeJSON[domain.Ticket](t, w)
 	w = f.do(t, http.MethodPost, ticketAPIBase+"/tickets/"+second.ID+"/move", `{"anchorTicketId":"`+created.ID+`","anchorAfter":false}`)
@@ -314,7 +323,7 @@ func Test_チケット一式_有効化から作成取得一覧更新状態変更
 	withAssignee := decodeJSON[map[string]any](t, w)
 	assert.Equal(t, "principal-1", withAssignee["assigneePrincipalId"], "詳細に担当が載る")
 
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets", "")
 	require.Equal(t, http.StatusOK, w.Code)
 	listed := decodeJSON[map[string][]map[string]any](t, w)
 	assignedInList := 0
@@ -352,7 +361,7 @@ func Test_チケット一式_有効化から作成取得一覧更新状態変更
 	// 削除済みは通常の取得・一覧・移動・アーカイブから消える（存在しないのと同じ 404）。
 	w = f.do(t, http.MethodGet, ticketAPIBase+"/tickets/"+created.ID, "")
 	assert.Equal(t, http.StatusNotFound, w.Code, "削除済みは取得できない")
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets", "")
 	require.Equal(t, http.StatusOK, w.Code)
 	afterDelete := decodeJSON[ticketListResponse](t, w)
 	for _, row := range afterDelete.Tickets {
@@ -391,8 +400,8 @@ func statusIDByCategory(statuses []domain.TicketStatus, category domain.TicketSt
 
 func Test_チケット作成_担当が存在しなければ400(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	f.tickets.addType(domain.TicketType{ID: "type-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "タスク", IsDefault: true})
-	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
+	f.tickets.addType(domain.TicketType{ID: "type-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "タスク", IsDefault: true})
+	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
 	created := postTicket(t, f, `{"title":"x"}`)
 
 	w := f.do(t, http.MethodPut, ticketAPIBase+"/tickets/"+created.ID+"/assignee", `{"assigneePrincipalId":"`+ticketFakeMissingPrincipalID+`"}`)
@@ -404,10 +413,10 @@ func Test_チケット作成_担当が存在しなければ400(t *testing.T) {
 
 func Test_チケット作成_開始日が期限より後なら400(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	f.tickets.addType(domain.TicketType{ID: "type-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "タスク", IsDefault: true})
-	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
+	f.tickets.addType(domain.TicketType{ID: "type-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "タスク", IsDefault: true})
+	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
 
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets",
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/tickets",
 		`{"title":"x","startDate":"2026-09-10","dueDate":"2026-09-01"}`)
 	require.Equal(t, http.StatusBadRequest, w.Code)
 	var body errorResponse
@@ -417,36 +426,36 @@ func Test_チケット作成_開始日が期限より後なら400(t *testing.T) 
 
 func Test_チケット作成_日付の形式が不正なら400(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	f.tickets.addType(domain.TicketType{ID: "type-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "タスク", IsDefault: true})
-	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
+	f.tickets.addType(domain.TicketType{ID: "type-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "タスク", IsDefault: true})
+	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
 
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", `{"title":"x","dueDate":"2026/09/10"}`)
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/tickets", `{"title":"x","dueDate":"2026/09/10"}`)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func Test_チケット作成_優先度が範囲外なら400(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	f.tickets.addType(domain.TicketType{ID: "type-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "タスク", IsDefault: true})
-	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
+	f.tickets.addType(domain.TicketType{ID: "type-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "タスク", IsDefault: true})
+	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
 
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", `{"title":"x","priority":9}`)
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/tickets", `{"title":"x","priority":9}`)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func Test_チケット親子_階層規則に反すると409(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	subType := f.tickets.addType(domain.TicketType{ID: "type-sub", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "小作業", HierarchyLevel: -1})
-	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
-	parent := f.tickets.addTicket(domain.Ticket{ID: "parent-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, TypeID: subType.ID, Title: "親", Number: 1})
+	subType := f.tickets.addType(domain.TicketType{ID: "type-sub", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "小作業", HierarchyLevel: -1})
+	f.tickets.addStatus(domain.TicketStatus{ID: "status-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "To Do", Category: domain.TicketStatusCategoryTodo, IsInitial: true})
+	parent := f.tickets.addTicket(domain.Ticket{ID: "parent-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, TypeID: subType.ID, Title: "親", Number: 1})
 
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets",
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/tickets",
 		`{"title":"子","parentId":"`+parent.ID+`","typeId":"`+subType.ID+`"}`)
 	assert.Equal(t, http.StatusConflict, w.Code)
 }
 
 func postTicket(t *testing.T, f ticketFixture, body string) domain.Ticket {
 	t.Helper()
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", body)
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/tickets", body)
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	return decodeJSON[domain.Ticket](t, w)
 }
@@ -456,61 +465,61 @@ func postTicket(t *testing.T, f ticketFixture, body string) domain.Ticket {
 func Test_状態マスタ_作成更新初期化アーカイブ復元(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
 
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-statuses",
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/ticket-statuses",
 		`{"name":"レビュー中","category":"in_progress","color":"#2f6b47"}`)
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	status := decodeJSON[domain.TicketStatus](t, w)
 
-	w = f.do(t, http.MethodPut, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-statuses/"+status.ID,
+	w = f.do(t, http.MethodPut, ticketProjectBase+"/ticket-statuses/"+status.ID,
 		`{"name":"レビュー中2","category":"in_progress","color":"#a0661a"}`)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-statuses/"+status.ID+"/set-initial", "")
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/ticket-statuses/"+status.ID+"/set-initial", "")
 	require.Equal(t, http.StatusNoContent, w.Code)
 
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-statuses", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/ticket-statuses", "")
 	require.Equal(t, http.StatusOK, w.Code)
 	list := decodeJSON[ticketStatusListResponse](t, w)
 	require.Len(t, list.Statuses, 1)
 	assert.True(t, list.Statuses[0].IsInitial)
 
 	// 現役チケットが参照していれば 409。
-	f.tickets.addTicket(domain.Ticket{ID: "t-in-use", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, StatusID: status.ID, TypeID: "type-x", Title: "使用中"})
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-statuses/"+status.ID+"/archive", "")
+	f.tickets.addTicket(domain.Ticket{ID: "t-in-use", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, StatusID: status.ID, TypeID: "type-x", Title: "使用中"})
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/ticket-statuses/"+status.ID+"/archive", "")
 	assert.Equal(t, http.StatusConflict, w.Code)
 
 	delete(f.tickets.tickets, "t-in-use")
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-statuses/"+status.ID+"/archive", "")
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/ticket-statuses/"+status.ID+"/archive", "")
 	require.Equal(t, http.StatusNoContent, w.Code)
 
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-statuses/"+status.ID+"/restore", "")
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/ticket-statuses/"+status.ID+"/restore", "")
 	require.Equal(t, http.StatusNoContent, w.Code)
 }
 
 func Test_種別マスタ_作成更新既定アーカイブ復元(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
 
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-types",
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/ticket-types",
 		`{"name":"バグ","hierarchyLevel":0,"color":"#9a3b2e"}`)
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 	typ := decodeJSON[domain.TicketType](t, w)
 
-	w = f.do(t, http.MethodPut, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-types/"+typ.ID,
+	w = f.do(t, http.MethodPut, ticketProjectBase+"/ticket-types/"+typ.ID,
 		`{"name":"バグ2","hierarchyLevel":1,"color":"#2f6b47"}`)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-types/"+typ.ID+"/set-default", "")
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/ticket-types/"+typ.ID+"/set-default", "")
 	require.Equal(t, http.StatusNoContent, w.Code)
 
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-types", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/ticket-types", "")
 	require.Equal(t, http.StatusOK, w.Code)
 	list := decodeJSON[ticketTypeListResponse](t, w)
 	require.Len(t, list.Types, 1)
 	assert.True(t, list.Types[0].IsDefault)
 
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-types/"+typ.ID+"/archive", "")
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/ticket-types/"+typ.ID+"/archive", "")
 	require.Equal(t, http.StatusNoContent, w.Code)
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-types/"+typ.ID+"/restore", "")
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/ticket-types/"+typ.ID+"/restore", "")
 	require.Equal(t, http.StatusNoContent, w.Code)
 }
 
@@ -518,27 +527,27 @@ func Test_種別マスタ_作成更新既定アーカイブ復元(t *testing.T) 
 // 現役のチケットだけを数える（アーカイブ済みは状態のアーカイブを妨げない）。
 func Test_状態種別一覧_使用中の件数を返す(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets/enable", "")
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/tickets/enable", "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	statuses, err := f.tickets.ListTicketStatuses(context.Background(), kbWorkspaceID, kbSpaceID, false)
+	statuses, err := f.tickets.ListTicketStatuses(context.Background(), kbWorkspaceID, tkProjectID, false)
 	require.NoError(t, err)
-	types, err := f.tickets.ListTicketTypes(context.Background(), kbWorkspaceID, kbSpaceID, false)
+	types, err := f.tickets.ListTicketTypes(context.Background(), kbWorkspaceID, tkProjectID, false)
 	require.NoError(t, err)
 	initial := statuses[0].ID
 
 	// 2 件作って、片方をアーカイブする。
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", `{"title":"1件目"}`)
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/tickets", `{"title":"1件目"}`)
 	require.Equal(t, http.StatusCreated, w.Code)
 	first := decodeJSON[domain.Ticket](t, w)
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", `{"title":"2件目"}`)
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/tickets", `{"title":"2件目"}`)
 	require.Equal(t, http.StatusCreated, w.Code)
 	second := decodeJSON[domain.Ticket](t, w)
 	w = f.do(t, http.MethodPost, ticketAPIBase+"/tickets/"+second.ID+"/archive", "")
 	require.Equal(t, http.StatusOK, w.Code)
 
 	countOf := func(path, key, id string) float64 {
-		res := f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/"+path, "")
+		res := f.do(t, http.MethodGet, ticketProjectBase+"/"+path, "")
 		require.Equal(t, http.StatusOK, res.Code, res.Body.String())
 		body := decodeJSON[map[string][]map[string]any](t, res)
 		for _, row := range body[key] {
@@ -563,25 +572,25 @@ func Test_状態種別一覧_使用中の件数を返す(t *testing.T) {
 
 func Test_状態作成_不正な色は400(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-statuses",
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/ticket-statuses",
 		`{"name":"x","category":"todo","color":"not-a-color"}`)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func Test_種別作成_範囲外のhierarchyLevelは400(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-types",
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/ticket-types",
 		`{"name":"x","hierarchyLevel":5,"color":"#2f6b47"}`)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func Test_状態種別マスタ_閲覧のみでは編集操作に403(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
-	w := f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-statuses",
+	w := f.do(t, http.MethodPost, ticketProjectBase+"/ticket-statuses",
 		`{"name":"x","category":"todo","color":"#2f6b47"}`)
 	assert.Equal(t, http.StatusForbidden, w.Code)
 
-	w = f.do(t, http.MethodPost, ticketAPIBase+"/spaces/"+kbSpaceID+"/ticket-types",
+	w = f.do(t, http.MethodPost, ticketProjectBase+"/ticket-types",
 		`{"name":"x","hierarchyLevel":0,"color":"#2f6b47"}`)
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
@@ -592,31 +601,31 @@ func Test_チケット一覧_期日での絞り込み(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
 	due, start := "2026-01-10", "2026-01-01"
 	inRange := f.tickets.addTicket(domain.Ticket{
-		ID: "ticket-due-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "対象",
+		ID: "ticket-due-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "対象",
 		DueDate: &due, StartDate: &start,
 	})
 	dueLate, startLate := "2026-03-10", "2026-03-01"
 	f.tickets.addTicket(domain.Ticket{
-		ID: "ticket-due-2", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "対象外",
+		ID: "ticket-due-2", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "対象外",
 		DueDate: &dueLate, StartDate: &startLate,
 	})
 
-	w := f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?dueBefore=2026-02-01", "")
+	w := f.do(t, http.MethodGet, ticketProjectBase+"/tickets?dueBefore=2026-02-01", "")
 	require.Equal(t, http.StatusOK, w.Code)
 	byDue := decodeJSON[map[string][]map[string]any](t, w)
 	require.Len(t, byDue["tickets"], 1)
 	assert.Equal(t, inRange.ID, byDue["tickets"][0]["id"])
 
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?startAfter=2026-02-01", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?startAfter=2026-02-01", "")
 	require.Equal(t, http.StatusOK, w.Code)
 	byStart := decodeJSON[map[string][]map[string]any](t, w)
 	require.Len(t, byStart["tickets"], 1)
 	assert.NotEqual(t, inRange.ID, byStart["tickets"][0]["id"])
 
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?dueBefore=not-a-date", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?dueBefore=not-a-date", "")
 	assert.Equal(t, http.StatusBadRequest, w.Code, "壊れた形式は400")
 
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?startAfter=2026/01/01", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?startAfter=2026/01/01", "")
 	assert.Equal(t, http.StatusBadRequest, w.Code, "区切りが違う形式も400")
 }
 
@@ -626,35 +635,35 @@ func Test_チケット一覧_保存した絞り込み(t *testing.T) {
 	me := f.perms.userPrincipal(kbWorkspaceID, kbUserID)
 	require.NotNil(t, me, "前提: 自分の principal が解決できる")
 
-	unassigned := f.tickets.addTicket(domain.Ticket{ID: "t-unassigned", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "未割り当て"})
-	mine := f.tickets.addTicket(domain.Ticket{ID: "t-mine", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "自分の担当"})
+	unassigned := f.tickets.addTicket(domain.Ticket{ID: "t-unassigned", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "未割り当て"})
+	mine := f.tickets.addTicket(domain.Ticket{ID: "t-mine", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "自分の担当"})
 	w := f.do(t, http.MethodPut, ticketAPIBase+"/tickets/"+mine.ID+"/assignee", `{"assigneePrincipalId":"`+me.ID+`"}`)
 	require.Equal(t, http.StatusOK, w.Code)
-	others := f.tickets.addTicket(domain.Ticket{ID: "t-others", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "他人の担当"})
+	others := f.tickets.addTicket(domain.Ticket{ID: "t-others", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "他人の担当"})
 	w = f.do(t, http.MethodPut, ticketAPIBase+"/tickets/"+others.ID+"/assignee", `{"assigneePrincipalId":"principal-other"}`)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?unassigned=true", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?unassigned=true", "")
 	require.Equal(t, http.StatusOK, w.Code)
 	got := decodeJSON[map[string][]map[string]any](t, w)
 	require.Len(t, got["tickets"], 1)
 	assert.Equal(t, unassigned.ID, got["tickets"][0]["id"])
 
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?assignedToMe=true", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?assignedToMe=true", "")
 	require.Equal(t, http.StatusOK, w.Code)
 	got = decodeJSON[map[string][]map[string]any](t, w)
 	require.Len(t, got["tickets"], 1)
 	assert.Equal(t, mine.ID, got["tickets"][0]["id"])
 
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?q=担当", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?q=担当", "")
 	require.Equal(t, http.StatusOK, w.Code)
 	got = decodeJSON[map[string][]map[string]any](t, w)
 	assert.Len(t, got["tickets"], 2, "「自分の担当」「他人の担当」の2件がタイトルで引っかかる")
 
 	// unassigned・assignedToMe・assigneePrincipalId は互いに排他。同時指定は400。
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?unassigned=true&assignedToMe=true", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?unassigned=true&assignedToMe=true", "")
 	assert.Equal(t, http.StatusBadRequest, w.Code, "unassignedとassignedToMeの同時指定は400")
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets?unassigned=true&assigneePrincipalId="+me.ID, "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?unassigned=true&assigneePrincipalId="+me.ID, "")
 	assert.Equal(t, http.StatusBadRequest, w.Code, "unassignedとassigneePrincipalIdの同時指定も400")
 }
 
@@ -664,15 +673,15 @@ func Test_チケット件数(t *testing.T) {
 	me := f.perms.userPrincipal(kbWorkspaceID, kbUserID)
 	require.NotNil(t, me)
 
-	f.tickets.addStatus(domain.TicketStatus{ID: "status-todo", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Category: domain.TicketStatusCategoryTodo})
+	f.tickets.addStatus(domain.TicketStatus{ID: "status-todo", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Category: domain.TicketStatusCategoryTodo})
 	overdueDate := "2020-01-01"
-	f.tickets.addTicket(domain.Ticket{ID: "t-overdue", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "期限切れ", DueDate: &overdueDate, StatusID: "status-todo"})
-	mine := f.tickets.addTicket(domain.Ticket{ID: "t-mine-2", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "自分の担当2"})
+	f.tickets.addTicket(domain.Ticket{ID: "t-overdue", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "期限切れ", DueDate: &overdueDate, StatusID: "status-todo"})
+	mine := f.tickets.addTicket(domain.Ticket{ID: "t-mine-2", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "自分の担当2"})
 	w := f.do(t, http.MethodPut, ticketAPIBase+"/tickets/"+mine.ID+"/assignee", `{"assigneePrincipalId":"`+me.ID+`"}`)
 	require.Equal(t, http.StatusOK, w.Code)
-	f.tickets.addTicket(domain.Ticket{ID: "t-unassigned-2", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "未割り当て2"})
+	f.tickets.addTicket(domain.Ticket{ID: "t-unassigned-2", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "未割り当て2"})
 
-	w = f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets/counts", "")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets/counts", "")
 	require.Equal(t, http.StatusOK, w.Code)
 	got := decodeJSON[ticketCountsResponse](t, w)
 	assert.Equal(t, int64(3), got.Total)
@@ -684,9 +693,9 @@ func Test_チケット件数(t *testing.T) {
 // Test_チケット詳細_祖先列を根から順に返す は ancestors フィールド（段 5・パンくず用）を固定する。
 func Test_チケット詳細_祖先列を根から順に返す(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
-	root := f.tickets.addTicket(domain.Ticket{ID: "anc-root", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "根"})
-	child := f.tickets.addTicket(domain.Ticket{ID: "anc-child", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "子", ParentID: &root.ID})
-	grand := f.tickets.addTicket(domain.Ticket{ID: "anc-grand", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "孫", ParentID: &child.ID})
+	root := f.tickets.addTicket(domain.Ticket{ID: "anc-root", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "根"})
+	child := f.tickets.addTicket(domain.Ticket{ID: "anc-child", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "子", ParentID: &root.ID})
+	grand := f.tickets.addTicket(domain.Ticket{ID: "anc-grand", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "孫", ParentID: &child.ID})
 
 	w := f.do(t, http.MethodGet, ticketAPIBase+"/tickets/"+grand.ID, "")
 	require.Equal(t, http.StatusOK, w.Code)
@@ -706,13 +715,13 @@ func Test_チケット詳細_祖先列を根から順に返す(t *testing.T) {
 // （孫・アーカイブ済み・他チケットの子は含まない）。
 func Test_チケット子一覧(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
-	parent := f.tickets.addTicket(domain.Ticket{ID: "ch-parent", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "親"})
-	second := f.tickets.addTicket(domain.Ticket{ID: "ch-2", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "子2", ParentID: &parent.ID, Position: "a1"})
-	first := f.tickets.addTicket(domain.Ticket{ID: "ch-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "子1", ParentID: &parent.ID, Position: "a0"})
-	f.tickets.addTicket(domain.Ticket{ID: "ch-grand", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "孫", ParentID: &first.ID, Position: "a0"})
+	parent := f.tickets.addTicket(domain.Ticket{ID: "ch-parent", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "親"})
+	second := f.tickets.addTicket(domain.Ticket{ID: "ch-2", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "子2", ParentID: &parent.ID, Position: "a1"})
+	first := f.tickets.addTicket(domain.Ticket{ID: "ch-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "子1", ParentID: &parent.ID, Position: "a0"})
+	f.tickets.addTicket(domain.Ticket{ID: "ch-grand", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "孫", ParentID: &first.ID, Position: "a0"})
 	archived := time.Now()
-	f.tickets.addTicket(domain.Ticket{ID: "ch-archived", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "アーカイブ済みの子", ParentID: &parent.ID, Position: "a2", ArchivedAt: &archived})
-	f.tickets.addTicket(domain.Ticket{ID: "ch-unrelated", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "無関係"})
+	f.tickets.addTicket(domain.Ticket{ID: "ch-archived", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "アーカイブ済みの子", ParentID: &parent.ID, Position: "a2", ArchivedAt: &archived})
+	f.tickets.addTicket(domain.Ticket{ID: "ch-unrelated", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "無関係"})
 
 	w := f.do(t, http.MethodGet, ticketAPIBase+"/tickets/"+parent.ID+"/children", "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -729,7 +738,7 @@ func Test_チケット子一覧(t *testing.T) {
 // （中身の可視判定そのものは persistence の結合テストが固定する）。
 func Test_チケットのページ逆参照(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
-	target := f.tickets.addTicket(domain.Ticket{ID: "ref-target", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "対象"})
+	target := f.tickets.addTicket(domain.Ticket{ID: "ref-target", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "対象"})
 
 	w := f.do(t, http.MethodGet, ticketAPIBase+"/tickets/"+target.ID+"/page-backlinks", "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -758,7 +767,7 @@ func Test_チケット取得_役割ごとの実効権限を応答に載せる(t 
 		t.Run(string(tc.role), func(t *testing.T) {
 			f := newTicketFixture(kbUserID, tc.role)
 			tk := f.tickets.addTicket(domain.Ticket{
-				ID: "ticket-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x", Number: 1,
+				ID: "ticket-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x", Number: 1,
 			})
 
 			w := f.do(t, http.MethodGet, ticketAPIBase+"/tickets/"+tk.ID, "")
@@ -776,14 +785,14 @@ func Test_チケット取得_役割ごとの実効権限を応答に載せる(t 
 	}
 }
 
-// 一覧には載せない。実効権限はスペース単位で行ごとに変わらないので、同じ値が全行に並ぶだけ。
+// 一覧には載せない。実効権限はプロジェクト単位で行ごとに変わらないので、同じ値が全行に並ぶだけ。
 func Test_チケット一覧_実効権限は載せない(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
 	f.tickets.addTicket(domain.Ticket{
-		ID: "ticket-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x", Number: 1,
+		ID: "ticket-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x", Number: 1,
 	})
 
-	w := f.do(t, http.MethodGet, ticketAPIBase+"/spaces/"+kbSpaceID+"/tickets", "")
+	w := f.do(t, http.MethodGet, ticketProjectBase+"/tickets", "")
 
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.NotContains(t, w.Body.String(), `"permission"`)

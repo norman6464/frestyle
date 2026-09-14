@@ -9,5 +9,9 @@
 # そこで dev-url にだけ、起動時に pg_trgm を作成済みの自前イメージを使う。
 # 01-extensions.sql は backend/scripts/local-db-init/ と全く同じファイル
 # （COPY で共有するだけで内容の複製はしない。文言がズレると気づけないため）。
+#
+# 拡張は template1 にも作る（02-template1.sh 参照）。Atlas は作業用 DB を CREATE DATABASE で
+# 作るため、initdb の投入先だけに作っても届かない。
 FROM public.ecr.aws/docker/library/postgres:17.6-alpine
 COPY local-db-init/01-extensions.sql /docker-entrypoint-initdb.d/01-extensions.sql
+COPY atlas-dev/02-template1.sh /docker-entrypoint-initdb.d/02-template1.sh

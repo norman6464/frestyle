@@ -14,7 +14,7 @@ import (
 
 func tkBaseTicket() *domain.Ticket {
 	return &domain.Ticket{
-		ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace,
+		ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject,
 		TypeID: "type-task", Title: "旧タイトル", Doc: []byte(`{"type":"doc","content":[]}`),
 		Priority: domain.TicketPriorityDefault, ParentID: nil,
 	}
@@ -107,7 +107,7 @@ func Test_チケット更新_子を持つチケットを小作業へ変えると
 	before := tkBaseTicket() // type-task = level 0（下の FindTicketType で定義）
 	subType := domain.TicketType{ID: "type-sub", HierarchyLevel: -1}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(before, nil)
-	repo.On("FindTicketType", mock.Anything, tkWS, tkSpace, "type-sub").Return(&subType, nil)
+	repo.On("FindTicketType", mock.Anything, tkWS, tkProject, "type-sub").Return(&subType, nil)
 	repo.On("CountActiveTicketChildren", mock.Anything, tkWS, tkTicket).Return(int64(2), nil)
 
 	_, err := ticket.NewUpdateTicketUseCase(repo).Execute(context.Background(), ticket.UpdateTicketInput{
@@ -126,11 +126,11 @@ func Test_チケット更新_種別変更で親との階層規則を再検証す
 	bundleType := domain.TicketType{ID: "type-bundle", HierarchyLevel: 1}
 	parentType := domain.TicketType{ID: "type-parent", HierarchyLevel: 0}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(before, nil)
-	repo.On("FindTicketType", mock.Anything, tkWS, tkSpace, "type-bundle").Return(&bundleType, nil)
+	repo.On("FindTicketType", mock.Anything, tkWS, tkProject, "type-bundle").Return(&bundleType, nil)
 	repo.On("CountActiveTicketChildren", mock.Anything, tkWS, tkTicket).Return(int64(0), nil)
 	repo.On("FindTicket", mock.Anything, tkWS, tkParent).
-		Return(&domain.Ticket{ID: tkParent, WorkspaceID: tkWS, SpaceID: tkSpace, TypeID: "type-parent"}, nil)
-	repo.On("FindTicketType", mock.Anything, tkWS, tkSpace, "type-parent").Return(&parentType, nil)
+		Return(&domain.Ticket{ID: tkParent, WorkspaceID: tkWS, ProjectID: tkProject, TypeID: "type-parent"}, nil)
+	repo.On("FindTicketType", mock.Anything, tkWS, tkProject, "type-parent").Return(&parentType, nil)
 
 	_, err := ticket.NewUpdateTicketUseCase(repo).Execute(context.Background(), ticket.UpdateTicketInput{
 		WorkspaceID: tkWS, TicketID: tkTicket, ActorUserID: 1,

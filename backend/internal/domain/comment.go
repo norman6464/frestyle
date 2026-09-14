@@ -55,11 +55,46 @@ type Comment struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// commentInlineNode は comments.body の要素 1 つの最小限の形。type を必ず持ち、text ノードは
+// commentBodyNode は comments.body のノード 1 つの最小限の形。type を必ず持ち、text ノードは
 // 非空の text を持つ、という 2 点だけを見る（marks の中身までは検証しない）。
-type commentInlineNode struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+//
+// Content を持つのは、本文が**塊（段落・箇条書き）を含む形**も受けるため。以前は
+// 一列（inline ノードだけ）を前提にしていたが、発言に箇条書きを書けるようにしたので、
+// 塊の中の text も同じ規則で見る必要が出た。古い一列の本文はそのまま通る
+// （Content が空なら再帰しないだけ）。
+type commentBodyNode struct {
+	Type    string            `json:"type"`
+	Text    string            `json:"text"`
+	Content []json.RawMessage `json:"content"`
+}
+
+// commentBodyMaxDepth は入れ子を辿る深さの上限。箇条書きの中の段落までで 3 段あれば足り、
+// 深い入れ子を投げつけられて無限に辿らされるのを防ぐ。
+const commentBodyMaxDepth = 6
+
+// validateCommentNodes は 1 段分のノード列を見て、さらに Content があれば潜る。
+func validateCommentNodes(items []json.RawMessage, depth int) error {
+	if depth > commentBodyMaxDepth {
+		return ErrInvalidCommentBody
+	}
+	for _, item := range items {
+		var node commentBodyNode
+		if err := json.Unmarshal(item, &node); err != nil {
+			return ErrInvalidCommentBody
+		}
+		if node.Type == "" {
+			return ErrInvalidCommentBody
+		}
+		if node.Type == "text" && strings.TrimSpace(node.Text) == "" {
+			return ErrInvalidCommentBody
+		}
+		if len(node.Content) > 0 {
+			if err := validateCommentNodes(node.Content, depth+1); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // ValidateCommentBody は comments.body に保存してよい形かを検証する。
@@ -67,8 +102,10 @@ type commentInlineNode struct {
 //   - JSON 配列であること。空配列は「本文の無いコメント」として拒否する
 //   - 各要素は object で type を持つこと（null・{} は type=="" として弾く。json.Unmarshal は
 //     null を非ポインタ struct に当ててもゼロ値のままなので同じ判定で拾える）
-//   - type=="text" の要素は空白のみでない text を持つこと（空だと KbCommentItem が無視する
-//     ノードになり、保存後に見た目だけ空のコメントとして残ってしまう）
+//   - type=="text" の要素は空白のみでない text を持つこと（空だと画面が無視するノードに
+//     なり、保存後に見た目だけ空のコメントとして残ってしまう）
+//   - 塊（content を持つノード）は中まで同じ規則で見る。段落の中に空白だけの text を
+//     入れれば通る、という抜け道を作らないため
 //
 // marks の中身・type の許可リスト等はここでは見ない。blocks.inline の parseBlockNode も
 // 同水準までしか見ておらず、それに揃える。
@@ -80,19 +117,7 @@ func ValidateCommentBody(raw string) error {
 	if len(items) == 0 {
 		return ErrInvalidCommentBody
 	}
-	for _, item := range items {
-		var node commentInlineNode
-		if err := json.Unmarshal(item, &node); err != nil {
-			return ErrInvalidCommentBody
-		}
-		if node.Type == "" {
-			return ErrInvalidCommentBody
-		}
-		if node.Type == "text" && strings.TrimSpace(node.Text) == "" {
-			return ErrInvalidCommentBody
-		}
-	}
-	return nil
+	return validateCommentNodes(items, 1)
 }
 
 // ValidateCommentAnchor は錨（block_id / anchor_from / anchor_to / quote）の組み合わせが

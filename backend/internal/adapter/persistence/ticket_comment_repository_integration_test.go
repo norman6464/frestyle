@@ -23,17 +23,17 @@ func TestTicketStatusTransitionRepository_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	ws := createWorkspace(t, sqlDB, "tk-transitions")
-	space := createSpace(t, sqlDB, ws, "eng")
-	statusID, typeID := seedTicketMasterViaRepo(ctx, t, repo, ws, space)
-	doneStatus := &domain.TicketStatus{WorkspaceID: ws, SpaceID: space, Name: "完了", Category: domain.TicketStatusCategoryDone, Color: "#2f6b47", Position: "a1"}
+	project := createProject(t, sqlDB, ws, "eng")
+	statusID, typeID := seedTicketMasterViaRepo(ctx, t, repo, ws, project)
+	doneStatus := &domain.TicketStatus{WorkspaceID: ws, ProjectID: project, Name: "完了", Category: domain.TicketStatusCategoryDone, Color: "#2f6b47", Position: "a1"}
 	require.NoError(t, repo.InsertTicketStatus(ctx, doneStatus))
 	created, err := repo.CreateTicket(ctx, repository.TicketCreateInput{
-		WorkspaceID: ws, SpaceID: space, TypeID: typeID, StatusID: statusID,
-		Title: "x", Doc: []byte(`{"type":"doc","content":[]}`), Position: "a0", Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+		WorkspaceID: ws, ProjectID: project, TypeID: typeID, StatusID: statusID,
+		Title: "x", Doc: []byte(`{"type":"doc","content":[]}`), Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, repo.InsertTicketStatusTransition(ctx, ws, space, created.ID, statusID, doneStatus.ID, 1))
+	require.NoError(t, repo.InsertTicketStatusTransition(ctx, ws, project, created.ID, statusID, doneStatus.ID, 1))
 
 	var count int
 	require.NoError(t, sqlDB.QueryRow(
@@ -43,7 +43,7 @@ func TestTicketStatusTransitionRepository_Integration(t *testing.T) {
 	assert.Equal(t, 1, count)
 
 	// 同じ状態への遷移（from == to）は CHECK で拒否される。
-	err = repo.InsertTicketStatusTransition(ctx, ws, space, created.ID, statusID, statusID, 1)
+	err = repo.InsertTicketStatusTransition(ctx, ws, project, created.ID, statusID, statusID, 1)
 	requirePgError(t, err, sqlStateCheckViolation, "ck_ticket_status_transitions_distinct")
 }
 
@@ -59,11 +59,11 @@ func TestTicketCommentRepository_Integration(t *testing.T) {
 		t.Helper()
 		testsupport.TruncateAll(t, sqlDB, kbTables...)
 		ws = createWorkspace(t, sqlDB, "tk-comments")
-		space := createSpace(t, sqlDB, ws, "eng")
-		statusID, typeID := seedTicketMasterViaRepo(ctx, t, tickets, ws, space)
+		project := createProject(t, sqlDB, ws, "eng")
+		statusID, typeID := seedTicketMasterViaRepo(ctx, t, tickets, ws, project)
 		created, err := tickets.CreateTicket(ctx, repository.TicketCreateInput{
-			WorkspaceID: ws, SpaceID: space, TypeID: typeID, StatusID: statusID,
-			Title: "x", Doc: []byte(`{"type":"doc","content":[]}`), Position: "a0", Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+			WorkspaceID: ws, ProjectID: project, TypeID: typeID, StatusID: statusID,
+			Title: "x", Doc: []byte(`{"type":"doc","content":[]}`), Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
 		})
 		require.NoError(t, err)
 		return ws, created.ID

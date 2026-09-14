@@ -175,14 +175,14 @@ const insertTicketStatusTransition = `-- name: InsertTicketStatusTransition :exe
 
 
 INSERT INTO ticket_status_transitions
-  (id, workspace_id, space_id, ticket_id, from_status_id, to_status_id, changed_by_user_id, changed_at)
+  (id, workspace_id, project_id, ticket_id, from_status_id, to_status_id, changed_by_user_id, changed_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, now())
 `
 
 type InsertTicketStatusTransitionParams struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID
-	SpaceID         uuid.UUID
+	ProjectID       uuid.UUID
 	TicketID        uuid.UUID
 	FromStatusID    uuid.UUID
 	ToStatusID      uuid.UUID
@@ -198,7 +198,7 @@ func (q *Queries) InsertTicketStatusTransition(ctx context.Context, arg InsertTi
 	_, err := q.db.ExecContext(ctx, insertTicketStatusTransition,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.SpaceID,
+		arg.ProjectID,
 		arg.TicketID,
 		arg.FromStatusID,
 		arg.ToStatusID,

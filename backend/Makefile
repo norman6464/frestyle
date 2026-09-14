@@ -60,15 +60,49 @@ ensure-atlas-dev-image:
 	@echo ">>> building $(ATLAS_DEV_IMAGE) (postgres + pg_trgm, atlas --dev-url 専用)"
 	@docker build -q -t $(ATLAS_DEV_IMAGE) -f scripts/atlas-dev/Dockerfile scripts >/dev/null
 
+# TARGET は必ず public スキーマだけに絞る。
+#
+# schema.hcl が宣言しているのは public ただ 1 つ。search_path を付けずに Atlas を回すと
+# データベース全体（realm）が対象になり、**宣言に無いスキーマは「消す対象」**と判断される。
+# Supabase の DB には auth / storage / realtime / supabase_migrations が同居しているので、
+# 絞り忘れると認証もストレージも消す計画が立つ。
+#
+# 実際に踏んだ（2026-09-13）: 付け忘れて
+#   Error: analyzing plan: found 5 schemas when migration plan is scoped to one
+# で止まった。Atlas が止めてくれただけで、止まらない道具なら本番が飛んでいた。
+# **人間が毎回 DSN に付け足す前提にしない。** ここで必ず付ける。
+#
+# なお psql（libpq）は search_path を URI パラメータとして受け付けない（Atlas は自前で
+# 解釈する）。そちらは下の schema-ensure-pg-trgm が WITH SCHEMA public で明示する。
+SCOPE_TARGET = \
+  scoped="$(TARGET)"; \
+  case "$$scoped" in \
+    *search_path=public*) ;; \
+    *search_path=*) \
+      echo "エラー: TARGET の search_path が public 以外です。schema.hcl は public だけを宣言しています" >&2; \
+      exit 1 ;; \
+    *\?*) scoped="$$scoped&search_path=public" ;; \
+    *) scoped="$$scoped?search_path=public" ;; \
+  esac
+
 # schema-plan / schema-apply の対象 DB（TARGET）に pg_trgm が無いと、GIN 索引の適用が
 # 「operator class ... does not exist」で落ちる。dev db 側と同じ拡張を対象 DB にも用意する
 # （Atlas は extension を管理しない＝作成も削除もしない。ここで先に作るだけで足りる）。
 # ローカルに psql が無い環境でも動くよう、使い捨ての postgres コンテナから叩く。
+#
+# WITH SCHEMA public と、その直後の確認がどちらも要る。
+#   - 置き場所を明示しないと、接続の search_path 次第で public 以外（Supabase なら
+#     extensions）に入りうる。Atlas は public だけを見るので、入っていても見えない
+#   - IF NOT EXISTS は「既に別のスキーマにある」場合に黙って何もしない。作成が成功した
+#     ことと、gin_trgm_ops が public から見えることは別問題なので、後者を必ず確かめる
+#     （確かめないと、この段が緑なのに Atlas 側が operator class で落ちる）
 .PHONY: schema-ensure-pg-trgm
 schema-ensure-pg-trgm:
 	@if [ -z "$(TARGET)" ]; then echo "使い方: make schema-ensure-pg-trgm TARGET=postgres://..."; exit 1; fi
 	@docker run --rm public.ecr.aws/docker/library/postgres:17.6-alpine \
-	  psql "$(TARGET)" -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+	  psql "$(TARGET)" -v ON_ERROR_STOP=1 \
+	  -c "CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;" \
+	  -c "DO \$$\$$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_opclass o JOIN pg_namespace n ON n.oid = o.opcnamespace WHERE o.opcname = 'gin_trgm_ops' AND n.nspname = 'public') THEN RAISE EXCEPTION 'gin_trgm_ops が public にありません。pg_trgm が別のスキーマに入っています（ALTER EXTENSION pg_trgm SET SCHEMA public; で移せます）'; END IF; END \$$\$$;"
 
 .PHONY: ensure-atlas
 ensure-atlas:
@@ -101,14 +135,16 @@ schema-gen: ensure-atlas ensure-atlas-dev-image
 .PHONY: schema-plan
 schema-plan: ensure-atlas ensure-atlas-dev-image schema-ensure-pg-trgm
 	@if [ -z "$(TARGET)" ]; then echo "使い方: make schema-plan TARGET=postgres://..."; exit 1; fi
-	@"$(ATLAS)" schema apply --url "$(TARGET)" --to "file://$(SCHEMA_HCL)" --dev-url "$(ATLAS_DEV_URL)" --dry-run
+	@$(SCOPE_TARGET); \
+	 "$(ATLAS)" schema apply --url "$$scoped" --to "file://$(SCHEMA_HCL)" --dev-url "$(ATLAS_DEV_URL)" --dry-run
 
 # schema.hcl を TARGET の実 DB へ宣言的に適用する。Atlas が差分を表示したあと
 # ターミナルで承認を求める（--auto-approve は使い捨て DB 以外では付けない）。
 .PHONY: schema-apply
 schema-apply: ensure-atlas ensure-atlas-dev-image schema-ensure-pg-trgm
 	@if [ -z "$(TARGET)" ]; then echo "使い方: make schema-apply TARGET=postgres://..."; exit 1; fi
-	@"$(ATLAS)" schema apply --url "$(TARGET)" --to "file://$(SCHEMA_HCL)" --dev-url "$(ATLAS_DEV_URL)"
+	@$(SCOPE_TARGET); \
+	 "$(ATLAS)" schema apply --url "$$scoped" --to "file://$(SCHEMA_HCL)" --dev-url "$(ATLAS_DEV_URL)"
 
 # sqlc 生成: queries/*.sql + schema.gen.sql → 型安全な Go (internal/adapter/persistence/sqlcgen)。
 # 生成物はコミット対象。クエリを変更したら必ず `make sqlc` で再生成する

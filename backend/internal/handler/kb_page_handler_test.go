@@ -32,7 +32,7 @@ const (
 	kbDestPageID         = "0198a000-0000-7000-8000-000000000005"
 	kbUserID             = uint64(42)
 	kbLabelID            = "0198a000-0000-7000-8000-000000000006"
-	kbOtherSpaceLabelID  = "0198a000-0000-7000-8000-000000000007"
+	kbOtherWsLabelID     = "0198a000-0000-7000-8000-000000000007"
 )
 
 const kbValidDoc = `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"本文"}]}]}`
@@ -106,14 +106,14 @@ func newKbFixture(fallback domain.PagePermission, uid uint64) kbFixture {
 	suggestions := newKbFakePageSuggestions()
 	presigner := &kbFakeImagePresigner{}
 	tickets := newTicketFakeRepo()
-	// 段13: ラベル付け外しの endpoint（kbEndpoints）が使う実在のラベル。
+	// ラベル付け外しの endpoint（kbEndpoints）が使う実在のラベル。語彙はワークスペース単位。
 	tickets.labels[kbLabelID] = &domain.Label{
-		ID: kbLabelID, WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Name: "重要", Color: "#4a90d9",
+		ID: kbLabelID, WorkspaceID: kbWorkspaceID, Name: "重要", Color: "#4a90d9",
 	}
-	// ページと違うスペースのラベル（Test_ナレッジAPI_入力の検証 の 404 ケース用）。
-	tickets.labels[kbOtherSpaceLabelID] = &domain.Label{
-		ID: kbOtherSpaceLabelID, WorkspaceID: kbWorkspaceID, SpaceID: "0198a000-0000-7000-8000-0000000000fe",
-		Name: "他スペース", Color: "#888888",
+	// 別ワークスペースのラベル（Test_ナレッジAPI_入力の検証 の 404 ケース用）。
+	tickets.labels[kbOtherWsLabelID] = &domain.Label{
+		ID: kbOtherWsLabelID, WorkspaceID: "0198a000-0000-7000-8000-0000000000fe",
+		Name: "別ワークスペース", Color: "#888888",
 	}
 	registerKnowledgeBaseRoutesWith(
 		g, pages, perms, perms, provisioner, users, comments, versions, views, favorites, templates, suggestions, tickets, fakeTxManager{}, presigner, tickets,
@@ -1188,8 +1188,8 @@ func Test_ナレッジAPI_入力の検証(t *testing.T) {
 			errorCode: "invalid_visibility",
 		},
 		{
-			name: "ラベル付けで違うスペースのラベルは404", method: http.MethodPut,
-			path:   "/api/v2/kb/workspaces/" + kbWorkspaceSlug + "/pages/" + kbChildPageID + "/labels/" + kbOtherSpaceLabelID,
+			name: "ラベル付けで別ワークスペースのラベルは404", method: http.MethodPut,
+			path:   "/api/v2/kb/workspaces/" + kbWorkspaceSlug + "/pages/" + kbChildPageID + "/labels/" + kbOtherWsLabelID,
 			status: http.StatusNotFound,
 		},
 	}
@@ -2247,28 +2247,38 @@ func Test_ナレッジAPI_IDだけでの解決(t *testing.T) {
 	})
 }
 
-// Test_チケットからの逆参照_見えるスペースのチケットだけ返す は TicketBacklinks（段 5）の
-// スペース単位の可視判定を固定する。チケットには pages のような個票の権限が無いため、
-// 登場したスペースごとに CanView を確かめる分岐（1 件目で判定・2 件目以降はキャッシュ再利用・
-// 見えなければ行ごと落とす）を実際のデータで通す。
-func Test_チケットからの逆参照_見えるスペースのチケットだけ返す(t *testing.T) {
-	f := newKbFixture(kbCanView, kbUserID)
-	f.perms.setScopeRole(kbSpaceID, kbUserID, domain.GrantRoleViewer)
+// Test_チケットからの逆参照_ワークスペースが見えるときだけ返す は TicketBacklinks の可視判定を
+// 固定する。チケットには pages のような個票の権限が無く、実効権限はワークスペース単位なので、
+// ページが（個票の付与などで）見えていても、バックログ側の可否はワークスペースの役割で別に
+// 決まる。
+func Test_チケットからの逆参照_ワークスペースが見えるときだけ返す(t *testing.T) {
+	setup := func(t *testing.T) (kbFixture, string) {
+		t.Helper()
+		f := newKbFixture(kbCanView, kbUserID)
+		linked := f.tickets.addTicket(domain.Ticket{
+			ID: "tb-linked", WorkspaceID: kbWorkspaceID, ProjectID: "tb-project", Title: "紐づく",
+		})
+		f.tickets.pageLinks[linked.ID] = []string{kbRootPageID}
+		return f, linked.ID
+	}
+	const path = "/api/v2/kb/workspaces/" + kbWorkspaceSlug + "/pages/" + kbRootPageID + "/ticket-backlinks"
 
-	visible := f.tickets.addTicket(domain.Ticket{ID: "tb-visible", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "見える"})
+	t.Run("ワークスペースの役割が届いていれば返す", func(t *testing.T) {
+		f, linkedID := setup(t)
+		f.perms.setScopeRole(kbWorkspaceID, kbUserID, domain.GrantRoleViewer)
 
-	hiddenSpace := "tb-hidden-space"
-	f.pages.addSpace(kbWorkspaceID, hiddenSpace) // 実在はするが setScopeRole していない = CanView false
-	hidden1 := f.tickets.addTicket(domain.Ticket{ID: "tb-hidden-1", WorkspaceID: kbWorkspaceID, SpaceID: hiddenSpace, Title: "見えない1"})
-	hidden2 := f.tickets.addTicket(domain.Ticket{ID: "tb-hidden-2", WorkspaceID: kbWorkspaceID, SpaceID: hiddenSpace, Title: "見えない2"})
+		w := f.do(t, http.MethodGet, path, "")
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		got := decodeJSON[[]domain.Ticket](t, w)
+		require.Len(t, got, 1)
+		assert.Equal(t, linkedID, got[0].ID)
+	})
 
-	f.tickets.pageLinks[visible.ID] = []string{kbRootPageID}
-	f.tickets.pageLinks[hidden1.ID] = []string{kbRootPageID}
-	f.tickets.pageLinks[hidden2.ID] = []string{kbRootPageID}
-
-	w := f.do(t, http.MethodGet, "/api/v2/kb/workspaces/"+kbWorkspaceSlug+"/pages/"+kbRootPageID+"/ticket-backlinks", "")
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	got := decodeJSON[[]domain.Ticket](t, w)
-	require.Len(t, got, 1, "見えないスペースの2件は落ちる")
-	assert.Equal(t, visible.ID, got[0].ID)
+	t.Run("ワークスペースの役割が無ければ空", func(t *testing.T) {
+		f, _ := setup(t)
+		// ページ自体は fallback(kbCanView) で見えるが、ワークスペースの役割は付けない。
+		w := f.do(t, http.MethodGet, path, "")
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		assert.Empty(t, decodeJSON[[]domain.Ticket](t, w), "バックログ側は見せない")
+	})
 }

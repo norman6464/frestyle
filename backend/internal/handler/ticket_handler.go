@@ -30,34 +30,37 @@ func validTicketDateQuery(v string) bool {
 // アーカイブ・状態変更・親変更・担当・履歴）。状態/種別マスタは TicketStatusHandler /
 // TicketTypeHandler が別に持つ（1 handler 1 概念）。
 //
-// 実効権限はページを介さない「スペース単位」判定。対象がまだ存在しない操作（一覧・作成・
-// 有効化）は checkSpace（kb.CheckSpacePermissionUseCase をそのまま流用 — usecase/ticket は
+// 実効権限は「ワークスペース単位」判定。対象がまだ存在しない操作（一覧・作成・有効化）は
+// checkWorkspace（kb.CheckWorkspacePermissionUseCase をそのまま流用 — usecase/ticket は
 // usecase/kb を import しないが handler 層は両方使ってよい）、チケットを名指しする操作は
-// checkTicket（内部で FindTicket → スペース解決）で判定する。
+// checkTicket（内部で FindTicket → 実在確認）で判定する。
 type TicketHandler struct {
-	checkSpace    *kb.CheckSpacePermissionUseCase
-	checkTicket   *ticket.CheckTicketPermissionUseCase
-	resolveKey    *ticket.ResolveTicketKeyUseCase
-	resolveLoc    *ticket.ResolveTicketLocationUseCase
-	enable        *ticket.EnableTicketsForSpaceUseCase
-	create        *ticket.CreateTicketUseCase
-	get           *ticket.GetTicketUseCase
-	getAssignment *ticket.GetTicketAssignmentUseCase
-	list          *ticket.ListTicketsUseCase
-	getCounts     *ticket.GetTicketCountsUseCase
-	listChildren  *ticket.ListTicketChildrenUseCase
-	update        *ticket.UpdateTicketUseCase
-	move          *ticket.MoveTicketUseCase
-	archive       *ticket.ArchiveTicketUseCase
-	restore       *ticket.RestoreTicketUseCase
-	del           *ticket.DeleteTicketUseCase
-	findDeleted   *ticket.FindDeletedTicketUseCase
-	restoreDel    *ticket.RestoreDeletedTicketUseCase
-	changeStat    *ticket.ChangeTicketStatusUseCase
-	changeParent  *ticket.ChangeTicketParentUseCase
-	assign        *ticket.AssignTicketUseCase
-	unassign      *ticket.UnassignTicketUseCase
-	history       *ticket.ListTicketHistoryUseCase
+	checkWorkspace *kb.CheckWorkspacePermissionUseCase
+	checkTicket    *ticket.CheckTicketPermissionUseCase
+	resolveKey     *ticket.ResolveTicketKeyUseCase
+	resolveLoc     *ticket.ResolveTicketLocationUseCase
+	enable         *ticket.EnableTicketsForProjectUseCase
+	create         *ticket.CreateTicketUseCase
+	get            *ticket.GetTicketUseCase
+	getAssignment  *ticket.GetTicketAssignmentUseCase
+	list           *ticket.ListTicketsUseCase
+	listAssigned   *ticket.ListAssignedTicketsUseCase
+	watch          *ticket.WatchTicketUseCase
+	watchState     *ticket.GetTicketWatchStateUseCase
+	getCounts      *ticket.GetTicketCountsUseCase
+	listChildren   *ticket.ListTicketChildrenUseCase
+	update         *ticket.UpdateTicketUseCase
+	move           *ticket.MoveTicketUseCase
+	archive        *ticket.ArchiveTicketUseCase
+	restore        *ticket.RestoreTicketUseCase
+	del            *ticket.DeleteTicketUseCase
+	findDeleted    *ticket.FindDeletedTicketUseCase
+	restoreDel     *ticket.RestoreDeletedTicketUseCase
+	changeStat     *ticket.ChangeTicketStatusUseCase
+	changeParent   *ticket.ChangeTicketParentUseCase
+	assign         *ticket.AssignTicketUseCase
+	unassign       *ticket.UnassignTicketUseCase
+	history        *ticket.ListTicketHistoryUseCase
 	// labels / labelsByIDs: 変更系 usecase はラベルを触らないので、応答組み立て直前に補う。
 	labels                 *ticket.ListLabelsForTicketUseCase
 	labelsByIDs            *ticket.ListLabelsByTicketIDsUseCase
@@ -67,15 +70,18 @@ type TicketHandler struct {
 }
 
 func NewTicketHandler(
-	checkSpace *kb.CheckSpacePermissionUseCase,
+	checkWorkspace *kb.CheckWorkspacePermissionUseCase,
 	checkTicket *ticket.CheckTicketPermissionUseCase,
 	resolveKey *ticket.ResolveTicketKeyUseCase,
 	resolveLoc *ticket.ResolveTicketLocationUseCase,
-	enable *ticket.EnableTicketsForSpaceUseCase,
+	enable *ticket.EnableTicketsForProjectUseCase,
 	create *ticket.CreateTicketUseCase,
 	get *ticket.GetTicketUseCase,
 	getAssignment *ticket.GetTicketAssignmentUseCase,
 	list *ticket.ListTicketsUseCase,
+	listAssigned *ticket.ListAssignedTicketsUseCase,
+	watch *ticket.WatchTicketUseCase,
+	watchState *ticket.GetTicketWatchStateUseCase,
 	getCounts *ticket.GetTicketCountsUseCase,
 	listChildren *ticket.ListTicketChildrenUseCase,
 	update *ticket.UpdateTicketUseCase,
@@ -97,10 +103,10 @@ func NewTicketHandler(
 	userDisplay *user.LookupUserDisplayUseCase,
 ) *TicketHandler {
 	return &TicketHandler{
-		checkSpace: checkSpace, checkTicket: checkTicket, resolveKey: resolveKey,
+		checkWorkspace: checkWorkspace, checkTicket: checkTicket, resolveKey: resolveKey,
 		resolveLoc: resolveLoc,
 		enable:     enable, create: create, get: get, getAssignment: getAssignment,
-		list: list, getCounts: getCounts, listChildren: listChildren, update: update,
+		list: list, listAssigned: listAssigned, watch: watch, watchState: watchState, getCounts: getCounts, listChildren: listChildren, update: update,
 		move: move, archive: archive, restore: restore,
 		del: del, findDeleted: findDeleted, restoreDel: restoreDel, changeStat: changeStat,
 		changeParent: changeParent, assign: assign, unassign: unassign, history: history,
@@ -122,9 +128,11 @@ func limitTicketBody(c *gin.Context) {
 
 // respondTicketErr は usecase / repository / domain のセンチネルを HTTP ステータスへ対応づける。
 // 「存在しない」と「見る権限が無い」を同じ 404 に揃える方針は kb と同じ（respondKnowledgeBaseErr）。
-// チケットはページのような個票 grant を持たずスペース単位の判定なので、撃ち分けの余地自体が少ない。
+// チケットはページのような個票 grant を持たずワークスペース単位の判定なので、撃ち分けの余地自体が少ない。
 func respondTicketErr(c *gin.Context, err error) {
 	switch {
+	case errors.Is(err, ticket.ErrInvalidStoryPoints):
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_story_points"})
 	case errors.Is(err, repository.ErrTicketNotFound),
 		errors.Is(err, repository.ErrTicketNotDeleted),
 		errors.Is(err, repository.ErrTicketStatusNotFound),
@@ -132,7 +140,7 @@ func respondTicketErr(c *gin.Context, err error) {
 		errors.Is(err, repository.ErrTicketCommentNotFound),
 		errors.Is(err, repository.ErrLabelNotFound),
 		errors.Is(err, repository.ErrTicketAttachmentNotFound),
-		errors.Is(err, repository.ErrSpaceNotFound),
+		errors.Is(err, repository.ErrProjectNotFound),
 		errors.Is(err, repository.ErrWorkspaceNotFound),
 		errors.Is(err, repository.ErrPrincipalNotFound):
 		// ErrPrincipalNotFound は権限判定の直後に所属が外された場合に起こり得る
@@ -184,22 +192,27 @@ func respondTicketErr(c *gin.Context, err error) {
 	}
 }
 
-// requireTicketSpacePermission はスペース単位の実効権限を確かめる（対象がまだ存在しない操作専用）。
-func (h *TicketHandler) requireTicketSpacePermission(
-	c *gin.Context, scope kbRequestScope, spaceID string, capability domain.Capability,
+// requireTicketWorkspacePermission はワークスペース単位の実効権限を確かめる
+// （対象がまだ存在しない操作専用）。
+func (h *TicketHandler) requireTicketWorkspacePermission(
+	c *gin.Context, scope kbRequestScope, capability domain.Capability,
 ) bool {
-	return requireTicketSpacePermissionWith(c, h.checkSpace, scope, spaceID, capability)
+	return requireTicketWorkspacePermissionWith(c, h.checkWorkspace, scope, capability)
 }
 
-// requireTicketSpacePermissionWith は requireTicketSpacePermission の実体。TicketHandler /
-// TicketStatusHandler / TicketTypeHandler の 3 つが同じ判定を共有するための package 関数
-// （kb の requirePagePermissionWith と同じ理由 — 個別に書くと 1 つだけ直し忘れて食い違う）。
-func requireTicketSpacePermissionWith(
-	c *gin.Context, checkSpace *kb.CheckSpacePermissionUseCase,
-	scope kbRequestScope, spaceID string, capability domain.Capability,
+// requireTicketWorkspacePermissionWith は requireTicketWorkspacePermission の実体。TicketHandler /
+// TicketStatusHandler / TicketTypeHandler / TicketLabelHandler が同じ判定を共有するための
+// package 関数（kb の requirePagePermissionWith と同じ理由 — 個別に書くと 1 つだけ直し忘れて
+// 食い違う）。
+//
+// プロジェクト ID はここでは見ない。判定の軸がワークスペースなのに加え、別ワークスペースの
+// プロジェクト ID を渡されても、以降のクエリがすべて workspace_id で絞るので 0 件に落ちる。
+func requireTicketWorkspacePermissionWith(
+	c *gin.Context, checkWorkspace *kb.CheckWorkspacePermissionUseCase,
+	scope kbRequestScope, capability domain.Capability,
 ) bool {
-	perm, err := checkSpace.Execute(c.Request.Context(), kb.CheckSpacePermissionInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, UserID: scope.userID,
+	perm, err := checkWorkspace.Execute(c.Request.Context(), kb.CheckWorkspacePermissionInput{
+		WorkspaceID: scope.workspaceID, UserID: scope.userID,
 	})
 	if err != nil {
 		respondTicketErr(c, err)
@@ -209,7 +222,7 @@ func requireTicketSpacePermissionWith(
 }
 
 // requireTicketPermission はチケット 1 件の実効権限を確かめる（CheckTicketPermissionUseCase
-// 経由のスペース単位判定。ページ付与のような個票の例外は無い）。
+// 経由のワークスペース単位判定。ページ付与のような個票の例外は無い）。
 func (h *TicketHandler) requireTicketPermission(
 	c *gin.Context, scope kbRequestScope, ticketID string, capability domain.Capability,
 ) bool {
@@ -248,20 +261,20 @@ func requireScopeCapability(c *gin.Context, perm *domain.ScopePermission, capabi
 	return true
 }
 
-// ticketEnableRequest は有効化の入力。SourceSpaceID を指定すると、そのスペースの現役構成を
-// 複製する（設計 Ⅵ）。
+// ticketEnableRequest は有効化の入力。SourceProjectID を指定すると、そのプロジェクトの現役構成を
+// 複製する。
 type ticketEnableRequest struct {
-	SourceSpaceID string `json:"sourceSpaceId,omitempty"`
+	SourceProjectID string `json:"sourceProjectId,omitempty"`
 }
 
-// Enable はスペースにチケット機能を有効化する（スペースの編集権限が要る）。
+// Enable はプロジェクトにチケット機能を有効化する（ワークスペースの編集権限が要る）。
 func (h *TicketHandler) Enable(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireTicketSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireTicketWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	// ボディは省略可（既定の雛形で有効化）。ShouldBindJSON は空ボディを io.EOF にするので
@@ -273,16 +286,15 @@ func (h *TicketHandler) Enable(c *gin.Context) {
 			return
 		}
 	}
-	var sourceSpaceID *string
-	if req.SourceSpaceID != "" {
-		// 複製元は自分が閲覧できるスペースに限る（他テナントの構成を覗き見る経路にしない）。
-		if !h.requireTicketSpacePermission(c, scope, req.SourceSpaceID, domain.CapabilityView) {
-			return
-		}
-		sourceSpaceID = &req.SourceSpaceID
+	// 複製元の権限を別途確かめる必要は無い。判定はワークスペース単位で上の Edit 検査が
+	// 既に通っており、複製元を読む ListTicketStatuses / ListTicketTypes も workspace_id で
+	// 絞るので、他テナントの構成は 0 件にしかならない。
+	var sourceProjectID *string
+	if req.SourceProjectID != "" {
+		sourceProjectID = &req.SourceProjectID
 	}
-	out, err := h.enable.Execute(c.Request.Context(), ticket.EnableTicketsForSpaceInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, SourceSpaceID: sourceSpaceID,
+	out, err := h.enable.Execute(c.Request.Context(), ticket.EnableTicketsForProjectInput{
+		WorkspaceID: scope.workspaceID, ProjectID: projectID, SourceProjectID: sourceProjectID,
 	})
 	if err != nil {
 		respondTicketErr(c, err)
@@ -304,15 +316,15 @@ type ticketCreateRequest struct {
 	DueDate   *string         `json:"dueDate,omitempty" binding:"omitempty,datetime=2006-01-02"`
 }
 
-// Create はスペース直下（または親チケットの下）に新しいチケットを作る（スペースの編集権限が
-// 要る。親を指定してもチケットは個票権限を持たないので判定はスペース単位のまま）。
+// Create はプロジェクト直下（または親チケットの下）に新しいチケットを作る（ワークスペースの編集権限が
+// 要る。親を指定してもチケットは個票権限を持たないので判定はプロジェクト単位のまま）。
 func (h *TicketHandler) Create(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireTicketSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	projectID := c.Param("projectId")
+	if !h.requireTicketWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	limitTicketBody(c)
@@ -334,7 +346,7 @@ func (h *TicketHandler) Create(c *gin.Context) {
 		parentID = &req.ParentID
 	}
 	t, err := h.create.Execute(c.Request.Context(), ticket.CreateTicketInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID,
+		WorkspaceID: scope.workspaceID, ProjectID: projectID,
 		TypeID: req.TypeID, StatusID: req.StatusID, ParentID: parentID,
 		Title: req.Title, Doc: string(doc), Priority: domain.TicketPriority(req.Priority),
 		StartDate: req.StartDate, DueDate: req.DueDate, CreatedByUserID: scope.userID,
@@ -468,7 +480,7 @@ type ticketResponse struct {
 	AssigneePrincipalID *string        `json:"assigneePrincipalId,omitempty"`
 	Labels              []domain.Label `json:"labels"`
 	// Ancestors / Permission / CreatedBy は詳細系（Get / ResolveByKey / ResolveByID）でだけ
-	// 埋める。一覧に含めないのは行ごとの N+1 解決を避けるため（Permission はスペース単位で
+	// 埋める。一覧に含めないのは行ごとの N+1 解決を避けるため（Permission はプロジェクト単位で
 	// 全行同じ値になり通信が太るだけ、という理由も重なる）。
 	Ancestors []domain.Ticket `json:"ancestors,omitempty"`
 	// Permission: CanComment / CanManage は CanEdit と別軸なので、画面の出し分けに要る。
@@ -526,14 +538,14 @@ func (h *TicketHandler) respondTicket(c *gin.Context, scope kbRequestScope, t *d
 	c.JSON(status, res)
 }
 
-// List はスペース内のチケット一覧を返す（スペースの閲覧権限が要る）。
+// List はプロジェクト内のチケット一覧を返す（ワークスペースの閲覧権限が要る）。
 func (h *TicketHandler) List(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireTicketSpacePermission(c, scope, spaceID, domain.CapabilityView) {
+	projectID := c.Param("projectId")
+	if !h.requireTicketWorkspacePermission(c, scope, domain.CapabilityView) {
 		return
 	}
 	var statusID, typeID, assigneeID, labelID, dueBefore, startAfter, q *string
@@ -582,7 +594,7 @@ func (h *TicketHandler) List(c *gin.Context) {
 		return
 	}
 	tickets, err := h.list.Execute(c.Request.Context(), ticket.ListTicketsInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID,
+		WorkspaceID: scope.workspaceID, ProjectID: projectID,
 		IncludeArchived: c.Query("archived") == "true",
 		StatusID:        statusID, TypeID: typeID, AssigneePrincipalID: assigneeID,
 		LabelID: labelID, DueBefore: dueBefore, StartAfter: startAfter,
@@ -599,7 +611,7 @@ func (h *TicketHandler) List(c *gin.Context) {
 	}
 	labelsByTicket, err := h.labelsByIDs.Execute(c.Request.Context(), scope.workspaceID, ticketIDs)
 	if err != nil {
-		slog.WarnContext(c.Request.Context(), "ticket: batch labels lookup failed", "err", err, "spaceId", spaceID)
+		slog.WarnContext(c.Request.Context(), "ticket: batch labels lookup failed", "err", err, "projectId", projectID)
 		labelsByTicket = nil
 	}
 	out := make([]ticketResponse, 0, len(tickets))
@@ -633,12 +645,12 @@ func (h *TicketHandler) Counts(c *gin.Context) {
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireTicketSpacePermission(c, scope, spaceID, domain.CapabilityView) {
+	projectID := c.Param("projectId")
+	if !h.requireTicketWorkspacePermission(c, scope, domain.CapabilityView) {
 		return
 	}
 	counts, err := h.getCounts.Execute(c.Request.Context(), ticket.GetTicketCountsInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, UserID: scope.userID,
+		WorkspaceID: scope.workspaceID, ProjectID: projectID, UserID: scope.userID,
 	})
 	if err != nil {
 		respondTicketErr(c, err)
@@ -691,12 +703,14 @@ func (h *TicketHandler) ListChildren(c *gin.Context) {
 // ticketUpdateRequest はチケット更新の入力（PUT 相当。呼び出し側は現在の望ましい値を
 // 毎回すべて渡す — UpdateTicketUseCase の doc 参照）。
 type ticketUpdateRequest struct {
-	Title     string          `json:"title" binding:"required,max=200"`
-	Doc       json.RawMessage `json:"doc" binding:"required"`
-	TypeID    string          `json:"typeId" binding:"required"`
-	Priority  int             `json:"priority" binding:"required,oneof=1 2 3"`
-	StartDate *string         `json:"startDate,omitempty" binding:"omitempty,datetime=2006-01-02"`
-	DueDate   *string         `json:"dueDate,omitempty" binding:"omitempty,datetime=2006-01-02"`
+	Title    string          `json:"title" binding:"required,max=200"`
+	Doc      json.RawMessage `json:"doc" binding:"required"`
+	TypeID   string          `json:"typeId" binding:"required"`
+	Priority int             `json:"priority" binding:"required,oneof=1 2 3"`
+	// StoryPoints は省略・null のどちらでも「未見積りにする」。0 は「0 ポイント」で別物。
+	StoryPoints *int    `json:"storyPoints,omitempty" binding:"omitempty,min=0,max=1000"`
+	StartDate   *string `json:"startDate,omitempty" binding:"omitempty,datetime=2006-01-02"`
+	DueDate     *string `json:"dueDate,omitempty" binding:"omitempty,datetime=2006-01-02"`
 }
 
 // Update はチケットの title / doc / type / priority / 日付を書き換える（編集権限が要る）。
@@ -718,7 +732,7 @@ func (h *TicketHandler) Update(c *gin.Context) {
 	t, err := h.update.Execute(c.Request.Context(), ticket.UpdateTicketInput{
 		WorkspaceID: scope.workspaceID, TicketID: ticketID,
 		Title: req.Title, Doc: string(req.Doc), TypeID: req.TypeID,
-		Priority:  domain.TicketPriority(req.Priority),
+		Priority: domain.TicketPriority(req.Priority), StoryPoints: req.StoryPoints,
 		StartDate: req.StartDate, DueDate: req.DueDate, ActorUserID: scope.userID,
 	})
 	if err != nil {
@@ -830,19 +844,19 @@ func (h *TicketHandler) Delete(c *gin.Context) {
 
 // RestoreDeleted は削除済みチケットを現役へ戻す（編集権限が要る）。対象は削除済みなので
 // 通常の requireTicketPermission（FindTicket 経由、deleted_at IS NULL 限定）は使えない。
-// Create/Enable と同じ「対象がまだ見えない操作」として、スペース ID だけ解決してから判定する。
+// Create/Enable と同じ「対象がまだ見えない操作」として、先にワークスペースの権限を判定してから
+// 実在を確かめる（順序が逆だと、権限の無い相手に削除済みチケットの実在が漏れる）。
 func (h *TicketHandler) RestoreDeleted(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
 		return
 	}
-	ticketID := c.Param("ticketId")
-	found, err := h.findDeleted.Execute(c.Request.Context(), scope.workspaceID, ticketID)
-	if err != nil {
-		respondTicketErr(c, err)
+	if !h.requireTicketWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
-	if !h.requireTicketSpacePermission(c, scope, found.SpaceID, domain.CapabilityEdit) {
+	ticketID := c.Param("ticketId")
+	if _, err := h.findDeleted.Execute(c.Request.Context(), scope.workspaceID, ticketID); err != nil {
+		respondTicketErr(c, err)
 		return
 	}
 	t, err := h.restoreDel.Execute(c.Request.Context(), ticket.RestoreDeletedTicketInput{
@@ -1048,4 +1062,100 @@ func (h *TicketHandler) PageBacklinks(c *gin.Context) {
 		pages = []domain.Page{}
 	}
 	c.JSON(http.StatusOK, pages)
+}
+
+// assignedTicketResponse は「自分の担当」1 行の応答。domain.AssignedTicket をそのまま返すと
+// 本文（doc）まで載って一覧が重くなるため、行を読むのに要る値だけへ絞る。
+type assignedTicketResponse struct {
+	ID             string  `json:"id"`
+	ProjectID      string  `json:"projectId"`
+	ProjectKey     string  `json:"projectKey"`
+	ProjectName    string  `json:"projectName"`
+	Number         int64   `json:"number"`
+	Title          string  `json:"title"`
+	TypeName       string  `json:"typeName"`
+	StatusName     string  `json:"statusName"`
+	StatusCategory string  `json:"statusCategory"`
+	StatusColor    string  `json:"statusColor"`
+	Priority       int     `json:"priority"`
+	DueDate        *string `json:"dueDate,omitempty"`
+}
+
+// ListAssigned は呼び出した本人に割り当たっているチケットを、ワークスペース全体から返す。
+// プロジェクトを指定しないのが List との違い（usecase のコメント参照）。
+func (h *TicketHandler) ListAssigned(c *gin.Context) {
+	scope, ok := kbScope(c)
+	if !ok {
+		return
+	}
+	if !h.requireTicketWorkspacePermission(c, scope, domain.CapabilityView) {
+		return
+	}
+	tickets, err := h.listAssigned.Execute(c.Request.Context(), ticket.ListAssignedTicketsInput{
+		WorkspaceID: scope.workspaceID, UserID: scope.userID,
+	})
+	if err != nil {
+		respondTicketErr(c, err)
+		return
+	}
+	res := make([]assignedTicketResponse, 0, len(tickets))
+	for _, t := range tickets {
+		res = append(res, assignedTicketResponse{
+			ID: t.ID, ProjectID: t.ProjectID, ProjectKey: t.ProjectKey, ProjectName: t.ProjectName,
+			Number: t.Number, Title: t.Title, TypeName: t.TypeName,
+			StatusName: t.StatusName, StatusCategory: string(t.StatusCategory), StatusColor: t.StatusColor,
+			Priority: int(t.Priority), DueDate: t.DueDate,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"tickets": res})
+}
+
+type ticketWatchRequest struct {
+	// Watching が true なら監視する、false なら外す。押すたびに切り替えるのではなく
+	// 「どちらにしたいか」を送らせる（二重送信で意図せず外れるのを防ぐ）。
+	Watching bool `json:"watching"`
+}
+
+// GetWatchState は自分が監視しているかと、監視している人数を返す。
+func (h *TicketHandler) GetWatchState(c *gin.Context) {
+	scope, ok := kbScope(c)
+	if !ok {
+		return
+	}
+	ticketID := c.Param("ticketId")
+	if !h.requireTicketPermission(c, scope, ticketID, domain.CapabilityView) {
+		return
+	}
+	state, err := h.watchState.Execute(c.Request.Context(), scope.workspaceID, ticketID, scope.userID)
+	if err != nil {
+		respondTicketErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, state)
+}
+
+// Watch は自分の監視を付け外しする。他人の監視は動かせない（通知が飛ぶため）。
+// 見る権限があれば監視できる —— 編集できない人でも進み具合は追いたい。
+func (h *TicketHandler) Watch(c *gin.Context) {
+	scope, ok := kbScope(c)
+	if !ok {
+		return
+	}
+	ticketID := c.Param("ticketId")
+	if !h.requireTicketPermission(c, scope, ticketID, domain.CapabilityView) {
+		return
+	}
+	var req ticketWatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_request"})
+		return
+	}
+	state, err := h.watch.Execute(c.Request.Context(), ticket.WatchTicketInput{
+		WorkspaceID: scope.workspaceID, TicketID: ticketID, UserID: scope.userID, Watching: req.Watching,
+	})
+	if err != nil {
+		respondTicketErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, state)
 }

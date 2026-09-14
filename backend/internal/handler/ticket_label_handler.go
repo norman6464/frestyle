@@ -9,23 +9,23 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/usecase/ticket"
 )
 
-// TicketLabelHandler はラベルの管理（スペース単位）とチケットへの付け外し（チケット単位）を
-// 受ける（段 4）。管理はスペース単位の判定（TicketStatusHandler と同じ形）、付け外しは
+// TicketLabelHandler はラベルの管理（ワークスペース単位）とチケットへの付け外し（チケット
+// 単位）を受ける。管理はワークスペース単位の判定（TicketStatusHandler と同じ形）、付け外しは
 // チケット単位の判定（TicketHandler.requireTicketPermission と同じ形）を両方使うので、
-// checkSpace / checkTicket を両方持つ（TicketHandler 自身と同じ構え）。
+// checkWorkspace / checkTicket を両方持つ（TicketHandler 自身と同じ構え）。
 type TicketLabelHandler struct {
-	checkSpace  *kb.CheckSpacePermissionUseCase
-	checkTicket *ticket.CheckTicketPermissionUseCase
-	list        *ticket.ListLabelsUseCase
-	create      *ticket.CreateLabelUseCase
-	update      *ticket.UpdateLabelUseCase
-	del         *ticket.DeleteLabelUseCase
-	addToTicket *ticket.AddTicketLabelUseCase
-	removeFrom  *ticket.RemoveTicketLabelUseCase
+	checkWorkspace *kb.CheckWorkspacePermissionUseCase
+	checkTicket    *ticket.CheckTicketPermissionUseCase
+	list           *ticket.ListLabelsUseCase
+	create         *ticket.CreateLabelUseCase
+	update         *ticket.UpdateLabelUseCase
+	del            *ticket.DeleteLabelUseCase
+	addToTicket    *ticket.AddTicketLabelUseCase
+	removeFrom     *ticket.RemoveTicketLabelUseCase
 }
 
 func NewTicketLabelHandler(
-	checkSpace *kb.CheckSpacePermissionUseCase,
+	checkWorkspace *kb.CheckWorkspacePermissionUseCase,
 	checkTicket *ticket.CheckTicketPermissionUseCase,
 	list *ticket.ListLabelsUseCase,
 	create *ticket.CreateLabelUseCase,
@@ -35,15 +35,15 @@ func NewTicketLabelHandler(
 	removeFrom *ticket.RemoveTicketLabelUseCase,
 ) *TicketLabelHandler {
 	return &TicketLabelHandler{
-		checkSpace: checkSpace, checkTicket: checkTicket, list: list, create: create, update: update,
+		checkWorkspace: checkWorkspace, checkTicket: checkTicket, list: list, create: create, update: update,
 		del: del, addToTicket: addToTicket, removeFrom: removeFrom,
 	}
 }
 
-func (h *TicketLabelHandler) requireSpacePermission(
-	c *gin.Context, scope kbRequestScope, spaceID string, capability domain.Capability,
+func (h *TicketLabelHandler) requireWorkspacePermission(
+	c *gin.Context, scope kbRequestScope, capability domain.Capability,
 ) bool {
-	return requireTicketSpacePermissionWith(c, h.checkSpace, scope, spaceID, capability)
+	return requireTicketWorkspacePermissionWith(c, h.checkWorkspace, scope, capability)
 }
 
 func (h *TicketLabelHandler) requireTicketPermission(
@@ -64,17 +64,16 @@ type ticketLabelListResponse struct {
 	Labels []domain.Label `json:"labels"`
 }
 
-// List はスペースのラベル一覧を返す（閲覧権限が要る）。
+// List はワークスペースのラベル一覧を返す（閲覧権限が要る）。
 func (h *TicketLabelHandler) List(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityView) {
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityView) {
 		return
 	}
-	labels, err := h.list.Execute(c.Request.Context(), scope.workspaceID, spaceID)
+	labels, err := h.list.Execute(c.Request.Context(), scope.workspaceID)
 	if err != nil {
 		respondTicketErr(c, err)
 		return
@@ -91,14 +90,13 @@ type ticketLabelRequest struct {
 	Color string `json:"color" binding:"required"`
 }
 
-// Create はスペースにラベルを 1 つ追加する（編集権限が要る）。
+// Create はワークスペースにラベルを 1 つ追加する（編集権限が要る）。
 func (h *TicketLabelHandler) Create(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	var req ticketLabelRequest
@@ -107,7 +105,7 @@ func (h *TicketLabelHandler) Create(c *gin.Context) {
 		return
 	}
 	label, err := h.create.Execute(c.Request.Context(), ticket.CreateLabelInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID, Name: req.Name, Color: req.Color,
+		WorkspaceID: scope.workspaceID, Name: req.Name, Color: req.Color,
 	})
 	if err != nil {
 		respondTicketErr(c, err)
@@ -122,8 +120,7 @@ func (h *TicketLabelHandler) Update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
 	var req ticketLabelRequest
@@ -132,8 +129,8 @@ func (h *TicketLabelHandler) Update(c *gin.Context) {
 		return
 	}
 	label, err := h.update.Execute(c.Request.Context(), ticket.UpdateLabelInput{
-		WorkspaceID: scope.workspaceID, SpaceID: spaceID,
-		LabelID: c.Param("labelId"), Name: req.Name, Color: req.Color,
+		WorkspaceID: scope.workspaceID,
+		LabelID:     c.Param("labelId"), Name: req.Name, Color: req.Color,
 	})
 	if err != nil {
 		respondTicketErr(c, err)
@@ -148,11 +145,10 @@ func (h *TicketLabelHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	spaceID := c.Param("spaceId")
-	if !h.requireSpacePermission(c, scope, spaceID, domain.CapabilityEdit) {
+	if !h.requireWorkspacePermission(c, scope, domain.CapabilityEdit) {
 		return
 	}
-	if err := h.del.Execute(c.Request.Context(), scope.workspaceID, spaceID, c.Param("labelId")); err != nil {
+	if err := h.del.Execute(c.Request.Context(), scope.workspaceID, c.Param("labelId")); err != nil {
 		respondTicketErr(c, err)
 		return
 	}

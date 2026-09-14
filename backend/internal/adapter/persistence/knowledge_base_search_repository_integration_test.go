@@ -249,13 +249,16 @@ func TestKnowledgeBasePageTicketLinks_Integration(t *testing.T) {
 		return ws, space
 	}
 
-	mustCreateTicket := func(t *testing.T, ws, space string) *domain.Ticket {
+	// チケットはプロジェクトに属する（スペースとは別の入れ物）。ページ側の space とは
+	// 独立に作る — ここが独立していることこそがこの表の設計。
+	mustCreateTicket := func(t *testing.T, ws string) *domain.Ticket {
 		t.Helper()
-		statusID, typeID := seedTicketMasterViaRepo(ctx, t, tickets, ws, space)
+		project := createProject(t, sqlDB, ws, "tk-links")
+		statusID, typeID := seedTicketMasterViaRepo(ctx, t, tickets, ws, project)
 		created, err := tickets.CreateTicket(ctx, repository.TicketCreateInput{
-			WorkspaceID: ws, SpaceID: space, TypeID: typeID, StatusID: statusID,
+			WorkspaceID: ws, ProjectID: project, TypeID: typeID, StatusID: statusID,
 			Title: "埋め込み先チケット", Doc: []byte(`{"type":"doc","content":[]}`),
-			Position: "a0", Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+			Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
 		})
 		require.NoError(t, err)
 		return created
@@ -274,7 +277,7 @@ func TestKnowledgeBasePageTicketLinks_Integration(t *testing.T) {
 
 	t.Run("ticketRefを含むページを保存するとpage_ticket_linksが張られる", func(t *testing.T) {
 		ws, space := setup(t)
-		target := mustCreateTicket(t, ws, space)
+		target := mustCreateTicket(t, ws)
 		page := mustCreatePage(ctx, t, uc, ws, space, nil, "埋め込み元ページ")
 
 		_, err := uc.replace.Execute(ctx, kb.ReplacePageBlocksInput{
@@ -295,7 +298,7 @@ func TestKnowledgeBasePageTicketLinks_Integration(t *testing.T) {
 
 	t.Run("ブロック削除でそのブロックのpage_ticket_linksが消える_CASCADE経由", func(t *testing.T) {
 		ws, space := setup(t)
-		target := mustCreateTicket(t, ws, space)
+		target := mustCreateTicket(t, ws)
 		page := mustCreatePage(ctx, t, uc, ws, space, nil, "対象ページ")
 		_, err := uc.replace.Execute(ctx, kb.ReplacePageBlocksInput{
 			WorkspaceID: ws, PageID: page.ID, Doc: ticketRefDoc("本文", target.ID), EditorUserID: 1,
@@ -313,7 +316,7 @@ func TestKnowledgeBasePageTicketLinks_Integration(t *testing.T) {
 
 	t.Run("埋め込み先チケット削除でpage_ticket_linksが消える_CASCADE経由", func(t *testing.T) {
 		ws, space := setup(t)
-		target := mustCreateTicket(t, ws, space)
+		target := mustCreateTicket(t, ws)
 		page := mustCreatePage(ctx, t, uc, ws, space, nil, "対象ページ2")
 		_, err := uc.replace.Execute(ctx, kb.ReplacePageBlocksInput{
 			WorkspaceID: ws, PageID: page.ID, Doc: ticketRefDoc("本文", target.ID), EditorUserID: 1,
@@ -331,7 +334,7 @@ func TestKnowledgeBasePageTicketLinks_Integration(t *testing.T) {
 
 	t.Run("再構築を2回流しても同じ結果になる_冪等性", func(t *testing.T) {
 		ws, space := setup(t)
-		target := mustCreateTicket(t, ws, space)
+		target := mustCreateTicket(t, ws)
 		page := mustCreatePage(ctx, t, uc, ws, space, nil, "対象ページ3")
 		_, err := uc.replace.Execute(ctx, kb.ReplacePageBlocksInput{
 			WorkspaceID: ws, PageID: page.ID, Doc: ticketRefDoc("本文", target.ID), EditorUserID: 1,
@@ -474,11 +477,12 @@ func TestKnowledgeBasePagesReferencingTicket_Integration(t *testing.T) {
 	f := setupKBPermission(t, sqlDB)
 	tickets := persistence.NewTicketRepository(sqlDB)
 
-	statusID, typeID := seedTicketMasterViaRepo(ctx, t, tickets, f.ws, f.spaceA)
+	project := createProject(t, sqlDB, f.ws, "tk-backlink")
+	statusID, typeID := seedTicketMasterViaRepo(ctx, t, tickets, f.ws, project)
 	target, err := tickets.CreateTicket(ctx, repository.TicketCreateInput{
-		WorkspaceID: f.ws, SpaceID: f.spaceA, TypeID: typeID, StatusID: statusID,
+		WorkspaceID: f.ws, ProjectID: project, TypeID: typeID, StatusID: statusID,
 		Title: "参照される側", Doc: []byte(`{"type":"doc","content":[]}`),
-		Position: "a0", Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+		Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
 	})
 	require.NoError(t, err)
 

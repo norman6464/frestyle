@@ -10,6 +10,7 @@ import (
 // 表示キー（例 FRESTYLE-12）は保存しない派生値（FormatTicketKey が SpaceKey と Number から
 // 組み立てる）。SpaceKey はこの構造体には無く、呼び出し側が spaces.key と組み合わせて
 // 表示キーへ変換する（Page が SpaceID しか持たず Space 情報を別に引くのと同じ分担）。
+// 所属はプロジェクト（バックログの入れ物）。ナレッジのスペースとは無関係。
 //
 // 本文（Doc）は ProseMirror の doc をそのまま jsonb で持つ（blocks には分解しない。設計 Ⅳ-E）。
 // PlainText は pageRef / ticketRef の属性を含まない検索用の写しで、本文保存のたびに usecase が
@@ -17,13 +18,13 @@ import (
 type Ticket struct {
 	ID          string `json:"id"`
 	WorkspaceID string `json:"workspaceId"`
-	SpaceID     string `json:"spaceId"`
-	// Number はスペース内で一意な連番。表示キーの一部。直接 INSERT せず、必ず採番 CTE
+	ProjectID   string `json:"projectId"`
+	// Number はプロジェクト内で一意な連番。表示キーの一部。直接 INSERT せず、必ず採番 CTE
 	// （CreateTicket クエリ）を経由する。
 	Number   int64  `json:"number"`
 	TypeID   string `json:"typeId"`
 	StatusID string `json:"statusId"`
-	// ParentID は親チケット。NULL はトップレベル。同じスペースのチケットに限る（DB の複合 FK）。
+	// ParentID は親チケット。NULL はトップレベル。同じプロジェクトのチケットに限る（DB の複合 FK）。
 	// 階層規則（設計 Ⅳ-D）は ValidateTicketParentChild が持つ。
 	ParentID *string         `json:"parentId,omitempty"`
 	Title    string          `json:"title"`
@@ -32,11 +33,16 @@ type Ticket struct {
 	PlainText string `json:"-"`
 	// Priority は 1=高 / 2=中 / 3=低。既定は TicketPriorityDefault。
 	Priority TicketPriority `json:"priority"`
+	// StoryPoints は見積りの大きさ。未見積りは nil（0 とは別物 —— 0 は「やることが無い」、
+	// nil は「まだ測っていない」）。刻み方は現場ごとなので値そのものは縛らない（上限だけ）。
+	StoryPoints *int `json:"storyPoints,omitempty"`
 	// StartDate / DueDate は 'YYYY-MM-DD' の文字列（Ⅳ-K: time.Time だと本番の simple protocol
 	// で 1 日ずれるため）。
 	StartDate *string `json:"startDate,omitempty"`
 	DueDate   *string `json:"dueDate,omitempty"`
-	// Position は同一スペース内・現役チケットの並び順（fracindex）。
+	// Position は同一プロジェクト内の並び順（fracindex）。値は ticket_backlog_ranks 由来で、
+	// 並び順を引かない経路（祖先・参照元の一覧、書き換えの応答）では空文字になる
+	// —— 空を「先頭」と読んで並べ替えに使わないこと（並べ替えは DB の ORDER BY が正）。
 	Position string `json:"position"`
 	// ClosedAt / Resolution は対（片方だけが NULL にはならない。ck_tickets_closed_pair）。
 	// 状態変更 usecase だけが書く（ResolveTicketClosedFields で category から導出する）。
@@ -57,7 +63,7 @@ type Ticket struct {
 type TicketStatus struct {
 	ID          string               `json:"id"`
 	WorkspaceID string               `json:"workspaceId"`
-	SpaceID     string               `json:"spaceId"`
+	ProjectID   string               `json:"projectId"`
 	Name        string               `json:"name"`
 	Category    TicketStatusCategory `json:"category"`
 	Color       string               `json:"color"`
@@ -72,7 +78,7 @@ type TicketStatus struct {
 type TicketType struct {
 	ID             string `json:"id"`
 	WorkspaceID    string `json:"workspaceId"`
-	SpaceID        string `json:"spaceId"`
+	ProjectID      string `json:"projectId"`
 	Name           string `json:"name"`
 	Color          string `json:"color"`
 	HierarchyLevel int    `json:"hierarchyLevel"`
@@ -137,4 +143,23 @@ type TicketTicketLink struct {
 	WorkspaceID    string `json:"workspaceId"`
 	SourceTicketID string `json:"sourceTicketId"`
 	TargetTicketID string `json:"targetTicketId"`
+}
+
+// AssignedTicket は「自分の担当」の画面に出す 1 行。チケット本体に、**どのプロジェクトの
+// 何の仕事か**を読むのに要る隣の値を添えたもの。
+//
+// Ticket をそのまま返さないのは、この画面がプロジェクトを横断するため。プロジェクト名も
+// 状態名も行ごとに違い、画面側で引き直すと行数分の往復になる。逆に言えば、ここに足してよい
+// のは「その行を読むのに要る値」だけ（編集に要る値はチケットを開いてから取る）。
+type AssignedTicket struct {
+	Ticket
+	// ProjectKey は表示キーの接頭辞（FRESTYLE-12 の FRESTYLE）。
+	ProjectKey  string `json:"projectKey"`
+	ProjectName string `json:"projectName"`
+	// StatusName / StatusCategory / StatusColor は状態の見た目。束ねる見出しは Category で決め、
+	// 名前と色はそのまま出す（状態はスペースごとに自由に足せるので、名前では束ねない）。
+	StatusName     string               `json:"statusName"`
+	StatusCategory TicketStatusCategory `json:"statusCategory"`
+	StatusColor    string               `json:"statusColor"`
+	TypeName       string               `json:"typeName"`
 }

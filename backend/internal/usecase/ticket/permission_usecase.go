@@ -11,10 +11,14 @@ import (
 )
 
 // CheckTicketPermissionUseCase は「このユーザーはこのチケットで何ができるか」に答える。
-// チケットの実効権限はスペース単位の判定（設計 Ⅳ-H）で、チケット固有の権限表は持たない —
-// 既存の SpacePermissionFactsForUser をそのまま使い、ここは「チケット→スペース」の解決
-// （FindTicket）だけを担う。チケットが実在しない・別ワークスペースなら
-// repository.ErrTicketNotFound をそのまま伝え、権限が無いことと存在しないことを区別しない。
+//
+// チケットの実効権限は **ワークスペース単位**。バックログはナレッジのスペースから独立した
+// 製品で、スペースの付与（space_grants）を引くと「ナレッジが見えない人はバックログも見えない」
+// という要らない結び付きが権限側から復活する。プロジェクト固有の権限表は今は持たない。
+//
+// FindTicket は権限のためではなく実在の確認のために呼ぶ。チケットが実在しない・別ワークス
+// ペースなら repository.ErrTicketNotFound をそのまま伝え、権限が無いことと存在しないことを
+// 区別しない。
 type CheckTicketPermissionUseCase struct {
 	tickets repository.TicketRepository
 	perms   repository.KnowledgeBasePermissionRepository
@@ -44,11 +48,10 @@ func (u *CheckTicketPermissionUseCase) Execute(
 	if in.UserID == 0 {
 		return nil, errors.New("userID is required")
 	}
-	t, err := u.tickets.FindTicket(ctx, in.WorkspaceID, in.TicketID)
-	if err != nil {
+	if _, err := u.tickets.FindTicket(ctx, in.WorkspaceID, in.TicketID); err != nil {
 		return nil, err
 	}
-	facts, err := u.perms.SpacePermissionFactsForUser(ctx, in.WorkspaceID, t.SpaceID, in.UserID)
+	facts, err := u.perms.WorkspacePermissionFactsForUser(ctx, in.WorkspaceID, in.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -75,11 +78,11 @@ func (u *ResolveTicketKeyUseCase) Execute(ctx context.Context, in ResolveTicketK
 	if in.WorkspaceID == "" {
 		return "", errors.New("workspaceID is required")
 	}
-	spaceKey, number, ok := domain.ParseTicketKey(in.Key)
+	projectKey, number, ok := domain.ParseTicketKey(in.Key)
 	if !ok {
 		return "", repository.ErrTicketNotFound
 	}
-	return u.tickets.ResolveTicketIDByKey(ctx, in.WorkspaceID, spaceKey, number)
+	return u.tickets.ResolveTicketIDByKey(ctx, in.WorkspaceID, projectKey, number)
 }
 
 // ResolveTicketLocationUseCase は URL の /kb/tickets/{ticketId} からチケットの属する

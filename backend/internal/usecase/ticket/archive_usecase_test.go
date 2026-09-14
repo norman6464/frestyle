@@ -33,12 +33,16 @@ func Test_チケットアーカイブ_履歴を残す(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func Test_チケット復元_positionを末尾へ付け直す(t *testing.T) {
+// 復元したチケットは並び順の末尾へ置き直す。書き込み先は ticket_backlog_ranks で、
+// tickets 側には並び順の列が無い（撤去済み）。
+func Test_チケット復元_並び順を末尾へ付け直す(t *testing.T) {
 	repo := &mockTicketRepo{}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).
-		Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace}, nil)
-	repo.On("LastActiveTicketPosition", mock.Anything, tkWS, tkSpace).Return("a0", nil)
-	repo.On("RestoreTicket", mock.Anything, tkWS, tkTicket, mock.MatchedBy(func(pos string) bool {
+		Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject}, nil)
+	repo.On("RestoreTicket", mock.Anything, tkWS, tkTicket).Return(nil)
+	repo.On("LastTicketRankPosition", mock.Anything, tkWS, tkProject).Return("a0", nil)
+	// アーカイブ中に行が消えている場合もあるので upsert。末尾（既存の最大より後ろ）へ置く。
+	repo.On("UpsertTicketRank", mock.Anything, tkWS, tkProject, tkTicket, mock.MatchedBy(func(pos string) bool {
 		return pos > "a0"
 	})).Return(nil)
 	repo.On("InsertTicketChangeGroup", mock.Anything, mock.AnythingOfType("*domain.TicketChangeGroup")).Return(nil)
