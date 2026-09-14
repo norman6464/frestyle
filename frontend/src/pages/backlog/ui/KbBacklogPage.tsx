@@ -89,10 +89,13 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   const sprints = useSprints(workspaceSlug ?? undefined, project?.id);
   // どのチケットがどのスプリントに入っているかは ID だけ引き、中身は一覧の応答から引き当てる。
   const openSprints = sprints.sprints.filter((sprint) => sprint.state !== 'completed');
-  const { bySprint } = useSprintTickets(
+  const { bySprint, error: sprintTicketsError } = useSprintTickets(
     workspaceSlug ?? undefined,
     openSprints.map((sprint) => sprint.id),
   );
+  // スプリント側が読めなかったことは必ず画面に出す。黙って隠すと、スプリントに
+  // 入っているはずのチケットがバックログに並んだまま「そういう状態だ」と読めてしまう。
+  const sprintError = sprints.error ?? sprintTicketsError;
   const { principals, nameOf, initialsOf } = usePrincipalNames(workspaceSlug ?? undefined);
 
   /**
@@ -301,66 +304,78 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                     </div>
                   </div>
                 ) : (
-                  <BacklogList
-                    groups={groups}
-                    statuses={masters.statuses}
-                    types={masters.types}
-                    projectKey={project.key}
-                    loading={list.loading}
-                    error={list.error}
-                    archived={archived}
-                    canEdit
-                    selectedId={selectedId}
-                    busyId={list.busyId}
-                    nameOf={nameOf}
-                    initialsOf={initialsOf}
-                    onSelect={handleSelect}
-                    onCreate={(title) => list.createTicket({ title }).then((t) => handleSelect(t.id))}
-                    onChangeStatus={(ticketId, nextStatusId) => {
-                      void withToastOnFailure(
-                        () => list.changeStatus(ticketId, { statusId: nextStatusId }),
-                        '状態を変えられませんでした。',
-                      ).catch(() => undefined);
-                    }}
-                    onMove={(id, input) => list.move(id, input)}
-                    onMoveInSprint={(ticketId, anchorTicketId, anchorAfter) =>
-                      sprints
-                        .moveTicket(ticketId, anchorTicketId, anchorAfter)
-                        .then(() => list.refresh())
-                        .catch(() => showToast('error', 'スプリントの中で動かせませんでした。'))
-                    }
-                    onMoveToSprint={(ticketId, sprintId) =>
-                      void sprints
-                        .addTicket(sprintId, ticketId)
-                        .catch(() => showToast('error', 'スプリントへ入れられませんでした。'))
-                    }
-                    onRemoveFromSprint={(ticketId) =>
-                      void sprints
-                        .removeTicket(ticketId)
-                        .catch(() => showToast('error', 'スプリントから出せませんでした。'))
-                    }
-                    renderGroupAction={(group) =>
-                      group.kind === 'sprint' ? (
-                        <button
-                          type="button"
-                          disabled={sprints.busyId === group.id}
-                          onClick={() => void handleChangeSprintState(group.id, group.sprintState)}
-                          className="rounded border border-surface-3 px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-1 disabled:opacity-50"
-                        >
-                          {group.sprintState === 'active' ? 'スプリントを完了' : 'スプリントを開始'}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => void handleCreateSprint()}
-                          className="rounded border border-surface-3 px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-1"
-                        >
-                          スプリントを作成
-                        </button>
-                      )
-                    }
-                    onRetry={list.refresh}
-                  />
+                  <>
+                    {sprintError && (
+                      // 一覧そのものは読めているので画面は塞がない。ただし
+                      // 「スプリントの中身が空なのか、読めなかったのか」は必ず区別させる。
+                      <p
+                        role="status"
+                        className="mx-4 mt-3 rounded-md border border-surface-3 bg-surface-2 px-3 py-2 text-xs text-[var(--color-text-muted)]"
+                      >
+                        {sprintError}
+                      </p>
+                    )}
+                    <BacklogList
+                      groups={groups}
+                      statuses={masters.statuses}
+                      types={masters.types}
+                      projectKey={project.key}
+                      loading={list.loading}
+                      error={list.error}
+                      archived={archived}
+                      canEdit
+                      selectedId={selectedId}
+                      busyId={list.busyId}
+                      nameOf={nameOf}
+                      initialsOf={initialsOf}
+                      onSelect={handleSelect}
+                      onCreate={(title) => list.createTicket({ title }).then((t) => handleSelect(t.id))}
+                      onChangeStatus={(ticketId, nextStatusId) => {
+                        void withToastOnFailure(
+                          () => list.changeStatus(ticketId, { statusId: nextStatusId }),
+                          '状態を変えられませんでした。',
+                        ).catch(() => undefined);
+                      }}
+                      onMove={(id, input) => list.move(id, input)}
+                      onMoveInSprint={(ticketId, anchorTicketId, anchorAfter) =>
+                        sprints
+                          .moveTicket(ticketId, anchorTicketId, anchorAfter)
+                          .then(() => list.refresh())
+                          .catch(() => showToast('error', 'スプリントの中で動かせませんでした。'))
+                      }
+                      onMoveToSprint={(ticketId, sprintId) =>
+                        void sprints
+                          .addTicket(sprintId, ticketId)
+                          .catch(() => showToast('error', 'スプリントへ入れられませんでした。'))
+                      }
+                      onRemoveFromSprint={(ticketId) =>
+                        void sprints
+                          .removeTicket(ticketId)
+                          .catch(() => showToast('error', 'スプリントから出せませんでした。'))
+                      }
+                      renderGroupAction={(group) =>
+                        group.kind === 'sprint' ? (
+                          <button
+                            type="button"
+                            disabled={sprints.busyId === group.id}
+                            onClick={() => void handleChangeSprintState(group.id, group.sprintState)}
+                            className="rounded border border-surface-3 px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-1 disabled:opacity-50"
+                          >
+                            {group.sprintState === 'active' ? 'スプリントを完了' : 'スプリントを開始'}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void handleCreateSprint()}
+                            className="rounded border border-surface-3 px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-1"
+                          >
+                            スプリントを作成
+                          </button>
+                        )
+                      }
+                      onRetry={list.refresh}
+                    />
+                  </>
                 ))}
 
               {/* 見出しは h1（プロジェクト名）→ h2（節）の順に落とす。節の名前を付けないと

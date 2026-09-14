@@ -14,9 +14,13 @@ export interface AssignedGroup {
 /**
  * 自分に割り当たっているチケットを取り、**状態ごとに束ねて**返す。
  *
- * 束ねる境目は「返ってきた順のまま、状態名が変わったところ」。並べ替えは backend が
- * 済ませている（状態の枠 → 状態の並び → 期限）ので、ここで並べ直さない —— 並びの規則を
- * 2 か所に分けると、片方だけ直したときに順序が黙ってずれる。
+ * 束ねる鍵は状態の名前。並べ替えは backend が済ませている（状態の枠 → 状態の並び →
+ * 期限）ので、ここで並べ直さない —— 並びの規則を 2 か所に分けると、片方だけ直したときに
+ * 順序が黙ってずれる。
+ *
+ * ただし backend が並べているのは**ワークスペース 1 つ分**まで。それを繋げると同じ状態名が
+ * 離れた位置に何度も現れるので、「隣り合っていたら同じ束」では見出しが重複する
+ * （「進行中」が 2 回出る）。名前で引き当てて束ね直し、見出しの順は最初に出てきた順にする。
  *
  * 所属するワークスペースすべてを横断して集める。API はワークスペース 1 つ分を返す口なので、
  * ここで順に呼んで束ね直す（resolveBacklogProject と同じ理由——projectId や「全部」を
@@ -38,18 +42,21 @@ export function useAssignedTickets() {
       );
       const tickets = perWorkspace.flat();
       const next: AssignedGroup[] = [];
+      const byName = new Map<string, AssignedGroup>();
       for (const ticket of tickets) {
-        const last = next[next.length - 1];
-        if (last && last.name === ticket.statusName) {
-          last.tickets.push(ticket);
+        const found = byName.get(ticket.statusName);
+        if (found) {
+          found.tickets.push(ticket);
           continue;
         }
-        next.push({
+        const group: AssignedGroup = {
           name: ticket.statusName,
           category: ticket.statusCategory,
           color: ticket.statusColor,
           tickets: [ticket],
-        });
+        };
+        byName.set(ticket.statusName, group);
+        next.push(group);
       }
       setGroups(next);
       setTotal(tickets.length);
