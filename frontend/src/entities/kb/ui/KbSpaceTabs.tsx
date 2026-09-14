@@ -5,7 +5,7 @@ export type KbSpaceTab = 'overview' | 'pages' | 'favorites' | 'members';
 
 const TABS: { id: KbSpaceTab; label: string; suffix: string }[] = [
   { id: 'overview', label: '概要', suffix: '' },
-  { id: 'pages', label: 'すべてのページ', suffix: '/pages' },
+  { id: 'pages', label: 'ナレッジ', suffix: '/pages' },
   { id: 'favorites', label: 'お気に入り', suffix: '/favorites' },
   { id: 'members', label: 'メンバー', suffix: '/members' },
 ];

@@ -7,7 +7,7 @@ import type { Ticket, TicketStatus } from '@/entities/ticket';
 function status(over: Partial<TicketStatus> & { id: string }): TicketStatus {
   return {
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     name: 'To Do',
     category: 'todo',
     color: '#5b6b7a',
@@ -29,7 +29,7 @@ const statuses: TicketStatus[] = [
 function child(over: Partial<Ticket> & { id: string }): Ticket {
   return {
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     number: 10,
     typeId: 'ty-1',
     statusId: 'st-1',
@@ -37,6 +37,8 @@ function child(over: Partial<Ticket> & { id: string }): Ticket {
     title: '子チケット',
     doc: { type: 'doc', content: [] },
     priority: 2,
+    storyPoints: null,
+    teamId: null,
     startDate: null,
     dueDate: null,
     position: 'a0',
@@ -55,7 +57,7 @@ function child(over: Partial<Ticket> & { id: string }): Ticket {
 const meta = {
   title: 'pages/backlog/TicketChildrenList',
   component: TicketChildrenList,
-  args: { tickets: [], loading: false, error: null, spaceKey: 'FRESTYLE', statuses },
+  args: { tickets: [], loading: false, error: null, projectKey: 'FRESTYLE', statuses },
   decorators: [
     (Story) => (
       <MemoryRouter>

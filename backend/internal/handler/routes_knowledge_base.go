@@ -71,7 +71,7 @@ func newKbImagePresignerOrFallback(deps *routeDeps) repository.KbImagePresigner 
 	}
 	pre, err := infraGCS.NewPresigner(context.Background(), bucket)
 	if err != nil {
-		log.Fatalf("[kb-image] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v", bucket, err)
+		log.Fatalf("[kb-image] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v — %s", bucket, err, imagesBucketHint)
 	}
 	return persistence.NewKbImagePresigner(pre)
 }

@@ -696,8 +696,8 @@ func (m *mockLabelRepo) FindLabel(ctx context.Context, workspaceID, labelID stri
 	return l, args.Error(1)
 }
 
-func (m *mockLabelRepo) ListLabels(ctx context.Context, workspaceID, spaceID string) ([]domain.Label, error) {
-	args := m.Called(ctx, workspaceID, spaceID)
+func (m *mockLabelRepo) ListLabels(ctx context.Context, workspaceID string) ([]domain.Label, error) {
+	args := m.Called(ctx, workspaceID)
 	l, _ := args.Get(0).([]domain.Label)
 	return l, args.Error(1)
 }
@@ -706,8 +706,8 @@ func (m *mockLabelRepo) UpdateLabel(ctx context.Context, l *domain.Label) error 
 	return m.Called(ctx, l).Error(0)
 }
 
-func (m *mockLabelRepo) DeleteLabel(ctx context.Context, workspaceID, spaceID, labelID string) error {
-	return m.Called(ctx, workspaceID, spaceID, labelID).Error(0)
+func (m *mockLabelRepo) DeleteLabel(ctx context.Context, workspaceID, labelID string) error {
+	return m.Called(ctx, workspaceID, labelID).Error(0)
 }
 
 func (m *mockLabelRepo) AddTicketLabel(ctx context.Context, workspaceID, ticketID, labelID string) error {

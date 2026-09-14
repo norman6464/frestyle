@@ -38,7 +38,7 @@ function ticket(over: Partial<Ticket>): Ticket {
   return {
     id: 't-1',
     workspaceId: 'w-1',
-    spaceId: SPACE,
+    projectId: SPACE,
     number: 1,
     typeId: 'ty-1',
     statusId: 'st-1',
@@ -62,7 +62,7 @@ function ticket(over: Partial<Ticket>): Ticket {
 }
 
 function label(over: Partial<Label> & { id: string }): Label {
-  return { spaceId: SPACE, name: 'ラベル', color: '#1d4ed8', createdAt: '', updatedAt: '', ...over };
+  return { projectId: SPACE, name: 'ラベル', color: '#1d4ed8', createdAt: '', updatedAt: '', ...over };
 }
 
 beforeEach(() => {
@@ -71,7 +71,7 @@ beforeEach(() => {
 });
 
 describe('useTicketList', () => {
-  it('workspaceSlug/spaceId のどちらかが欠けていれば取りに行かない', () => {
+  it('workspaceSlug/projectId のどちらかが欠けていれば取りに行かない', () => {
     renderHook(() => useTicketList(undefined, undefined, { archived: false }));
     expect(hoisted.fetchTickets).not.toHaveBeenCalled();
   });
@@ -88,21 +88,56 @@ describe('useTicketList', () => {
     expect(result.current.tickets).toHaveLength(1);
   });
 
-  it('スペースを素早く切り替えると、前のスペースの遅れた応答は捨てる', async () => {
+  it('保存した絞り込み(unassigned/assignedToMe/overdue/q)をそのまま渡す', async () => {
+    const { result } = renderHook(() =>
+      useTicketList(SLUG, SPACE, { archived: false, unassigned: true, overdue: true, q: '認証' }),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(hoisted.fetchTickets).toHaveBeenCalledWith(SLUG, SPACE, {
+      archived: false,
+      statusId: undefined,
+      typeId: undefined,
+      assigneePrincipalId: undefined,
+      labelId: undefined,
+      unassigned: true,
+      assignedToMe: undefined,
+      overdue: true,
+      q: '認証',
+    });
+  });
+
+  it('絞り込みが変わると取り直す(キーに含めている)', async () => {
+    const { result, rerender } = renderHook(
+      ({ assignedToMe }) => useTicketList(SLUG, SPACE, { archived: false, assignedToMe }),
+      { initialProps: { assignedToMe: false } },
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    hoisted.fetchTickets.mockClear();
+
+    rerender({ assignedToMe: true });
+    await waitFor(() => expect(hoisted.fetchTickets).toHaveBeenCalledTimes(1));
+    expect(hoisted.fetchTickets).toHaveBeenCalledWith(
+      SLUG,
+      SPACE,
+      expect.objectContaining({ assignedToMe: true }),
+    );
+  });
+
+  it('プロジェクトを素早く切り替えると、前のプロジェクトの遅れた応答は捨てる', async () => {
     let resolveFirst: (tickets: Ticket[]) => void = () => {};
     const firstResponse = new Promise<Ticket[]>((resolve) => {
       resolveFirst = resolve;
     });
     hoisted.fetchTickets.mockReturnValueOnce(firstResponse);
-    hoisted.fetchTickets.mockResolvedValueOnce([ticket({ id: 't-2', number: 2, spaceId: 's-2' })]);
+    hoisted.fetchTickets.mockResolvedValueOnce([ticket({ id: 't-2', number: 2, projectId: 's-2' })]);
 
     const { result, rerender } = renderHook(
-      ({ spaceId }) => useTicketList(SLUG, spaceId, { archived: false }),
-      { initialProps: { spaceId: 's-1' } },
+      ({ projectId }) => useTicketList(SLUG, projectId, { archived: false }),
+      { initialProps: { projectId: 's-1' } },
     );
 
     // s-1 の取得が飛んでいる間に s-2 へ切り替える。
-    rerender({ spaceId: 's-2' });
+    rerender({ projectId: 's-2' });
     await waitFor(() => expect(result.current.tickets).toHaveLength(1));
     expect(result.current.tickets[0].id).toBe('t-2');
 

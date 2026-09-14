@@ -18,7 +18,7 @@ function type(over: Partial<TicketType>): TicketType {
   return {
     id: 'ty-1',
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     name: '開発タスク',
     hierarchyLevel: 0,
     color: '#2563eb',

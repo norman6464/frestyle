@@ -24,7 +24,7 @@ vi.mock('@/entities/ticket', async (importOriginal) => {
 });
 
 function fixtureLabel(over: Partial<Label> & { id: string }): Label {
-  return { spaceId: 's-1', name: 'ラベル', color: '#1d4ed8', createdAt: '', updatedAt: '', ...over };
+  return { projectId: 's-1', name: 'ラベル', color: '#1d4ed8', createdAt: '', updatedAt: '', ...over };
 }
 
 const SLUG = 'acme';
@@ -40,7 +40,7 @@ describe('useTicketLabels', () => {
     const { result } = renderHook(() => useTicketLabels(SLUG, SPACE));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.labels).toHaveLength(1);
-    expect(hoisted.fetchLabels).toHaveBeenCalledWith(SLUG, SPACE);
+    expect(hoisted.fetchLabels).toHaveBeenCalledWith(SLUG);
   });
 
   it('取得失敗は文言を出す', async () => {

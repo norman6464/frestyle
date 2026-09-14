@@ -116,9 +116,12 @@ jobs:
       # schema.gen.sql / scripts/local-db-init/02-schema.sql が最新かを検証する。
       # schema.hcl を直接触っても make schema-gen を忘れると、sqlc の入力・結合テスト・
       # ローカル初回起動のどれもが古い定義のまま取り残される。
-      # Atlas は差分計算のために使い捨ての PostgreSQL（--dev-url docker://postgres/17/dev）を
-      # runner 上の docker デーモンで自分で立てる（ubuntu-latest には標準で入っている）ので、
-      # このジョブが別途 PostgreSQL サービスを用意する必要はない。
+      # Atlas は差分計算のために使い捨ての PostgreSQL を runner 上の docker デーモンで
+      # 自分で立てる（ubuntu-latest には標準で入っている）ので、このジョブが別途
+      # PostgreSQL サービスを用意する必要はない。dev-url は素の postgres イメージではなく
+      # pg_trgm を作成済みの自前イメージ（make ensure-atlas-dev-image・
+      # backend/scripts/atlas-dev/Dockerfile）——schema.hcl が gin_trgm_ops の索引を
+      # 宣言しており、拡張の無い dev db では inspect が失敗するため。
       # Atlas の版は backend/Makefile の ATLAS_VERSION 固定（生成物は版で差分が出るため
       # ここでは版を書かず Makefile を唯一の出どころにする）。
       - name: schema drift check (schema.hcl -> schema.gen.sql)
@@ -272,7 +275,7 @@ jobs:
   #   repository（internal/adapter/persistence）のクエリは sqlc 生成コードを実 DB に対して
   #   叩いて初めて実行される。単体側のプロファイルには 1 行も現れないので、単体だけを数えると
   #   「結合テストが毎回検証しているコードがテストされていない」ように見え、総カバレッジが
-  #   実態よりかなり低く出る（2026-08-26 実測: 単体のみ 45.0% → 合算 64.0%）。
+  #   実態よりかなり低く出る（単体のみ 45.0% → 合算 64.0%）。
   #
   # どう合算しているのか（外部ツールは使わない）:
   #   Go の coverprofile は 1 行目が "mode: <set|count|atomic>"、以降が
@@ -339,7 +342,7 @@ jobs:
       # 薄い infra ラッパなど 0% のパッケージも分母に入る総計なので、個々のパッケージの
       # 水準よりは低い値になる。
       #
-      # 根拠（この値をどう決めたか）: 2026-09-08 にローカルで CI と同じ手順
+      # 根拠（この値をどう決めたか）: ローカルで CI と同じ手順
       # （-race 付き単体 + 専用 postgres コンテナに対する -tags=integration -run Integration）
       # で計測した実測値。単体のみ 46.3% / 結合のみ 33.6% / 合算 68.1%（macOS）。
       # 言語ランタイムの有無で環境差が出ていた internal/infra/sandbox は無くなったため、

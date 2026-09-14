@@ -4,7 +4,7 @@ import TicketLabelChip from './TicketLabelChip';
 import type { Label } from '@/entities/ticket';
 
 function label(name: string, color: string): Label {
-  return { id: name, spaceId: 's-1', name, color, createdAt: '', updatedAt: '' };
+  return { id: name, name, color, createdAt: '', updatedAt: '' };
 }
 
 const meta = {

@@ -18,7 +18,7 @@ vi.mock('@/entities/ticket', async (importOriginal) => {
 function ticket(over: Partial<Ticket> & { id: string }): Ticket {
   return {
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     number: 1,
     typeId: 'ty-1',
     statusId: 'st-1',

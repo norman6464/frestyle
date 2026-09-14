@@ -39,7 +39,7 @@ export const COMMAND_ITEMS: CommandItem[] = [
     description: 'バックログに移動',
     icon: ChartBarIcon,
     category: 'ページ移動',
-    action: { type: 'navigate', path: '/kb/backlog' },
+    action: { type: 'navigate', path: '/backlog' },
     keywords: ['backlog', 'ticket', 'チケット', 'バックログ', '課題'],
   },
   {

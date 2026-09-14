@@ -1,33 +1,31 @@
--- ラベル（labels）とチケットへの付け外し（ticket_labels）のクエリ（段 4・設計 Ⅵ）。
+-- ラベル（labels）とチケットへの付け外し（ticket_labels）のクエリ。
+-- ラベルはワークスペース単位の語彙で、ページ（page_labels）とチケット（ticket_labels）の
+-- 両方から同じ行を引く（labels テーブルの doc コメント参照）。
 
 -- =============================================================================
 -- labels
 -- =============================================================================
 
 -- name: CreateLabel :one
-INSERT INTO labels (id, workspace_id, space_id, name, color, created_at, updated_at)
-VALUES (sqlc.arg(id), sqlc.arg(workspace_id), sqlc.arg(space_id), sqlc.arg(name), sqlc.arg(color), now(), now())
+INSERT INTO labels (id, workspace_id, name, color, created_at, updated_at)
+VALUES (sqlc.arg(id), sqlc.arg(workspace_id), sqlc.arg(name), sqlc.arg(color), now(), now())
 RETURNING *;
 
 -- name: FindLabel :one
 SELECT * FROM labels WHERE workspace_id = $1 AND id = $2;
 
 -- name: ListLabels :many
-SELECT * FROM labels WHERE workspace_id = $1 AND space_id = $2 ORDER BY name_key;
+SELECT * FROM labels WHERE workspace_id = $1 ORDER BY name_key;
 
 -- name: UpdateLabel :one
--- space_id で絞るのは、呼び出し側が権限を確かめた相手（URL のスペース）と
--- 実際に書き換える行を必ず一致させるため。usecase 側でも同じ突き合わせをしているが、
--- 新しい呼び出し元がその一手を忘れても、ここで 0 行に落ちて黙って通ることはない。
 UPDATE labels
 SET name = sqlc.arg(name), color = sqlc.arg(color), updated_at = now()
-WHERE workspace_id = sqlc.arg(workspace_id) AND space_id = sqlc.arg(space_id) AND id = sqlc.arg(id)
+WHERE workspace_id = sqlc.arg(workspace_id) AND id = sqlc.arg(id)
 RETURNING *;
 
 -- name: DeleteLabel :execrows
--- ticket_labels は ON DELETE CASCADE で一緒に消える。
--- space_id で絞る理由は UpdateLabel と同じ。
-DELETE FROM labels WHERE workspace_id = $1 AND space_id = $2 AND id = $3;
+-- ticket_labels / page_labels は ON DELETE CASCADE で一緒に消える。
+DELETE FROM labels WHERE workspace_id = $1 AND id = $2;
 
 -- =============================================================================
 -- ticket_labels

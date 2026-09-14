@@ -1,13 +1,24 @@
 export interface BacklogReorderBarProps {
   /** 選択中チケットの表示キー（例 FRESTYLE-457）。未選択なら null。 */
   selectedKey: string | null;
-  /** 選択中チケットが一覧の先頭か（「1つ上へ」を disable する）。 */
+  /** 選択中チケットが入っている段の名前（「スプリント 1 の中で」と出すため）。 */
+  groupName?: string | null;
+  /** 選択中チケットが段の先頭か（「1つ上へ」を disable する）。 */
   isFirst: boolean;
-  /** 選択中チケットが一覧の末尾か（「1つ下へ」「末尾へ」を disable する）。 */
+  /** 選択中チケットが段の末尾か（「1つ下へ」「末尾へ」を disable する）。 */
   isLast: boolean;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onMoveLast: () => void;
+  /**
+   * 入れ先に選べるスプリント（計画中・進行中だけ。いま入っている段は除く）。空なら送り先の
+   * 選択そのものを出さない —— 押せるのに何も選べない選択肢を置かないため。
+   */
+  sprints?: { id: string; name: string }[];
+  /** 選択中のチケットをスプリントへ入れる。 */
+  onMoveToSprint?: (sprintId: string) => void;
+  /** 選択中のチケットをスプリントから出す（バックログへ戻る）。段がスプリントのときだけ渡る。 */
+  onRemoveFromSprint?: () => void;
 }
 
 const ICON_PROPS = {
@@ -27,11 +38,15 @@ const ICON_PROPS = {
  */
 export default function BacklogReorderBar({
   selectedKey,
+  groupName = null,
   isFirst,
   isLast,
   onMoveUp,
   onMoveDown,
   onMoveLast,
+  sprints = [],
+  onMoveToSprint,
+  onRemoveFromSprint,
 }: BacklogReorderBarProps) {
   const hasSelection = selectedKey !== null;
   return (
@@ -40,6 +55,7 @@ export default function BacklogReorderBar({
         {hasSelection ? (
           <>
             選択中 <b className="text-[var(--color-text-primary)]">{selectedKey}</b> を
+            {groupName && <>（{groupName} の中で）</>}
           </>
         ) : (
           '行を選ぶと並び替えられます'
@@ -81,8 +97,50 @@ export default function BacklogReorderBar({
         </svg>
         末尾へ
       </button>
-      <span className="ml-auto text-[var(--color-text-muted)]">
-        アーカイブでは出さない（並び替えは現役の兄弟に限る）
+      {onMoveToSprint && sprints.length > 0 && (
+        <label className="flex items-center gap-1.5 text-[var(--color-text-muted)]">
+          スプリントへ
+          <select
+            aria-label="入れ先のスプリント"
+            value=""
+            disabled={!hasSelection}
+            onChange={(e) => {
+              if (e.target.value === '') return;
+              onMoveToSprint(e.target.value);
+              // 選び直せるよう毎回空へ戻す（同じスプリントへ続けて入れられるように）。
+              e.target.value = '';
+            }}
+            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-1 text-xs text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <option value="">選ぶ…</option>
+            {sprints.map((sprint) => (
+              <option key={sprint.id} value={sprint.id}>
+                {sprint.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {onRemoveFromSprint && (
+        <button
+          type="button"
+          onClick={onRemoveFromSprint}
+          disabled={!hasSelection}
+          className="inline-flex items-center rounded border border-surface-3 px-2 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        >
+          スプリントから出す
+        </button>
+      )}
+      {/* 仕様の但し書きは常設しない。毎回読むものではないので「?」へ畳み、
+          知りたい人だけがホバー／フォーカスで読めるようにする。 */}
+      <span
+        className="ml-auto inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-surface-3 text-[10px] font-bold text-[var(--color-text-muted)]"
+        tabIndex={0}
+        role="note"
+        aria-label="並び替えの決まり"
+        title="並び替えは同じ段の中だけ（スプリントとバックログは別の並びを持つ）。アーカイブでは出さない"
+      >
+        ?
       </span>
     </div>
   );

@@ -21,7 +21,7 @@ describe('apiRoutes のパスパラメータは encodeURIComponent を通す', (
 
   it('複数のパラメータ（TICKET_API.ticketComment）', () => {
     expect(TICKET_API.ticketComment('ws/1', 't#1', 'c?1')).toBe(
-      '/api/v2/kb/workspaces/ws%2F1/tickets/t%231/comments/c%3F1',
+      '/api/v2/workspaces/ws%2F1/tickets/t%231/comments/c%3F1',
     );
   });
 

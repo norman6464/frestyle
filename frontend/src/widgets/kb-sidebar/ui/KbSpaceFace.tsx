@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
+  BookOpenIcon,
   ChevronUpDownIcon,
   EllipsisHorizontalIcon,
   FolderIcon,
   PlusIcon,
+  Squares2X2Icon,
+  StarIcon,
+  UsersIcon,
 } from '@heroicons/react/24/outline';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { NameCreateForm } from '@/shared/ui';
@@ -30,11 +34,26 @@ export interface KbSpaceFaceProps {
   onCreateSpace: (input: { name: string; visibility?: 'workspace' | 'private' }) => Promise<KbSpace>;
 }
 
+const VISIBILITY_LABEL: Record<KbSpace['visibility'], string> = {
+  workspace: 'チームスペース',
+  private: 'プライベートスペース',
+};
+
 /**
- * KbSpaceFace は「今いるスペース」の顔（段14）。KbSpaceSection の見出し部分を引き継ぐが、
- * 開閉トグルは無い（サイドバーが表示するのは常にこの 1 スペースのため）。代わりに
- * スペース切替（一時的な繋ぎ — W3 でヘッダーの「スペース▾」に正式に移すまで）と、
- * 固定ナビ 4 項目（概要・すべてのページ・お気に入り・メンバー）を持つ。
+ * 角の印に出す 2 文字。スペースの鍵（チケットキーの接頭辞。FRESTYLE-12 の FRESTYLE）から
+ * 取る — 名前と違って改名で変わらず、チケットのキーとも揃う。自動採番の鍵（s-1a2b3c）は
+ * 先頭の "S-" だと見分けが付かないので、記号を落としてから 2 文字取る。
+ */
+function spaceInitials(key: string): string {
+  const letters = key.replace(/[^A-Za-z0-9]/g, '');
+  return (letters.slice(0, 2) || key.slice(0, 2)).toUpperCase();
+}
+
+/**
+ * KbSpaceFace は「今いるスペース」の顔。角の印・名前・種別と鍵を出し、そこを押すと
+ * 他のスペースへ移れる（切替はこのサイドバーが持つ — ヘッダーには置かない）。
+ * その下に固定ナビ 4 項目（概要・ナレッジ・お気に入り・メンバー）を並べる。バックログは
+ * ここには置かない — ナレッジとは別の製品で、入れ物（プロジェクト）もスペースとは別のため。
  */
 export default function KbSpaceFace({
   space,
@@ -49,6 +68,7 @@ export default function KbSpaceFace({
   const { showToast } = useToast();
   const [renaming, setRenaming] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const templates = useKbPageTemplates(workspaceSlug, space.id, templatePickerOpen);
 
@@ -69,9 +89,17 @@ export default function KbSpaceFace({
     onCreatedFromTemplate(created);
   };
 
+  // 14px・#4A4945 相当。12px の淡い灰色だと「押せる行」に見えず、コントラストも足りない。
+  const navItemClass = (isActive: boolean) =>
+    `flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+      isActive
+        ? 'bg-brand-500/10 font-medium text-brand-700'
+        : 'text-[var(--color-text-tertiary)] hover:bg-surface-2'
+    }`;
+
   return (
     <div className="mb-2">
-      <div className="group relative flex items-center gap-1 rounded-md pr-1 hover:bg-surface-2">
+      <div className="group relative flex items-center gap-0.5 rounded-md pr-1 hover:bg-surface-2">
         {renaming ? (
           <div className="flex min-w-0 flex-1 items-center gap-1 px-1 py-1.5">
             <KbInlineRename
@@ -82,9 +110,29 @@ export default function KbSpaceFace({
             />
           </div>
         ) : (
-          <span className="min-w-0 flex-1 truncate px-1 py-1.5 text-sm font-semibold text-[var(--color-text-primary)]">
-            {space.name}
-          </span>
+          <button
+            type="button"
+            onClick={() => setSwitcherOpen((prev) => !prev)}
+            aria-expanded={switcherOpen}
+            aria-label="スペースを切り替える"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left"
+          >
+            <span
+              aria-hidden="true"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-600 text-xs font-semibold text-white"
+            >
+              {spaceInitials(space.key)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-[var(--color-text-primary)]">
+                {space.name}
+              </span>
+              <span className="block truncate text-xs text-[var(--color-text-muted)]">
+                {VISIBILITY_LABEL[space.visibility]}・{space.key.toUpperCase()}
+              </span>
+            </span>
+            <ChevronUpDownIcon className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
+          </button>
         )}
         {!archivedMode && !renaming && (
           <>
@@ -136,38 +184,35 @@ export default function KbSpaceFace({
             )}
           </>
         )}
+
+        {switcherOpen && (
+          <KbSpaceSwitcherMenu
+            workspaceSlug={workspaceSlug}
+            activeSpaceId={space.id}
+            onCreateSpace={onCreateSpace}
+            onClose={() => setSwitcherOpen(false)}
+          />
+        )}
       </div>
 
       {!archivedMode && (
-        <KbSpaceSwitcher workspaceSlug={workspaceSlug} activeSpaceId={space.id} onCreateSpace={onCreateSpace} />
-      )}
-
-      {!archivedMode && (
-        <nav aria-label={`${space.name} の画面`} className="mt-1 flex flex-col">
-          <Link
-            to={`/kb/spaces/${space.id}`}
-            className="rounded-md px-2 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-surface-2"
-          >
-            概要
-          </Link>
-          <Link
-            to={`/kb/spaces/${space.id}/pages`}
-            className="rounded-md px-2 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-surface-2"
-          >
-            すべてのページ
-          </Link>
-          <Link
-            to={`/kb/spaces/${space.id}/favorites`}
-            className="rounded-md px-2 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-surface-2"
-          >
-            お気に入り
-          </Link>
-          <Link
-            to={`/kb/spaces/${space.id}/members`}
-            className="rounded-md px-2 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-surface-2"
-          >
-            メンバー
-          </Link>
+        <nav aria-label={`${space.name} の画面`} className="mt-2 flex flex-col gap-0.5">
+          <NavLink to={`/kb/spaces/${space.id}`} end className={({ isActive }) => navItemClass(isActive)}>
+            <Squares2X2Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">概要</span>
+          </NavLink>
+          <NavLink to={`/kb/spaces/${space.id}/pages`} className={({ isActive }) => navItemClass(isActive)}>
+            <BookOpenIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">ナレッジ</span>
+          </NavLink>
+          <NavLink to={`/kb/spaces/${space.id}/favorites`} className={({ isActive }) => navItemClass(isActive)}>
+            <StarIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">お気に入り</span>
+          </NavLink>
+          <NavLink to={`/kb/spaces/${space.id}/members`} className={({ isActive }) => navItemClass(isActive)}>
+            <UsersIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">メンバー</span>
+          </NavLink>
         </nav>
       )}
 
@@ -186,27 +231,28 @@ export default function KbSpaceFace({
 }
 
 /**
- * KbSpaceSwitcher は他のスペースへ移る一時的な繋ぎ（W3 でヘッダーの「スペース▾」に
- * 正式に移すまで）。開いたときだけ自分がアクセスできるスペース一覧（/me/spaces）を取る。
+ * KbSpaceSwitcherMenu は「顔」を押したときに出るスペースの一覧。開いたときだけ
+ * 自分がアクセスできるスペース（/me/spaces）を取る。作成の入口もここに持つ
+ * （スペースを作る手段が他に無くなるため、一覧と同じ場所に置く）。
  */
-function KbSpaceSwitcher({
+function KbSpaceSwitcherMenu({
   workspaceSlug,
   activeSpaceId,
   onCreateSpace,
+  onClose,
 }: {
   workspaceSlug: string;
   activeSpaceId: string;
   onCreateSpace: (input: { name: string; visibility?: 'workspace' | 'private' }) => Promise<KbSpace>;
+  onClose: () => void;
 }) {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [open, setOpen] = useState(false);
   const [mySpaces, setMySpaces] = useState<KbMySpace[] | null>(null);
   const [addingSpace, setAddingSpace] = useState(false);
   const [addingPrivateSpace, setAddingPrivateSpace] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
     KbRepository.fetchMySpaces(workspaceSlug)
       .then((list) => {
@@ -218,14 +264,14 @@ function KbSpaceSwitcher({
     return () => {
       cancelled = true;
     };
-  }, [open, workspaceSlug]);
+  }, [workspaceSlug]);
 
   const createSpace = async (input: { name: string; visibility?: 'workspace' | 'private' }) => {
     try {
       const space = await onCreateSpace(input);
       setAddingSpace(false);
       setAddingPrivateSpace(false);
-      setOpen(false);
+      onClose();
       navigate(`/kb/spaces/${space.id}`);
     } catch {
       showToast('error', 'スペースを作成できませんでした');
@@ -234,79 +280,68 @@ function KbSpaceSwitcher({
   };
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-expanded={open}
-        aria-label="スペースを切り替える"
-        className="mb-1 flex w-full items-center gap-1 rounded-md px-1 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-surface-2"
-      >
-        <ChevronUpDownIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <span>スペースを切り替える</span>
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full z-20 w-56 rounded-lg border border-surface-3 bg-surface-1 py-1 shadow-lg">
-          {mySpaces === null && (
-            <p className="px-3 py-1.5 text-xs text-[var(--color-text-muted)]">読み込み中…</p>
-          )}
-          {mySpaces?.map((s) => (
-            <Link
-              key={s.id}
-              to={`/kb/spaces/${s.id}`}
-              onClick={() => setOpen(false)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-surface-2 ${
-                s.id === activeSpaceId ? 'font-semibold text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
-              }`}
+    <div className="absolute left-0 top-full z-20 mt-1 w-60 rounded-lg border border-surface-3 bg-surface-1 py-1 shadow-lg">
+      {mySpaces === null && <p className="px-3 py-1.5 text-sm text-[var(--color-text-muted)]">読み込み中…</p>}
+      {mySpaces?.map((s) => (
+        <Link
+          key={s.id}
+          to={`/kb/spaces/${s.id}`}
+          onClick={onClose}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-surface-2 ${
+            s.id === activeSpaceId
+              ? 'font-semibold text-[var(--color-text-primary)]'
+              : 'text-[var(--color-text-secondary)]'
+          }`}
+        >
+          <FolderIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="truncate">{s.name}</span>
+        </Link>
+      ))}
+      <div className="mt-1 border-t border-surface-3 pt-1">
+        {addingSpace ? (
+          <div className="px-2 pb-1">
+            <NameCreateForm what="スペース" onCreate={createSpace} />
+            <button
+              type="button"
+              onClick={() => setAddingSpace(false)}
+              className="w-full px-2 pb-1 text-left text-xs text-[var(--color-text-muted)] hover:underline"
             >
-              <FolderIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{s.name}</span>
-            </Link>
-          ))}
-          <div className="mt-1 border-t border-surface-3 pt-1">
-            {addingSpace ? (
-              <div className="px-2 pb-1">
-                <NameCreateForm what="スペース" onCreate={createSpace} />
-                <button
-                  type="button"
-                  onClick={() => setAddingSpace(false)}
-                  className="w-full px-2 pb-1 text-left text-xs text-[var(--color-text-muted)] hover:underline"
-                >
-                  やめる
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAddingSpace(true)}
-                className="w-full px-3 py-1.5 text-left text-sm text-[var(--color-text-secondary)] hover:bg-surface-2"
-              >
-                スペースを作成
-              </button>
-            )}
-            {addingPrivateSpace ? (
-              <div className="px-2 pb-1">
-                <NameCreateForm what="プライベートスペース" onCreate={(input) => createSpace({ ...input, visibility: 'private' })} />
-                <button
-                  type="button"
-                  onClick={() => setAddingPrivateSpace(false)}
-                  className="w-full px-2 pb-1 text-left text-xs text-[var(--color-text-muted)] hover:underline"
-                >
-                  やめる
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAddingPrivateSpace(true)}
-                className="w-full px-3 py-1.5 text-left text-sm text-[var(--color-text-secondary)] hover:bg-surface-2"
-              >
-                プライベートスペースを作成
-              </button>
-            )}
+              やめる
+            </button>
           </div>
-        </div>
-      )}
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddingSpace(true)}
+            className="w-full px-3 py-1.5 text-left text-sm text-[var(--color-text-secondary)] hover:bg-surface-2"
+          >
+            スペースを作成
+          </button>
+        )}
+        {addingPrivateSpace ? (
+          <div className="px-2 pb-1">
+            <NameCreateForm
+              what="プライベートスペース"
+              onCreate={(input) => createSpace({ ...input, visibility: 'private' })}
+            />
+            <button
+              type="button"
+              onClick={() => setAddingPrivateSpace(false)}
+              className="w-full px-2 pb-1 text-left text-xs text-[var(--color-text-muted)] hover:underline"
+            >
+              やめる
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddingPrivateSpace(true)}
+            className="w-full px-3 py-1.5 text-left text-sm text-[var(--color-text-secondary)] hover:bg-surface-2"
+          >
+            プライベートスペースを作成
+          </button>
+        )}
+      </div>
     </div>
   );
 }

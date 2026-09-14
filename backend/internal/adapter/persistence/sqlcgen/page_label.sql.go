@@ -40,7 +40,7 @@ func (q *Queries) AddPageLabel(ctx context.Context, arg AddPageLabelParams) (int
 }
 
 const listLabelsByPage = `-- name: ListLabelsByPage :many
-SELECT l.id, l.workspace_id, l.space_id, l.name, l.name_key, l.color, l.created_at, l.updated_at FROM labels l
+SELECT l.id, l.workspace_id, l.name, l.name_key, l.color, l.created_at, l.updated_at FROM labels l
 JOIN page_labels pl ON pl.workspace_id = l.workspace_id AND pl.label_id = l.id
 WHERE pl.workspace_id = $1 AND pl.page_id = $2
 ORDER BY l.name_key
@@ -63,7 +63,6 @@ func (q *Queries) ListLabelsByPage(ctx context.Context, arg ListLabelsByPagePara
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
 			&i.Name,
 			&i.NameKey,
 			&i.Color,
@@ -84,7 +83,7 @@ func (q *Queries) ListLabelsByPage(ctx context.Context, arg ListLabelsByPagePara
 }
 
 const listLabelsByPageIDs = `-- name: ListLabelsByPageIDs :many
-SELECT pl.page_id, l.id, l.workspace_id, l.space_id, l.name, l.name_key, l.color, l.created_at, l.updated_at FROM page_labels pl
+SELECT pl.page_id, l.id, l.workspace_id, l.name, l.name_key, l.color, l.created_at, l.updated_at FROM page_labels pl
 JOIN labels l ON l.workspace_id = pl.workspace_id AND l.id = pl.label_id
 WHERE pl.workspace_id = $1
   AND pl.page_id IN (
@@ -102,7 +101,6 @@ type ListLabelsByPageIDsRow struct {
 	PageID      uuid.UUID
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
 	Name        string
 	NameKey     sql.NullString
 	Color       string
@@ -124,7 +122,6 @@ func (q *Queries) ListLabelsByPageIDs(ctx context.Context, arg ListLabelsByPageI
 			&i.PageID,
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
 			&i.Name,
 			&i.NameKey,
 			&i.Color,

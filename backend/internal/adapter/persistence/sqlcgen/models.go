@@ -53,7 +53,6 @@ type CommentThread struct {
 type Label struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
 	Name        string
 	NameKey     sql.NullString
 	Color       string
@@ -226,6 +225,28 @@ type Profile struct {
 	UpdatedAt       time.Time
 }
 
+type Project struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Key         string
+	Name        string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type ProjectVersion struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+	Name        string
+	NameLower   sql.NullString
+	ReleasedAt  sql.NullTime
+	Position    string
+	ArchivedAt  sql.NullTime
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type ShareLink struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID
@@ -261,10 +282,40 @@ type SpaceGrant struct {
 	UpdatedAt   time.Time
 }
 
+type Sprint struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+	Name        string
+	State       string
+	StartDate   pgtext.NullDate
+	EndDate     pgtext.NullDate
+	Position    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type Team struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+	Name        string
+	NameLower   sql.NullString
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type TeamMember struct {
+	WorkspaceID uuid.UUID
+	TeamID      uuid.UUID
+	UserID      int64
+	CreatedAt   time.Time
+}
+
 type Ticket struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID
-	SpaceID         uuid.UUID
+	ProjectID       uuid.UUID
 	Number          int64
 	TypeID          uuid.UUID
 	StatusID        uuid.UUID
@@ -273,9 +324,10 @@ type Ticket struct {
 	Doc             json.RawMessage
 	PlainText       string
 	Priority        int32
+	StoryPoints     sql.NullInt32
+	TeamID          uuid.NullUUID
 	StartDate       pgtext.NullDate
 	DueDate         pgtext.NullDate
-	Position        string
 	ClosedAt        sql.NullTime
 	Resolution      sql.NullString
 	CreatedByUserID int64
@@ -305,6 +357,15 @@ type TicketAttachment struct {
 	SizeBytes        int64
 	UploadedByUserID int64
 	CreatedAt        time.Time
+}
+
+type TicketBacklogRank struct {
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+	TicketID    uuid.UUID
+	Position    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type TicketChangeGroup struct {
@@ -360,10 +421,18 @@ type TicketCommentReaction struct {
 
 type TicketCounter struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	LastNumber  int64
 	UpdatedAt   time.Time
 	DeletedAt   sql.NullTime
+}
+
+type TicketFixVersion struct {
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+	TicketID    uuid.UUID
+	VersionID   uuid.UUID
+	CreatedAt   time.Time
 }
 
 type TicketLabel struct {
@@ -387,11 +456,10 @@ type TicketPath struct {
 	Depth       int32
 }
 
-type TicketRank struct {
+type TicketSprintRank struct {
 	WorkspaceID uuid.UUID
+	SprintID    uuid.UUID
 	TicketID    uuid.UUID
-	ContextKind string
-	ContextID   uuid.UUID
 	Position    string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -400,7 +468,7 @@ type TicketRank struct {
 type TicketStatus struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
+	ProjectID   uuid.UUID
 	Name        string
 	NameLower   sql.NullString
 	Category    string
@@ -416,7 +484,7 @@ type TicketStatus struct {
 type TicketStatusTransition struct {
 	ID              uuid.UUID
 	WorkspaceID     uuid.UUID
-	SpaceID         uuid.UUID
+	ProjectID       uuid.UUID
 	TicketID        uuid.UUID
 	FromStatusID    uuid.UUID
 	ToStatusID      uuid.UUID
@@ -434,7 +502,7 @@ type TicketTicketLink struct {
 type TicketType struct {
 	ID             uuid.UUID
 	WorkspaceID    uuid.UUID
-	SpaceID        uuid.UUID
+	ProjectID      uuid.UUID
 	Name           string
 	NameLower      sql.NullString
 	Color          string
@@ -447,6 +515,13 @@ type TicketType struct {
 	DeletedAt      sql.NullTime
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+type TicketWatcher struct {
+	WorkspaceID uuid.UUID
+	TicketID    uuid.UUID
+	UserID      int64
+	CreatedAt   time.Time
 }
 
 type User struct {

@@ -9,7 +9,6 @@ import { toDropTarget, type KbDropZone } from '../model/dropZone';
 import KbSpaceFace from './KbSpaceFace';
 import KbTreeList from './KbTreeList';
 import KbSearchDialog from './KbSearchDialog';
-import KbBacklogSection from './KbBacklogSection';
 
 export interface KbSidebarProps {
   /** URL が指しているワークスペース。未指定なら所属の先頭を開く。 */
@@ -24,12 +23,12 @@ export interface KbSidebarProps {
 }
 
 /**
- * KbSidebar はナレッジの「場所を示す面」。
+ * KbSidebar はナレッジの「場所を示す面」。柱（GlobalSidebar）の中へ差し込まれる区画で、
+ * 単体では柱にならない —— 柱はアプリに 1 本だけあり、行き先や通知はそちらが持つ。
  *
- * 上から ワークスペースの切替 → 今いるスペースの顔（KbSpaceFace） → ページの木 →
- * バックログへの導線。常に 1 つの spaceId（今いるスペース）だけを表示する。
- * 他のスペースへの移動は KbSpaceFace 内の一時的な切替が担う
- * （W3 でヘッダーへ正式に移すまでの繋ぎ）。
+ * 上から ワークスペースの切替 → 今いるスペースの顔（KbSpaceFace）→ ページの木。
+ * 常に 1 つの spaceId（今いるスペース）だけを表示する。他のスペースへ移るのは
+ * スペースの顔を押して出る一覧から。
  */
 export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSidebarProps) {
   const navigate = useNavigate();
@@ -64,6 +63,8 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
 
   // 題名の検索。実体はサーバー（ツリーと同じ規則で、閲覧できるページだけが返る）。
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // バックログのバッジと「保存した絞り込み」の件数は同じ 1 回の問い合わせで賄う。
 
   // 作った直後のページは、そのまま題名を書き換えられる状態で出す
   // （「無題」のまま置き去りにされるのを減らす）。KbSpaceSection から引き上げた状態
@@ -164,7 +165,9 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
   };
 
   return (
-    <nav aria-label="ナレッジ" className="flex h-full flex-col overflow-y-auto overscroll-contain p-2">
+    // 柱（GlobalSidebar）の中に差し込まれる区画。余白とスクロールは柱が持つので
+    // ここでは持たない（入れ子のスクロール領域を作らない）。
+    <nav aria-label="ナレッジ" className="flex min-h-0 flex-col">
       <KbWorkspaceSwitcher
         workspaces={workspaces}
         activeSlug={activeSlug}
@@ -320,8 +323,6 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
               </p>
             )}
           </div>
-
-          {!archivedMode && <KbBacklogSection workspaceSlug={activeSlug} spaces={spaces} />}
         </>
       )}
 

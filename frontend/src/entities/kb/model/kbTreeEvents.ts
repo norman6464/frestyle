@@ -9,10 +9,9 @@ import type { KbPage, KbWorkspace } from './types';
  * entities 層の小さな購読口で結ぶ。イベントはサーバーが返した確定後のページを運ぶ
  * （楽観更新の通知ではない — 失敗した操作がイベントになることはない）。
  *
- * ワークスペースの作成・削除も同じ理由で通知する。SecondaryPanel はモバイル用/
- * デスクトップ用の DOM を常に両方マウントするため、KbSidebar（useKbTree）は
- * 単一画面内でも複数インスタンスが独立に一覧を持つ。ヘッダーの切替（useWorkspaceList）
- * も別インスタンスなので、片方の変更を他方が自動では知れない。
+ * ワークスペースの作成・削除も同じ理由で通知する。柱（GlobalSidebar）の一覧は
+ * useWorkspaceList、ナレッジの区画は useKbTree と別インスタンスで一覧を持つため、
+ * 片方の変更を他方が自動では知れない。
  */
 export type KbTreeEvent =
   | { type: 'page-created'; page: KbPage }

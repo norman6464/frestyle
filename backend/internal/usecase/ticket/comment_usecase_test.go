@@ -53,7 +53,7 @@ func Test_発言作成_チケットが無ければそのまま伝える(t *testi
 
 func Test_発言作成_親発言が実在しなければ拒否(t *testing.T) {
 	tickets := &mockTicketRepo{}
-	tickets.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace}, nil)
+	tickets.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject}, nil)
 	comments := &mockTicketCommentRepo{}
 	comments.On("FindTicketComment", mock.Anything, tkWS, tkTicket, "does-not-exist").Return(nil, repository.ErrTicketCommentNotFound)
 	uc := ticket.NewCreateTicketCommentUseCase(comments, tickets, &mockKBPermissionRepo{}, &mockNotificationRepo{})
@@ -70,7 +70,7 @@ func Test_発言作成_親発言が実在しなければ拒否(t *testing.T) {
 // 届く。自分自身への通知は作らない。
 func Test_発言作成_メンションはワークスペースの一員にだけ届き自分は除く(t *testing.T) {
 	tickets := &mockTicketRepo{}
-	tickets.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace, Title: "本文タイトル"}, nil)
+	tickets.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, Title: "本文タイトル"}, nil)
 	tickets.On("FindTicketAssignment", mock.Anything, tkWS, tkTicket).Return(nil, repository.ErrTicketNotFound)
 
 	comments := &mockTicketCommentRepo{}
@@ -106,7 +106,7 @@ func Test_発言作成_メンションはワークスペースの一員にだけ
 // 担当が付いていて発言者本人でなければ ticket_commented が届く。
 func Test_発言作成_担当者への通知(t *testing.T) {
 	tickets := &mockTicketRepo{}
-	tickets.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace, Title: "T"}, nil)
+	tickets.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, Title: "T"}, nil)
 	tickets.On("FindTicketAssignment", mock.Anything, tkWS, tkTicket).
 		Return(&domain.TicketAssignment{TicketID: tkTicket, AssigneePrincipalID: "principal-1"}, nil)
 

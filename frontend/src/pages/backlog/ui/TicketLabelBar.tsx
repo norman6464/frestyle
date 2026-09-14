@@ -6,7 +6,7 @@ import TicketLabelPicker from './TicketLabelPicker';
 export interface TicketLabelBarProps {
   /** このチケットに付いているラベル。 */
   attached: Label[];
-  /** スペースに定義されている全ラベル（ピッカーの選択肢）。 */
+  /** ワークスペースに定義されている全ラベル（ピッカーの選択肢）。 */
   allLabels: Label[];
   canEdit: boolean;
   onToggle: (label: Label) => void;
@@ -29,14 +29,20 @@ export default function TicketLabelBar({ attached, allLabels, canEdit, onToggle,
           <TicketLabelChip key={label.id} label={label} />
         ))}
         {canEdit && (
+          // ラベルが 1 つも無いときは記号だけにしない。「＋」では何が足せるのか分からず、
+          // 5px 四方の的を押すまで確かめようがない。既に付いているなら、
+          // 並んだチップが文脈になるので記号で足りる。
           <button
             type="button"
             onClick={() => setPickerOpen((v) => !v)}
             aria-expanded={pickerOpen}
             aria-label="ラベルを付ける"
-            className="grid h-5 w-5 place-items-center rounded border border-dashed border-surface-3 text-xs text-[var(--color-text-muted)] hover:bg-surface-2"
+            className={`inline-flex items-center gap-1 rounded border border-dashed border-surface-3 text-xs text-[var(--color-text-muted)] hover:bg-surface-2 ${
+              attached.length === 0 ? 'px-2 py-0.5' : 'h-5 w-5 justify-center'
+            }`}
           >
-            ＋
+            <span aria-hidden="true">＋</span>
+            {attached.length === 0 && <span>ラベルを追加</span>}
           </button>
         )}
       </div>

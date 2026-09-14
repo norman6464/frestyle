@@ -42,7 +42,7 @@ export const 既定: Story = {
           color="taupe"
         />
         <FeatureCard
-          to="/kb/backlog"
+          to="/backlog"
           icon={ChartBarIcon}
           title="バックログ"
           description="チームのチケットを一覧で追えます。"

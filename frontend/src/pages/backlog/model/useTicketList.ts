@@ -15,6 +15,11 @@ export interface UseTicketListOptions {
   statusId?: string;
   typeId?: string;
   assigneePrincipalId?: string;
+  labelId?: string;
+  unassigned?: boolean;
+  assignedToMe?: boolean;
+  overdue?: boolean;
+  q?: string;
 }
 
 export interface TicketListState {
@@ -30,37 +35,52 @@ const LOAD_FAILED = 'チケットを読み込めませんでした。時間を�
 interface ListTarget {
   key: string;
   workspaceSlug: string;
-  spaceId: string;
+  projectId: string;
   filter: TicketListFilter;
 }
 
 function targetOf(
   workspaceSlug: string | undefined,
-  spaceId: string | undefined,
+  projectId: string | undefined,
   options: UseTicketListOptions,
 ): ListTarget | null {
-  if (!workspaceSlug || !spaceId) return null;
+  if (!workspaceSlug || !projectId) return null;
   const filter: TicketListFilter = {
     archived: options.archived,
     statusId: options.statusId,
     typeId: options.typeId,
     assigneePrincipalId: options.assigneePrincipalId,
+    labelId: options.labelId,
+    unassigned: options.unassigned,
+    assignedToMe: options.assignedToMe,
+    overdue: options.overdue,
+    q: options.q,
   };
   // 区切りは全角空白（slug にも UUID にも現れない。useKbComments と同じ理由）。
-  const key = `${workspaceSlug} ${spaceId} ${options.archived ? 'arc' : 'live'} ${options.statusId ?? ''} ${
-    options.typeId ?? ''
-  } ${options.assigneePrincipalId ?? ''}`;
-  return { key, workspaceSlug, spaceId, filter };
+  const key = [
+    workspaceSlug,
+    projectId,
+    options.archived ? 'arc' : 'live',
+    options.statusId ?? '',
+    options.typeId ?? '',
+    options.assigneePrincipalId ?? '',
+    options.labelId ?? '',
+    options.unassigned ? 'u' : '',
+    options.assignedToMe ? 'me' : '',
+    options.overdue ? 'od' : '',
+    options.q ?? '',
+  ].join(' ');
+  return { key, workspaceSlug, projectId, filter };
 }
 
 /**
- * useTicketList はスペース 1 つぶんのチケット一覧を読み書きする（設計 Ⅶ）。
+ * useTicketList はプロジェクト 1 つぶんのチケット一覧を読み書きする。
  *
  * 一覧の応答は既に `Ticket` の全項目（doc 含む）を持っているため、詳細パネルは
  * 別に取得しない — 選択中の 1 件をこの配列から `find` するだけでよい
  * （履歴だけは別 hook `useTicketDetail` が持つ）。
  *
- * 宛先（workspaceSlug + spaceId + 現役/アーカイブ + 絞り込み）が変わるたびに取り直す。
+ * 宛先（workspaceSlug + projectId + 現役/アーカイブ + 絞り込み）が変わるたびに取り直す。
  * 応答は要求を始めたときの宛先が今も見えているときだけ反映し、古い応答で
  * 新しい画面を上書きしない（useKbComments と同じ 3 点確認: 宛先一致・seq 一致・
  * 取得中に割り込んだ書き込みが無いこと）。
@@ -70,7 +90,7 @@ function targetOf(
  */
 export function useTicketList(
   workspaceSlug: string | undefined,
-  spaceId: string | undefined,
+  projectId: string | undefined,
   options: UseTicketListOptions,
 ) {
   const [state, setState] = useState<TicketListState>({
@@ -84,7 +104,7 @@ export function useTicketList(
   const seq = useRef(0);
   const writeCount = useRef(0);
 
-  const target = targetOf(workspaceSlug, spaceId, options);
+  const target = targetOf(workspaceSlug, projectId, options);
   const targetKey = target?.key ?? null;
 
   const load = useCallback(async (to: ListTarget) => {
@@ -92,7 +112,7 @@ export function useTicketList(
     const writesAtStart = writeCount.current;
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const tickets = await TicketRepository.fetchTickets(to.workspaceSlug, to.spaceId, to.filter);
+      const tickets = await TicketRepository.fetchTickets(to.workspaceSlug, to.projectId, to.filter);
       if (active.current?.key !== to.key || seq.current !== request) return;
       if (writeCount.current !== writesAtStart) {
         setState((prev) => ({ ...prev, loading: false }));
@@ -165,7 +185,7 @@ export function useTicketList(
     (input: CreateTicketInput) =>
       mutate(
         '',
-        (to) => TicketRepository.createTicket(to.workspaceSlug, to.spaceId, input),
+        (to) => TicketRepository.createTicket(to.workspaceSlug, to.projectId, input),
         (tickets, created) => [...tickets, created],
       ),
     [mutate],

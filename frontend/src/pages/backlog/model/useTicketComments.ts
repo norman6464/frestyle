@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { TicketRepository, type TicketComment, type TicketCommentSegment } from '@/entities/ticket';
+import { TicketRepository, type TicketComment, type TicketCommentBlock } from '@/entities/ticket';
 
 export interface TicketCommentsState {
   comments: TicketComment[];
@@ -80,7 +80,7 @@ export function useTicketComments(workspaceSlug: string | undefined, ticketId: s
   }, []);
 
   const createComment = useCallback(
-    async (body: TicketCommentSegment[], parentCommentId?: string) => {
+    async (body: TicketCommentBlock[], parentCommentId?: string) => {
       const to = active.current;
       if (!to) throw new Error('ticket comments: no active target');
       const created = await TicketRepository.createTicketComment(to.workspaceSlug, to.ticketId, body, parentCommentId);
@@ -91,7 +91,7 @@ export function useTicketComments(workspaceSlug: string | undefined, ticketId: s
   );
 
   const editComment = useCallback(
-    async (commentId: string, body: TicketCommentSegment[]) => {
+    async (commentId: string, body: TicketCommentBlock[]) => {
       const to = active.current;
       if (!to) throw new Error('ticket comments: no active target');
       const updated = await TicketRepository.updateTicketComment(to.workspaceSlug, to.ticketId, commentId, body);

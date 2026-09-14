@@ -1372,8 +1372,8 @@ func (r *knowledgeBasePermissionRepository) AcceptWorkspaceInvitation(
 		if err != nil {
 			return err
 		}
-		// 受諾した瞬間から全員が書ける（AddWorkspaceMemberUseCase が踏襲していた
-		// ユーザー決定 2026-08-28 と同じ既定）。無いときだけ与える（上書きしない）。
+		// 受諾した瞬間から全員が書ける（AddWorkspaceMemberUseCase が踏襲していた既定と
+		// 同じ）。無いときだけ与える（上書きしない）。
 		if err := qtx.InsertWorkspaceGrantIfAbsent(ctx, sqlcgen.InsertWorkspaceGrantIfAbsentParams{
 			WorkspaceID: wsID,
 			PrincipalID: row.ID,

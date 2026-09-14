@@ -2,19 +2,48 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { withApi, withStore, withToast } from '../../../../.storybook/decorators';
+import { SidebarSection } from '@/shared/ui';
 import AppShell from './AppShell';
 
 /**
- * ログイン後の画面ぜんぶを包む外枠（帯・本文・上に戻る・行き先を探す窓）。
+ * ログイン後の画面ぜんぶを包む外枠（帯・柱・本文・上に戻る・行き先を探す窓）。
  *
- * 帯は本文の**上に重ねてある**。縦に並べると帯の後ろに何も無くなり、半透明とぼかしが
- * 効かない。重ねたぶん本文の先頭に余白を入れて、最初の行が帯の裏に隠れないようにしてある。
+ * 帯は常時表示で、本文とは縦に並べる（重ねない）。その下は横並びで、左に柱 1 本、
+ * 右が本文。柱の中身のうち画面ごとの区画は、画面が差し込み口から入れる。
  *
- * ⌘K（Windows は Ctrl+K）でどこからでも「行き先を探す窓」が開く。
- *
- * 本文が縦に長い画面では、下へスクロールすると帯が上へ滑って隠れる（本文が全高になる）。
- * 画面を移ると必ず戻す — 前の画面で隠したまま次の画面へ持ち越さない。
+ * ⌘K（Windows は Ctrl+K）でどこからでも「行き先を探す窓」が開き、⌘\ で柱が開閉する。
  */
+/**
+ * story の本文。`withSection` のときは柱への差し込み（画面ごとの区画）も一緒に出す。
+ */
+function Body({ withSection }: { withSection: boolean }) {
+  return (
+    <>
+      {withSection && (
+        <SidebarSection>
+          <nav aria-label="ナレッジ" className="flex flex-col gap-0.5">
+            <p className="px-2 py-1.5 text-sm font-semibold text-[var(--color-text-primary)]">開発ナレッジ</p>
+            <a href="#a" className="rounded-md px-2 py-1.5 text-sm text-[var(--color-text-tertiary)]">
+              概要
+            </a>
+            <a href="#b" className="rounded-md px-2 py-1.5 text-sm text-[var(--color-text-tertiary)]">
+              アーキテクチャ概要
+            </a>
+          </nav>
+        </SidebarSection>
+      )}
+      <div className="mx-auto max-w-3xl p-6">
+        <h1 className="mb-4 text-2xl font-bold text-[var(--color-text-primary)]">ここが本文</h1>
+        {Array.from({ length: 30 }, (_, i) => (
+          <p key={i} className="py-2 text-sm text-[var(--color-text-secondary)]">
+            {i + 1} 行目
+          </p>
+        ))}
+      </div>
+    </>
+  );
+}
+
 const meta = {
   title: 'widgets/app-shell/AppShell',
   component: AppShell,
@@ -25,30 +54,22 @@ const meta = {
     withApi({
       '/profile/me': { displayName: '川野 拓馬', avatarUrl: null, email: 'takuma@example.com' },
       '/notifications/unread-count': 2,
+      // 宛先は前方一致で選ばれる。細かいほう（spaces）を先に書かないと、スペースの
+      // 問い合わせにワークスペースの配列が返り、柱が別物を並べてしまう。
+      '/kb/workspaces/w-3f2a9c/spaces': [
+        { id: 'sp-1', workspaceId: 'w-1', name: '設計スペース', createdAt: '', updatedAt: '' },
+      ],
       '/kb/workspaces': [
         { slug: 'w-3f2a9c', name: '開発チーム', createdAt: '2026-01-01T00:00:00Z', canManage: true },
       ],
     }),
-    // AppShell は「枠」なので、中身は Outlet に入る。router の入れ子まで作らないと描けない。
-    (Story) => (
+    // AppShell は「枠」なので、中身は Outlet に入る。router の入れ子まで作らないと描けない
+    // （router は 1 つだけ。story ごとに足すと「Router の中に Router」で描けなくなる）。
+    (Story, context) => (
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route element={<Story />}>
-            <Route
-              index
-              element={
-                <div className="mx-auto max-w-3xl p-6">
-                  <h1 className="mb-4 text-2xl font-bold text-[var(--color-text-primary)]">
-                    ここが本文
-                  </h1>
-                  {Array.from({ length: 30 }, (_, i) => (
-                    <p key={i} className="py-2 text-sm text-[var(--color-text-secondary)]">
-                      {i + 1} 行目
-                    </p>
-                  ))}
-                </div>
-              }
-            />
+            <Route index element={<Body withSection={context.parameters.withSection === true} />} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -63,7 +84,8 @@ type Story = StoryObj<typeof meta>;
 export const 既定: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('navigation', { name: 'メインナビゲーション' })).toBeVisible();
+    // 行き先は左端の柱が持つ（ヘッダーには無い）。
+    await expect(canvas.getByRole('navigation', { name: 'アプリのナビゲーション' })).toBeVisible();
     await expect(canvas.getByRole('heading', { name: 'ここが本文' })).toBeVisible();
   },
 };
@@ -76,6 +98,24 @@ export const コマンドパレットを開く: Story = {
     await waitFor(async () => {
       await expect(canvas.getByPlaceholderText('コマンドを検索...')).toBeVisible();
     });
+  },
+};
+
+/**
+ * 画面ごとの区画（ナレッジの木・バックログのプロジェクト）は、画面が差し込み口から
+ * 柱の中へ入れる。柱は 1 本しか無く、その中に行き先と区画が縦に並ぶ。
+ *
+ * 差し込むと柱の既定の中身（スペースの一覧）は引っ込む —— 区画のほうが今いる場所を
+ * 詳しく出しており、同じものが上下に二重になるため。
+ */
+export const 画面の区画が柱に入る: Story = {
+  parameters: { withSection: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const rail = canvas.getByRole('navigation', { name: 'アプリのナビゲーション' }).closest('div')!.parentElement!;
+    // 差し込んだ中身が DOM 上も柱の中にある（本文の中に残っていない）。
+    await expect(rail.contains(canvas.getByRole('navigation', { name: 'ナレッジ' }))).toBe(true);
+    await expect(canvas.getByRole('heading', { name: 'ここが本文' })).toBeVisible();
   },
 };
 

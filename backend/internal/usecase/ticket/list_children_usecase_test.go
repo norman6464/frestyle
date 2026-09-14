@@ -11,16 +11,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Test_チケット子一覧_親のスペースIDで問い合わせる は、子は親と同じスペースにしか
+// Test_チケット子一覧_親のプロジェクトIDで問い合わせる は、子は親と同じプロジェクトにしか
 // 居ない前提（domain.ValidateTicketParentChild）を repository への問い合わせに反映する。
-// spaceID は入力に持たず、FindTicket で親を引いてから使う。
-func Test_チケット子一覧_親のスペースIDで問い合わせる(t *testing.T) {
+// projectID は入力に持たず、FindTicket で親を引いてから使う。
+func Test_チケット子一覧_親のプロジェクトIDで問い合わせる(t *testing.T) {
 	repo := &mockTicketRepo{}
-	parent := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace}
+	parent := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(parent, nil)
 	parentID := tkTicket
-	children := []domain.Ticket{{ID: "child-1", WorkspaceID: tkWS, SpaceID: tkSpace, ParentID: &parentID}}
-	repo.On("ListTicketChildren", mock.Anything, tkWS, tkSpace, tkTicket).Return(children, nil)
+	children := []domain.Ticket{{ID: "child-1", WorkspaceID: tkWS, ProjectID: tkProject, ParentID: &parentID}}
+	repo.On("ListTicketChildren", mock.Anything, tkWS, tkProject, tkTicket).Return(children, nil)
 
 	got, err := ticket.NewListTicketChildrenUseCase(repo).Execute(context.Background(), ticket.ListTicketChildrenInput{
 		WorkspaceID: tkWS, ParentTicketID: tkTicket,

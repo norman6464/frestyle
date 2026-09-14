@@ -9,7 +9,7 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 )
 
-// 既定の雛形（sourceSpaceId 未指定時）の色。画面の見本と同じ配色を使い、進行中の 3 状態は
+// 既定の雛形（sourceProjectId 未指定時）の色。画面の見本と同じ配色を使い、進行中の 3 状態は
 // 進むほど濃くして一覧で見分けが付くようにする。
 const (
 	seedColorTodo     = "#5b6b7a"
@@ -23,48 +23,48 @@ const (
 	seedColorBugType    = "#9a3b2e"
 )
 
-// EnableTicketsForSpaceUseCase はスペースにチケット機能を有効化する。「有効化済み」の正本は
+// EnableTicketsForProjectUseCase はプロジェクトにチケット機能を有効化する。「有効化済み」の正本は
 // 初期状態を持つ現役の状態が 1 つあること（HasActiveInitialTicketStatus）で、二重有効化は
-// repository.ErrTicketsAlreadyEnabled を返す。SourceSpaceID を指定すると既存スペースの現役の
+// repository.ErrTicketsAlreadyEnabled を返す。SourceProjectID を指定すると既存プロジェクトの現役の
 // 状態・種別を複製し、無指定なら既定の雛形（seedStatuses / seedTypes）を作る — どちらも
 // 有効化後は管理画面で編集できるので初期値でしかない。複製元への参照権限の確認は
 // 呼び出し側の責務。
-type EnableTicketsForSpaceUseCase struct {
+type EnableTicketsForProjectUseCase struct {
 	repo      repository.TicketRepository
 	txManager repository.TxManager
 }
 
-func NewEnableTicketsForSpaceUseCase(
+func NewEnableTicketsForProjectUseCase(
 	r repository.TicketRepository, txManager repository.TxManager,
-) *EnableTicketsForSpaceUseCase {
-	return &EnableTicketsForSpaceUseCase{repo: r, txManager: txManager}
+) *EnableTicketsForProjectUseCase {
+	return &EnableTicketsForProjectUseCase{repo: r, txManager: txManager}
 }
 
-type EnableTicketsForSpaceInput struct {
+type EnableTicketsForProjectInput struct {
 	WorkspaceID string
-	SpaceID     string
-	// SourceSpaceID が nil なら既定の雛形、非 nil ならそのスペースの現役構成を複製する。
-	SourceSpaceID *string
+	ProjectID   string
+	// SourceProjectID が nil なら既定の雛形、非 nil ならそのプロジェクトの現役構成を複製する。
+	SourceProjectID *string
 }
 
-// EnableTicketsForSpaceOutput はどれだけ作ったかの要約。json タグを明示するのは、タグが無いと
+// EnableTicketsForProjectOutput はどれだけ作ったかの要約。json タグを明示するのは、タグが無いと
 // フィールド名がそのまま出て、ほかの camelCase API と綴りが食い違うため。
-type EnableTicketsForSpaceOutput struct {
+type EnableTicketsForProjectOutput struct {
 	StatusCount int `json:"statusCount"`
 	TypeCount   int `json:"typeCount"`
 }
 
-func (u *EnableTicketsForSpaceUseCase) Execute(
-	ctx context.Context, in EnableTicketsForSpaceInput,
-) (*EnableTicketsForSpaceOutput, error) {
+func (u *EnableTicketsForProjectUseCase) Execute(
+	ctx context.Context, in EnableTicketsForProjectInput,
+) (*EnableTicketsForProjectOutput, error) {
 	if in.WorkspaceID == "" {
 		return nil, errors.New("workspaceID is required")
 	}
-	if in.SpaceID == "" {
-		return nil, errors.New("spaceID is required")
+	if in.ProjectID == "" {
+		return nil, errors.New("projectID is required")
 	}
 
-	already, err := u.repo.HasActiveInitialTicketStatus(ctx, in.WorkspaceID, in.SpaceID)
+	already, err := u.repo.HasActiveInitialTicketStatus(ctx, in.WorkspaceID, in.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -80,14 +80,14 @@ func (u *EnableTicketsForSpaceUseCase) Execute(
 	if err := u.txManager.DoInTx(ctx, func(ctx context.Context) error {
 		for _, s := range statuses {
 			s := s
-			s.WorkspaceID, s.SpaceID = in.WorkspaceID, in.SpaceID
+			s.WorkspaceID, s.ProjectID = in.WorkspaceID, in.ProjectID
 			if err := u.repo.InsertTicketStatus(ctx, &s); err != nil {
 				return err
 			}
 		}
 		for _, t := range types {
 			t := t
-			t.WorkspaceID, t.SpaceID = in.WorkspaceID, in.SpaceID
+			t.WorkspaceID, t.ProjectID = in.WorkspaceID, in.ProjectID
 			if err := u.repo.InsertTicketType(ctx, &t); err != nil {
 				return err
 			}
@@ -96,24 +96,24 @@ func (u *EnableTicketsForSpaceUseCase) Execute(
 	}); err != nil {
 		return nil, err
 	}
-	return &EnableTicketsForSpaceOutput{StatusCount: len(statuses), TypeCount: len(types)}, nil
+	return &EnableTicketsForProjectOutput{StatusCount: len(statuses), TypeCount: len(types)}, nil
 }
 
 // buildSeed は作る状態・種別の集合を組み立てる（DB へはまだ書かない）。複製元指定があれば
 // 現役の ListTicketStatuses/ListTicketTypes を読み、無ければ既定の雛形を fracindex で採番する。
-func (u *EnableTicketsForSpaceUseCase) buildSeed(
-	ctx context.Context, in EnableTicketsForSpaceInput,
+func (u *EnableTicketsForProjectUseCase) buildSeed(
+	ctx context.Context, in EnableTicketsForProjectInput,
 ) ([]domain.TicketStatus, []domain.TicketType, error) {
-	if in.SourceSpaceID != nil {
-		statuses, err := u.repo.ListTicketStatuses(ctx, in.WorkspaceID, *in.SourceSpaceID, false)
+	if in.SourceProjectID != nil {
+		statuses, err := u.repo.ListTicketStatuses(ctx, in.WorkspaceID, *in.SourceProjectID, false)
 		if err != nil {
 			return nil, nil, err
 		}
-		types, err := u.repo.ListTicketTypes(ctx, in.WorkspaceID, *in.SourceSpaceID, false)
+		types, err := u.repo.ListTicketTypes(ctx, in.WorkspaceID, *in.SourceProjectID, false)
 		if err != nil {
 			return nil, nil, err
 		}
-		// SpaceID の複製先への書き換えは呼び出し元の Execute で行う。ここでは読んだ値をそのまま返す。
+		// ProjectID の複製先への書き換えは呼び出し元の Execute で行う。ここでは読んだ値をそのまま返す。
 		return statuses, types, nil
 	}
 

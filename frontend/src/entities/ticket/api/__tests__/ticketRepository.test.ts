@@ -33,7 +33,7 @@ beforeEach(() => {
 const wireTicket = (over: Record<string, unknown> = {}) => ({
   id: 't-1',
   workspaceId: 'w-1',
-  spaceId: 's-1',
+  projectId: 'p-1',
   number: 457,
   typeId: 'ty-1',
   statusId: 'st-1',
@@ -48,10 +48,10 @@ const wireTicket = (over: Record<string, unknown> = {}) => ({
 });
 
 describe('TicketRepository.fetchTickets', () => {
-  it('GET /kb/workspaces/:slug/spaces/:spaceId/tickets を叩き、omitempty のキーを null に正規化する', async () => {
+  it('GET /workspaces/:slug/projects/:projectId/tickets を叩き、omitempty のキーを null に正規化する', async () => {
     mockGet.mockResolvedValue({ data: { tickets: [wireTicket()] } });
-    const list = await TicketRepository.fetchTickets('acme', 's-1');
-    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/spaces/s-1/tickets', { params: {} });
+    const list = await TicketRepository.fetchTickets('acme', 'p-1');
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/projects/p-1/tickets', { params: {} });
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
       id: 't-1',
@@ -67,19 +67,33 @@ describe('TicketRepository.fetchTickets', () => {
 
   it('tickets が null で返っても空配列にする', async () => {
     mockGet.mockResolvedValue({ data: { tickets: null } });
-    await expect(TicketRepository.fetchTickets('acme', 's-1')).resolves.toEqual([]);
+    await expect(TicketRepository.fetchTickets('acme', 'p-1')).resolves.toEqual([]);
   });
 
   it('絞り込みをクエリパラメータへ渡す', async () => {
     mockGet.mockResolvedValue({ data: { tickets: [] } });
-    await TicketRepository.fetchTickets('acme', 's-1', {
+    await TicketRepository.fetchTickets('acme', 'p-1', {
       statusId: 'st-1',
       typeId: 'ty-1',
       assigneePrincipalId: 'p-1',
       archived: true,
     });
-    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/spaces/s-1/tickets', {
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/projects/p-1/tickets', {
       params: { statusId: 'st-1', typeId: 'ty-1', assigneePrincipalId: 'p-1', archived: 'true' },
+    });
+  });
+
+  it('保存した絞り込み(unassigned/assignedToMe/overdue/q/labelId)もクエリパラメータへ渡す', async () => {
+    mockGet.mockResolvedValue({ data: { tickets: [] } });
+    await TicketRepository.fetchTickets('acme', 'p-1', {
+      labelId: 'l-1',
+      unassigned: true,
+      assignedToMe: true,
+      overdue: true,
+      q: '認証',
+    });
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/projects/p-1/tickets', {
+      params: { label: 'l-1', unassigned: 'true', assignedToMe: 'true', overdue: 'true', q: '認証' },
     });
   });
 
@@ -87,9 +101,18 @@ describe('TicketRepository.fetchTickets', () => {
     mockGet.mockResolvedValue({
       data: { tickets: [wireTicket({ parentId: 't-0', assigneePrincipalId: 'p-1' })] },
     });
-    const [ticket] = await TicketRepository.fetchTickets('acme', 's-1');
+    const [ticket] = await TicketRepository.fetchTickets('acme', 'p-1');
     expect(ticket.parentId).toBe('t-0');
     expect(ticket.assigneePrincipalId).toBe('p-1');
+  });
+});
+
+describe('TicketRepository.fetchTicketCounts', () => {
+  it('GET .../tickets/counts を叩き、応答をそのまま返す', async () => {
+    mockGet.mockResolvedValue({ data: { total: 10, assignedToMe: 3, overdue: 1, unassigned: 2 } });
+    const counts = await TicketRepository.fetchTicketCounts('acme', 'p-1');
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/projects/p-1/tickets/counts');
+    expect(counts).toEqual({ total: 10, assignedToMe: 3, overdue: 1, unassigned: 2 });
   });
 });
 
@@ -97,7 +120,7 @@ describe('TicketRepository.fetchTicketChildren', () => {
   it('GET /tickets/:ticketId/children を叩く', async () => {
     mockGet.mockResolvedValue({ data: { tickets: [wireTicket({ id: 'c-1', parentId: 't-1' })] } });
     const list = await TicketRepository.fetchTicketChildren('acme', 't-1');
-    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/children');
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/children');
     expect(list).toHaveLength(1);
     expect(list[0].parentId).toBe('t-1');
   });
@@ -111,8 +134,8 @@ describe('TicketRepository.fetchTicketChildren', () => {
 describe('TicketRepository.createTicket', () => {
   it('POST で作成し、省略項目は空文字/0 で送る', async () => {
     mockPost.mockResolvedValue({ data: wireTicket() });
-    await TicketRepository.createTicket('acme', 's-1', { title: '新しいチケット' });
-    expect(mockPost).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/spaces/s-1/tickets', {
+    await TicketRepository.createTicket('acme', 'p-1', { title: '新しいチケット' });
+    expect(mockPost).toHaveBeenCalledWith('/api/v2/workspaces/acme/projects/p-1/tickets', {
       parentId: '',
       typeId: '',
       statusId: '',
@@ -129,7 +152,7 @@ describe('TicketRepository.moveTicket', () => {
   it('POST /move へ anchor を送る（204・戻り値なし）', async () => {
     mockPost.mockResolvedValue({ data: undefined });
     await TicketRepository.moveTicket('acme', 't-1', { anchorTicketId: 't-2', anchorAfter: true });
-    expect(mockPost).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/move', {
+    expect(mockPost).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/move', {
       anchorTicketId: 't-2',
       anchorAfter: true,
     });
@@ -138,7 +161,7 @@ describe('TicketRepository.moveTicket', () => {
   it('anchor 省略時は末尾へ（空文字を送る）', async () => {
     mockPost.mockResolvedValue({ data: undefined });
     await TicketRepository.moveTicket('acme', 't-1', {});
-    expect(mockPost).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/move', {
+    expect(mockPost).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/move', {
       anchorTicketId: '',
       anchorAfter: false,
     });
@@ -149,13 +172,13 @@ describe('TicketRepository.unassignTicket / archiveTicketStatus', () => {
   it('DELETE /assignee を叩く', async () => {
     mockDelete.mockResolvedValue({ data: undefined });
     await TicketRepository.unassignTicket('acme', 't-1');
-    expect(mockDelete).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/assignee');
+    expect(mockDelete).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/assignee');
   });
 
   it('POST /ticket-statuses/:id/archive を叩く', async () => {
     mockPost.mockResolvedValue({ data: undefined });
-    await TicketRepository.archiveTicketStatus('acme', 's-1', 'st-1');
-    expect(mockPost).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/spaces/s-1/ticket-statuses/st-1/archive');
+    await TicketRepository.archiveTicketStatus('acme', 'p-1', 'st-1');
+    expect(mockPost).toHaveBeenCalledWith('/api/v2/workspaces/acme/projects/p-1/ticket-statuses/st-1/archive');
   });
 });
 
@@ -167,7 +190,7 @@ describe('TicketRepository.fetchTicketStatuses', () => {
           {
             id: 'st-1',
             workspaceId: 'w-1',
-            spaceId: 's-1',
+            projectId: 'p-1',
             name: 'To Do',
             category: 'todo',
             color: '#5b6b7a',
@@ -180,7 +203,7 @@ describe('TicketRepository.fetchTicketStatuses', () => {
         ],
       },
     });
-    const [status] = await TicketRepository.fetchTicketStatuses('acme', 's-1');
+    const [status] = await TicketRepository.fetchTicketStatuses('acme', 'p-1');
     expect(status.activeTicketCount).toBe(3);
     expect(status.archivedAt).toBeNull();
   });
@@ -192,7 +215,7 @@ describe('TicketRepository.updateTicketStatus', () => {
       data: {
         id: 'st-1',
         workspaceId: 'w-1',
-        spaceId: 's-1',
+        projectId: 'p-1',
         name: 'To Do',
         category: 'todo',
         color: '#5b6b7a',
@@ -202,7 +225,7 @@ describe('TicketRepository.updateTicketStatus', () => {
         updatedAt: '2026-09-09T00:00:00Z',
       },
     });
-    const status = await TicketRepository.updateTicketStatus('acme', 's-1', 'st-1', {
+    const status = await TicketRepository.updateTicketStatus('acme', 'p-1', 'st-1', {
       name: 'To Do',
       category: 'todo',
       color: '#5b6b7a',
@@ -212,7 +235,7 @@ describe('TicketRepository.updateTicketStatus', () => {
 });
 
 describe('TicketRepository.fetchTicketComments', () => {
-  it('GET /comments を叩き、本文をインラインノードの配列から区間の列へ畳む', async () => {
+  it('GET /comments を叩き、本文のノード配列を塊の列へ畳む', async () => {
     mockGet.mockResolvedValue({
       data: {
         comments: [
@@ -231,13 +254,13 @@ describe('TicketRepository.fetchTicketComments', () => {
 
     const comments = await TicketRepository.fetchTicketComments('acme', 't-1');
 
-    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/comments');
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/comments');
     expect(comments).toEqual([
       {
         id: 'c-1',
         parentCommentId: null,
         author: { userId: 1, name: '田中 太郎' },
-        body: [{ kind: 'text', text: 'こんにちは' }],
+        body: [{ kind: 'paragraph', segments: [{ kind: 'text', text: 'こんにちは' }] }],
         edited: false,
         reactions: [{ userId: 2, emoji: '👍' }],
         createdAt: '2026-09-10T00:00:00Z',
@@ -272,7 +295,7 @@ describe('TicketRepository.fetchTicketComments', () => {
 });
 
 describe('TicketRepository.createTicketComment', () => {
-  it('POST で区間の列を送信できる本文へ組み立てて送る', async () => {
+  it('POST で塊の列を送信できる本文へ組み立てて送る', async () => {
     mockPost.mockResolvedValue({
       data: {
         id: 'c-1',
@@ -285,11 +308,16 @@ describe('TicketRepository.createTicketComment', () => {
       },
     });
 
-    await TicketRepository.createTicketComment('acme', 't-1', [{ kind: 'text', text: 'お願いします' }], 'c-parent');
+    await TicketRepository.createTicketComment(
+      'acme',
+      't-1',
+      [{ kind: 'paragraph', segments: [{ kind: 'text', text: 'お願いします' }] }],
+      'c-parent',
+    );
 
-    expect(mockPost).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/comments', {
+    expect(mockPost).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/comments', {
       parentCommentId: 'c-parent',
-      body: [{ type: 'text', text: 'お願いします' }],
+      body: [{ type: 'paragraph', content: [{ type: 'text', text: 'お願いします' }] }],
     });
   });
 });
@@ -309,11 +337,11 @@ describe('TicketRepository.updateTicketComment', () => {
     });
 
     const updated = await TicketRepository.updateTicketComment('acme', 't-1', 'c-1', [
-      { kind: 'text', text: '直しました' },
+      { kind: 'paragraph', segments: [{ kind: 'text', text: '直しました' }] },
     ]);
 
-    expect(mockPut).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/comments/c-1', {
-      body: [{ type: 'text', text: '直しました' }],
+    expect(mockPut).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/comments/c-1', {
+      body: [{ type: 'paragraph', content: [{ type: 'text', text: '直しました' }] }],
     });
     expect(updated.reactions).toEqual([]);
   });
@@ -323,12 +351,12 @@ describe('TicketRepository.deleteTicketComment', () => {
   it('DELETE を叩く（204）', async () => {
     mockDelete.mockResolvedValue({ data: undefined });
     await TicketRepository.deleteTicketComment('acme', 't-1', 'c-1');
-    expect(mockDelete).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/comments/c-1');
+    expect(mockDelete).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/comments/c-1');
   });
 });
 
 describe('TicketRepository.fetchTicketCommentEdits', () => {
-  it('GET /edits を叩き、編集前の本文も区間の列へ畳む', async () => {
+  it('GET /edits を叩き、編集前の本文も塊の列へ畳む', async () => {
     mockGet.mockResolvedValue({
       data: {
         edits: [
@@ -344,12 +372,12 @@ describe('TicketRepository.fetchTicketCommentEdits', () => {
 
     const edits = await TicketRepository.fetchTicketCommentEdits('acme', 't-1', 'c-1');
 
-    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/comments/c-1/edits');
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/comments/c-1/edits');
     expect(edits).toEqual([
       {
         id: 'e-1',
         editor: { userId: 1, name: '田中 太郎' },
-        previousBody: [{ kind: 'text', text: '直す前' }],
+        previousBody: [{ kind: 'paragraph', segments: [{ kind: 'text', text: '直す前' }] }],
         editedAt: '2026-09-10T00:00:00Z',
       },
     ]);
@@ -364,7 +392,7 @@ describe('TicketRepository.addTicketCommentReaction / removeTicketCommentReactio
     await TicketRepository.addTicketCommentReaction('acme', 't-1', 'c-1', '👍');
     await TicketRepository.removeTicketCommentReaction('acme', 't-1', 'c-1', '👍');
 
-    const expectedUrl = `/api/v2/kb/workspaces/acme/tickets/t-1/comments/c-1/reactions/${encodeURIComponent('👍')}`;
+    const expectedUrl = `/api/v2/workspaces/acme/tickets/t-1/comments/c-1/reactions/${encodeURIComponent('👍')}`;
     expect(mockPut).toHaveBeenCalledWith(expectedUrl);
     expect(mockDelete).toHaveBeenCalledWith(expectedUrl);
   });
@@ -373,38 +401,38 @@ describe('TicketRepository.addTicketCommentReaction / removeTicketCommentReactio
 describe('TicketRepository.fetchLabels', () => {
   it('GET /labels を叩く', async () => {
     mockGet.mockResolvedValue({
-      data: { labels: [{ id: 'l-1', spaceId: 's-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' }] },
+      data: { labels: [{ id: 'l-1', projectId: 'p-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' }] },
     });
-    const labels = await TicketRepository.fetchLabels('acme', 's-1');
-    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/spaces/s-1/labels');
+    const labels = await TicketRepository.fetchLabels('acme');
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/labels');
     expect(labels).toHaveLength(1);
   });
 
   it('labels が null でも空配列にする', async () => {
     mockGet.mockResolvedValue({ data: { labels: null } });
-    await expect(TicketRepository.fetchLabels('acme', 's-1')).resolves.toEqual([]);
+    await expect(TicketRepository.fetchLabels('acme')).resolves.toEqual([]);
   });
 });
 
 describe('TicketRepository.createLabel / updateLabel', () => {
   it('POST で作成する', async () => {
-    mockPost.mockResolvedValue({ data: { id: 'l-1', spaceId: 's-1', name: '検索', color: '#dbeafe', createdAt: '', updatedAt: '' } });
-    await TicketRepository.createLabel('acme', 's-1', { name: '検索', color: '#dbeafe' });
-    expect(mockPost).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/spaces/s-1/labels', { name: '検索', color: '#dbeafe' });
+    mockPost.mockResolvedValue({ data: { id: 'l-1', projectId: 'p-1', name: '検索', color: '#dbeafe', createdAt: '', updatedAt: '' } });
+    await TicketRepository.createLabel('acme', { name: '検索', color: '#dbeafe' });
+    expect(mockPost).toHaveBeenCalledWith('/api/v2/workspaces/acme/labels', { name: '検索', color: '#dbeafe' });
   });
 
   it('PUT で更新する', async () => {
-    mockPut.mockResolvedValue({ data: { id: 'l-1', spaceId: 's-1', name: '検索2', color: '#dbeafe', createdAt: '', updatedAt: '' } });
-    await TicketRepository.updateLabel('acme', 's-1', 'l-1', { name: '検索2', color: '#dbeafe' });
-    expect(mockPut).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/spaces/s-1/labels/l-1', { name: '検索2', color: '#dbeafe' });
+    mockPut.mockResolvedValue({ data: { id: 'l-1', projectId: 'p-1', name: '検索2', color: '#dbeafe', createdAt: '', updatedAt: '' } });
+    await TicketRepository.updateLabel('acme', 'l-1', { name: '検索2', color: '#dbeafe' });
+    expect(mockPut).toHaveBeenCalledWith('/api/v2/workspaces/acme/labels/l-1', { name: '検索2', color: '#dbeafe' });
   });
 });
 
 describe('TicketRepository.deleteLabel', () => {
   it('DELETE を叩く（204）', async () => {
     mockDelete.mockResolvedValue({ data: undefined });
-    await TicketRepository.deleteLabel('acme', 's-1', 'l-1');
-    expect(mockDelete).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/spaces/s-1/labels/l-1');
+    await TicketRepository.deleteLabel('acme', 'l-1');
+    expect(mockDelete).toHaveBeenCalledWith('/api/v2/workspaces/acme/labels/l-1');
   });
 });
 
@@ -414,8 +442,8 @@ describe('TicketRepository.addTicketLabel / removeTicketLabel', () => {
     mockDelete.mockResolvedValue({ data: undefined });
     await TicketRepository.addTicketLabel('acme', 't-1', 'l-1');
     await TicketRepository.removeTicketLabel('acme', 't-1', 'l-1');
-    expect(mockPut).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/labels/l-1');
-    expect(mockDelete).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/labels/l-1');
+    expect(mockPut).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/labels/l-1');
+    expect(mockDelete).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/labels/l-1');
   });
 });
 
@@ -425,7 +453,7 @@ describe('TicketRepository.fetchTicketAttachments', () => {
       data: { attachments: [{ id: 'at-1', ticketId: 't-1', filename: 'a.png', contentType: 'image/png', sizeBytes: 1, uploadedByUserId: 1, createdAt: '' }] },
     });
     const attachments = await TicketRepository.fetchTicketAttachments('acme', 't-1');
-    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/attachments');
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/attachments');
     expect(attachments).toHaveLength(1);
   });
 
@@ -439,7 +467,7 @@ describe('TicketRepository.issueTicketAttachmentUploadUrl', () => {
   it('POST で contentType と size を渡す', async () => {
     mockPost.mockResolvedValue({ data: { url: 'https://gcs/put?sig', key: 'k-1', expiresIn: 600 } });
     const issued = await TicketRepository.issueTicketAttachmentUploadUrl('acme', 't-1', 'image/png', 1024);
-    expect(mockPost).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/attachments/upload-url', {
+    expect(mockPost).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/attachments/upload-url', {
       contentType: 'image/png',
       size: 1024,
     });
@@ -469,7 +497,7 @@ describe('TicketRepository.createTicketAttachment', () => {
       contentType: 'application/pdf',
       sizeBytes: 10,
     });
-    expect(mockPost).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/attachments', {
+    expect(mockPost).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/attachments', {
       key: 'k-1',
       filename: 'a.pdf',
       contentType: 'application/pdf',
@@ -483,7 +511,7 @@ describe('TicketRepository.issueTicketAttachmentDownloadUrl', () => {
   it('GET でダウンロード URL を発行する', async () => {
     mockGet.mockResolvedValue({ data: { url: 'https://gcs/get?sig', expiresIn: 600 } });
     const issued = await TicketRepository.issueTicketAttachmentDownloadUrl('acme', 't-1', 'at-1');
-    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/attachments/at-1/download-url');
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/attachments/at-1/download-url');
     expect(issued).toEqual({ url: 'https://gcs/get?sig', expiresIn: 600 });
   });
 });
@@ -492,6 +520,6 @@ describe('TicketRepository.deleteTicketAttachment', () => {
   it('DELETE を叩く（204）', async () => {
     mockDelete.mockResolvedValue({ data: undefined });
     await TicketRepository.deleteTicketAttachment('acme', 't-1', 'at-1');
-    expect(mockDelete).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/tickets/t-1/attachments/at-1');
+    expect(mockDelete).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/attachments/at-1');
   });
 });

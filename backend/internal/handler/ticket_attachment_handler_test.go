@@ -15,7 +15,7 @@ import (
 // 直接見ているので、ここでは handler の配線に絞る。
 func Test_添付一式_発行記録一覧ダウンロードURL削除(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-1", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "対象チケット"})
+	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "対象チケット"})
 	base := ticketAPIBase + "/tickets/" + target.ID + "/attachments"
 
 	// 1) アップロード URL の発行。
@@ -61,7 +61,7 @@ func Test_添付一式_発行記録一覧ダウンロードURL削除(t *testing.
 
 func Test_添付_閲覧のみではアップロードURL発行403だが一覧は見える(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
-	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-viewer", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x"})
+	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-viewer", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x"})
 	base := ticketAPIBase + "/tickets/" + target.ID + "/attachments"
 
 	w := f.do(t, http.MethodPost, base+"/upload-url", `{"contentType":"application/pdf","size":1024}`)
@@ -74,7 +74,7 @@ func Test_添付_閲覧のみではアップロードURL発行403だが一覧は
 // 閲覧のみでは記録・削除・ダウンロードURL発行も含め編集系はすべて403になる。
 func Test_添付_閲覧のみでは記録も削除も403(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
-	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-viewer2", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x"})
+	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-viewer2", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x"})
 	base := ticketAPIBase + "/tickets/" + target.ID + "/attachments"
 
 	w := f.do(t, http.MethodPost, base, `{"key":"tickets/`+kbWorkspaceID+`/`+target.ID+`/1.bin","filename":"x.pdf","contentType":"application/pdf","sizeBytes":1024}`)
@@ -86,7 +86,7 @@ func Test_添付_閲覧のみでは記録も削除も403(t *testing.T) {
 // 存在しない添付のダウンロードURL発行・削除は404になる。
 func Test_添付_存在しない添付のダウンロードURL発行削除は404(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-404", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x"})
+	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-404", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x"})
 	base := ticketAPIBase + "/tickets/" + target.ID + "/attachments"
 
 	w := f.do(t, http.MethodGet, base+"/no-such-id/download-url", "")
@@ -106,7 +106,7 @@ func Test_添付_存在しないチケットへのアップロードURL発行は
 
 func Test_添付_許可リスト外のContentTypeは拒否(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-2", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x"})
+	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-2", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x"})
 
 	w := f.do(t, http.MethodPost, ticketAPIBase+"/tickets/"+target.ID+"/attachments/upload-url",
 		`{"contentType":"application/x-msdownload","size":1024}`)
@@ -117,7 +117,7 @@ func Test_添付_許可リスト外のContentTypeは拒否(t *testing.T) {
 
 func Test_添付_上限を超えるサイズと空のファイル名は拒否(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-5", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x"})
+	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-5", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x"})
 	base := ticketAPIBase + "/tickets/" + target.ID + "/attachments"
 
 	w := f.do(t, http.MethodPost, base+"/upload-url",
@@ -138,7 +138,7 @@ func Test_添付_上限を超えるサイズと空のファイル名は拒否(t 
 // ここでは handler がエラーを正しく 400 へ写像することを確かめる）。
 func Test_添付_他チケット由来のkeyは記録できない(t *testing.T) {
 	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
-	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-3", WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, Title: "x"})
+	target := f.tickets.addTicket(domain.Ticket{ID: "ticket-attachments-3", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: "x"})
 
 	foreignKey := "tickets/" + kbWorkspaceID + "/some-other-ticket/123.bin"
 	w := f.do(t, http.MethodPost, ticketAPIBase+"/tickets/"+target.ID+"/attachments",

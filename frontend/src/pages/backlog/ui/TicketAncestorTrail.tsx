@@ -4,7 +4,7 @@ import { formatTicketKey, type Ticket } from '@/entities/ticket';
 export interface TicketAncestorTrailProps {
   /** 根から順の祖先（自分自身は含まない）。 */
   ancestors: Ticket[];
-  spaceKey: string;
+  projectKey: string;
 }
 
 /**
@@ -13,7 +13,7 @@ export interface TicketAncestorTrailProps {
  * 題名ではなく表示キーだけを出す。狭い幅で題名を並べると折り返して 2 行になり、
  * 見出し帯の高さが親の数で変わってしまう。
  */
-export default function TicketAncestorTrail({ ancestors, spaceKey }: TicketAncestorTrailProps) {
+export default function TicketAncestorTrail({ ancestors, projectKey }: TicketAncestorTrailProps) {
   if (ancestors.length === 0) return null;
 
   return (
@@ -21,11 +21,11 @@ export default function TicketAncestorTrail({ ancestors, spaceKey }: TicketAnces
       {ancestors.map((ancestor) => (
         <span key={ancestor.id} className="flex items-center gap-1">
           <Link
-            to={`/kb/tickets/${ancestor.id}`}
+            to={`/tickets/${ancestor.id}`}
             title={ancestor.title}
             className="hover:text-[var(--color-text-primary)] hover:underline"
           >
-            {formatTicketKey(spaceKey, ancestor.number)}
+            {formatTicketKey(projectKey, ancestor.number)}
           </Link>
           <span aria-hidden="true" className="text-[var(--color-text-faint)]">
             ›

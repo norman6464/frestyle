@@ -12,7 +12,7 @@ const hoisted = vi.hoisted(() => ({
   archiveTicket: vi.fn(),
   restoreTicket: vi.fn(),
   changeTicketParent: vi.fn(),
-  fetchSpaces: vi.fn(),
+  fetchProject: vi.fn(),
   addTicketLabel: vi.fn(),
   removeTicketLabel: vi.fn(),
 }));
@@ -36,11 +36,11 @@ vi.mock('@/entities/ticket', async (importOriginal) => {
   };
 });
 
-vi.mock('@/entities/kb', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/kb')>();
+vi.mock('@/entities/project', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/entities/project')>();
   return {
     ...actual,
-    KbRepository: { fetchSpaces: hoisted.fetchSpaces },
+    ProjectRepository: { fetchProject: hoisted.fetchProject },
   };
 });
 
@@ -50,7 +50,7 @@ function ticket(over: Partial<Ticket> = {}): Ticket {
   return {
     id: 't-1',
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     number: 12,
     typeId: 'ty-1',
     statusId: 'st-1',
@@ -75,11 +75,11 @@ function ticket(over: Partial<Ticket> = {}): Ticket {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  hoisted.fetchSpaces.mockResolvedValue([{ id: 's-1', key: 'FRESTYLE', name: 'FreStyle' }]);
+  hoisted.fetchProject.mockResolvedValue({ id: 'p-1', key: 'FRESTYLE', name: 'FreStyle' });
 });
 
 describe('useTicketPage', () => {
-  it('解決してワークスペース・チケット・祖先・権限・スペースを持つ', async () => {
+  it('解決してワークスペース・チケット・祖先・権限・プロジェクトを持つ', async () => {
     hoisted.resolveTicket.mockResolvedValue({
       workspaceSlug: 'acme',
       workspaceName: 'Acme',
@@ -95,7 +95,7 @@ describe('useTicketPage', () => {
     expect(result.current.workspaceSlug).toBe('acme');
     expect(result.current.ticket?.id).toBe('t-1');
     expect(result.current.permission).toEqual(permission);
-    expect(result.current.space?.key).toBe('FRESTYLE');
+    expect(result.current.project?.key).toBe('FRESTYLE');
   });
 
   it('404はチケットが見つからない文言、それ以外は読み込み失敗の文言', async () => {
@@ -112,7 +112,7 @@ describe('useTicketPage', () => {
     );
   });
 
-  it('スペースが引けなくてもチケットは表示する（キーだけ出ない）', async () => {
+  it('プロジェクトが引けなくてもチケットは表示する（キーだけ出ない）', async () => {
     hoisted.resolveTicket.mockResolvedValue({
       workspaceSlug: 'acme',
       workspaceName: 'Acme',
@@ -121,14 +121,14 @@ describe('useTicketPage', () => {
       ancestors: [],
       permission,
     });
-    hoisted.fetchSpaces.mockRejectedValue(new Error('network'));
+    hoisted.fetchProject.mockRejectedValue(new Error('network'));
 
     const { result } = renderHook(() => useTicketPage('t-1'));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBeNull();
     expect(result.current.ticket?.id).toBe('t-1');
-    expect(result.current.space).toBeNull();
+    expect(result.current.project).toBeNull();
   });
 
   it('宛先を切り替えたら古い応答を無視する', async () => {
@@ -246,7 +246,7 @@ describe('useTicketPage', () => {
 describe('addLabel / removeLabel', () => {
   const permission: TicketPermission = { canView: true, canComment: true, canEdit: true, canManage: false };
   const label = (over: Partial<Label> & { id: string }): Label => ({
-    spaceId: 's-1',
+    projectId: 's-1',
     name: 'ラベル',
     color: '#1d4ed8',
     createdAt: '',

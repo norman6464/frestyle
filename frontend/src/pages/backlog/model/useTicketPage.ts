@@ -7,7 +7,7 @@ import {
   type TicketPermission,
   type UpdateTicketInput,
 } from '@/entities/ticket';
-import { KbRepository, type KbSpace } from '@/entities/kb';
+import { ProjectRepository, type Project } from '@/entities/project';
 
 export interface TicketPageState {
   /** 以降の API 呼び出しに使う。解決するまで null。 */
@@ -17,7 +17,7 @@ export interface TicketPageState {
   ancestors: Ticket[];
   permission: TicketPermission | null;
   /** 表示キーの組み立てとバックログへ戻る導線に要る。 */
-  space: KbSpace | null;
+  project: Project | null;
   loading: boolean;
   error: string | null;
   /** この 1 件への書き込みが飛んでいる間 true。 */
@@ -29,7 +29,7 @@ const EMPTY: TicketPageState = {
   ticket: null,
   ancestors: [],
   permission: null,
-  space: null,
+  project: null,
   loading: false,
   error: null,
   busy: false,
@@ -44,8 +44,8 @@ const LOAD_FAILED = 'チケットを開けませんでした。時間をおい�
  * 通知・本文中の参照・ブックマークからの再訪はワークスペースを知らないまま来るので、
  * ID だけで開ける必要がある。応答の workspaceSlug を以降の書き込みに使う。
  *
- * スペースを別に引くのは**表示キー（例 FRESTYLE-12）に spaces.key が要る**ため。
- * チケットの応答には spaceId しか入っておらず、key は入っていない。
+ * プロジェクトを別に引くのは**表示キー（例 FRESTYLE-12）に projects.key が要る**ため。
+ * チケットの応答には projectId しか入っておらず、key は入っていない。
  *
  * 楽観更新はしない。応答をそのまま state へ入れ、失敗は投げる（呼び出し側が知らせる）。
  * 遅れて返ってきた前のチケットの応答で今の画面を上書きしないよう、宛先と世代を確かめる。
@@ -61,13 +61,12 @@ export function useTicketPage(ticketId: string | undefined) {
     try {
       const resolved = await TicketRepository.resolveTicket(id);
       if (active.current !== id || seq.current !== request) return;
-      // スペースは表示キーのためだけに引く。引けなくてもチケットは出す（キーが出ないだけ）。
-      let space: KbSpace | null = null;
+      // プロジェクトは表示キーのためだけに引く。引けなくてもチケットは出す（キーが出ないだけ）。
+      let project: Project | null = null;
       try {
-        const spaces = await KbRepository.fetchSpaces(resolved.workspaceSlug);
-        space = spaces.find((s) => s.id === resolved.ticket.spaceId) ?? null;
+        project = await ProjectRepository.fetchProject(resolved.workspaceSlug, resolved.ticket.projectId);
       } catch {
-        space = null;
+        project = null;
       }
       if (active.current !== id || seq.current !== request) return;
       setState({
@@ -75,7 +74,7 @@ export function useTicketPage(ticketId: string | undefined) {
         ticket: resolved.ticket,
         ancestors: resolved.ancestors,
         permission: resolved.permission,
-        space,
+        project,
         loading: false,
         error: null,
         busy: false,

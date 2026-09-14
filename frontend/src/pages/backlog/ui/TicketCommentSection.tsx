@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Loading from '@/shared/ui/Loading';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
-import type { TicketCommentSegment } from '@/entities/ticket';
+import type { TicketCommentBlock } from '@/entities/ticket';
 import { useTicketComments } from '../model/useTicketComments';
 import { useCurrentUserId } from '../model/useCurrentUserId';
 import { useWorkspaceMembers } from '../model/useWorkspaceMembers';
@@ -62,12 +62,12 @@ export default function TicketCommentSection({ workspaceSlug, ticketId, compact 
   }, [comments, members]);
   const resolveMentionName = (userId: string) => mentionNames.get(userId) ?? null;
 
-  const handleCreate = (body: TicketCommentSegment[], parentCommentId?: string) =>
+  const handleCreate = (body: TicketCommentBlock[], parentCommentId?: string) =>
     withPermissionToast(() => createComment(body, parentCommentId), showToast, 'コメントを投稿できませんでした。');
   /** TicketCommentThread の onReply（引数順が逆・戻り値を捨てる）に合わせる薄い橋渡し。 */
-  const handleReply = (parentCommentId: string, body: TicketCommentSegment[]) =>
+  const handleReply = (parentCommentId: string, body: TicketCommentBlock[]) =>
     handleCreate(body, parentCommentId).then(() => undefined);
-  const handleEdit = (commentId: string, body: TicketCommentSegment[]) =>
+  const handleEdit = (commentId: string, body: TicketCommentBlock[]) =>
     withPermissionToast(() => editComment(commentId, body), showToast, 'コメントを更新できませんでした。');
   const handleDelete = (commentId: string) =>
     withPermissionToast(() => deleteComment(commentId), showToast, 'コメントを削除できませんでした。');
@@ -85,7 +85,9 @@ export default function TicketCommentSection({ workspaceSlug, ticketId, compact 
     <TicketCommentComposer
       onSubmit={(body) => handleCreate(body).then(() => undefined)}
       members={members}
-      placeholder="コメントを書く"
+      placeholder="コメントを追加する..."
+      submitLabel="保存"
+      collapsible
     />
   );
 
@@ -127,7 +129,7 @@ export default function TicketCommentSection({ workspaceSlug, ticketId, compact 
         {composer}
         {comments.length > 0 && (
           <Link
-            to={`/kb/tickets/${ticketId}`}
+            to={`/tickets/${ticketId}`}
             className="text-center text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
           >
             すべて見る（{comments.length}）

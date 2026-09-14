@@ -18,7 +18,7 @@ var (
 	ErrTicketTypeInUse   = errors.New("ticket type is in use")
 )
 
-// CreateTicketStatusUseCase はスペースに状態を 1 つ追加する。新規作成では初期状態にしない
+// CreateTicketStatusUseCase はプロジェクトに状態を 1 つ追加する。新規作成では初期状態にしない
 // （初期状態の切り替えは SetInitialTicketStatusUseCase の専任）。
 type CreateTicketStatusUseCase struct {
 	repo repository.TicketRepository
@@ -30,7 +30,7 @@ func NewCreateTicketStatusUseCase(r repository.TicketRepository) *CreateTicketSt
 
 type CreateTicketStatusInput struct {
 	WorkspaceID string
-	SpaceID     string
+	ProjectID   string
 	Name        string
 	Category    domain.TicketStatusCategory
 	Color       string
@@ -40,8 +40,8 @@ func (u *CreateTicketStatusUseCase) Execute(ctx context.Context, in CreateTicket
 	if in.WorkspaceID == "" {
 		return nil, errors.New("workspaceID is required")
 	}
-	if in.SpaceID == "" {
-		return nil, errors.New("spaceID is required")
+	if in.ProjectID == "" {
+		return nil, errors.New("projectID is required")
 	}
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
@@ -55,7 +55,7 @@ func (u *CreateTicketStatusUseCase) Execute(ctx context.Context, in CreateTicket
 		return nil, domain.ErrInvalidTicketColor
 	}
 
-	last, err := u.repo.LastActiveTicketStatusPosition(ctx, in.WorkspaceID, in.SpaceID)
+	last, err := u.repo.LastActiveTicketStatusPosition(ctx, in.WorkspaceID, in.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (u *CreateTicketStatusUseCase) Execute(ctx context.Context, in CreateTicket
 	}
 
 	status := &domain.TicketStatus{
-		WorkspaceID: in.WorkspaceID, SpaceID: in.SpaceID,
+		WorkspaceID: in.WorkspaceID, ProjectID: in.ProjectID,
 		Name: name, Category: in.Category, Color: color, Position: pos,
 	}
 	if err := u.repo.InsertTicketStatus(ctx, status); err != nil {
@@ -85,7 +85,7 @@ func NewUpdateTicketStatusUseCase(r repository.TicketRepository) *UpdateTicketSt
 
 type UpdateTicketStatusInput struct {
 	WorkspaceID string
-	SpaceID     string
+	ProjectID   string
 	StatusID    string
 	Name        string
 	Category    domain.TicketStatusCategory
@@ -93,8 +93,8 @@ type UpdateTicketStatusInput struct {
 }
 
 func (u *UpdateTicketStatusUseCase) Execute(ctx context.Context, in UpdateTicketStatusInput) (*domain.TicketStatus, error) {
-	if in.WorkspaceID == "" || in.SpaceID == "" || in.StatusID == "" {
-		return nil, errors.New("workspaceID, spaceID and statusID are required")
+	if in.WorkspaceID == "" || in.ProjectID == "" || in.StatusID == "" {
+		return nil, errors.New("workspaceID, projectID and statusID are required")
 	}
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
@@ -108,7 +108,7 @@ func (u *UpdateTicketStatusUseCase) Execute(ctx context.Context, in UpdateTicket
 		return nil, domain.ErrInvalidTicketColor
 	}
 	status := &domain.TicketStatus{
-		ID: in.StatusID, WorkspaceID: in.WorkspaceID, SpaceID: in.SpaceID,
+		ID: in.StatusID, WorkspaceID: in.WorkspaceID, ProjectID: in.ProjectID,
 		Name: name, Category: in.Category, Color: color,
 	}
 	if err := u.repo.UpdateTicketStatus(ctx, status); err != nil {
@@ -128,15 +128,15 @@ func NewSetInitialTicketStatusUseCase(r repository.TicketRepository) *SetInitial
 
 type SetInitialTicketStatusInput struct {
 	WorkspaceID string
-	SpaceID     string
+	ProjectID   string
 	StatusID    string
 }
 
 func (u *SetInitialTicketStatusUseCase) Execute(ctx context.Context, in SetInitialTicketStatusInput) error {
-	if in.WorkspaceID == "" || in.SpaceID == "" || in.StatusID == "" {
-		return errors.New("workspaceID, spaceID and statusID are required")
+	if in.WorkspaceID == "" || in.ProjectID == "" || in.StatusID == "" {
+		return errors.New("workspaceID, projectID and statusID are required")
 	}
-	return u.repo.SetTicketStatusInitial(ctx, in.WorkspaceID, in.SpaceID, in.StatusID)
+	return u.repo.SetTicketStatusInitial(ctx, in.WorkspaceID, in.ProjectID, in.StatusID)
 }
 
 // ArchiveTicketStatusUseCase は状態をアーカイブする。現役のチケットが参照していれば拒否する
@@ -151,22 +151,22 @@ func NewArchiveTicketStatusUseCase(r repository.TicketRepository) *ArchiveTicket
 
 type ArchiveTicketStatusInput struct {
 	WorkspaceID string
-	SpaceID     string
+	ProjectID   string
 	StatusID    string
 }
 
 func (u *ArchiveTicketStatusUseCase) Execute(ctx context.Context, in ArchiveTicketStatusInput) error {
-	if in.WorkspaceID == "" || in.SpaceID == "" || in.StatusID == "" {
-		return errors.New("workspaceID, spaceID and statusID are required")
+	if in.WorkspaceID == "" || in.ProjectID == "" || in.StatusID == "" {
+		return errors.New("workspaceID, projectID and statusID are required")
 	}
-	count, err := u.repo.CountActiveTicketsByStatus(ctx, in.WorkspaceID, in.SpaceID, in.StatusID)
+	count, err := u.repo.CountActiveTicketsByStatus(ctx, in.WorkspaceID, in.ProjectID, in.StatusID)
 	if err != nil {
 		return err
 	}
 	if count > 0 {
 		return ErrTicketStatusInUse
 	}
-	return u.repo.ArchiveTicketStatus(ctx, in.WorkspaceID, in.SpaceID, in.StatusID)
+	return u.repo.ArchiveTicketStatus(ctx, in.WorkspaceID, in.ProjectID, in.StatusID)
 }
 
 // RestoreTicketStatusUseCase はアーカイブ済み状態を現役へ戻す。position は末尾へ付け直す。
@@ -182,15 +182,15 @@ func NewRestoreTicketStatusUseCase(r repository.TicketRepository) *RestoreTicket
 
 type RestoreTicketStatusInput struct {
 	WorkspaceID string
-	SpaceID     string
+	ProjectID   string
 	StatusID    string
 }
 
 func (u *RestoreTicketStatusUseCase) Execute(ctx context.Context, in RestoreTicketStatusInput) error {
-	if in.WorkspaceID == "" || in.SpaceID == "" || in.StatusID == "" {
-		return errors.New("workspaceID, spaceID and statusID are required")
+	if in.WorkspaceID == "" || in.ProjectID == "" || in.StatusID == "" {
+		return errors.New("workspaceID, projectID and statusID are required")
 	}
-	last, err := u.repo.LastActiveTicketStatusPosition(ctx, in.WorkspaceID, in.SpaceID)
+	last, err := u.repo.LastActiveTicketStatusPosition(ctx, in.WorkspaceID, in.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -198,5 +198,5 @@ func (u *RestoreTicketStatusUseCase) Execute(ctx context.Context, in RestoreTick
 	if err != nil {
 		return err
 	}
-	return u.repo.RestoreTicketStatus(ctx, in.WorkspaceID, in.SpaceID, in.StatusID, pos)
+	return u.repo.RestoreTicketStatus(ctx, in.WorkspaceID, in.ProjectID, in.StatusID, pos)
 }

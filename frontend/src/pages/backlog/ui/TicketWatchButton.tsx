@@ -1,0 +1,80 @@
+import { useCallback, useEffect, useState } from 'react';
+import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { TicketRepository } from '@/entities/ticket';
+
+export interface TicketWatchButtonProps {
+  workspaceSlug: string;
+  ticketId: string;
+}
+
+/**
+ * 監視の付け外し。押した人自身の分だけを動かす。
+ *
+ * 「担当」とは別物で、担当は 1 人（責任の所在）、監視は何人でも（気にしている人）。
+ * 編集できない人でも押せる —— 進み具合を追うだけなら書き換えの権限は要らないため。
+ *
+ * 送るのは「切り替え」ではなく「どちらにしたいか」。二重に押されたときに意図せず
+ * 外れるのを防ぐ（backend の PUT も同じ形で受ける）。
+ */
+export default function TicketWatchButton({ workspaceSlug, ticketId }: TicketWatchButtonProps) {
+  const [watching, setWatching] = useState(false);
+  const [count, setCount] = useState(0);
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setReady(false);
+    TicketRepository.fetchTicketWatchState(workspaceSlug, ticketId)
+      .then((state) => {
+        if (!alive) return;
+        setWatching(state.watching);
+        setCount(state.count);
+        setReady(true);
+      })
+      .catch(() => {
+        // 取れなくてもチケットは読める。押せないまま黙って畳む（fail-open）。
+        if (alive) setReady(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [workspaceSlug, ticketId]);
+
+  const toggle = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const next = await TicketRepository.setTicketWatching(workspaceSlug, ticketId, !watching);
+      setWatching(next.watching);
+      setCount(next.count);
+    } catch {
+      // 失敗したら見た目を変えない（押す前の状態のまま）。
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, ticketId, watching, workspaceSlug]);
+
+  if (!ready) return null;
+
+  const Icon = watching ? EyeIcon : EyeSlashIcon;
+
+  return (
+    <button
+      type="button"
+      onClick={() => void toggle()}
+      disabled={busy}
+      aria-pressed={watching}
+      aria-label={watching ? '監視をやめる' : '監視する'}
+      title={watching ? '監視をやめる' : '監視する'}
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+        watching
+          ? 'border-brand-400 bg-brand-100 text-brand-700'
+          : 'border-surface-3 text-[var(--color-text-secondary)] hover:bg-surface-2'
+      }`}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      <span className="tabular-nums">{count}</span>
+    </button>
+  );
+}

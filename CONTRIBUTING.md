@@ -142,6 +142,6 @@ gh workflow run "CD - Frontend Deploy to S3 + CloudFront" -R norman6464/frestyle
 
 ## 8. マージ権限
 
-- `main` はブランチ保護下（force-push・削除は禁止）。**PR承認・CI green は GitHub 側の必須設定にはなっていない**（2026-09-09 実機確認: `required_pull_request_reviews.required_approving_review_count` は 0、`required_status_checks` は未設定。`enforce_admins` は on だが、そもそもゲートが無いため意味を持たない）。運用上はレビューを得てからのマージを基本とする。
+- `main` はブランチ保護下（force-push・削除は禁止）。**PR承認・CI green は GitHub 側の必須設定にはなっていない**（`required_pull_request_reviews.required_approving_review_count` は 0、`required_status_checks` は未設定。`enforce_admins` は on だが、そもそもゲートが無いため意味を持たない）。運用上はレビューを得てからのマージを基本とする。
 - リポジトリ管理者（`@norman6464`）は admin 権限で要件をバイパスできる（`gh pr merge --admin`）。緊急時・自分の PR の最終マージ用。
 - メンバーを追加するときは **Write / Maintain ロール**で（Admin ロールはバイパスできてしまうため避ける）。

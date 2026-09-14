@@ -9,7 +9,12 @@ services:
       POSTGRES_USER: ${LOCAL_DB_USER:-frestyle}
       POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:-frestyle}
       POSTGRES_DB: ${LOCAL_DB_NAME:-frestyle}
-      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+      # en_US.UTF-8 は本番（Supabase）と揃える。--locale=C だと pg_trgm の日本語トライグラムが
+      # 黙って空になり（show_trgm('認証コード') が {}）、あいまい検索がローカルでだけ全滅する
+      # （実測済み）。ロケールは initdb 時にしか効かないため、
+      # 既存の db_data ボリュームがある環境は `docker compose down -v`（= make local-reset）で
+      # 作り直すこと。
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=en_US.UTF-8'
     ports:
       # ループバックにだけ配る。既定の資格情報(frestyle/frestyle)を持つ DB なので、
       # 0.0.0.0 に開くと同じ LAN に居る誰でも接続できてしまう(公衆 Wi-Fi・社内ネットワーク)。

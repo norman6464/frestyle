@@ -592,8 +592,8 @@ func (h *KnowledgeBasePageHandler) Backlinks(c *gin.Context) {
 
 // TicketBacklinks は、このページを本文の pageRef で参照しているチケット一覧を返す
 // （ticket_page_links の逆参照）。チケットには pages のような個票の権限が無く、実効権限は
-// スペース単位。候補は複数スペースにまたがりうるので、登場したスペースごとに 1 回だけ
-// CanView を判定する（チケット 1 件ごとに判定すると同じスペースを何度も引き直す）。
+// ワークスペース単位（ticket.CheckTicketPermissionUseCase 参照）。候補はすべて同じワーク
+// スペースの中なので、判定は 1 回で足りる。
 func (h *KnowledgeBasePageHandler) TicketBacklinks(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
@@ -603,26 +603,26 @@ func (h *KnowledgeBasePageHandler) TicketBacklinks(c *gin.Context) {
 	if !h.requirePagePermission(c, scope, pageID, domain.CapabilityView) {
 		return
 	}
+	// ページが見えることはチケットが見えることを意味しない（ページは個票の付与で広がりうる）。
+	// バックログ側の可否はワークスペースの役割で別に判定する。
+	perm, err := h.checkWorkspace.Execute(c.Request.Context(), kb.CheckWorkspacePermissionInput{
+		WorkspaceID: scope.workspaceID, UserID: scope.userID,
+	})
+	if err != nil {
+		respondKnowledgeBaseErr(c, err)
+		return
+	}
+	if !perm.CanView {
+		c.JSON(http.StatusOK, []domain.Ticket{})
+		return
+	}
 	tickets, err := h.ticketBacklinks.Execute(c.Request.Context(), scope.workspaceID, pageID)
 	if err != nil {
 		respondKnowledgeBaseErr(c, err)
 		return
 	}
-	visibleSpaces := make(map[string]bool)
 	out := make([]domain.Ticket, 0, len(tickets))
-	for _, t := range tickets {
-		visible, checked := visibleSpaces[t.SpaceID]
-		if !checked {
-			perm, permErr := h.checkSpace.Execute(c.Request.Context(), kb.CheckSpacePermissionInput{
-				WorkspaceID: scope.workspaceID, SpaceID: t.SpaceID, UserID: scope.userID,
-			})
-			visible = permErr == nil && perm.CanView
-			visibleSpaces[t.SpaceID] = visible
-		}
-		if visible {
-			out = append(out, t)
-		}
-	}
+	out = append(out, tickets...)
 	c.JSON(http.StatusOK, out)
 }
 

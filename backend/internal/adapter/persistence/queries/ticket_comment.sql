@@ -7,7 +7,7 @@
 
 -- name: InsertTicketStatusTransition :exec
 INSERT INTO ticket_status_transitions
-  (id, workspace_id, space_id, ticket_id, from_status_id, to_status_id, changed_by_user_id, changed_at)
+  (id, workspace_id, project_id, ticket_id, from_status_id, to_status_id, changed_by_user_id, changed_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, now());
 
 -- =============================================================================

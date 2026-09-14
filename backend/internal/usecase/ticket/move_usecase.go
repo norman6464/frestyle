@@ -9,8 +9,8 @@ import (
 )
 
 // ErrTicketMoveAnchorNotSibling は move で指定された「隣のチケット」が、移動先の
-// 現役の兄弟（同じスペース・アーカイブされていない）で無かったときに返す。
-// 不在・別スペース・アーカイブ済みを区別しない。
+// 現役の兄弟（同じプロジェクト・アーカイブされていない）で無かったときに返す。
+// 不在・別プロジェクト・アーカイブ済みを区別しない。
 //
 // 黙って末尾へ落とさないのは、**利用者が落とした場所と違う場所に入り、しかも
 // 成功したように見える**ため（page の MovePageUseCase と同じ方針）。断って、
@@ -48,18 +48,17 @@ func (u *MoveTicketUseCase) Execute(ctx context.Context, in MoveTicketInput) err
 		return err
 	}
 
-	pos, err := u.placementPosition(ctx, in, t.SpaceID)
+	pos, err := u.placementPosition(ctx, in, t.ProjectID)
 	if err != nil {
 		return err
 	}
-	// 並び順の正本は ticket_ranks（段 2・設計 Ⅳ-F）。tickets.position は CreateTicket の
-	// NOT NULL 制約を満たすためだけに残った列で、以後 Move では触らない。
+	// 並び順の正本は ticket_backlog_ranks だけ（tickets.position は撤去済み）。
 	return u.repo.MoveTicketRank(ctx, in.WorkspaceID, in.TicketID, pos)
 }
 
-func (u *MoveTicketUseCase) placementPosition(ctx context.Context, in MoveTicketInput, spaceID string) (string, error) {
+func (u *MoveTicketUseCase) placementPosition(ctx context.Context, in MoveTicketInput, projectID string) (string, error) {
 	if in.AnchorTicketID == nil {
-		last, err := u.repo.LastActiveTicketRankPosition(ctx, in.WorkspaceID, spaceID)
+		last, err := u.repo.LastTicketRankPosition(ctx, in.WorkspaceID, projectID)
 		if err != nil {
 			return "", err
 		}
@@ -70,7 +69,7 @@ func (u *MoveTicketUseCase) placementPosition(ctx context.Context, in MoveTicket
 	// （position 順）をここで読み、アンカーの前後を自分で探す。ワークスペース内のチケット数は
 	// 実データで数百件規模（設計 artifact Ⅱ）なので、一覧をそのまま読む実装で十分間に合う。
 	tickets, err := u.repo.ListTickets(ctx, repository.ListTicketsInput{
-		WorkspaceID: in.WorkspaceID, SpaceID: spaceID,
+		WorkspaceID: in.WorkspaceID, ProjectID: projectID,
 	})
 	if err != nil {
 		return "", err

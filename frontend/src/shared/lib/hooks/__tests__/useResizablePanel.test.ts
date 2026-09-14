@@ -100,4 +100,25 @@ describe('useResizablePanel', () => {
     const second = renderHook(() => useResizablePanel({ side: 'left', defaultWidth: 288 }));
     expect(second.result.current.width).toBe(288);
   });
+
+  // 保存された幅は「そのとき測った画面」の値なので、復元時に今の画面で測り直す。
+  // 広い画面で広げた幅を狭い画面で開くと、上限を超えたまま復元されて本文が潰れる。
+  it('覚えてある幅が今の画面の上限を超えていたら丸めて復元する', () => {
+    const original = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { value: 1000, configurable: true });
+    localStorage.setItem('width-key', JSON.stringify(900));
+
+    const { result } = renderHook(() =>
+      useResizablePanel({ storageKey: 'width-key', maxWidthRatio: 0.5 }),
+    );
+
+    expect(result.current.width).toBe(500);
+    Object.defineProperty(window, 'innerWidth', { value: original, configurable: true });
+  });
+
+  it('覚えてある幅が下限を下回っていたら下限まで戻す', () => {
+    localStorage.setItem('width-key', JSON.stringify(10));
+    const { result } = renderHook(() => useResizablePanel({ storageKey: 'width-key', minWidth: 288 }));
+    expect(result.current.width).toBe(288);
+  });
 });

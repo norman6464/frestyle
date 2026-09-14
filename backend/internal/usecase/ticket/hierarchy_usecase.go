@@ -12,9 +12,9 @@ import (
 // （ticket_paths の閉包表を読む。段 5）。
 //
 // ページ側の ListViewableAncestorsUseCase と違い、祖先ごとの可視判定は行わない。
-// チケットの親は常に同一スペース限定（fk_tickets_parent）なので、このチケット自体が
-// 見えている（handler が requireTicketPermission を先に通している）なら、同じスペースの
-// 祖先もすべて見える（設計 Ⅳ-H: チケットの実効権限はスペース単位）。
+// チケットの親は常に同一プロジェクト限定（fk_tickets_parent）なので、このチケット自体が
+// 見えている（handler が requireTicketPermission を先に通している）なら、同じプロジェクトの
+// 祖先もすべて見える（チケットの実効権限はワークスペース単位）。
 type ListTicketAncestorsUseCase struct {
 	repo repository.TicketRepository
 }
@@ -36,11 +36,11 @@ func (u *ListTicketAncestorsUseCase) Execute(ctx context.Context, workspaceID, t
 // ListTicketsReferencingPageUseCase はページ詳細の逆参照一覧が使う（そのページを本文中の
 // pageRef で参照しているチケット一覧。段 5）。
 //
-// チケットには pages のような個票の権限が無い（設計 Ⅳ-H）ため、ここではスペース単位の
-// 可視判定を行わない — 候補チケットをそのまま返し、どのスペースを見せてよいかの判定は
-// handler 側（複数スペースにまたがりうるので、候補の空間集合を CheckSpacePermissionUseCase で
-// 確かめる）に委ねる。usecase/ticket は usecase/kb を import できない（サブパッケージ同士は
-// import しない規約）ため、この分担は handler 層でのみ組める。
+// チケットには pages のような個票の権限が無く、実効権限はワークスペース単位のため、ここでは
+// 可視判定を行わない — 候補チケットをそのまま返し、バックログ側を見せてよいかの判定は
+// handler 側（kb.CheckWorkspacePermissionUseCase で 1 回）に委ねる。usecase/ticket は
+// usecase/kb を import できない（サブパッケージ同士は import しない規約）ため、この分担は
+// handler 層でのみ組める。
 type ListTicketsReferencingPageUseCase struct {
 	repo repository.TicketRepository
 }

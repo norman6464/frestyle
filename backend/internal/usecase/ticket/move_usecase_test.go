@@ -14,8 +14,8 @@ import (
 func Test_チケット移動_アンカー無しなら末尾へ(t *testing.T) {
 	repo := &mockTicketRepo{}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).
-		Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace, Position: "a0"}, nil)
-	repo.On("LastActiveTicketRankPosition", mock.Anything, tkWS, tkSpace).Return("a1", nil)
+		Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, Position: "a0"}, nil)
+	repo.On("LastTicketRankPosition", mock.Anything, tkWS, tkProject).Return("a1", nil)
 	repo.On("MoveTicketRank", mock.Anything, tkWS, tkTicket, mock.MatchedBy(func(pos string) bool {
 		return pos > "a1"
 	})).Return(nil)
@@ -26,14 +26,14 @@ func Test_チケット移動_アンカー無しなら末尾へ(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// アンカーに指定したチケットが現役の兄弟（同じスペース・アーカイブされていない）で
+// アンカーに指定したチケットが現役の兄弟（同じプロジェクト・アーカイブされていない）で
 // なければ、黙って末尾へ落とさず拒否する（設計: 落とした場所と違う場所に入り、
 // しかも成功したように見える事故を防ぐ）。
 func Test_チケット移動_アンカーが兄弟でなければ拒否(t *testing.T) {
 	repo := &mockTicketRepo{}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).
-		Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace, Position: "a0"}, nil)
-	repo.On("ListTickets", mock.Anything, repository.ListTicketsInput{WorkspaceID: tkWS, SpaceID: tkSpace}).
+		Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, Position: "a0"}, nil)
+	repo.On("ListTickets", mock.Anything, repository.ListTicketsInput{WorkspaceID: tkWS, ProjectID: tkProject}).
 		Return([]domain.Ticket{{ID: tkTicket, Position: "a0"}}, nil)
 
 	anchor := "does-not-exist"
@@ -47,9 +47,9 @@ func Test_チケット移動_アンカーが兄弟でなければ拒否(t *testi
 func Test_チケット移動_アンカーの直後に置く(t *testing.T) {
 	repo := &mockTicketRepo{}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).
-		Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace, Position: "a2"}, nil)
+		Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, Position: "a2"}, nil)
 	anchor := "t-anchor"
-	repo.On("ListTickets", mock.Anything, repository.ListTicketsInput{WorkspaceID: tkWS, SpaceID: tkSpace}).
+	repo.On("ListTickets", mock.Anything, repository.ListTicketsInput{WorkspaceID: tkWS, ProjectID: tkProject}).
 		Return([]repository.TicketWithAssignee{
 			{Ticket: domain.Ticket{ID: anchor, Position: "a0"}},
 			{Ticket: domain.Ticket{ID: "t-next", Position: "a1"}},

@@ -33,7 +33,7 @@ func newRichTextImagePresignerOrFallback(deps *routeDeps) repository.RichTextIma
 	}
 	pre, err := infraGCS.NewPresigner(context.Background(), bucket)
 	if err != nil {
-		log.Fatalf("[rich-text-image] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v", bucket, err)
+		log.Fatalf("[rich-text-image] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v — %s", bucket, err, imagesBucketHint)
 	}
 	return persistence.NewRichTextImagePresigner(pre)
 }

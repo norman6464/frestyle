@@ -90,12 +90,12 @@ func (u *ChangeTicketParentUseCase) Execute(ctx context.Context, in ChangeTicket
 	return updated, nil
 }
 
-// validateNewParent は新しい親が「同じスペースに実在する」「階層規則を満たす」
+// validateNewParent は新しい親が「同じプロジェクトに実在する」「階層規則を満たす」
 // 「周期・深さ超過を作らない」ことを検証する。
 func (u *ChangeTicketParentUseCase) validateNewParent(
 	ctx context.Context, workspaceID string, current *domain.Ticket, newParentID string,
 ) error {
-	currentType, err := u.repo.FindTicketType(ctx, workspaceID, current.SpaceID, current.TypeID)
+	currentType, err := u.repo.FindTicketType(ctx, workspaceID, current.ProjectID, current.TypeID)
 	if err != nil {
 		return err
 	}
@@ -103,10 +103,10 @@ func (u *ChangeTicketParentUseCase) validateNewParent(
 	if err != nil {
 		return err
 	}
-	if newParent.SpaceID != current.SpaceID {
+	if newParent.ProjectID != current.ProjectID {
 		return repository.ErrTicketNotFound
 	}
-	newParentType, err := u.repo.FindTicketType(ctx, workspaceID, current.SpaceID, newParent.TypeID)
+	newParentType, err := u.repo.FindTicketType(ctx, workspaceID, current.ProjectID, newParent.TypeID)
 	if err != nil {
 		return err
 	}

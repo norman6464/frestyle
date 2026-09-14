@@ -5,15 +5,14 @@ import (
 	"time"
 )
 
-// Label はスペースごとのラベル（名前 + 色）。段 4・設計 Ⅵ。
+// Label はワークスペースごとのラベル（名前 + 色）。ページとチケットが同じ語彙を引く。
 //
-// 同名は空白・大文字小文字違いも含めてスペース内で作れない（uq_labels_space_name の
-// 部分一意。DB 側は既にトリム済みの name しか受け付けない — 呼び出し側が保存前に
-// strings.TrimSpace を通す分担は ticket_statuses/ticket_types と同じ）。
+// 同名は空白・大文字小文字違いも含めてワークスペース内で作れない（uq_labels_workspace_name。
+// DB 側は既にトリム済みの name しか受け付けない — 呼び出し側が保存前に strings.TrimSpace を
+// 通す分担は ticket_statuses/ticket_types と同じ）。
 type Label struct {
 	ID          string    `json:"id"`
 	WorkspaceID string    `json:"-"`
-	SpaceID     string    `json:"spaceId"`
 	Name        string    `json:"name"`
 	Color       string    `json:"color"`
 	CreatedAt   time.Time `json:"createdAt"`

@@ -1,8 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { Bars3Icon, DocumentIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
+import { DocumentIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { KbSidebar, KbPageGlyph } from '@/widgets/kb-sidebar';
-import { SecondaryPanel } from '@/widgets/secondary-panel';
-import { useMobilePanelState } from '@/shared/lib/hooks/useMobilePanelState';
+import { SidebarSection } from '@/shared/ui';
 import { useKbSpaceEntry, KbSpaceTabs } from '@/entities/kb';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useKbSpaceAllPages } from '../model/useKbSpaceAllPages';
@@ -11,59 +10,53 @@ import { useKbSpaceAllPages } from '../model/useKbSpaceAllPages';
 export default function KbSpaceAllPagesPage() {
   const { spaceId } = useParams<{ spaceId?: string }>();
   const navigate = useNavigate();
-  const { isOpen: mobilePanelOpen, open: openMobilePanel, close: closeMobilePanel } = useMobilePanelState();
 
   const { workspaceSlug, space, noSpaces, loading, error } = useKbSpaceEntry(spaceId, (id) =>
     navigate(`/kb/spaces/${id}`, { replace: true }),
   );
 
-  if (error) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
-        {error}
-      </div>
-    );
-  }
-
-  if (noSpaces) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center">
-        <div>
-          <p className="mb-1 text-base font-semibold text-[var(--color-text-secondary)]">
-            アクセスできるスペースがありません
-          </p>
-          <p className="text-sm text-[var(--color-text-muted)]">ナレッジでスペースを作ると使えるようになります。</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading || !space || !workspaceSlug) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-muted)]">
-        読み込み中…
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-full overflow-hidden">
-      <SecondaryPanel title="ナレッジ" peekable storageKey="frestyle.panel.note" resizable resizeStorageKey="frestyle.panel.note.width" mobileOpen={mobilePanelOpen} onMobileClose={closeMobilePanel}>
-        <KbSidebar workspaceSlug={workspaceSlug} spaceId={space.id} />
-      </SecondaryPanel>
+      {/* 柱の中の「ナレッジの区画」。noSpaces でも常に差し込む（KbSidebar 自身が空の
+          ワークスペース／空のスペース一覧を検知して作成フォームを出す）。 */}
+      <SidebarSection>
+        <KbSidebar workspaceSlug={workspaceSlug ?? undefined} spaceId={space?.id ?? ''} />
+      </SidebarSection>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="flex items-center border-b border-surface-3 bg-surface-1 px-4 py-2 md:hidden">
-          <button type="button" onClick={openMobilePanel} aria-label="ナレッジを開く" className="p-1">
-            <Bars3Icon className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
+        {error && (
+          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
+            {error}
+          </div>
+        )}
 
-        <KbSpaceTabs space={space} active="pages" />
+        {!error && noSpaces && (
+          <div className="flex flex-1 items-center justify-center px-6 text-center">
+            <div>
+              <p className="mb-1 text-base font-semibold text-[var(--color-text-secondary)]">
+                アクセスできるスペースがありません
+              </p>
+              <p className="text-sm text-[var(--color-text-muted)]">
+                左のサイドバーからワークスペースまたはスペースを作ると使えるようになります。
+              </p>
+            </div>
+          </div>
+        )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <AllPagesList workspaceSlug={workspaceSlug} spaceId={space.id} onOpen={(id) => navigate(`/kb/${id}`)} />
-        </div>
+        {!error && !noSpaces && (loading || !space || !workspaceSlug) && (
+          <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-muted)]">
+            読み込み中…
+          </div>
+        )}
+
+        {!error && !noSpaces && space && workspaceSlug && (
+          <>
+            <KbSpaceTabs space={space} active="pages" />
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <AllPagesList workspaceSlug={workspaceSlug} spaceId={space.id} onOpen={(id) => navigate(`/kb/${id}`)} />
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

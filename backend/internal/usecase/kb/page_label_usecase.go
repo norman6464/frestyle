@@ -8,10 +8,10 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 )
 
-// AddPageLabelUseCase はページにラベルを付ける（ticket.AddTicketLabelUseCase のページ版・
-// 段13）。ラベルはスペースごとなので、ページと違うスペースのラベルを付けようとした場合は
-// repository.ErrLabelNotFound として拒む（ticket 側と同じ「見えない」と「存在しない」を
-// 同じ扱いにする方針 — 他スペースのラベル ID が実在するかどうかをここで漏らさない）。
+// AddPageLabelUseCase はページにラベルを付ける（ticket.AddTicketLabelUseCase のページ版）。
+// ラベルはワークスペースごとの語彙で、別ワークスペースのラベル ID は FindLabel の時点で
+// repository.ErrLabelNotFound になる（ticket 側と同じ「見えない」と「存在しない」を
+// 同じ扱いにする方針 — 他ワークスペースのラベル ID が実在するかどうかをここで漏らさない）。
 type AddPageLabelUseCase struct {
 	labels repository.LabelRepository
 	pages  repository.KnowledgeBaseRepository
@@ -31,16 +31,11 @@ func (u *AddPageLabelUseCase) Execute(ctx context.Context, in AddPageLabelInput)
 	if in.WorkspaceID == "" || in.PageID == "" || in.LabelID == "" {
 		return errors.New("workspaceID, pageID and labelID are required")
 	}
-	page, err := u.pages.FindPage(ctx, in.WorkspaceID, in.PageID)
-	if err != nil {
+	if _, err := u.pages.FindPage(ctx, in.WorkspaceID, in.PageID); err != nil {
 		return err
 	}
-	label, err := u.labels.FindLabel(ctx, in.WorkspaceID, in.LabelID)
-	if err != nil {
+	if _, err := u.labels.FindLabel(ctx, in.WorkspaceID, in.LabelID); err != nil {
 		return err
-	}
-	if label.SpaceID != page.SpaceID {
-		return repository.ErrLabelNotFound
 	}
 	return u.labels.AddPageLabel(ctx, in.WorkspaceID, in.PageID, in.LabelID)
 }

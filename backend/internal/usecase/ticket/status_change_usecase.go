@@ -50,7 +50,7 @@ func (u *ChangeTicketStatusUseCase) Execute(ctx context.Context, in ChangeTicket
 	if err != nil {
 		return nil, err
 	}
-	newStatus, err := u.repo.FindTicketStatus(ctx, in.WorkspaceID, before.SpaceID, in.StatusID)
+	newStatus, err := u.repo.FindTicketStatus(ctx, in.WorkspaceID, before.ProjectID, in.StatusID)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (u *ChangeTicketStatusUseCase) Execute(ctx context.Context, in ChangeTicket
 	unchanged := before.StatusID == in.StatusID
 	var oldStatus *domain.TicketStatus
 	if !unchanged {
-		oldStatus, err = u.repo.FindTicketStatus(ctx, in.WorkspaceID, before.SpaceID, before.StatusID)
+		oldStatus, err = u.repo.FindTicketStatus(ctx, in.WorkspaceID, before.ProjectID, before.StatusID)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +77,7 @@ func (u *ChangeTicketStatusUseCase) Execute(ctx context.Context, in ChangeTicket
 		// ticket_status_transitions は ticket_change_items（人が読む履歴）とは別の専用ログ
 		// （設計 Ⅵ）。同じ状態変更の一部として両方へ書く。
 		if err := u.repo.InsertTicketStatusTransition(
-			ctx, in.WorkspaceID, before.SpaceID, in.TicketID, oldStatus.ID, newStatus.ID, in.ActorUserID,
+			ctx, in.WorkspaceID, before.ProjectID, in.TicketID, oldStatus.ID, newStatus.ID, in.ActorUserID,
 		); err != nil {
 			return nil, err
 		}

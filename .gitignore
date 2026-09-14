@@ -26,3 +26,6 @@ docker-compose.override.yml
 /backend/coderunner
 /backend/server
 devsync/
+
+# pen.dev のデザインファイル。実装の正本はコードで、.pen は手元の下書き。
+design/

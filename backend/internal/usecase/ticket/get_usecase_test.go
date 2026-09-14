@@ -36,7 +36,7 @@ func Test_チケット取得_そのまま返す(t *testing.T) {
 	repo.On("FindTicketWithAssignee", mock.Anything, tkWS, tkTicket).
 		Return(&repository.TicketWithAssignee{
 			Ticket: domain.Ticket{
-				ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace,
+				ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject,
 				Doc: []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"本文"}]}]}`),
 			},
 			AssigneePrincipalID: &assignee,

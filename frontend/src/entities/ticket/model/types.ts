@@ -42,14 +42,13 @@ export type TicketChangeField =
   | 'link';
 
 /**
- * ラベル（スペースごとに定義し、チケットへ付け外しする）。
+ * ラベル（ワークスペースごとに定義し、ページとチケットへ付け外しする）。
  *
  * color は `#rrggbb` の小文字 7 桁で、利用者が自由に決める。読みやすさの担保は
  * 画面側の仕事になる（shared/lib/labelPaint.ts）。
  */
 export interface Label {
   id: string;
-  spaceId: string;
   name: string;
   color: string;
   createdAt: string;
@@ -76,7 +75,7 @@ export interface TicketAttachment {
  * チケット 1 件に対する実効権限。役割は閲覧 / 発言 / 編集 / 管理の 4 段で、
  * 編集できることと他人の発言を消せることは別の段。
  *
- * 詳細の応答にだけ入る（一覧には入らない — 権限はスペース単位で行ごとに変わらない）。
+ * 詳細の応答にだけ入る（一覧には入らない — 権限はプロジェクト単位で行ごとに変わらない）。
  */
 export interface TicketPermission {
   canView: boolean;
@@ -89,7 +88,7 @@ export interface TicketPermission {
 export interface TicketWire {
   id: string;
   workspaceId: string;
-  spaceId: string;
+  projectId: string;
   number: number;
   typeId: string;
   statusId: string;
@@ -97,8 +96,10 @@ export interface TicketWire {
   title: string;
   doc: unknown;
   priority: TicketPriority;
+  storyPoints?: number;
   startDate?: string;
   dueDate?: string;
+  teamId?: string;
   position: string;
   closedAt?: string;
   resolution?: TicketResolution;
@@ -117,7 +118,7 @@ export interface TicketWire {
 export interface Ticket {
   id: string;
   workspaceId: string;
-  spaceId: string;
+  projectId: string;
   number: number;
   typeId: string;
   statusId: string;
@@ -125,8 +126,12 @@ export interface Ticket {
   title: string;
   doc: unknown;
   priority: TicketPriority;
+  /** 見積り。未見積りは null（0 とは別物 —— 0 は「0 ポイント」）。 */
+  storyPoints: number | null;
   startDate: string | null;
   dueDate: string | null;
+  /** 担当チーム。未設定は null。選べるのは同じプロジェクトのチームだけ（DB が守る）。 */
+  teamId: string | null;
   position: string;
   closedAt: string | null;
   resolution: TicketResolution | null;
@@ -139,13 +144,13 @@ export interface Ticket {
   labels: Label[];
 }
 
-/** チケットの表示キー（例 FRESTYLE-12）。spaceKey + number から組み立てる（lib/ticketKey.ts）。 */
+/** チケットの表示キー（例 FRESTYLE-12）。projectKey + number から組み立てる（lib/ticketKey.ts）。 */
 export type TicketKey = string;
 
 export interface TicketStatusWire {
   id: string;
   workspaceId: string;
-  spaceId: string;
+  projectId: string;
   name: string;
   category: TicketStatusCategory;
   color: string;
@@ -160,7 +165,7 @@ export interface TicketStatusWire {
 export interface TicketStatus {
   id: string;
   workspaceId: string;
-  spaceId: string;
+  projectId: string;
   name: string;
   category: TicketStatusCategory;
   color: string;
@@ -176,7 +181,7 @@ export interface TicketStatus {
 export interface TicketTypeWire {
   id: string;
   workspaceId: string;
-  spaceId: string;
+  projectId: string;
   name: string;
   hierarchyLevel: TicketHierarchyLevel;
   color: string;
@@ -193,7 +198,7 @@ export interface TicketTypeWire {
 export interface TicketType {
   id: string;
   workspaceId: string;
-  spaceId: string;
+  projectId: string;
   name: string;
   hierarchyLevel: TicketHierarchyLevel;
   color: string;
@@ -254,9 +259,42 @@ export interface TicketCommentReaction {
  * （`[{type:'text',text:'…'},{type:'mention',attrs:{userId:'42'}}]`）。ここではその配列を
  * 画面が扱いやすい形へ畳んだものを持つ。往復は `lib/commentBody.ts` が受け持つ。
  */
+/**
+ * 発言の文字区間に付く書式。
+ *
+ * **ここに無い marks は読み込みの時点で捨てる。** backend は marks を検証しないので、
+ * 保存されている値が画面の書いたものだとは限らない（commentBody.ts の readCommentBody
+ * 参照）。許可リストで受けることで、知らない飾りは自動的に不許可側へ倒れる。
+ */
+export interface TicketCommentMarks {
+  bold?: boolean;
+  italic?: boolean;
+  strike?: boolean;
+  code?: boolean;
+  /** リンク先。読み込み時に安全なもの（http / https / mailto / tel）だけが残る。 */
+  href?: string;
+}
+
 export type TicketCommentSegment =
-  | { kind: 'text'; text: string }
+  | { kind: 'text'; text: string; marks?: TicketCommentMarks }
   | { kind: 'mention'; userId: string };
+
+/**
+ * 発言の本文の 1 塊。段落か、箇条書き（番号付きを含む）のどちらか。
+ *
+ * 以前の本文は「段落を持たない一列」（TicketCommentSegment[]）だった。箇条書きを
+ * 書けるようにするため塊の列へ広げたが、**古い一列の本文も読める**ようにしてある
+ * （読み込みが 1 つの段落として畳む。commentBody.ts の readCommentBody 参照）。
+ */
+export type TicketCommentBlock =
+  | { kind: 'paragraph'; segments: TicketCommentSegment[] }
+  | {
+      kind: 'list';
+      /** true なら番号付き、false なら箇条書き。 */
+      ordered: boolean;
+      /** 項目 1 つが段落 1 つ分の区間の列。 */
+      items: TicketCommentSegment[][];
+    };
 
 export interface TicketCommentWire {
   id: string;
@@ -274,7 +312,7 @@ export interface TicketComment {
   /** 返信先。トップレベルの発言は null。 */
   parentCommentId: string | null;
   author: TicketCommentAuthor;
-  body: TicketCommentSegment[];
+  body: TicketCommentBlock[];
   /** 一度でも編集されていれば true（編集前の本文は別の口で引く）。 */
   edited: boolean;
   reactions: TicketCommentReaction[];
@@ -292,11 +330,11 @@ export interface TicketCommentEditWire {
 export interface TicketCommentEdit {
   id: string;
   editor: TicketCommentAuthor;
-  previousBody: TicketCommentSegment[];
+  previousBody: TicketCommentBlock[];
   editedAt: string;
 }
 
-/** GET /api/v2/kb/tickets/:ticketId（slug 無し解決）の応答。 */
+/** GET /api/v2/tickets/:ticketId（slug 無し解決）の応答。 */
 export interface ResolvedTicket {
   workspaceSlug: string;
   workspaceName: string;
@@ -312,12 +350,56 @@ export interface TicketListFilter {
   statusId?: string;
   typeId?: string;
   assigneePrincipalId?: string;
+  labelId?: string;
   /** true でアーカイブ済みだけを返す（現役との「込み」は取れない。設計 Ⅳ-C）。 */
   archived?: boolean;
+  /** 担当が付いていないチケットだけ。assigneePrincipalId / assignedToMe とは互いに排他。 */
+  unassigned?: boolean;
+  /** 自分が担当のチケットだけ。principal の解決は backend が行う（フロントでは計算しない）。 */
+  assignedToMe?: boolean;
+  /** 期限が今日より前、かつ状態が完了(done)ではないチケットだけ。 */
+  overdue?: boolean;
+  /** 題名・本文のあいまい検索（ILIKE 中間一致 + word_similarity）。 */
+  q?: string;
+}
+
+/** GET .../tickets/counts の応答。サイドバー「保存した絞り込み」の件数バッジ。 */
+export interface TicketCounts {
+  total: number;
+  assignedToMe: number;
+  overdue: number;
+  unassigned: number;
 }
 
 /** POST .../tickets/enable の応答。 */
 export interface EnableTicketsResult {
   statusCount: number;
   typeCount: number;
+}
+
+/**
+ * AssignedTicket は「自分の担当」1 行。プロジェクトを横断する画面なので、行を読むのに
+ * 要る隣の値（プロジェクト・状態・種別）が同じ行に入っている。本文（doc）は載らない
+ * —— 一覧で本文は読まないため（開けばチケット本体が取れる）。
+ */
+export interface AssignedTicket {
+  id: string;
+  projectId: string;
+  projectKey: string;
+  projectName: string;
+  number: number;
+  title: string;
+  typeName: string;
+  statusName: string;
+  /** 'todo' | 'in_progress' | 'done'。束ねる見出しはこれで決める（名前では束ねない）。 */
+  statusCategory: string;
+  statusColor: string;
+  priority: number;
+  dueDate: string | null;
+}
+
+/** 監視の状態（自分が監視しているか・全体で何人か）。 */
+export interface TicketWatchState {
+  watching: boolean;
+  count: number;
 }

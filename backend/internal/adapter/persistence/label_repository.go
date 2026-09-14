@@ -31,7 +31,6 @@ func toDomainLabel(row sqlcgen.Label) domain.Label {
 	return domain.Label{
 		ID:          row.ID.String(),
 		WorkspaceID: row.WorkspaceID.String(),
-		SpaceID:     row.SpaceID.String(),
 		Name:        row.Name,
 		Color:       row.Color,
 		CreatedAt:   row.CreatedAt,
@@ -41,23 +40,22 @@ func toDomainLabel(row sqlcgen.Label) domain.Label {
 
 func (r *labelRepository) CreateLabel(ctx context.Context, l *domain.Label) error {
 	wsID, ok := kbParseID(l.WorkspaceID)
-	spID, ok2 := kbParseID(l.SpaceID)
-	if !ok || !ok2 {
-		return repository.ErrSpaceNotFound
+	if !ok {
+		return repository.ErrWorkspaceNotFound
 	}
 	id, err := ticketNewID()
 	if err != nil {
 		return err
 	}
 	row, err := r.queries(ctx).CreateLabel(ctx, sqlcgen.CreateLabelParams{
-		ID: id, WorkspaceID: wsID, SpaceID: spID, Name: l.Name, Color: l.Color,
+		ID: id, WorkspaceID: wsID, Name: l.Name, Color: l.Color,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
 			return repository.ErrLabelNameTaken
 		}
 		if isForeignKeyViolation(err) {
-			return repository.ErrSpaceNotFound
+			return repository.ErrWorkspaceNotFound
 		}
 		return err
 	}
@@ -82,13 +80,12 @@ func (r *labelRepository) FindLabel(ctx context.Context, workspaceID, labelID st
 	return &l, nil
 }
 
-func (r *labelRepository) ListLabels(ctx context.Context, workspaceID, spaceID string) ([]domain.Label, error) {
+func (r *labelRepository) ListLabels(ctx context.Context, workspaceID string) ([]domain.Label, error) {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
-	if !ok || !ok2 {
+	if !ok {
 		return nil, nil
 	}
-	rows, err := r.queries(ctx).ListLabels(ctx, sqlcgen.ListLabelsParams{WorkspaceID: wsID, SpaceID: spID})
+	rows, err := r.queries(ctx).ListLabels(ctx, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -101,13 +98,12 @@ func (r *labelRepository) ListLabels(ctx context.Context, workspaceID, spaceID s
 
 func (r *labelRepository) UpdateLabel(ctx context.Context, l *domain.Label) error {
 	wsID, ok := kbParseID(l.WorkspaceID)
-	spID, ok2 := kbParseID(l.SpaceID)
-	lID, ok3 := kbParseID(l.ID)
-	if !ok || !ok2 || !ok3 {
+	lID, ok2 := kbParseID(l.ID)
+	if !ok || !ok2 {
 		return repository.ErrLabelNotFound
 	}
 	row, err := r.queries(ctx).UpdateLabel(ctx, sqlcgen.UpdateLabelParams{
-		WorkspaceID: wsID, SpaceID: spID, ID: lID, Name: l.Name, Color: l.Color,
+		WorkspaceID: wsID, ID: lID, Name: l.Name, Color: l.Color,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return repository.ErrLabelNotFound
@@ -122,14 +118,13 @@ func (r *labelRepository) UpdateLabel(ctx context.Context, l *domain.Label) erro
 	return nil
 }
 
-func (r *labelRepository) DeleteLabel(ctx context.Context, workspaceID, spaceID, labelID string) error {
+func (r *labelRepository) DeleteLabel(ctx context.Context, workspaceID, labelID string) error {
 	wsID, ok := kbParseID(workspaceID)
-	spID, ok2 := kbParseID(spaceID)
-	lID, ok3 := kbParseID(labelID)
-	if !ok || !ok2 || !ok3 {
+	lID, ok2 := kbParseID(labelID)
+	if !ok || !ok2 {
 		return repository.ErrLabelNotFound
 	}
-	n, err := r.queries(ctx).DeleteLabel(ctx, sqlcgen.DeleteLabelParams{WorkspaceID: wsID, SpaceID: spID, ID: lID})
+	n, err := r.queries(ctx).DeleteLabel(ctx, sqlcgen.DeleteLabelParams{WorkspaceID: wsID, ID: lID})
 	if err != nil {
 		return err
 	}
@@ -210,7 +205,6 @@ func (r *labelRepository) ListLabelsByTicketIDs(ctx context.Context, workspaceID
 		out[tID] = append(out[tID], domain.Label{
 			ID:          row.ID.String(),
 			WorkspaceID: row.WorkspaceID.String(),
-			SpaceID:     row.SpaceID.String(),
 			Name:        row.Name,
 			Color:       row.Color,
 			CreatedAt:   row.CreatedAt,
@@ -291,7 +285,6 @@ func (r *labelRepository) ListLabelsByPageIDs(ctx context.Context, workspaceID s
 		out[pID] = append(out[pID], domain.Label{
 			ID:          row.ID.String(),
 			WorkspaceID: row.WorkspaceID.String(),
-			SpaceID:     row.SpaceID.String(),
 			Name:        row.Name,
 			Color:       row.Color,
 			CreatedAt:   row.CreatedAt,

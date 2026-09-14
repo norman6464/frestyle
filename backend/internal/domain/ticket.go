@@ -172,37 +172,37 @@ const (
 // TicketNumberMin はチケット番号の最小値。採番は 1 から始まり、0 と負の番号は無い。
 const TicketNumberMin = 1
 
-// FormatTicketKey は人が見る表示キー（例: FRESTYLE-12）を組み立てる。表示キーは spaces.key と
-// tickets.number からの派生値で保存しない。spaces.key は変えない決まりなので二重に持つ理由が
+// FormatTicketKey は人が見る表示キー（例: FRESTYLE-12）を組み立てる。表示キーは projects.key と
+// tickets.number からの派生値で保存しない。projects.key は変えない決まりなので二重に持つ理由が
 // 無く、SQL 側で連結すると sqlc の生成型が interface{} になる（実測）ため、組み立ては Go の
 // ここだけで行う。
-func FormatTicketKey(spaceKey string, number int64) string {
-	return strings.ToUpper(spaceKey) + "-" + strconv.FormatInt(number, 10)
+func FormatTicketKey(projectKey string, number int64) string {
+	return strings.ToUpper(projectKey) + "-" + strconv.FormatInt(number, 10)
 }
 
-// ParseTicketKey は表示キーをスペースの key と番号へ分解する。分解できなければ ok が false で、
-// そのとき key と番号は返さない。
+// ParseTicketKey は表示キーをプロジェクトの key と番号へ分解する。分解できなければ ok が
+// false で、そのとき key と番号は返さない。
 //
-// **最後のハイフンで区切る。** spaces.key は小文字の英数字と内側のハイフンを許すので
+// **最後のハイフンで区切る。** projects.key は小文字の英数字と内側のハイフンを許すので
 // `my-app-12` の形が普通に起こり、最初のハイフンで割ると key が `my` になってしまう。key 自体が
 // 数字で終わる場合（`frestyle-12-3`）も、最後で割れば正しく `frestyle-12` と 3 になる。
 //
-// 大文字で来ても小文字で来ても受ける。返す key は必ず小文字で、そのまま spaces.key と
+// 大文字で来ても小文字で来ても受ける。返す key は必ず小文字で、そのまま projects.key と
 // 突き合わせられる。
 func ParseTicketKey(s string) (string, int64, bool) {
 	i := strings.LastIndex(s, "-")
 	if i < 0 {
 		return "", 0, false
 	}
-	spaceKey := strings.ToLower(s[:i])
-	if !ValidSpaceKey(spaceKey) {
+	projectKey := strings.ToLower(s[:i])
+	if !ValidProjectKey(projectKey) {
 		return "", 0, false
 	}
 	number, ok := parseTicketNumber(s[i+1:])
 	if !ok {
 		return "", 0, false
 	}
-	return spaceKey, number, true
+	return projectKey, number, true
 }
 
 // parseTicketNumber は表示キーの番号側を読む。strconv.ParseInt にそのまま渡さないのは、あちらが
@@ -227,4 +227,16 @@ func parseTicketNumber(s string) (int64, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+// TicketStoryPointsMax は見積りの上限（tickets.story_points の CHECK と対）。
+const TicketStoryPointsMax = 1000
+
+// ValidTicketStoryPoints は見積りとして保存してよい値かを返す。
+// 未見積り（nil）は常に正しい —— 「まだ測っていない」は禁じる理由が無い。
+func ValidTicketStoryPoints(points *int) bool {
+	if points == nil {
+		return true
+	}
+	return *points >= 0 && *points <= TicketStoryPointsMax
 }

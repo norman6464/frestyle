@@ -1,139 +1,146 @@
-import { TicketKeyBadge, TicketStatusPill, type Ticket, type TicketStatus, type TicketType } from '@/entities/ticket';
-import TicketLabelChip from './TicketLabelChip';
-
-/** 一覧の行では場所を取りすぎないよう、ラベルは最大でこの件数だけチップにし、残りは件数へ畳む。 */
-const MAX_VISIBLE_LABELS = 2;
+import {
+  TicketKeyBadge,
+  TicketTypeGlyph,
+  type Ticket,
+  type TicketStatus,
+  type TicketType,
+} from '@/entities/ticket';
 
 export interface BacklogRowProps {
   ticket: Ticket;
-  /** チケットが属するスペースの key（表示キーの組み立てに使う。例 "FRESTYLE"）。 */
-  spaceKey: string;
+  /** チケットが属するプロジェクトの key（表示キーの組み立てに使う。例 "FRESTYLE"）。 */
+  projectKey: string;
   type: TicketType | undefined;
   status: TicketStatus | undefined;
+  /** 状態の選択肢。行の中で切り替えられるようにする（見本と同じ）。 */
+  statuses: TicketStatus[];
   assigneeName: string;
   assigneeInitials: string;
   selected: boolean;
   busy: boolean;
+  /** 変更を受け付けるか（アーカイブ中は false）。 */
+  canEdit: boolean;
   /** 子チケット（parentId が現在見えている親を指す）なら字下げを出す。 */
   indented: boolean;
-  canEdit: boolean;
   onOpen: () => void;
+  onChangeStatus: (statusId: string) => void;
 }
 
-const PRIORITY_LABEL: Record<number, string> = { 1: '高', 2: '中', 3: '低' };
+/**
+ * 優先度は色だけで表さない。**形も変える。**
+ *
+ * 上向き＝急ぐ / 横棒＝ふつう / 下向き＝後回し、と向きで分かるようにして、色はその補強に回す。
+ * 見本と同じく行には印だけを置き、「高」「中」「低」の文字は出さない（読み上げには残す）。
+ */
+const PRIORITY_VIEW: Record<number, { label: string; mark: string; className: string }> = {
+  1: { label: '高', mark: '▲', className: 'text-red-600' },
+  2: { label: '中', mark: '−', className: 'text-[var(--color-text-tertiary)]' },
+  3: { label: '低', mark: '▼', className: 'text-[var(--color-text-muted)]' },
+};
 
-function isOverdue(dueDate: string | null): boolean {
-  if (!dueDate) return false;
-  const today = new Date().toISOString().slice(0, 10);
-  return dueDate < today;
+/** 見積りは未設定（null）と 0 を区別して出す。0 は「やることが無い」で、未設定とは別物。 */
+function formatPoints(points: number | null): string {
+  return points === null ? '—' : String(points);
 }
 
-function formatDue(dueDate: string | null): string {
-  if (!dueDate) return '—';
-  // 'YYYY-MM-DD' → 'MM/DD'（見本と同じ短縮表記）。
-  return dueDate.slice(5).replace('-', '/');
-}
-
-/** バックログ一覧の行 1 件（見本 2a・行型）。アバター先頭・キー+種別/題名・右に優先度/期限/状態。 */
+/**
+ * バックログ一覧の行 1 件。見本と同じ **1 行**組み。
+ *
+ * 種別 → キー → 題名 …… 優先度 → 見積り → 状態 → 担当、の順。行全体を `<button>` には
+ * しない —— 中に状態の選択が入るため（押せるものを押せるもので包むと、どちらが反応したのか
+ * 決まらないし、読み上げも壊れる）。開くのは題名側の帯だけが受け持つ。
+ */
 export default function BacklogRow({
   ticket,
-  spaceKey,
+  projectKey,
   type,
   status,
+  statuses,
   assigneeName,
   assigneeInitials,
   selected,
   busy,
-  indented,
   canEdit,
+  indented,
   onOpen,
+  onChangeStatus,
 }: BacklogRowProps) {
   const done = status?.category === 'done';
-  const over = isOverdue(ticket.dueDate);
+  const priority = PRIORITY_VIEW[ticket.priority] ?? PRIORITY_VIEW[2];
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-current={selected}
+    <div
       aria-busy={busy || undefined}
-      className={`flex w-full items-center gap-2.5 border-b border-surface-3 px-3 py-2.5 text-left text-sm transition-colors last:border-b-0 ${
+      className={`flex w-full items-center gap-2 border-b border-surface-3 pr-3 text-sm transition-colors last:border-b-0 ${
         selected ? 'bg-surface-3' : 'hover:bg-surface-2'
       }`}
     >
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-current={selected}
+        className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-3 text-left outline-none focus-visible:bg-surface-2"
+      >
+        <TicketTypeGlyph type={type} />
+        <TicketKeyBadge projectKey={projectKey} number={ticket.number} className="shrink-0 tabular-nums" />
+        <span
+          className={`min-w-0 truncate ${done ? 'text-[var(--color-text-muted)] line-through' : 'text-[var(--color-text-primary)]'}`}
+        >
+          {indented && (
+            <span className="mr-1 text-[var(--color-text-muted)]" aria-hidden="true">
+              └
+            </span>
+          )}
+          {ticket.title}
+        </span>
+      </button>
+
+      <span className={`shrink-0 text-xs leading-none ${priority.className}`}>
+        <span aria-hidden="true">{priority.mark}</span>
+        <span className="sr-only">{`優先度: ${priority.label}`}</span>
+      </span>
+
+      <span
+        className={`w-6 shrink-0 text-right text-xs tabular-nums ${
+          ticket.storyPoints === null ? 'text-[var(--color-text-faint)]' : 'text-[var(--color-text-secondary)]'
+        }`}
+        title="見積り"
+      >
+        {formatPoints(ticket.storyPoints)}
+      </span>
+
+      {/* 状態はここで変えられる（見本と同じ）。押せることが分かるよう、素の `select` の
+          ドロップダウン印をそのまま残し、枠の色だけ状態マスタの色に合わせる。 */}
+      <select
+        value={ticket.statusId}
+        disabled={!canEdit || busy}
+        aria-label={`${ticket.title} の状態`}
+        onChange={(e) => onChangeStatus(e.target.value)}
+        className="w-28 shrink-0 rounded border bg-transparent px-1.5 py-0.5 text-xs font-medium disabled:cursor-default disabled:opacity-70"
+        style={{ borderColor: status?.color ?? 'var(--color-surface-3)', color: status?.color ?? undefined }}
+      >
+        {statuses.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
+
       {ticket.assigneePrincipalId ? (
         <span
-          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-taupe-500 text-[10px] font-bold text-white"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-taupe-500 text-[10px] font-bold text-white"
           title={assigneeName || undefined}
         >
           {assigneeInitials}
         </span>
       ) : (
         <span
-          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-dashed border-surface-3 text-[var(--color-text-muted)]"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-surface-3 text-[var(--color-text-muted)]"
           aria-label="未割り当て"
         >
           –
         </span>
       )}
-
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5 text-[10.5px] font-bold tracking-wide text-[var(--color-text-muted)]">
-          <TicketKeyBadge spaceKey={spaceKey} number={ticket.number} className="tabular-nums" />
-          <span>{type?.name ?? ''}</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span
-            className={`min-w-0 truncate ${done ? 'text-[var(--color-text-muted)] line-through' : 'text-[var(--color-text-primary)]'}`}
-          >
-            {indented && (
-              <span className="mr-1 text-[var(--color-text-muted)]" aria-hidden="true">
-                └
-              </span>
-            )}
-            {ticket.title}
-          </span>
-          {ticket.labels.length > 0 && (
-            <span className="flex flex-shrink-0 items-center gap-1">
-              {ticket.labels.slice(0, MAX_VISIBLE_LABELS).map((label) => (
-                <TicketLabelChip key={label.id} label={label} />
-              ))}
-              {ticket.labels.length > MAX_VISIBLE_LABELS && (
-                <span className="text-[11px] text-[var(--color-text-muted)]">
-                  +{ticket.labels.length - MAX_VISIBLE_LABELS}
-                </span>
-              )}
-            </span>
-          )}
-        </span>
-      </span>
-
-      <span
-        className={`w-8 flex-shrink-0 text-right text-xs ${
-          ticket.priority === 1 ? 'font-bold text-brand-700' : 'text-[var(--color-text-muted)]'
-        }`}
-      >
-        {PRIORITY_LABEL[ticket.priority]}
-      </span>
-
-      <span
-        className={`w-12 flex-shrink-0 text-right text-xs tabular-nums ${
-          over ? 'font-semibold text-red-600' : 'text-[var(--color-text-muted)]'
-        }`}
-      >
-        {formatDue(ticket.dueDate)}
-      </span>
-
-      <span className="w-24 flex-shrink-0 text-right">
-        {status && (
-          <TicketStatusPill
-            name={status.name}
-            color={status.color}
-            category={status.category}
-            showChevron={canEdit && !busy}
-          />
-        )}
-      </span>
-    </button>
+    </div>
   );
 }

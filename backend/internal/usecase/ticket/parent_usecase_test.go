@@ -17,7 +17,7 @@ func tkTaskType() domain.TicketType {
 
 func Test_チケット親変更_トップレベルへ戻す(t *testing.T) {
 	repo := &mockTicketRepo{}
-	current := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace, TypeID: "type-task", ParentID: &tkParent}
+	current := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, TypeID: "type-task", ParentID: &tkParent}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(current, nil)
 	repo.On("UpdateTicket", mock.Anything, tkWS, tkTicket, mock.MatchedBy(func(f repository.TicketUpdateFields) bool {
 		return f.ParentID == nil
@@ -36,7 +36,7 @@ func Test_チケット親変更_トップレベルへ戻す(t *testing.T) {
 // 自分自身、または自分の子孫の下へは移せない（周期を作る）。
 func Test_チケット親変更_自分自身の下には移せない(t *testing.T) {
 	repo := &mockTicketRepo{}
-	current := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace, TypeID: "type-task"}
+	current := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, TypeID: "type-task"}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(current, nil)
 
 	selfID := tkTicket
@@ -51,12 +51,12 @@ func Test_チケット親変更_自分自身の下には移せない(t *testing.
 // 含まれていれば、その候補は自分の子孫（を含む祖先の連なり）ということ。
 func Test_チケット親変更_子孫の下には移せない(t *testing.T) {
 	repo := &mockTicketRepo{}
-	current := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace, TypeID: "type-task"}
+	current := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, TypeID: "type-task"}
 	grandchild := "grandchild-1"
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(current, nil)
 	repo.On("FindTicket", mock.Anything, tkWS, grandchild).
-		Return(&domain.Ticket{ID: grandchild, WorkspaceID: tkWS, SpaceID: tkSpace, TypeID: "type-task"}, nil)
-	repo.On("FindTicketType", mock.Anything, tkWS, tkSpace, "type-task").Return(&domain.TicketType{ID: "type-task", HierarchyLevel: 0}, nil)
+		Return(&domain.Ticket{ID: grandchild, WorkspaceID: tkWS, ProjectID: tkProject, TypeID: "type-task"}, nil)
+	repo.On("FindTicketType", mock.Anything, tkWS, tkProject, "type-task").Return(&domain.TicketType{ID: "type-task", HierarchyLevel: 0}, nil)
 	// grandchild の祖先チェーンに tkTicket 自身が含まれる = grandchild は tkTicket の子孫。
 	repo.On("ListTicketParentChain", mock.Anything, tkWS, grandchild).Return([]domain.Ticket{
 		{ID: "root"}, {ID: tkTicket},
@@ -71,12 +71,12 @@ func Test_チケット親変更_子孫の下には移せない(t *testing.T) {
 func Test_チケット親変更_正常な移動は履歴を残す(t *testing.T) {
 	repo := &mockTicketRepo{}
 	newParent := "new-parent"
-	current := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace, TypeID: "type-task", ParentID: nil}
+	current := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, TypeID: "type-task", ParentID: nil}
 	parentType := tkTaskType()
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(current, nil)
 	repo.On("FindTicket", mock.Anything, tkWS, newParent).
-		Return(&domain.Ticket{ID: newParent, WorkspaceID: tkWS, SpaceID: tkSpace, TypeID: "type-task"}, nil)
-	repo.On("FindTicketType", mock.Anything, tkWS, tkSpace, "type-task").Return(&parentType, nil)
+		Return(&domain.Ticket{ID: newParent, WorkspaceID: tkWS, ProjectID: tkProject, TypeID: "type-task"}, nil)
+	repo.On("FindTicketType", mock.Anything, tkWS, tkProject, "type-task").Return(&parentType, nil)
 	repo.On("ListTicketParentChain", mock.Anything, tkWS, newParent).Return([]domain.Ticket{}, nil)
 	repo.On("UpdateTicket", mock.Anything, tkWS, tkTicket, mock.AnythingOfType("repository.TicketUpdateFields")).
 		Return(&domain.Ticket{ID: tkTicket}, nil)
@@ -96,7 +96,7 @@ func Test_チケット親変更_正常な移動は履歴を残す(t *testing.T) 
 
 func Test_チケット親変更_変化が無ければ履歴を残さない(t *testing.T) {
 	repo := &mockTicketRepo{}
-	current := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, SpaceID: tkSpace, TypeID: "type-task", ParentID: nil}
+	current := &domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, TypeID: "type-task", ParentID: nil}
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).Return(current, nil)
 	repo.On("UpdateTicket", mock.Anything, tkWS, tkTicket, mock.AnythingOfType("repository.TicketUpdateFields")).
 		Return(current, nil)

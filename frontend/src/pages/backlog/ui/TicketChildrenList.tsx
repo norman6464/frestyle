@@ -6,7 +6,7 @@ export interface TicketChildrenListProps {
   tickets: Ticket[];
   loading: boolean;
   error: string | null;
-  spaceKey: string;
+  projectKey: string;
   statuses: TicketStatus[];
 }
 
@@ -14,7 +14,7 @@ export interface TicketChildrenListProps {
  * 直下の子の一覧(読むだけ)。親の付け替えは子チケット自身を開いたときの「親」欄から行う
  * (useTicketChildren の doc 参照)。
  */
-export default function TicketChildrenList({ tickets, loading, error, spaceKey, statuses }: TicketChildrenListProps) {
+export default function TicketChildrenList({ tickets, loading, error, projectKey, statuses }: TicketChildrenListProps) {
   if (loading) return <Loading size="small" />;
   if (error) {
     return (
@@ -34,10 +34,10 @@ export default function TicketChildrenList({ tickets, loading, error, spaceKey, 
         return (
           <li key={child.id}>
             <Link
-              to={`/kb/tickets/${child.id}`}
+              to={`/tickets/${child.id}`}
               className="flex items-center gap-1.5 rounded px-1 py-1 text-xs hover:bg-surface-2"
             >
-              <TicketKeyBadge spaceKey={spaceKey} number={child.number} />
+              <TicketKeyBadge projectKey={projectKey} number={child.number} />
               <span className="min-w-0 flex-1 truncate text-[var(--color-text-primary)]">{child.title}</span>
               {status && <TicketStatusPill name={status.name} color={status.color} category={status.category} />}
             </Link>

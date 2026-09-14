@@ -3,7 +3,7 @@ import { EllipsisHorizontalIcon } from '@heroicons/react/24/outline';
 import Avatar from '@/shared/ui/Avatar';
 import ConfirmModal from '@/shared/ui/ConfirmModal';
 import { formatDateTime, formatTime } from '@/shared/lib/formatters';
-import type { TicketComment, TicketCommentSegment } from '@/entities/ticket';
+import type { TicketComment, TicketCommentBlock } from '@/entities/ticket';
 import type { KbWorkspaceMember } from '@/entities/kb';
 import { useCommentEdits } from '../model/useCommentEdits';
 import { summarizeReactions } from '../lib/summarizeReactions';
@@ -25,8 +25,8 @@ export interface TicketCommentItemProps {
   members: KbWorkspaceMember[];
   replyOpen: boolean;
   onToggleReply: () => void;
-  onReply: (body: TicketCommentSegment[]) => Promise<void>;
-  onEdit: (body: TicketCommentSegment[]) => Promise<void>;
+  onReply: (body: TicketCommentBlock[]) => Promise<void>;
+  onEdit: (body: TicketCommentBlock[]) => Promise<void>;
   onDelete: () => Promise<void>;
   onReact: (emoji: string) => void;
   resolveMentionName: (userId: string) => string | null;
@@ -89,7 +89,7 @@ export default function TicketCommentItem({
     setMenuOpen(false);
   };
 
-  const submitEdit = async (body: TicketCommentSegment[]) => {
+  const submitEdit = async (body: TicketCommentBlock[]) => {
     await onEdit(body);
     setEditing(false);
   };
@@ -131,21 +131,13 @@ export default function TicketCommentItem({
             <TicketCommentComposer
               onSubmit={submitEdit}
               members={members}
-              initialSegments={comment.body}
+              initialBlocks={comment.body}
               resolveMentionName={resolveMentionName}
               placeholder="発言を編集"
               submitLabel="保存"
+              onCancel={() => setEditing(false)}
               autoFocus
             />
-            <div className="mt-1 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setEditing(false)}
-                className="text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-              >
-                やめる
-              </button>
-            </div>
           </div>
         ) : (
           <TicketCommentBody body={comment.body} resolveMentionName={resolveMentionName} />
@@ -211,7 +203,14 @@ export default function TicketCommentItem({
 
         {replyOpen && !compact && (
           <div className="mt-2">
-            <TicketCommentComposer onSubmit={onReply} members={members} placeholder="返信を書く" submitLabel="返信" autoFocus />
+            <TicketCommentComposer
+              onSubmit={onReply}
+              members={members}
+              placeholder="返信を書く"
+              submitLabel="返信"
+              onCancel={() => onToggleReply()}
+              autoFocus
+            />
           </div>
         )}
       </div>

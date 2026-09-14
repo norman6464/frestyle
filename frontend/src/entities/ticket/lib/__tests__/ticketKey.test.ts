@@ -2,18 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { formatTicketKey, parseTicketKey } from '../ticketKey';
 
 describe('formatTicketKey', () => {
-  it('spaceKey を大文字化して number をハイフンで繋ぐ', () => {
+  it('projectKey を大文字化して number をハイフンで繋ぐ', () => {
     expect(formatTicketKey('frestyle', 457)).toBe('FRESTYLE-457');
   });
 });
 
 describe('parseTicketKey', () => {
-  it('末尾のハイフンで spaceKey と number に分解する', () => {
-    expect(parseTicketKey('FRESTYLE-457')).toEqual({ spaceKey: 'FRESTYLE', number: 457 });
+  it('末尾のハイフンで projectKey と number に分解する', () => {
+    expect(parseTicketKey('FRESTYLE-457')).toEqual({ projectKey: 'FRESTYLE', number: 457 });
   });
 
-  it('spaceKey 自体にハイフンを含む場合も最後のハイフンで割る', () => {
-    expect(parseTicketKey('my-app-12')).toEqual({ spaceKey: 'my-app', number: 12 });
+  it('projectKey 自体にハイフンを含む場合も最後のハイフンで割る', () => {
+    expect(parseTicketKey('my-app-12')).toEqual({ projectKey: 'my-app', number: 12 });
   });
 
   it('ハイフンが無ければ null', () => {
@@ -28,7 +28,7 @@ describe('parseTicketKey', () => {
     expect(parseTicketKey('FRESTYLE-12a')).toBeNull();
   });
 
-  it('先頭がハイフンなら null（spaceKey が空）', () => {
+  it('先頭がハイフンなら null（projectKey が空）', () => {
     expect(parseTicketKey('-12')).toBeNull();
   });
 });

@@ -80,6 +80,18 @@ SELECT n_users, activity_days
 \set kb_page_local_setup_faq_id '00000000-5eed-0000-0000-0000000000b3'
 \set kb_page_architecture_id '00000000-5eed-0000-0000-0000000000b4'
 \set kb_page_faq_id '00000000-5eed-0000-0000-0000000000b5'
+-- バックログ（プロジェクト）。ナレッジのスペースとは無関係の別の入れ物。
+\set pj_project_id '00000000-5eed-0000-0000-0000000000e1'
+\set pj_status_todo_id '00000000-5eed-0000-0000-0000000000e2'
+\set pj_status_doing_id '00000000-5eed-0000-0000-0000000000e3'
+\set pj_status_done_id '00000000-5eed-0000-0000-0000000000e4'
+\set pj_type_task_id '00000000-5eed-0000-0000-0000000000e5'
+\set pj_type_bug_id '00000000-5eed-0000-0000-0000000000e6'
+-- チケットの id も固定する。並び順は別表（ticket_backlog_ranks）に入れるので、
+-- gen_random_uuid() だと後から参照できない。
+\set pj_ticket_setup_id '00000000-5eed-0000-0000-0000000000e7'
+\set pj_ticket_backlog_id '00000000-5eed-0000-0000-0000000000e8'
+\set pj_ticket_search_id '00000000-5eed-0000-0000-0000000000e9'
 
 -- ワークスペース 2: チーム共有ワークスペースの例(personal_owner_user_id は NULL)。
 -- メンバーは運営管理者(admin)に加え、bulk の seed1 / seed2(editor / viewer)。
@@ -465,12 +477,233 @@ VALUES
   (gen_random_uuid(), :'kb_workspace_support_id', :'kb_page_escalation_id', NULL, 'a1', 'paragraph',
    '{}'::jsonb, '[{"type":"text","text":"重大度が高い、または一次回答から 24 時間解決しない場合(ダミー文言)。"}]'::jsonb);
 
+-- ---- バックログ（プロジェクト・チケット・版・チーム・スプリント）----------------
+--
+-- 画面を目で確かめるには「1 件だけ」では足りない。並べ替え・絞り込み・スプリントの
+-- 出し分け・チームや版の付け外しは、どれも**複数あって初めて**確かめられる。
+-- そこで 3 プロジェクト / 約 50 チケット / 10 人のメンバーを入れる。
+--
+-- 固定 ID を使うのは最初のプロジェクトの土台だけ。チケットやその派生は
+-- generate_series で作り、以降は tickets を読み直して組み立てる（id を数え上げない）。
+
+-- 運営管理者に加えて 9 人をこのワークスペースのメンバーにする（bulk で作った
+-- seed1..N の先頭を使い回す）。principals はチケットの担当に要る。
+INSERT INTO workspace_members (workspace_id, user_id, status, joined_at)
+SELECT :'kb_workspace_id', 1000000 + i, 'active', now()
+FROM generate_series(1, 9) AS i
+ON CONFLICT DO NOTHING;
+
+INSERT INTO principals (id, workspace_id, kind, user_id)
+SELECT
+  ('00000000-5eed-0001-0000-' || lpad(i::text, 12, '0'))::uuid,
+  :'kb_workspace_id', 'user', 1000000 + i
+FROM generate_series(1, 9) AS i
+ON CONFLICT DO NOTHING;
+
+INSERT INTO workspace_grants (workspace_id, principal_id, role)
+SELECT :'kb_workspace_id', p.id, CASE WHEN p.user_id % 3 = 0 THEN 'admin' ELSE 'editor' END
+FROM principals p
+WHERE p.workspace_id = :'kb_workspace_id' AND p.user_id BETWEEN 1000001 AND 1000009
+ON CONFLICT DO NOTHING;
+
+-- プロジェクトは 3 つ。切替・横断（自分の担当）を確かめるために複数要る。
+INSERT INTO projects (id, workspace_id, "key", name)
+VALUES
+  (:'pj_project_id',                                   :'kb_workspace_id', 'local', 'ローカル開発'),
+  ('00000000-5eed-0002-0000-000000000001'::uuid,       :'kb_workspace_id', 'app',   'アプリ本体'),
+  ('00000000-5eed-0002-0000-000000000002'::uuid,       :'kb_workspace_id', 'infra', '基盤・運用');
+
+-- 状態・種別・採番カウンタは 3 プロジェクトぶん同じ形で作る。
+INSERT INTO ticket_statuses (id, workspace_id, project_id, name, category, color, "position", is_initial)
+SELECT
+  ('00000000-5eed-0003-' || lpad(pj.n::text, 4, '0') || '-' || lpad(s.n::text, 12, '0'))::uuid,
+  :'kb_workspace_id', pj.id, s.name, s.category, s.color, s.pos, s.n = 1
+FROM (VALUES
+  (1, :'pj_project_id'::uuid),
+  (2, '00000000-5eed-0002-0000-000000000001'::uuid),
+  (3, '00000000-5eed-0002-0000-000000000002'::uuid)
+) AS pj(n, id)
+CROSS JOIN (VALUES
+  (1, 'To Do',    'todo',        '#5b6b7a', 'a0'),
+  (2, '開発',     'in_progress', '#a0661a', 'a1'),
+  (3, 'レビュー', 'in_progress', '#1d4ed8', 'a2'),
+  (4, 'リリース', 'done',        '#2f6b47', 'a3')
+) AS s(n, name, category, color, pos);
+
+INSERT INTO ticket_types (id, workspace_id, project_id, name, hierarchy_level, color, "position", is_default)
+SELECT
+  ('00000000-5eed-0004-' || lpad(pj.n::text, 4, '0') || '-' || lpad(t.n::text, 12, '0'))::uuid,
+  :'kb_workspace_id', pj.id, t.name, 0, t.color, t.pos, t.n = 1
+FROM (VALUES
+  (1, :'pj_project_id'::uuid),
+  (2, '00000000-5eed-0002-0000-000000000001'::uuid),
+  (3, '00000000-5eed-0002-0000-000000000002'::uuid)
+) AS pj(n, id)
+CROSS JOIN (VALUES
+  (1, '開発タスク', '#2563eb', 'a0'),
+  (2, 'バグ',       '#9a3b2e', 'a1'),
+  (3, '調査',       '#7c5cbf', 'a2')
+) AS t(n, name, color, pos);
+
+-- ラベルはワークスペース単位（プロジェクトに属さない）。
+INSERT INTO labels (id, workspace_id, name, color)
+VALUES
+  ('00000000-5eed-0005-0000-000000000001'::uuid, :'kb_workspace_id', '不具合',   '#9a3b2e'),
+  ('00000000-5eed-0005-0000-000000000002'::uuid, :'kb_workspace_id', '要調査',   '#7c5cbf'),
+  ('00000000-5eed-0005-0000-000000000003'::uuid, :'kb_workspace_id', '改善',     '#2f6b47'),
+  ('00000000-5eed-0005-0000-000000000004'::uuid, :'kb_workspace_id', '至急',     '#dc2626');
+
+-- リリース版（修正バージョンの選択肢）。プロジェクトごとに 3 つ。
+INSERT INTO project_versions (id, workspace_id, project_id, name, "position", released_at)
+SELECT
+  ('00000000-5eed-0006-' || lpad(pj.n::text, 4, '0') || '-' || lpad(v.n::text, 12, '0'))::uuid,
+  :'kb_workspace_id', pj.id, v.name, v.pos,
+  CASE WHEN v.n = 1 THEN now() - interval '30 day' ELSE NULL END
+FROM (VALUES
+  (1, :'pj_project_id'::uuid),
+  (2, '00000000-5eed-0002-0000-000000000001'::uuid),
+  (3, '00000000-5eed-0002-0000-000000000002'::uuid)
+) AS pj(n, id)
+CROSS JOIN (VALUES
+  (1, '1.0.0', 'a0'),
+  (2, '1.1.0', 'a1'),
+  (3, '2.0.0', 'a2')
+) AS v(n, name, pos);
+
+-- チーム（プロジェクト単位）。
+INSERT INTO teams (id, workspace_id, project_id, name)
+SELECT
+  ('00000000-5eed-0007-' || lpad(pj.n::text, 4, '0') || '-' || lpad(t.n::text, 12, '0'))::uuid,
+  :'kb_workspace_id', pj.id, t.name
+FROM (VALUES
+  (1, :'pj_project_id'::uuid),
+  (2, '00000000-5eed-0002-0000-000000000001'::uuid),
+  (3, '00000000-5eed-0002-0000-000000000002'::uuid)
+) AS pj(n, id)
+CROSS JOIN (VALUES (1, '開発チーム'), (2, '基盤チーム')) AS t(n, name);
+
+-- チームの所属。1 人が複数チームに属することもある形にする。
+INSERT INTO team_members (workspace_id, team_id, user_id)
+SELECT :'kb_workspace_id', t.id, 1000000 + m.i
+FROM teams t
+CROSS JOIN generate_series(1, 9) AS m(i)
+WHERE t.workspace_id = :'kb_workspace_id' AND (m.i + length(t.name)) % 3 = 0
+ON CONFLICT DO NOTHING;
+
+-- スプリント。プロジェクトごとに「進行中 1・計画中 1」。柱に並ぶ様子を確かめるため。
+INSERT INTO sprints (id, workspace_id, project_id, name, state, start_date, end_date, "position")
+SELECT
+  ('00000000-5eed-0008-' || lpad(pj.n::text, 4, '0') || '-' || lpad(s.n::text, 12, '0'))::uuid,
+  :'kb_workspace_id', pj.id, s.name, s.state,
+  CASE WHEN s.state = 'active' THEN (now() - interval '7 day')::date ELSE NULL END,
+  CASE WHEN s.state = 'active' THEN (now() + interval '7 day')::date ELSE NULL END,
+  s.pos
+FROM (VALUES
+  (1, :'pj_project_id'::uuid),
+  (2, '00000000-5eed-0002-0000-000000000001'::uuid),
+  (3, '00000000-5eed-0002-0000-000000000002'::uuid)
+) AS pj(n, id)
+CROSS JOIN (VALUES
+  (1, 'スプリント 1', 'active',  'a0'),
+  (2, 'スプリント 2', 'planned', 'a1')
+) AS s(n, name, state, pos);
+
+-- チケット本体。3 プロジェクトに 17 件ずつ（計 51 件）。
+--
+-- 題名は「何の画面を見ているか」が分かる具体名にする（「ダミー 12」だと並べ替えや
+-- 絞り込みの確認で自分がどれを動かしたか見失う）。
+INSERT INTO tickets
+  (id, workspace_id, project_id, number, type_id, status_id, title, doc, plain_text,
+   priority, story_points, start_date, due_date, team_id, created_by_user_id, created_at, updated_at)
+SELECT
+  ('00000000-5eed-0009-' || lpad(pj.n::text, 4, '0') || '-' || lpad(i::text, 12, '0'))::uuid,
+  :'kb_workspace_id', pj.id, i,
+  ('00000000-5eed-0004-' || lpad(pj.n::text, 4, '0') || '-' || lpad((1 + i % 3)::text, 12, '0'))::uuid,
+  ('00000000-5eed-0003-' || lpad(pj.n::text, 4, '0') || '-' || lpad((1 + i % 4)::text, 12, '0'))::uuid,
+  pj.prefix || ' ' || (ARRAY[
+    'ログインの導線を整理する', '一覧の並べ替えが効かない', '検索の日本語が拾えない',
+    '添付の上限を決める', 'コメントの通知を出す', '権限の既定値を見直す',
+    'ダッシュボードの初期表示を速くする', '期限切れの色を調整する', 'CSV の書き出しを足す',
+    '監査ログの保持期間を決める', 'モバイルの折り返しが崩れる', 'API のページングを入れる',
+    '設定画面の文言を統一する', '重複チケットの検知', 'アーカイブの復元手順を書く',
+    'エラー画面の案内を親切にする', '初回起動の手順をまとめる'
+  ])[i],
+  '{"type":"doc","content":[]}'::jsonb, '', 1 + (i % 3),
+  CASE WHEN i % 4 = 0 THEN NULL ELSE (ARRAY[1,2,3,5,8])[1 + (i % 5)] END,
+  CASE WHEN i % 5 = 0 THEN (now() - interval '3 day')::date ELSE NULL END,
+  CASE WHEN i % 6 = 0 THEN (now() - interval '2 day')::date
+       WHEN i % 7 = 0 THEN (now() + interval '10 day')::date ELSE NULL END,
+  CASE WHEN i % 3 = 0
+       THEN ('00000000-5eed-0007-' || lpad(pj.n::text, 4, '0') || '-' || lpad((1 + i % 2)::text, 12, '0'))::uuid
+       ELSE NULL END,
+  1000000, now() - (i || ' day')::interval, now()
+FROM (VALUES
+  (1, :'pj_project_id'::uuid, 'ローカル:'),
+  (2, '00000000-5eed-0002-0000-000000000001'::uuid, 'アプリ:'),
+  (3, '00000000-5eed-0002-0000-000000000002'::uuid, '基盤:')
+) AS pj(n, id, prefix)
+CROSS JOIN generate_series(1, 17) AS i;
+
+-- 採番カウンタは tickets の最大番号と必ず揃える（ズレると次の作成が UNIQUE で落ちる）。
+INSERT INTO ticket_counters (workspace_id, project_id, last_number)
+SELECT workspace_id, project_id, max(number) FROM tickets
+WHERE workspace_id = :'kb_workspace_id'
+GROUP BY workspace_id, project_id;
+
+-- バックログの並び順。tickets は並び順の列を持たない（この表が正本）。
+-- 鍵は fracindex の作法に合わせる（'a' + base62 1 桁。17 件なので 1 桁で足りる）。
+INSERT INTO ticket_backlog_ranks (workspace_id, project_id, ticket_id, "position")
+SELECT t.workspace_id, t.project_id, t.id,
+  'a' || substr('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'::text, t.number::int, 1)
+FROM tickets t
+WHERE t.workspace_id = :'kb_workspace_id';
+
+-- 担当。3 件に 2 件ほど割り当て、残りは未割り当てのまま（「未割り当て」の絞り込みを試すため）。
+INSERT INTO ticket_assignments (workspace_id, ticket_id, assignee_principal_id, assigned_by_user_id)
+SELECT t.workspace_id, t.id, p.id, 1000000
+FROM tickets t
+JOIN LATERAL (
+  SELECT id FROM principals
+  WHERE workspace_id = t.workspace_id AND kind = 'user'
+  ORDER BY user_id
+  OFFSET (t.number % 9) LIMIT 1
+) p ON true
+WHERE t.workspace_id = :'kb_workspace_id' AND t.number % 3 <> 0;
+
+-- ラベル。数件に付ける。
+INSERT INTO ticket_labels (workspace_id, ticket_id, label_id)
+SELECT t.workspace_id, t.id,
+  ('00000000-5eed-0005-0000-' || lpad((1 + t.number % 4)::text, 12, '0'))::uuid
+FROM tickets t
+WHERE t.workspace_id = :'kb_workspace_id' AND t.number % 2 = 0;
+
+-- 修正バージョン（多対多）。4 件に 1 件は 2 つ付けて、複数持てることを目で確かめられるようにする。
+INSERT INTO ticket_fix_versions (workspace_id, project_id, ticket_id, version_id)
+SELECT t.workspace_id, t.project_id, t.id, v.id
+FROM tickets t
+JOIN project_versions v ON v.workspace_id = t.workspace_id AND v.project_id = t.project_id
+WHERE t.workspace_id = :'kb_workspace_id'
+  AND ((t.number % 4 = 1 AND v.name = '1.1.0')
+    OR (t.number % 4 = 2 AND v.name IN ('1.1.0', '2.0.0')));
+
+-- 進行中のスプリントに、各プロジェクトの先頭 5 件を入れる。
+INSERT INTO ticket_sprint_ranks (workspace_id, sprint_id, ticket_id, "position")
+SELECT t.workspace_id, s.id, t.id,
+  'a' || substr('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'::text, t.number::int, 1)
+FROM tickets t
+JOIN sprints s ON s.workspace_id = t.workspace_id AND s.project_id = t.project_id AND s.state = 'active'
+WHERE t.workspace_id = :'kb_workspace_id' AND t.number <= 5;
+
+
 COMMIT;
 
 -- ---- 統計の更新 ------------------------------------------------------------
 -- ANALYZE を忘れるとプランナが古い統計で判断し、実行計画の比較が無意味になる。
 \echo '=== ANALYZE 実行中 ...'
-ANALYZE users, profiles, workspaces, principals, workspace_grants, spaces, pages, page_paths, blocks;
+ANALYZE users, profiles, workspaces, principals, workspace_grants, spaces, pages, page_paths, blocks,
+        projects, ticket_statuses, ticket_types, ticket_counters, tickets, ticket_backlog_ranks,
+        ticket_assignments, ticket_labels, labels, project_versions, ticket_fix_versions,
+        teams, team_members, sprints, ticket_sprint_ranks;
 
 -- 規模の受け渡しに使った一時テーブルは、この後の集計に混ざらないよう捨てる。
 DROP TABLE _cfg;

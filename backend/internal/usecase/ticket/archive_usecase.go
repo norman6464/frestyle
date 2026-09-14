@@ -94,7 +94,14 @@ func (u *RestoreTicketUseCase) Execute(ctx context.Context, in RestoreTicketInpu
 	if err != nil {
 		return nil, err
 	}
-	last, err := u.repo.LastActiveTicketPosition(ctx, in.WorkspaceID, t.SpaceID)
+	if err := u.repo.RestoreTicket(ctx, in.WorkspaceID, in.TicketID); err != nil {
+		return nil, err
+	}
+	// 並び順は末尾へ付け直す。アーカイブされていた間に他のチケットの並びが進んでいる
+	// 可能性があるため、元の位置は復元しない（削除からの復元 RestoreDeletedTicketUseCase
+	// と同じ扱い）。upsert なのは、この表より前に作られてアーカイブ済みだったチケットには
+	// 並び順の行が無いため（移行では現役の分だけ入れた）。
+	last, err := u.repo.LastTicketRankPosition(ctx, in.WorkspaceID, t.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +109,7 @@ func (u *RestoreTicketUseCase) Execute(ctx context.Context, in RestoreTicketInpu
 	if err != nil {
 		return nil, err
 	}
-	if err := u.repo.RestoreTicket(ctx, in.WorkspaceID, in.TicketID, pos); err != nil {
+	if err := u.repo.UpsertTicketRank(ctx, in.WorkspaceID, t.ProjectID, in.TicketID, pos); err != nil {
 		return nil, err
 	}
 	if err := recordArchivedChange(ctx, u.repo, in.WorkspaceID, in.TicketID, in.ActorUserID, &archivedTrue, &archivedFalse); err != nil {

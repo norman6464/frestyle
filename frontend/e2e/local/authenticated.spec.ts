@@ -172,7 +172,8 @@ test.describe('スペース追加導線（POST モック）', () => {
       });
     });
 
-    // サイドバーはモバイル用とデスクトップ用の 2 つが DOM に居るので、見えている方だけを掴む。
+    // 同じ名前のものが柱と本文の両方に出ることがある（スペース名など）。画面幅で
+    // 隠れている方を掴まないよう、見えているものだけに絞る。
     const visible = page.locator(':visible');
 
     await page.goto(`/kb/spaces/${EXISTING_ID}`);

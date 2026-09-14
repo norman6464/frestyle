@@ -42,20 +42,21 @@ func (q *Queries) AddTicketLabel(ctx context.Context, arg AddTicketLabelParams) 
 const createLabel = `-- name: CreateLabel :one
 
 
-INSERT INTO labels (id, workspace_id, space_id, name, color, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, now(), now())
-RETURNING id, workspace_id, space_id, name, name_key, color, created_at, updated_at
+INSERT INTO labels (id, workspace_id, name, color, created_at, updated_at)
+VALUES ($1, $2, $3, $4, now(), now())
+RETURNING id, workspace_id, name, name_key, color, created_at, updated_at
 `
 
 type CreateLabelParams struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
 	Name        string
 	Color       string
 }
 
-// ラベル（labels）とチケットへの付け外し（ticket_labels）のクエリ（段 4・設計 Ⅵ）。
+// ラベル（labels）とチケットへの付け外し（ticket_labels）のクエリ。
+// ラベルはワークスペース単位の語彙で、ページ（page_labels）とチケット（ticket_labels）の
+// 両方から同じ行を引く（labels テーブルの doc コメント参照）。
 // =============================================================================
 // labels
 // =============================================================================
@@ -63,7 +64,6 @@ func (q *Queries) CreateLabel(ctx context.Context, arg CreateLabelParams) (Label
 	row := q.db.QueryRowContext(ctx, createLabel,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.SpaceID,
 		arg.Name,
 		arg.Color,
 	)
@@ -71,7 +71,6 @@ func (q *Queries) CreateLabel(ctx context.Context, arg CreateLabelParams) (Label
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
 		&i.Name,
 		&i.NameKey,
 		&i.Color,
@@ -82,19 +81,17 @@ func (q *Queries) CreateLabel(ctx context.Context, arg CreateLabelParams) (Label
 }
 
 const deleteLabel = `-- name: DeleteLabel :execrows
-DELETE FROM labels WHERE workspace_id = $1 AND space_id = $2 AND id = $3
+DELETE FROM labels WHERE workspace_id = $1 AND id = $2
 `
 
 type DeleteLabelParams struct {
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
 	ID          uuid.UUID
 }
 
-// ticket_labels は ON DELETE CASCADE で一緒に消える。
-// space_id で絞る理由は UpdateLabel と同じ。
+// ticket_labels / page_labels は ON DELETE CASCADE で一緒に消える。
 func (q *Queries) DeleteLabel(ctx context.Context, arg DeleteLabelParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteLabel, arg.WorkspaceID, arg.SpaceID, arg.ID)
+	result, err := q.db.ExecContext(ctx, deleteLabel, arg.WorkspaceID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -102,7 +99,7 @@ func (q *Queries) DeleteLabel(ctx context.Context, arg DeleteLabelParams) (int64
 }
 
 const findLabel = `-- name: FindLabel :one
-SELECT id, workspace_id, space_id, name, name_key, color, created_at, updated_at FROM labels WHERE workspace_id = $1 AND id = $2
+SELECT id, workspace_id, name, name_key, color, created_at, updated_at FROM labels WHERE workspace_id = $1 AND id = $2
 `
 
 type FindLabelParams struct {
@@ -116,7 +113,6 @@ func (q *Queries) FindLabel(ctx context.Context, arg FindLabelParams) (Label, er
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
 		&i.Name,
 		&i.NameKey,
 		&i.Color,
@@ -127,16 +123,11 @@ func (q *Queries) FindLabel(ctx context.Context, arg FindLabelParams) (Label, er
 }
 
 const listLabels = `-- name: ListLabels :many
-SELECT id, workspace_id, space_id, name, name_key, color, created_at, updated_at FROM labels WHERE workspace_id = $1 AND space_id = $2 ORDER BY name_key
+SELECT id, workspace_id, name, name_key, color, created_at, updated_at FROM labels WHERE workspace_id = $1 ORDER BY name_key
 `
 
-type ListLabelsParams struct {
-	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
-}
-
-func (q *Queries) ListLabels(ctx context.Context, arg ListLabelsParams) ([]Label, error) {
-	rows, err := q.db.QueryContext(ctx, listLabels, arg.WorkspaceID, arg.SpaceID)
+func (q *Queries) ListLabels(ctx context.Context, workspaceID uuid.UUID) ([]Label, error) {
+	rows, err := q.db.QueryContext(ctx, listLabels, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +138,6 @@ func (q *Queries) ListLabels(ctx context.Context, arg ListLabelsParams) ([]Label
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
 			&i.Name,
 			&i.NameKey,
 			&i.Color,
@@ -168,7 +158,7 @@ func (q *Queries) ListLabels(ctx context.Context, arg ListLabelsParams) ([]Label
 }
 
 const listLabelsByTicket = `-- name: ListLabelsByTicket :many
-SELECT l.id, l.workspace_id, l.space_id, l.name, l.name_key, l.color, l.created_at, l.updated_at FROM labels l
+SELECT l.id, l.workspace_id, l.name, l.name_key, l.color, l.created_at, l.updated_at FROM labels l
 JOIN ticket_labels tl ON tl.workspace_id = l.workspace_id AND tl.label_id = l.id
 WHERE tl.workspace_id = $1 AND tl.ticket_id = $2
 ORDER BY l.name_key
@@ -191,7 +181,6 @@ func (q *Queries) ListLabelsByTicket(ctx context.Context, arg ListLabelsByTicket
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
 			&i.Name,
 			&i.NameKey,
 			&i.Color,
@@ -212,7 +201,7 @@ func (q *Queries) ListLabelsByTicket(ctx context.Context, arg ListLabelsByTicket
 }
 
 const listLabelsByTicketIDs = `-- name: ListLabelsByTicketIDs :many
-SELECT tl.ticket_id, l.id, l.workspace_id, l.space_id, l.name, l.name_key, l.color, l.created_at, l.updated_at FROM ticket_labels tl
+SELECT tl.ticket_id, l.id, l.workspace_id, l.name, l.name_key, l.color, l.created_at, l.updated_at FROM ticket_labels tl
 JOIN labels l ON l.workspace_id = tl.workspace_id AND l.id = tl.label_id
 WHERE tl.workspace_id = $1
   AND tl.ticket_id IN (
@@ -230,7 +219,6 @@ type ListLabelsByTicketIDsRow struct {
 	TicketID    uuid.UUID
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
 	Name        string
 	NameKey     sql.NullString
 	Color       string
@@ -255,7 +243,6 @@ func (q *Queries) ListLabelsByTicketIDs(ctx context.Context, arg ListLabelsByTic
 			&i.TicketID,
 			&i.ID,
 			&i.WorkspaceID,
-			&i.SpaceID,
 			&i.Name,
 			&i.NameKey,
 			&i.Color,
@@ -296,34 +283,28 @@ func (q *Queries) RemoveTicketLabel(ctx context.Context, arg RemoveTicketLabelPa
 const updateLabel = `-- name: UpdateLabel :one
 UPDATE labels
 SET name = $1, color = $2, updated_at = now()
-WHERE workspace_id = $3 AND space_id = $4 AND id = $5
-RETURNING id, workspace_id, space_id, name, name_key, color, created_at, updated_at
+WHERE workspace_id = $3 AND id = $4
+RETURNING id, workspace_id, name, name_key, color, created_at, updated_at
 `
 
 type UpdateLabelParams struct {
 	Name        string
 	Color       string
 	WorkspaceID uuid.UUID
-	SpaceID     uuid.UUID
 	ID          uuid.UUID
 }
 
-// space_id で絞るのは、呼び出し側が権限を確かめた相手（URL のスペース）と
-// 実際に書き換える行を必ず一致させるため。usecase 側でも同じ突き合わせをしているが、
-// 新しい呼び出し元がその一手を忘れても、ここで 0 行に落ちて黙って通ることはない。
 func (q *Queries) UpdateLabel(ctx context.Context, arg UpdateLabelParams) (Label, error) {
 	row := q.db.QueryRowContext(ctx, updateLabel,
 		arg.Name,
 		arg.Color,
 		arg.WorkspaceID,
-		arg.SpaceID,
 		arg.ID,
 	)
 	var i Label
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
-		&i.SpaceID,
 		&i.Name,
 		&i.NameKey,
 		&i.Color,

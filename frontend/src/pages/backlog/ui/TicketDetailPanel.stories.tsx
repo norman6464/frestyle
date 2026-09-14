@@ -8,7 +8,7 @@ import { withApi, withToast } from '../../../../.storybook/decorators';
 const ticket: Ticket = {
   id: 't-1',
   workspaceId: 'w-1',
-  spaceId: 's-1',
+  projectId: 's-1',
   number: 457,
   typeId: 'ty-1',
   statusId: 'st-2',
@@ -16,6 +16,8 @@ const ticket: Ticket = {
   title: '段1: チケットの骨格（9表）',
   doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '本文です。' }] }] },
   priority: 1,
+  storyPoints: null,
+  teamId: null,
   startDate: null,
   dueDate: '2026-09-12',
   position: 'a0',
@@ -33,7 +35,7 @@ const statuses: TicketStatus[] = [
   {
     id: 'st-1',
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     name: 'To Do',
     category: 'todo',
     color: '#5b6b7a',
@@ -47,7 +49,7 @@ const statuses: TicketStatus[] = [
   {
     id: 'st-2',
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     name: '開発',
     category: 'in_progress',
     color: '#a0661a',
@@ -64,7 +66,7 @@ const types: TicketType[] = [
   {
     id: 'ty-1',
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     name: '開発タスク',
     hierarchyLevel: 0,
     color: '#2563eb',
@@ -87,7 +89,7 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   args: {
     ticket,
-    spaceKey: 'FRESTYLE',
+    projectKey: 'FRESTYLE',
     statuses,
     types,
     principals,
@@ -102,11 +104,11 @@ const meta = {
     onRestore: fn(async () => {}),
     workspaceSlug: 'acme',
     allLabels: [
-      { id: 'l-1', spaceId: 's-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' },
-      { id: 'l-2', spaceId: 's-1', name: '要調査', color: '#8b7355', createdAt: '', updatedAt: '' },
+      { id: 'l-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' },
+      { id: 'l-2', name: '要調査', color: '#8b7355', createdAt: '', updatedAt: '' },
     ],
     onToggleLabel: fn(),
-    onCreateLabel: fn(async (name, color) => ({ id: 'l-new', spaceId: 's-1', name, color, createdAt: '', updatedAt: '' })),
+    onCreateLabel: fn(async (name, color) => ({ id: 'l-new', projectId: 's-1', name, color, createdAt: '', updatedAt: '' })),
     onChangeParent: fn(async () => {}),
   },
   decorators: [
@@ -121,9 +123,9 @@ const meta = {
     // 子一覧を取得する。どの story にも共通で要る宛先なので meta 側の decorator に置く。
     withApi({
       '/profile/me': { userId: 1, displayName: 'norman6464', email: '', bio: '', avatarUrl: '', status: '', updatedAt: '' },
-      '/kb/workspaces/acme/tickets/t-1/comments': { comments: [] },
-      '/kb/workspaces/acme/tickets/t-1/attachments': { attachments: [] },
-      '/kb/workspaces/acme/tickets/t-1/children': { tickets: [] },
+      '/workspaces/acme/tickets/t-1/comments': { comments: [] },
+      '/workspaces/acme/tickets/t-1/attachments': { attachments: [] },
+      '/workspaces/acme/tickets/t-1/children': { tickets: [] },
     }),
   ],
 } satisfies Meta<typeof TicketDetailPanel>;
@@ -165,8 +167,8 @@ export const ラベルつき: Story = {
     ticket: {
       ...ticket,
       labels: [
-        { id: 'l-1', spaceId: 's-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' },
-        { id: 'l-2', spaceId: 's-1', name: '要調査', color: '#8b7355', createdAt: '', updatedAt: '' },
+        { id: 'l-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' },
+        { id: 'l-2', name: '要調査', color: '#8b7355', createdAt: '', updatedAt: '' },
       ],
     },
   },
@@ -177,11 +179,14 @@ export const ラベルつき: Story = {
   },
 };
 
-// 見出しと閉じるボタンは器（SecondaryPanel）が描く。ここで同じ見出しを出すと二重になる。
+// パネルの見出し（「チケット」）と閉じるボタンは器（SecondaryPanel）が描く。
+// ここで同じものを出すと二重になる。
+//
+// 「詳細」は節の見出しとして中にある（属性の一覧）ので、無いことを確かめる対象ではない。
 export const 見出しを自分では描かない: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.queryByText('詳細')).toBeNull();
+    await expect(canvas.queryByText('チケット')).toBeNull();
     await expect(canvas.queryByRole('button', { name: '詳細を閉じる' })).toBeNull();
   },
 };
