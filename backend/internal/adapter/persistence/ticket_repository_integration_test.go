@@ -878,6 +878,34 @@ func TestTicketRepository_Integration(t *testing.T) {
 		assert.EqualValues(t, 1, n)
 	})
 
+	// bigint に収まらないユーザー ID は、素の int64 変換だと負数へ巻き戻り、入力とは
+	// 無関係な行を指す（out_of_range_user_id_integration_test.go に経緯）。監視は
+	// 「どのチケットを・誰が」の 2 つで 1 行が決まるので、巻き戻ると別人の監視を
+	// 勝手に付け外しできてしまう。ここでは付け外し・判定のどれも通さないことを固定する。
+	t.Run("範囲外のユーザーIDでは監視を付け外しできない", func(t *testing.T) {
+		ws, project := setup(t)
+		statusID, typeID := seedTicketMasterViaRepo(ctx, t, repo, ws, project)
+		created, err := repo.CreateTicket(ctx, repository.TicketCreateInput{
+			WorkspaceID: ws, ProjectID: project, TypeID: typeID, StatusID: statusID,
+			Title: "見張る仕事", Doc: []byte(`{"type":"doc","content":[]}`),
+			Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+		})
+		require.NoError(t, err)
+		alice := createUser(t, sqlDB, "alice-watch-range")
+		require.NoError(t, repo.AddTicketWatcher(ctx, ws, created.ID, alice))
+
+		assert.Error(t, repo.AddTicketWatcher(ctx, ws, created.ID, wrappedUserID()),
+			"1 行も書けていないので nil を返さないこと")
+		assert.Error(t, repo.RemoveTicketWatcher(ctx, ws, created.ID, wrappedUserID()))
+		_, err = repo.IsTicketWatchedBy(ctx, ws, created.ID, wrappedUserID())
+		assert.Error(t, err)
+
+		// 付けも外しもしていない ＝ 先に付けた 1 人がそのまま残っている。
+		n, err := repo.CountTicketWatchers(ctx, ws, created.ID)
+		require.NoError(t, err)
+		assert.EqualValues(t, 1, n, "範囲外の ID の操作が実在の行を動かさないこと")
+	})
+
 	// 並び順の一意制約が「プロジェクトの中だけ」に効くことを固定する。
 	//
 	// 旧 ticket_ranks は UNIQUE (context_kind, context_id, position) で、backlog では

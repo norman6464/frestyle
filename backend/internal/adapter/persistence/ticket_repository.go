@@ -1433,8 +1433,14 @@ func (r *ticketRepository) AddTicketWatcher(ctx context.Context, workspaceID, ti
 	if !ok || !ok2 {
 		return repository.ErrTicketNotFound
 	}
+	// ticket_watchers.user_id は bigint。素の int64(userID) は math.MaxInt64 超で負数へ
+	// 巻き戻り、入力とは無関係な行を指す（お気に入りと同じ扱いに揃える）。
+	uid, ok3 := toInt64ID(userID)
+	if !ok3 {
+		return outOfRangeIDError("user_id", userID)
+	}
 	return r.queries(ctx).InsertTicketWatcher(ctx, sqlcgen.InsertTicketWatcherParams{
-		WorkspaceID: wsID, TicketID: tID, UserID: int64(userID),
+		WorkspaceID: wsID, TicketID: tID, UserID: uid,
 	})
 }
 
@@ -1444,9 +1450,13 @@ func (r *ticketRepository) RemoveTicketWatcher(ctx context.Context, workspaceID,
 	if !ok || !ok2 {
 		return repository.ErrTicketNotFound
 	}
+	uid, ok3 := toInt64ID(userID)
+	if !ok3 {
+		return outOfRangeIDError("user_id", userID)
+	}
 	// 監視していない人が押しても落とさない（結果はどちらも「監視していない」）。
 	_, err := r.queries(ctx).DeleteTicketWatcher(ctx, sqlcgen.DeleteTicketWatcherParams{
-		WorkspaceID: wsID, TicketID: tID, UserID: int64(userID),
+		WorkspaceID: wsID, TicketID: tID, UserID: uid,
 	})
 	return err
 }
@@ -1466,8 +1476,12 @@ func (r *ticketRepository) IsTicketWatchedBy(ctx context.Context, workspaceID, t
 	if !ok || !ok2 {
 		return false, nil
 	}
+	uid, ok3 := toInt64ID(userID)
+	if !ok3 {
+		return false, outOfRangeIDError("user_id", userID)
+	}
 	return r.queries(ctx).IsTicketWatchedBy(ctx, sqlcgen.IsTicketWatchedByParams{
-		WorkspaceID: wsID, TicketID: tID, UserID: int64(userID),
+		WorkspaceID: wsID, TicketID: tID, UserID: uid,
 	})
 }
 
