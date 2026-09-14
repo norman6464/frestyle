@@ -35,6 +35,62 @@ func TestProjectVersionRepository_Integration(t *testing.T) {
 		return
 	}
 
+	// 壊れた ID は「無い」として扱う（sprint と同じ理由。ID は URL から来る）。
+	t.Run("壊れたIDは無いものとして扱う", func(t *testing.T) {
+		ws, project, _ := setup(t)
+		const broken = "ID ではない"
+
+		_, err := repo.CreateProjectVersion(ctx, ws, broken, "1.0.0", "a0")
+		assert.ErrorIs(t, err, repository.ErrProjectNotFound)
+		_, err = repo.GetProjectVersion(ctx, ws, project, broken)
+		assert.ErrorIs(t, err, repository.ErrProjectVersionNotFound)
+		assert.ErrorIs(t, repo.AddTicketFixVersion(ctx, ws, broken, broken), repository.ErrTicketNotFound)
+
+		list, err := repo.ListProjectVersions(ctx, ws, broken, true)
+		require.NoError(t, err)
+		assert.Empty(t, list)
+		fix, err := repo.ListTicketFixVersions(ctx, ws, broken)
+		require.NoError(t, err)
+		assert.Empty(t, fix)
+	})
+
+	// 1 件引く口と末尾の位置。どちらも「別プロジェクトのものを拾わない」ことが肝で、
+	// 混ざると直したつもりのない版に印が付く。
+	t.Run("1件引く口は別プロジェクトの版を拾わない", func(t *testing.T) {
+		ws, projectA, projectB := setup(t)
+		v, err := repo.CreateProjectVersion(ctx, ws, projectA, "1.0.0", "a0")
+		require.NoError(t, err)
+
+		got, err := repo.GetProjectVersion(ctx, ws, projectA, v.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "1.0.0", got.Name)
+
+		_, err = repo.GetProjectVersion(ctx, ws, projectB, v.ID)
+		assert.ErrorIs(t, err, repository.ErrProjectVersionNotFound, "別プロジェクトからは引けない")
+
+		_, err = repo.GetProjectVersion(ctx, ws, projectA, "00000000-0000-0000-0000-000000000000")
+		assert.ErrorIs(t, err, repository.ErrProjectVersionNotFound)
+	})
+
+	t.Run("末尾の位置はプロジェクトごとに数える", func(t *testing.T) {
+		ws, projectA, projectB := setup(t)
+
+		last, err := repo.LastProjectVersionPosition(ctx, ws, projectA)
+		require.NoError(t, err)
+		assert.Empty(t, last, "1 件も無ければ空")
+
+		_, err = repo.CreateProjectVersion(ctx, ws, projectA, "1.0.0", "a1")
+		require.NoError(t, err)
+		_, err = repo.CreateProjectVersion(ctx, ws, projectA, "1.1.0", "a5")
+		require.NoError(t, err)
+		_, err = repo.CreateProjectVersion(ctx, ws, projectB, "9.9.9", "a9")
+		require.NoError(t, err)
+
+		last, err = repo.LastProjectVersionPosition(ctx, ws, projectA)
+		require.NoError(t, err)
+		assert.Equal(t, "a5", last, "別プロジェクトの位置を混ぜない")
+	})
+
 	t.Run("版を作って一覧・改名・畳む・戻す", func(t *testing.T) {
 		ws, project, _ := setup(t)
 

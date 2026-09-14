@@ -23,6 +23,28 @@ func TestProjectRepository_Integration(t *testing.T) {
 	repo := persistence.NewProjectRepository(sqlDB)
 	ctx := context.Background()
 
+	// 壊れた ID（UUID として読めない文字列）は「無い」として扱う。ID は URL から
+	// 来るので、解釈できないまま SQL へ渡して FK 違反にせず、ここで止める。
+	t.Run("壊れたIDは無いものとして扱う", func(t *testing.T) {
+		testsupport.TruncateAll(t, sqlDB, "projects", "workspaces")
+		ws := createWorkspace(t, sqlDB, "pj-broken")
+		const broken = "ID ではない"
+
+		err := repo.CreateProject(ctx, &domain.Project{WorkspaceID: broken, Key: "k", Name: "名前"})
+		assert.ErrorIs(t, err, repository.ErrWorkspaceNotFound)
+
+		_, err = repo.FindProject(ctx, ws, broken)
+		assert.ErrorIs(t, err, repository.ErrProjectNotFound)
+		_, err = repo.FindProjectByKey(ctx, broken, "k")
+		assert.ErrorIs(t, err, repository.ErrProjectNotFound)
+		assert.ErrorIs(t, repo.RenameProject(ctx, ws, broken, "名前"), repository.ErrProjectNotFound)
+
+		// 一覧は「0 件」で返す（存在し得ない ID なので結果は空と同じ）。
+		list, err := repo.ListProjects(ctx, broken)
+		require.NoError(t, err)
+		assert.Empty(t, list)
+	})
+
 	t.Run("作成_一覧_取得_改名", func(t *testing.T) {
 		testsupport.TruncateAll(t, sqlDB, "projects", "workspaces")
 		ws := createWorkspace(t, sqlDB, "pj-main")

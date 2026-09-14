@@ -45,6 +45,40 @@ func TestTeamRepository_Integration(t *testing.T) {
 		return created
 	}
 
+	// 壊れた ID は「無い」として扱う（版・スプリントと同じ理由）。
+	t.Run("壊れたIDは無いものとして扱う", func(t *testing.T) {
+		ws, project, _ := setup(t)
+		const broken = "ID ではない"
+
+		_, err := repo.CreateTeam(ctx, ws, broken, "基盤")
+		assert.ErrorIs(t, err, repository.ErrProjectNotFound)
+		_, err = repo.GetTeam(ctx, ws, project, broken)
+		assert.ErrorIs(t, err, repository.ErrTeamNotFound)
+		_, err = repo.SetTicketTeam(ctx, ws, broken, "")
+		assert.ErrorIs(t, err, repository.ErrTicketNotFound)
+
+		list, err := repo.ListTeams(ctx, ws, broken)
+		require.NoError(t, err)
+		assert.Empty(t, list)
+	})
+
+	// 1 件引く口。別プロジェクトからは引けない（版と同じ規則を DB に守らせている）。
+	t.Run("1件引く口は別プロジェクトのチームを拾わない", func(t *testing.T) {
+		ws, projectA, projectB := setup(t)
+		created, err := repo.CreateTeam(ctx, ws, projectA, "基盤")
+		require.NoError(t, err)
+
+		got, err := repo.GetTeam(ctx, ws, projectA, created.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "基盤", got.Name)
+
+		_, err = repo.GetTeam(ctx, ws, projectB, created.ID)
+		assert.ErrorIs(t, err, repository.ErrTeamNotFound, "別プロジェクトからは引けない")
+
+		_, err = repo.GetTeam(ctx, ws, projectA, "00000000-0000-0000-0000-000000000000")
+		assert.ErrorIs(t, err, repository.ErrTeamNotFound)
+	})
+
 	t.Run("チームを作って一覧・改名する", func(t *testing.T) {
 		ws, project, _ := setup(t)
 		team, err := repo.CreateTeam(ctx, ws, project, "基盤")

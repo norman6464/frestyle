@@ -25,6 +25,13 @@ func (u *FindTicketSprintUseCase) Execute(ctx context.Context, workspaceID, tick
 		return nil, errors.New("workspaceID and ticketID are required")
 	}
 	rank, err := u.repo.FindTicketSprint(ctx, workspaceID, ticketID)
+	// どのスプリントにも入っていないのは異常ではない。repository は「行が無い」を
+	// ErrSprintTicketNotFound で知らせるので、ここで「入っていない」へ畳む。
+	// そのまま外へ出すと handler が 404 にしてしまい、スプリントに入っていない
+	// チケット（大多数）の詳細を開くたびに取得失敗として扱われる。
+	if errors.Is(err, repository.ErrSprintTicketNotFound) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
