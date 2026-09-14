@@ -1,29 +1,29 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import KbTicketSavedFilters from '../KbTicketSavedFilters';
+import BacklogSavedFilters from '../BacklogSavedFilters';
 import type { TicketCounts } from '@/entities/ticket';
 
 function renderIt(counts: TicketCounts | null) {
   return render(
     <MemoryRouter>
-      <KbTicketSavedFilters spaceId="s-1" counts={counts} />
+      <BacklogSavedFilters projectId="s-1" counts={counts} />
     </MemoryRouter>,
   );
 }
 
-describe('KbTicketSavedFilters', () => {
+describe('BacklogSavedFilters', () => {
   it('3つのリンクを、バックログの絞り込みクエリ付きで出す', () => {
     renderIt({ total: 0, assignedToMe: 0, overdue: 0, unassigned: 0 });
 
     expect(screen.getByRole('link', { name: /自分の担当/ })).toHaveAttribute(
       'href',
-      '/kb/backlog/s-1?assignedToMe=1',
+      '/backlog/s-1?assignedToMe=1',
     );
-    expect(screen.getByRole('link', { name: /期限切れ/ })).toHaveAttribute('href', '/kb/backlog/s-1?overdue=1');
+    expect(screen.getByRole('link', { name: /期限切れ/ })).toHaveAttribute('href', '/backlog/s-1?overdue=1');
     expect(screen.getByRole('link', { name: /未割り当て/ })).toHaveAttribute(
       'href',
-      '/kb/backlog/s-1?unassigned=1',
+      '/backlog/s-1?unassigned=1',
     );
   });
 

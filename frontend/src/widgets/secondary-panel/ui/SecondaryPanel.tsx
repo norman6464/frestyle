@@ -15,6 +15,12 @@ const RESIZE_MAX_WIDTH_RATIO = 0.5;
 interface SecondaryPanelProps {
   title: string;
   badge?: string;
+  /**
+   * 見出しと**同じ行**の右端に置く小物（閉じる・全画面で開く等）。
+   * headerContent は見出しの下の段に置かれるので、アイコンだけの操作はこちらを使う
+   * —— 見出し 1 行とアイコン 1 行で 2 段になると、上が無駄に厚くなる。
+   */
+  headerActions?: React.ReactNode;
   headerContent?: React.ReactNode;
   children: React.ReactNode;
   mobileOpen?: boolean;
@@ -81,8 +87,8 @@ function PanelHeader({
 }) {
   return (
     <div className="px-4 py-3 border-b border-surface-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="min-w-0 truncate text-sm font-semibold text-[var(--color-text-primary)]">
           {title}
           {badge && <span className="ml-2 text-xs font-normal text-[var(--color-text-muted)]">{badge}</span>}
         </h2>
@@ -272,6 +278,7 @@ function PeekablePanel({
 export default function SecondaryPanel({
   title,
   badge,
+  headerActions,
   headerContent,
   children,
   mobileOpen = false,
@@ -324,13 +331,16 @@ export default function SecondaryPanel({
             {title}
             {badge && <span className="ml-2 text-xs font-normal text-[var(--color-text-muted)]">{badge}</span>}
           </h2>
-          <button
-            onClick={onMobileClose}
-            className="p-1 hover:bg-surface-2 rounded transition-colors"
-            aria-label="パネルを閉じる"
-          >
-            <XMarkIcon className="w-4 h-4 text-[var(--color-text-muted)]" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {headerActions}
+            <button
+              onClick={onMobileClose}
+              className="p-1 hover:bg-surface-2 rounded transition-colors"
+              aria-label="パネルを閉じる"
+            >
+              <XMarkIcon className="w-4 h-4 text-[var(--color-text-muted)]" />
+            </button>
+          </div>
         </div>
         {headerContent && <div className="px-4 py-2 border-b border-surface-3">{headerContent}</div>}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
@@ -371,7 +381,7 @@ export default function SecondaryPanel({
             badge={badge}
             headerContent={headerContent}
             toggle={
-              collapsible ? (
+              headerActions ?? (collapsible ? (
                 <button
                   onClick={onToggleCollapsed}
                   title="パネルを折りたたむ"
@@ -380,7 +390,7 @@ export default function SecondaryPanel({
                 >
                   <ChevronDoubleLeftIcon className="w-4 h-4" />
                 </button>
-              ) : undefined
+              ) : undefined)
             }
           />
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>

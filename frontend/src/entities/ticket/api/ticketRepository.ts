@@ -4,6 +4,8 @@ import { TICKET_API } from '@/shared/config/apiRoutes';
 import { toArray } from '@/shared/lib/toArray';
 import { readCommentBody, buildCommentBody } from '../lib/commentBody';
 import type {
+  AssignedTicket,
+  TicketWatchState,
   EnableTicketsResult,
   Label,
   ResolvedTicket,
@@ -13,7 +15,7 @@ import type {
   TicketComment,
   TicketCommentEdit,
   TicketCommentEditWire,
-  TicketCommentSegment,
+  TicketCommentBlock,
   TicketCommentWire,
   TicketCounts,
   TicketHierarchyLevel,
@@ -42,7 +44,7 @@ function normalizeTicket(wire: TicketWire): Ticket {
   return {
     id: wire.id,
     workspaceId: wire.workspaceId,
-    spaceId: wire.spaceId,
+    projectId: wire.projectId,
     number: wire.number,
     typeId: wire.typeId,
     statusId: wire.statusId,
@@ -50,8 +52,10 @@ function normalizeTicket(wire: TicketWire): Ticket {
     title: wire.title,
     doc: wire.doc,
     priority: wire.priority,
+    storyPoints: wire.storyPoints ?? null,
     startDate: wire.startDate ?? null,
     dueDate: wire.dueDate ?? null,
+    teamId: wire.teamId ?? null,
     position: wire.position,
     closedAt: wire.closedAt ?? null,
     resolution: wire.resolution ?? null,
@@ -72,7 +76,7 @@ function normalizeTicketStatus(wire: TicketStatusWire): TicketStatus {
   return {
     id: wire.id,
     workspaceId: wire.workspaceId,
-    spaceId: wire.spaceId,
+    projectId: wire.projectId,
     name: wire.name,
     category: wire.category,
     color: wire.color,
@@ -89,7 +93,7 @@ function normalizeTicketType(wire: TicketTypeWire): TicketType {
   return {
     id: wire.id,
     workspaceId: wire.workspaceId,
-    spaceId: wire.spaceId,
+    projectId: wire.projectId,
     name: wire.name,
     hierarchyLevel: wire.hierarchyLevel,
     color: wire.color,
@@ -144,6 +148,8 @@ export interface UpdateTicketInput {
   doc: unknown;
   typeId: string;
   priority: TicketPriority;
+  /** 未見積りにするなら null（省略も同じ）。0 は「0 ポイント」で別物。 */
+  storyPoints?: number | null;
   startDate?: string | null;
   dueDate?: string | null;
 }
@@ -191,10 +197,10 @@ export interface TicketTypeInput {
 const TicketRepository = {
   async enable(
     workspaceSlug: string,
-    spaceId: string,
+    projectId: string,
     sourceSpaceId?: string,
   ): Promise<EnableTicketsResult> {
-    const res = await apiClient.post<EnableTicketsResult>(TICKET_API.enable(workspaceSlug, spaceId), {
+    const res = await apiClient.post<EnableTicketsResult>(TICKET_API.enable(workspaceSlug, projectId), {
       sourceSpaceId: sourceSpaceId ?? '',
     });
     return res.data;
@@ -202,7 +208,7 @@ const TicketRepository = {
 
   async fetchTickets(
     workspaceSlug: string,
-    spaceId: string,
+    projectId: string,
     filter: TicketListFilter = {},
   ): Promise<Ticket[]> {
     const params: Record<string, string> = {};
@@ -215,15 +221,40 @@ const TicketRepository = {
     if (filter.assignedToMe) params.assignedToMe = 'true';
     if (filter.overdue) params.overdue = 'true';
     if (filter.q) params.q = filter.q;
-    const res = await apiClient.get<{ tickets: TicketWire[] }>(TICKET_API.tickets(workspaceSlug, spaceId), {
+    const res = await apiClient.get<{ tickets: TicketWire[] }>(TICKET_API.tickets(workspaceSlug, projectId), {
       params,
     });
     return toArray<TicketWire>(res.data?.tickets).map(normalizeTicket);
   },
 
+  /**
+   * 「自分の担当」。ワークスペース全体を横断して、呼び出した本人に割り当たっている
+   * 現役のチケットを返す。並びは backend が決める（状態の枠 → 状態 → 期限）ので、
+   * 画面側は返ってきた順のまま束ねて出せばよい。
+   */
+  async fetchAssignedTickets(workspaceSlug: string): Promise<AssignedTicket[]> {
+    const res = await apiClient.get<{ tickets: AssignedTicket[] }>(TICKET_API.assignedTickets(workspaceSlug));
+    return toArray<AssignedTicket>(res.data?.tickets);
+  },
+
+  /** GET — 監視の状態（自分が監視しているか・何人が監視しているか）。 */
+  async fetchTicketWatchState(workspaceSlug: string, ticketId: string): Promise<TicketWatchState> {
+    const res = await apiClient.get<TicketWatchState>(TICKET_API.ticketWatch(workspaceSlug, ticketId));
+    return res.data;
+  },
+
+  /**
+   * PUT — 自分の監視を付け外しする。押すたびに切り替えるのではなく「どちらにしたいか」を
+   * 送る（二重送信で意図せず外れるのを防ぐ）。
+   */
+  async setTicketWatching(workspaceSlug: string, ticketId: string, watching: boolean): Promise<TicketWatchState> {
+    const res = await apiClient.put<TicketWatchState>(TICKET_API.ticketWatch(workspaceSlug, ticketId), { watching });
+    return res.data;
+  },
+
   /** サイドバー「保存した絞り込み」の件数バッジ。 */
-  async fetchTicketCounts(workspaceSlug: string, spaceId: string): Promise<TicketCounts> {
-    const res = await apiClient.get<TicketCounts>(TICKET_API.ticketCounts(workspaceSlug, spaceId));
+  async fetchTicketCounts(workspaceSlug: string, projectId: string): Promise<TicketCounts> {
+    const res = await apiClient.get<TicketCounts>(TICKET_API.ticketCounts(workspaceSlug, projectId));
     return res.data;
   },
 
@@ -233,8 +264,8 @@ const TicketRepository = {
     return toArray<TicketWire>(res.data?.tickets).map(normalizeTicket);
   },
 
-  async createTicket(workspaceSlug: string, spaceId: string, input: CreateTicketInput): Promise<Ticket> {
-    const res = await apiClient.post<TicketWire>(TICKET_API.tickets(workspaceSlug, spaceId), {
+  async createTicket(workspaceSlug: string, projectId: string, input: CreateTicketInput): Promise<Ticket> {
+    const res = await apiClient.post<TicketWire>(TICKET_API.tickets(workspaceSlug, projectId), {
       parentId: input.parentId ?? '',
       typeId: input.typeId ?? '',
       statusId: input.statusId ?? '',
@@ -288,6 +319,7 @@ const TicketRepository = {
       doc: input.doc,
       typeId: input.typeId,
       priority: input.priority,
+      storyPoints: input.storyPoints ?? undefined,
       startDate: input.startDate ?? undefined,
       dueDate: input.dueDate ?? undefined,
     });
@@ -357,84 +389,84 @@ const TicketRepository = {
 
   async fetchTicketStatuses(
     workspaceSlug: string,
-    spaceId: string,
+    projectId: string,
     archived = false,
   ): Promise<TicketStatus[]> {
     const res = await apiClient.get<{ statuses: TicketStatusWire[] }>(
-      TICKET_API.ticketStatuses(workspaceSlug, spaceId),
+      TICKET_API.ticketStatuses(workspaceSlug, projectId),
       { params: archived ? { archived: 'true' } : undefined },
     );
     return toArray<TicketStatusWire>(res.data?.statuses).map(normalizeTicketStatus);
   },
 
-  async createTicketStatus(workspaceSlug: string, spaceId: string, input: TicketStatusInput): Promise<TicketStatus> {
-    const res = await apiClient.post<TicketStatusWire>(TICKET_API.ticketStatuses(workspaceSlug, spaceId), input);
+  async createTicketStatus(workspaceSlug: string, projectId: string, input: TicketStatusInput): Promise<TicketStatus> {
+    const res = await apiClient.post<TicketStatusWire>(TICKET_API.ticketStatuses(workspaceSlug, projectId), input);
     return normalizeTicketStatus(res.data);
   },
 
   async updateTicketStatus(
     workspaceSlug: string,
-    spaceId: string,
+    projectId: string,
     statusId: string,
     input: TicketStatusInput,
   ): Promise<TicketStatus> {
     const res = await apiClient.put<TicketStatusWire>(
-      TICKET_API.ticketStatus(workspaceSlug, spaceId, statusId),
+      TICKET_API.ticketStatus(workspaceSlug, projectId, statusId),
       input,
     );
     return normalizeTicketStatus(res.data);
   },
 
   /** 204 応答。 */
-  async setInitialTicketStatus(workspaceSlug: string, spaceId: string, statusId: string): Promise<void> {
-    await apiClient.post(TICKET_API.setInitialTicketStatus(workspaceSlug, spaceId, statusId));
+  async setInitialTicketStatus(workspaceSlug: string, projectId: string, statusId: string): Promise<void> {
+    await apiClient.post(TICKET_API.setInitialTicketStatus(workspaceSlug, projectId, statusId));
   },
 
   /** 204 応答。使用中は 409 status_in_use。 */
-  async archiveTicketStatus(workspaceSlug: string, spaceId: string, statusId: string): Promise<void> {
-    await apiClient.post(TICKET_API.archiveTicketStatus(workspaceSlug, spaceId, statusId));
+  async archiveTicketStatus(workspaceSlug: string, projectId: string, statusId: string): Promise<void> {
+    await apiClient.post(TICKET_API.archiveTicketStatus(workspaceSlug, projectId, statusId));
   },
 
   /** 204 応答。 */
-  async restoreTicketStatus(workspaceSlug: string, spaceId: string, statusId: string): Promise<void> {
-    await apiClient.post(TICKET_API.restoreTicketStatus(workspaceSlug, spaceId, statusId));
+  async restoreTicketStatus(workspaceSlug: string, projectId: string, statusId: string): Promise<void> {
+    await apiClient.post(TICKET_API.restoreTicketStatus(workspaceSlug, projectId, statusId));
   },
 
-  async fetchTicketTypes(workspaceSlug: string, spaceId: string, archived = false): Promise<TicketType[]> {
-    const res = await apiClient.get<{ types: TicketTypeWire[] }>(TICKET_API.ticketTypes(workspaceSlug, spaceId), {
+  async fetchTicketTypes(workspaceSlug: string, projectId: string, archived = false): Promise<TicketType[]> {
+    const res = await apiClient.get<{ types: TicketTypeWire[] }>(TICKET_API.ticketTypes(workspaceSlug, projectId), {
       params: archived ? { archived: 'true' } : undefined,
     });
     return toArray<TicketTypeWire>(res.data?.types).map(normalizeTicketType);
   },
 
-  async createTicketType(workspaceSlug: string, spaceId: string, input: TicketTypeInput): Promise<TicketType> {
-    const res = await apiClient.post<TicketTypeWire>(TICKET_API.ticketTypes(workspaceSlug, spaceId), input);
+  async createTicketType(workspaceSlug: string, projectId: string, input: TicketTypeInput): Promise<TicketType> {
+    const res = await apiClient.post<TicketTypeWire>(TICKET_API.ticketTypes(workspaceSlug, projectId), input);
     return normalizeTicketType(res.data);
   },
 
   async updateTicketType(
     workspaceSlug: string,
-    spaceId: string,
+    projectId: string,
     typeId: string,
     input: TicketTypeInput,
   ): Promise<TicketType> {
-    const res = await apiClient.put<TicketTypeWire>(TICKET_API.ticketType(workspaceSlug, spaceId, typeId), input);
+    const res = await apiClient.put<TicketTypeWire>(TICKET_API.ticketType(workspaceSlug, projectId, typeId), input);
     return normalizeTicketType(res.data);
   },
 
   /** 204 応答。 */
-  async setDefaultTicketType(workspaceSlug: string, spaceId: string, typeId: string): Promise<void> {
-    await apiClient.post(TICKET_API.setDefaultTicketType(workspaceSlug, spaceId, typeId));
+  async setDefaultTicketType(workspaceSlug: string, projectId: string, typeId: string): Promise<void> {
+    await apiClient.post(TICKET_API.setDefaultTicketType(workspaceSlug, projectId, typeId));
   },
 
   /** 204 応答。使用中は 409 type_in_use。 */
-  async archiveTicketType(workspaceSlug: string, spaceId: string, typeId: string): Promise<void> {
-    await apiClient.post(TICKET_API.archiveTicketType(workspaceSlug, spaceId, typeId));
+  async archiveTicketType(workspaceSlug: string, projectId: string, typeId: string): Promise<void> {
+    await apiClient.post(TICKET_API.archiveTicketType(workspaceSlug, projectId, typeId));
   },
 
   /** 204 応答。 */
-  async restoreTicketType(workspaceSlug: string, spaceId: string, typeId: string): Promise<void> {
-    await apiClient.post(TICKET_API.restoreTicketType(workspaceSlug, spaceId, typeId));
+  async restoreTicketType(workspaceSlug: string, projectId: string, typeId: string): Promise<void> {
+    await apiClient.post(TICKET_API.restoreTicketType(workspaceSlug, projectId, typeId));
   },
 
   /** 古い順（backend の並びのまま）。 */
@@ -446,7 +478,7 @@ const TicketRepository = {
   async createTicketComment(
     workspaceSlug: string,
     ticketId: string,
-    body: TicketCommentSegment[],
+    body: TicketCommentBlock[],
     parentCommentId?: string,
   ): Promise<TicketComment> {
     const res = await apiClient.post<TicketCommentWire>(TICKET_API.ticketComments(workspaceSlug, ticketId), {
@@ -464,7 +496,7 @@ const TicketRepository = {
     workspaceSlug: string,
     ticketId: string,
     commentId: string,
-    body: TicketCommentSegment[],
+    body: TicketCommentBlock[],
   ): Promise<TicketComment> {
     const res = await apiClient.put<TicketCommentWire>(TICKET_API.ticketComment(workspaceSlug, ticketId, commentId), {
       body: buildCommentBody(body),
@@ -495,24 +527,24 @@ const TicketRepository = {
     await apiClient.delete(TICKET_API.ticketCommentReaction(workspaceSlug, ticketId, commentId, emoji));
   },
 
-  async fetchLabels(workspaceSlug: string, spaceId: string): Promise<Label[]> {
-    const res = await apiClient.get<{ labels: Label[] }>(TICKET_API.labels(workspaceSlug, spaceId));
+  async fetchLabels(workspaceSlug: string): Promise<Label[]> {
+    const res = await apiClient.get<{ labels: Label[] }>(TICKET_API.labels(workspaceSlug));
     return toArray<Label>(res.data?.labels);
   },
 
-  async createLabel(workspaceSlug: string, spaceId: string, input: LabelInput): Promise<Label> {
-    const res = await apiClient.post<Label>(TICKET_API.labels(workspaceSlug, spaceId), input);
+  async createLabel(workspaceSlug: string, input: LabelInput): Promise<Label> {
+    const res = await apiClient.post<Label>(TICKET_API.labels(workspaceSlug), input);
     return res.data;
   },
 
-  async updateLabel(workspaceSlug: string, spaceId: string, labelId: string, input: LabelInput): Promise<Label> {
-    const res = await apiClient.put<Label>(TICKET_API.label(workspaceSlug, spaceId, labelId), input);
+  async updateLabel(workspaceSlug: string, labelId: string, input: LabelInput): Promise<Label> {
+    const res = await apiClient.put<Label>(TICKET_API.label(workspaceSlug, labelId), input);
     return res.data;
   },
 
   /** 204 応答。使用中でも通る（付け外しの中間行は CASCADE で外れる）。 */
-  async deleteLabel(workspaceSlug: string, spaceId: string, labelId: string): Promise<void> {
-    await apiClient.delete(TICKET_API.label(workspaceSlug, spaceId, labelId));
+  async deleteLabel(workspaceSlug: string, labelId: string): Promise<void> {
+    await apiClient.delete(TICKET_API.label(workspaceSlug, labelId));
   },
 
   /** 204 応答・冪等。 */

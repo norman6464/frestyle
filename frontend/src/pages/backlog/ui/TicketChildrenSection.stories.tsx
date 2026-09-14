@@ -8,7 +8,7 @@ import type { Ticket, TicketStatus } from '@/entities/ticket';
 const statuses: TicketStatus[] = [
   {
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     id: 'st-1',
     name: 'To Do',
     category: 'todo',
@@ -25,7 +25,7 @@ const statuses: TicketStatus[] = [
 function childWire(over: Record<string, unknown> & { id: string }) {
   return {
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     number: 10,
     typeId: 'ty-1',
     statusId: 'st-1',
@@ -44,7 +44,7 @@ function childWire(over: Record<string, unknown> & { id: string }) {
 const meta = {
   title: 'pages/backlog/TicketChildrenSection',
   component: TicketChildrenSection,
-  args: { workspaceSlug: 'acme', ticketId: 't-1', spaceKey: 'FRESTYLE', statuses },
+  args: { workspaceSlug: 'acme', ticketId: 't-1', projectKey: 'FRESTYLE', statuses },
   decorators: [
     (Story) => (
       <MemoryRouter>
@@ -60,7 +60,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const 子なし: Story = {
-  decorators: [withApi({ '/kb/workspaces/acme/tickets/t-1/children': { tickets: [] } })],
+  decorators: [withApi({ '/workspaces/acme/tickets/t-1/children': { tickets: [] } })],
   play: async ({ canvasElement }) => {
     await waitFor(async () => {
       await expect(within(canvasElement).getByText('子チケットはありません')).toBeInTheDocument();
@@ -71,7 +71,7 @@ export const 子なし: Story = {
 export const 子あり: Story = {
   decorators: [
     withApi({
-      '/kb/workspaces/acme/tickets/t-1/children': { tickets: [childWire({ id: 'c-1', title: '設計する' })] },
+      '/workspaces/acme/tickets/t-1/children': { tickets: [childWire({ id: 'c-1', title: '設計する' })] },
     }),
   ],
   play: async ({ canvasElement }) => {

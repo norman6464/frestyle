@@ -23,6 +23,10 @@ const PasswordResetPage = lazyWithReload(() => import('@/pages/password-reset').
 const MenuPage = lazyWithReload(() => import('@/pages/home').then((m) => ({ default: m.MenuPage })), 'MenuPage');
 const SettingsPage = lazyWithReload(() => import('@/pages/settings').then((m) => ({ default: m.SettingsPage })), 'SettingsPage');
 const KbPage = lazyWithReload(() => import('@/pages/kb').then((m) => ({ default: m.KbPage })), 'KbPage');
+const AssignedPage = lazyWithReload(
+  () => import('@/pages/assigned').then((m) => ({ default: m.AssignedPage })),
+  'AssignedPage',
+);
 const KbBacklogPage = lazyWithReload(
   () => import('@/pages/backlog').then((m) => ({ default: m.KbBacklogPage })),
   'KbBacklogPage',
@@ -123,20 +127,25 @@ export default function App() {
             （/kb/:slug/pages/:pageId）だけこの受け皿で写す。 */}
         <Route path="/kb/:workspaceSlug/pages/:pageId" element={<LegacyKbPageRedirect />} />
         {/*
-          バックログ（チケット）。既存の spaces に属するので kb と同じテナント非公開の作りを
-          踏襲する。/kb/backlog はスペース未選択の入口（最初に見つかったスペースへ移す）、
-          個票は /kb/tickets/{ticketId}（kb の /kb/{pageId} と同じ、ワークスペースを
-          URL に出さない解決の口）。
+          バックログ（チケット）。URL は `/kb` の下に置かない — ナレッジとは別の製品で、
+          入れ物（プロジェクト）もスペースとは無関係のため。/backlog はプロジェクト未選択の
+          入口（最初に見つかったプロジェクトへ移す）、個票は /tickets/{ticketId}
+          （kb の /kb/{pageId} と同じ、ワークスペースを URL に出さない解決の口）。
         */}
-        <Route path="/kb/backlog" element={<KbBacklogPage />} />
-        <Route path="/kb/backlog/:spaceId" element={<KbBacklogPage />} />
-        <Route path="/kb/tickets/:ticketId" element={<KbTicketPage />} />
-        {/* メンバー管理（段 7）。role 変更・停止 / 復帰・削除。ワークスペース自体の設定なので
-            /kb/{pageId} と違い workspaceSlug を URL に出す（backlog の :spaceId と同じ判断）。 */}
+        {/* 自分の担当。プロジェクトを横断するので URL にプロジェクトを取らない。 */}
+        <Route path="/assigned" element={<AssignedPage />} />
+        {/* バックログの面は経路が持つ。戻る・進む・リンクの共有がそのまま効くようにするため、
+            問い合わせ文字列（?tab=）ではなくパスの段に出す。 */}
+        <Route path="/backlog" element={<KbBacklogPage />} />
+        <Route path="/backlog/:projectId" element={<KbBacklogPage view="backlog" />} />
+        <Route path="/backlog/:projectId/settings" element={<KbBacklogPage view="settings" />} />
+        <Route path="/backlog/:projectId/archive" element={<KbBacklogPage view="archive" />} />
+        <Route path="/tickets/:ticketId" element={<KbTicketPage />} />
+        {/* メンバー管理。role 変更・停止 / 復帰・削除。ワークスペース自体の設定なので
+            /kb/{pageId} と違い workspaceSlug を URL に出す。 */}
         <Route path="/kb/:workspaceSlug/members" element={<KbMembersPage />} />
         {/*
-          スペース単位の 4 画面（段14）。/kb/backlog と同じ「workspaceSlug を URL に持たず
-          spaceId だけで解決する」流儀。/kb/spaces はスペース未選択の入口（自分がアクセス
+          スペース単位の 4 画面。「workspaceSlug を URL に持たず spaceId だけで解決する」流儀。/kb/spaces はスペース未選択の入口（自分がアクセス
           できる最初のスペースへ移す）を兼ねる。
         */}
         <Route path="/kb/spaces" element={<KbSpaceOverviewPage />} />

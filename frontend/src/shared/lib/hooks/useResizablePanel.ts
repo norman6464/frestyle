@@ -36,15 +36,34 @@ const DEFAULT_MAX_WIDTH_RATIO = 0.5;
 // （マウスドラッグの向きは side で反転するが、キー操作は side を意識させない一貫した挙動にする）。
 const KEY_STEP = 16;
 
-function readInitialWidth(storageKey: string | undefined, defaultWidth: number): number {
-  if (!storageKey) return defaultWidth;
+/**
+ * 覚えてある幅を読む。**読んだ値は必ず今の画面に収まる範囲へ丸める。**
+ *
+ * ドラッグ中は最大幅を守っているが、保存された値をそのまま復元すると守られない。
+ * 広い外部ディスプレイで広げた幅は、持ち出して狭い画面で開いたときに画面の半分を
+ * 大きく超えたまま復元され、本文がほとんど見えなくなる。幅は画面に対する割合で
+ * 決めている以上、復元のたびに測り直すのが筋。
+ */
+function readInitialWidth(
+  storageKey: string | undefined,
+  defaultWidth: number,
+  minWidth: number,
+  maxWidthRatio: number,
+): number {
+  const clamp = (value: number) => {
+    // SSR や測れない場面では上限を掛けない（下限だけ守る）。
+    const viewport = typeof window === 'undefined' ? 0 : window.innerWidth;
+    const max = viewport > 0 ? viewport * maxWidthRatio : Number.POSITIVE_INFINITY;
+    return Math.min(Math.max(value, minWidth), Math.max(max, minWidth));
+  };
+  if (!storageKey) return clamp(defaultWidth);
   try {
     const raw = localStorage.getItem(storageKey);
-    if (raw === null) return defaultWidth;
+    if (raw === null) return clamp(defaultWidth);
     const parsed = JSON.parse(raw);
-    return typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : defaultWidth;
+    return clamp(typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : defaultWidth);
   } catch {
-    return defaultWidth;
+    return clamp(defaultWidth);
   }
 }
 
@@ -63,7 +82,9 @@ export function useResizablePanel(options: UseResizablePanelOptions = {}): UseRe
     storageKey,
   } = options;
 
-  const [width, setWidth] = useState<number>(() => readInitialWidth(storageKey, defaultWidth));
+  const [width, setWidth] = useState<number>(() =>
+    readInitialWidth(storageKey, defaultWidth, minWidth, maxWidthRatio),
+  );
   const [isResizing, setIsResizing] = useState(false);
 
   const persist = useCallback((value: number) => {

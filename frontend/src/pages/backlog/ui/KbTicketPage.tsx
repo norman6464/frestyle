@@ -10,7 +10,7 @@ import { useTicketDetail } from '../model/useTicketDetail';
 import TicketFullView from './TicketFullView';
 
 /**
- * KbTicketPage は `/kb/tickets/:ticketId`（ワークスペースを URL に持たない口）の受け皿で、
+ * KbTicketPage は `/tickets/:ticketId`（ワークスペースを URL に持たない口）の受け皿で、
  * チケット 1 件を全画面で開く。
  *
  * 通知・本文中の参照・ブックマークからの再訪はワークスペースを知らないまま来るので、
@@ -22,8 +22,8 @@ export default function KbTicketPage() {
   const { showToast } = useToast();
 
   const page = useTicketPage(ticketId);
-  const masters = useTicketMasters(page.workspaceSlug ?? undefined, page.ticket?.spaceId);
-  const labels = useTicketLabels(page.workspaceSlug ?? undefined, page.ticket?.spaceId);
+  const masters = useTicketMasters(page.workspaceSlug ?? undefined, page.ticket?.projectId);
+  const labels = useTicketLabels(page.workspaceSlug ?? undefined);
   const { principals } = usePrincipalNames(page.workspaceSlug ?? undefined);
   const history = useTicketDetail(page.workspaceSlug ?? undefined, page.ticket ? (ticketId ?? null) : null);
 
@@ -53,7 +53,7 @@ export default function KbTicketPage() {
       key={page.ticket.id}
       ticket={page.ticket}
       ancestors={page.ancestors}
-      spaceKey={page.space?.key ?? ''}
+      projectKey={page.project?.key ?? ''}
       workspaceSlug={page.workspaceSlug ?? ''}
       statuses={masters.statuses}
       types={masters.types}

@@ -6,6 +6,8 @@
  */
 
 // --- プリミティブ ---
+export { default as FormatIcon } from './FormatIcon';
+export type { FormatIconName, FormatIconProps } from './FormatIcon';
 export { default as Button } from './Button';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './Button';
 export { default as InputField } from './InputField';
@@ -22,6 +24,7 @@ export { default as FormMessage } from './FormMessage';
 export type { FormMessage as FormMessageData } from './FormMessage';
 
 // --- 画面の枠・状態表示 ---
+export { SidebarSlotProvider, SidebarSlotTarget, SidebarSection } from './SidebarSlot';
 export { default as ConfirmModal } from './ConfirmModal';
 export { default as EmptyState } from './EmptyState';
 export { default as Toast } from './Toast';

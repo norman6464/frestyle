@@ -5,15 +5,16 @@ import { withApi, withRouter, withStore, withToast } from '../../../../.storyboo
 import Header from './Header';
 
 /**
- * 画面のいちばん上に固定される帯。左に印、中央に行き先と検索、右に知らせと自分のメニュー。
+ * 画面のいちばん上に固定される帯。左に柱の開閉と印、中央に検索、右に知らせと自分のメニュー。
  * 常時表示（本文の上には重ねない・自動的には隠れない）で、地は不透明。
  *
- * 狭い画面ではナビが畳まれ、三本線のボタンから縦に開く。検索は虫眼鏡アイコンに畳む。
+ * 行き先（ホーム・自分の担当・ナレッジ・バックログ）もワークスペース切替も**ここには無い**
+ * —— すべて左の柱（GlobalSidebar）が持つ。同じ行き先を 2 か所に置かない。
  *
- * 行き先の一覧は 1 か所（`model/navigation.ts`）だけが持っていて、この帯・畳んだメニュー・
- * サイドバーが同じものを読む。増やすときも 1 行足せば全部に出る。
+ * 柱を開け閉めするボタンは 1 つだけ。以前は「アプリの柱」と「画面の柱」で 2 つ並び、
+ * ほぼ同じ絵のボタンが隣り合ってどちらが何を閉じるのか見分けが付かなかった。
  *
- * ワークスペース切替はここには無い（`KbSidebar` 先頭にある）。
+ * 狭い画面では柱が引き出しになり、三本線がその入口になる。検索は虫眼鏡アイコンに畳む。
  */
 const meta = {
   title: 'widgets/app-shell/Header',
@@ -21,6 +22,8 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   args: {
     onOpenSearch: fn(),
+    onToggleGlobalSidebar: fn(),
+    onOpenMobileSidebar: fn(),
   },
   decorators: [
     withRouter,
@@ -45,13 +48,40 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** ふだんの見え方。 */
+/**
+ * ふだんの見え方。行き先（ホーム・ナレッジ…）はここには無い —— 左の柱が持つ。
+ * ヘッダーに残すのは柱の開閉・ロゴ・検索・通知・ユーザーだけ。
+ */
 export const 既定: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('navigation', { name: 'メインナビゲーション' })).toBeVisible();
-    await expect(canvas.getByRole('link', { name: 'ナレッジ' })).toBeVisible();
+    await expect(canvas.queryByRole('link', { name: 'ナレッジ' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: '検索' })).toBeVisible();
     await expect(await canvas.findByText('川野 拓馬')).toBeVisible();
+  },
+};
+
+/**
+ * 柱を開け閉めするボタンは**この 1 つだけ**。2 つ並べない —— 絵がほぼ同じで、
+ * どちらが何を閉じるのか見分けが付かなくなる（実際にそうなっていた）。
+ * 押すと今の状態に応じて絵とラベルが変わる。
+ */
+export const 柱の開閉ボタンはひとつ: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const buttons = canvas.getAllByRole('button', { name: /サイドバーを/ });
+    await expect(buttons).toHaveLength(1);
+    await userEvent.click(buttons[0]);
+    await expect(args.onToggleGlobalSidebar).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** 柱を閉じているとき。ボタンは「開く」に変わる。 */
+export const 柱を閉じているとき: Story = {
+  args: { globalSidebarOpen: false },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'サイドバーを開く' })).toBeVisible();
   },
 };
 
@@ -99,43 +129,24 @@ export const 情報が取れないとき: Story = {
   decorators: [withApi({ '/kb/workspaces': [] })],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // ナビは出る。名前だけが既定の文言になる。
-    await expect(canvas.getByRole('navigation', { name: 'メインナビゲーション' })).toBeVisible();
+    // 帯は壊れない。名前だけが既定の文言になる。
+    await expect(canvas.getByRole('button', { name: '検索' })).toBeVisible();
     await expect(await canvas.findByText('ユーザー')).toBeVisible();
   },
 };
 
-/** 狭い画面。ナビが畳まれ、三本線から開く。 */
+/**
+ * 狭い画面。三本線は柱の引き出しを開く合図を送るだけで、ヘッダー自身は縦メニューを持たない
+ * （行き先は柱にしか無い）。自分のメニューはここでも出す —— ログアウトの入口がそこだけのため。
+ */
 export const 狭い画面: Story = {
   globals: { viewport: { value: 'mobile1', isRotated: false } },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'メニュー' }));
-    await expect(canvas.getByRole('navigation', { name: 'モバイルナビゲーション' })).toBeVisible();
+    await expect(args.onOpenMobileSidebar).toHaveBeenCalledTimes(1);
+    await expect(canvas.queryByRole('navigation')).toBeNull();
+    await expect(await canvas.findByRole('button', { name: '川野 拓馬' })).toBeVisible();
   },
 };
 
-/**
- * デスクトップ幅の下限付近（md ブレークポイント直後・DevTools を開いた状態などでよく
- * 起きる帯）。ナビはまだ畳まれないが幅は十分ではない — ここでラベルが文字単位で
- * 折り返され「縦書きのように見える」崩れ方をしていた。
- */
-export const デスクトップの下限付近_ナビが折り返さない: Story = {
-  decorators: [
-    // globals.viewport は Storybook manager 側のプレビュー iframe だけを縮める設定で、
-    // このテストランナー（vitest --project=storybook）では実際のブラウザ幅に反映されない
-    // （実測: window.innerWidth は常に 1200 のまま）。DOM 上の利用可能幅そのものを狭める。
-    (StoryFn) => (
-      <div style={{ width: '780px', overflow: 'hidden' }}>
-        <StoryFn />
-      </div>
-    ),
-  ],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    // 1 行のままであることを高さで確かめる（折り返すと複数行ぶん高くなる）。
-    for (const label of ['ホーム', 'ナレッジ', 'バックログ']) {
-      await expect(canvas.getByRole('link', { name: label }).clientHeight).toBeLessThan(40);
-    }
-  },
-};

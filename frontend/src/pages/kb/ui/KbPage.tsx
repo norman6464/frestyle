@@ -15,12 +15,11 @@ import Loading from '@/shared/ui/Loading';
 import EmptyState from '@/shared/ui/EmptyState';
 import ConfirmModal from '@/shared/ui/ConfirmModal';
 import Button from '@/shared/ui/Button';
+import { SidebarSection } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
-import { useMobilePanelState } from '@/shared/lib/hooks/useMobilePanelState';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import {
   DocumentTextIcon,
-  Bars3Icon,
   ChatBubbleLeftRightIcon,
   ClockIcon,
   LightBulbIcon,
@@ -86,7 +85,6 @@ export default function KbPage() {
   // ヘッダー/サイドバーのワークスペース切替から来たときだけ渡ってくる。
   // ページを開いているときは data.workspaceSlug が正なのでそちらを優先する。
   const navigationWorkspaceSlug = (location.state as { workspaceSlug?: string } | null)?.workspaceSlug;
-  const { isOpen: mobilePanelOpen, open: openMobilePanel, close: closeMobilePanel } = useMobilePanelState();
 
   // 本文保存が block_id_conflict で失敗したら再読み込みを促す。0（未発生）はスキップする
   // （マウント時の初期値で誤発火しないため）。再送しても直らない失敗なので、
@@ -543,36 +541,17 @@ export default function KbPage() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* サイドバーはバックログの一覧と同じ機構で出し入れする（« で隠す / 左端ホバーで
-          一時表示 / ⌘\ で切替）。画面ごとに別の作りを持たない — 覚えることを増やさない。 */}
-      <SecondaryPanel
-        title="ナレッジ"
-        peekable
-        storageKey="frestyle.panel.note"
-        resizable
-        resizeStorageKey="frestyle.panel.note.width"
-        mobileOpen={mobilePanelOpen}
-        onMobileClose={closeMobilePanel}
-      >
+      {/* ページの木は柱の中の「ナレッジの区画」として出す（柱は 1 本だけ）。
+          どのスペースの木かを知っているのはこの画面なので、中身はここから差し込む。 */}
+      <SidebarSection>
         <KbSidebar
           workspaceSlug={data?.workspaceSlug ?? navigationWorkspaceSlug}
           spaceId={data?.page.spaceId ?? ''}
           activePageId={pageId}
         />
-      </SecondaryPanel>
+      </SidebarSection>
 
       <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain">
-        {/* モバイルヘッダー: md 以上は SecondaryPanel 自身の一時表示機構（左端ホバー / ☰）が
-            効くのでここには出さない。md 未満はこのボタンだけがサイドバーを開く唯一の手段。 */}
-        <div className="md:hidden bg-surface-1 border-b border-surface-3 px-4 py-2 flex items-center">
-          <button
-            onClick={openMobilePanel}
-            className="p-1.5 hover:bg-surface-2 rounded transition-colors"
-            aria-label="ナレッジ一覧を開く"
-          >
-            <Bars3Icon className="w-5 h-5 text-[var(--color-text-muted)]" />
-          </button>
-        </div>
         <div className="mx-auto w-full max-w-[900px] px-6 py-10">
           {/* pageId 無し(素の /kb)は resolveEntryPageId が続きを決めている間だけ通る道で、
               ほとんどの場合は決まり次第 /kb/{id} へ移ってしまう。ここに残るのは、

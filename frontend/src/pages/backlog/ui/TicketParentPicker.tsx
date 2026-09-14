@@ -3,11 +3,11 @@ import { formatTicketKey, type Ticket } from '@/entities/ticket';
 import Loading from '@/shared/ui/Loading';
 
 export interface TicketParentPickerProps {
-  /** スペース内の現役チケット（対象自身は含めない）。 */
+  /** プロジェクト内の現役チケット（対象自身は含めない）。 */
   candidates: Ticket[];
   loading: boolean;
   error: string | null;
-  spaceKey: string;
+  projectKey: string;
   currentParentId: string | null;
   onSelect: (parentId: string | null) => void;
 }
@@ -22,7 +22,7 @@ export default function TicketParentPicker({
   candidates,
   loading,
   error,
-  spaceKey,
+  projectKey,
   currentParentId,
   onSelect,
 }: TicketParentPickerProps) {
@@ -30,7 +30,7 @@ export default function TicketParentPicker({
 
   const trimmed = filter.trim().toLowerCase();
   const visible = candidates.filter(
-    (t) => t.title.toLowerCase().includes(trimmed) || formatTicketKey(spaceKey, t.number).toLowerCase().includes(trimmed),
+    (t) => t.title.toLowerCase().includes(trimmed) || formatTicketKey(projectKey, t.number).toLowerCase().includes(trimmed),
   );
 
   return (
@@ -74,7 +74,7 @@ export default function TicketParentPicker({
                 }`}
               >
                 <span className="flex-none font-mono text-[11px] text-[var(--color-text-muted)]">
-                  {formatTicketKey(spaceKey, t.number)}
+                  {formatTicketKey(projectKey, t.number)}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-[var(--color-text-primary)]">{t.title}</span>
               </button>

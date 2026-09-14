@@ -8,7 +8,7 @@ import type { KbGrantablePrincipal } from '@/entities/kb';
 const ticket: Ticket = {
   id: 't-1',
   workspaceId: 'w-1',
-  spaceId: 's-1',
+  projectId: 's-1',
   number: 457,
   typeId: 'ty-1',
   statusId: 'st-2',
@@ -16,6 +16,8 @@ const ticket: Ticket = {
   title: '段1: チケットの骨格（9表）',
   doc: { type: 'doc', content: [] },
   priority: 1,
+  storyPoints: null,
+  teamId: null,
   startDate: null,
   dueDate: '2026-09-12',
   position: 'a0',
@@ -33,7 +35,7 @@ const statuses: TicketStatus[] = [
   {
     id: 'st-1',
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     name: 'To Do',
     category: 'todo',
     color: '#5b6b7a',
@@ -47,7 +49,7 @@ const statuses: TicketStatus[] = [
   {
     id: 'st-2',
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     name: '開発',
     category: 'in_progress',
     color: '#a0661a',
@@ -65,13 +67,15 @@ const principals: KbGrantablePrincipal[] = [{ id: 'p-1', kind: 'user', name: 'no
 function candidateWire(over: Record<string, unknown> & { id: string }) {
   return {
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     number: 3,
     typeId: 'ty-1',
     statusId: 'st-1',
     title: '候補',
     doc: { type: 'doc', content: [] },
     priority: 2,
+    storyPoints: null,
+    teamId: null,
     position: 'a0',
     createdByUserId: 1,
     createdAt: '',
@@ -86,19 +90,31 @@ const meta = {
   args: {
     ticket,
     workspaceSlug: 'acme',
-    spaceKey: 'FRESTYLE',
-    statuses,
+    projectKey: 'FRESTYLE',
     principals,
     parentTicket: undefined,
     canEdit: true,
     archived: false,
     busy: false,
     priority: ticket.priority,
+    storyPoints: ticket.storyPoints,
+    startDate: ticket.startDate,
     dueDate: ticket.dueDate,
-    onChangeStatus: fn(),
+    versions: [],
+    teams: [],
+    fixVersions: [],
+    sprint: null,
+    teamId: null,
+    onSetFixVersion: fn(),
+    onChangeTeam: fn(),
+    allLabels: [],
+    onToggleLabel: fn(),
+    onCreateLabel: fn(),
+    onChangeStoryPoints: fn(),
     onAssign: fn(),
     onUnassign: fn(),
     onChangePriority: fn(),
+    onChangeStartDate: fn(),
     onChangeDueDate: fn(),
     onChangeParent: fn(),
   },
@@ -111,11 +127,29 @@ type Story = StoryObj<typeof meta>;
 export const 編集できる: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByLabelText('状態')).toHaveValue('st-2');
+    // 状態はこの面には無い（題名の直下の TicketStatusSelect が持つ）。
+    await expect(canvas.queryByLabelText('状態')).toBeNull();
     await expect(canvas.getByLabelText('担当')).toHaveValue('p-1');
     await expect(canvas.getByLabelText('優先度')).toHaveValue('1');
+    // 期限は押すまで文字（見本と同じ）。押してはじめて日付の入力欄になる。
+    await expect(canvas.queryByLabelText('期限')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '2026-09-12' }));
     await expect(canvas.getByLabelText('期限')).toHaveValue('2026-09-12');
     await expect(canvas.getByLabelText('親を変更')).toHaveTextContent('なし');
+  },
+};
+
+/**
+ * 空の項目は枠を出さず案内文だけを置く（見本と同じ）。入力欄を最初から並べると、
+ * まだ何も入っていない項目まで枠だらけになり「読む項目」と区別が付かなくなる。
+ */
+export const 空の項目は押すまで文字: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const blank = canvas.getByRole('button', { name: '日付を追加してください' });
+    await expect(canvas.queryByLabelText('開始日')).toBeNull();
+    await userEvent.click(blank);
+    await expect(canvas.getByLabelText('開始日')).toBeInTheDocument();
   },
 };
 
@@ -125,7 +159,8 @@ export const 読むだけ: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.queryByLabelText('状態')).toBeNull();
     await expect(canvas.queryByLabelText('親を変更')).toBeNull();
-    await expect(canvas.getByText('なし')).toBeInTheDocument();
+    // 「なし」は修正バージョンと親の 2 か所に出るので、件数で見る（どちらも空の状態）。
+    await expect(canvas.getAllByText('なし')).toHaveLength(2);
   },
 };
 
@@ -149,7 +184,7 @@ export const アーカイブ済みは親を編集できない: Story = {
 export const ピッカーを開いて候補から選ぶ: Story = {
   decorators: [
     withApi({
-      '/kb/workspaces/acme/spaces/s-1/tickets': {
+      '/workspaces/acme/projects/s-1/tickets': {
         tickets: [candidateWire({ id: 'c-1', number: 3, title: '検索の改善' }), candidateWire({ id: 'c-2', number: 9, title: '絞り込みの見直し' })],
       },
     }),
@@ -170,7 +205,7 @@ export const ピッカーを開いて候補から選ぶ: Story = {
 export const ピッカーで絞り込む: Story = {
   decorators: [
     withApi({
-      '/kb/workspaces/acme/spaces/s-1/tickets': {
+      '/workspaces/acme/projects/s-1/tickets': {
         tickets: [candidateWire({ id: 'c-1', number: 3, title: '検索の改善' }), candidateWire({ id: 'c-2', number: 9, title: '絞り込みの見直し' })],
       },
     }),
@@ -192,7 +227,7 @@ export const 親を外す: Story = {
     ticket: { ...ticket, parentId: 'p-parent' },
     parentTicket: { ...ticket, id: 'p-parent', number: 3, title: '親チケット' },
   },
-  decorators: [withApi({ '/kb/workspaces/acme/spaces/s-1/tickets': { tickets: [] } })],
+  decorators: [withApi({ '/workspaces/acme/projects/s-1/tickets': { tickets: [] } })],
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByLabelText('親を変更'));

@@ -1,4 +1,3 @@
-import { lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import {
   TicketKeyBadge,
@@ -12,6 +11,7 @@ import {
 import type { KbGrantablePrincipal } from '@/entities/kb';
 import Loading from '@/shared/ui/Loading';
 import { SaveStatusIndicator, emptyRichDoc, isRichDoc } from '@/shared/ui/RichTextEditor';
+import TicketDescriptionEditor from './TicketDescriptionEditor';
 import { useTicketEditor } from '../model/useTicketEditor';
 import TicketAncestorTrail from './TicketAncestorTrail';
 import TicketAttachmentSection from './TicketAttachmentSection';
@@ -19,15 +19,13 @@ import TicketAttributePanel from './TicketAttributePanel';
 import TicketChangeHistory from './TicketChangeHistory';
 import TicketChildrenSection from './TicketChildrenSection';
 import TicketCommentSection from './TicketCommentSection';
-import TicketLabelBar from './TicketLabelBar';
 import TicketSection from './TicketSection';
-
-const RichTextEditor = lazy(() => import('@/shared/ui/RichTextEditor').then((m) => ({ default: m.RichTextEditor })));
+import { useTicketVocabulary } from '../model/useTicketVocabulary';
 
 export interface TicketFullViewProps {
   ticket: Ticket;
   ancestors: Ticket[];
-  spaceKey: string;
+  projectKey: string;
   workspaceSlug: string;
   statuses: TicketStatus[];
   types: TicketType[];
@@ -64,7 +62,7 @@ export interface TicketFullViewProps {
 export default function TicketFullView({
   ticket,
   ancestors,
-  spaceKey,
+  projectKey,
   workspaceSlug,
   statuses,
   types,
@@ -89,6 +87,8 @@ export default function TicketFullView({
   const archived = ticket.archivedAt !== null;
   const parentTicket = ancestors.length > 0 ? ancestors[ancestors.length - 1] : undefined;
 
+  // 版・チーム（プロジェクトの語彙）と、このチケットに付いている分・所属スプリント。
+  const vocabulary = useTicketVocabulary(workspaceSlug, ticket.projectId, ticket.id, ticket.teamId);
   const editor = useTicketEditor(ticket, canEdit && !archived, onUpdate);
   const docValue = isRichDoc(editor.doc) ? editor.doc : emptyRichDoc();
 
@@ -96,16 +96,16 @@ export default function TicketFullView({
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex flex-none flex-wrap items-center gap-2 border-b border-surface-3 px-4 py-3 md:px-6">
         <Link
-          to={`/kb/backlog/${ticket.spaceId}`}
+          to={`/backlog/${ticket.projectId}`}
           className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:underline"
         >
           ◂ バックログ
         </Link>
-        <TicketAncestorTrail ancestors={ancestors} spaceKey={spaceKey} />
+        <TicketAncestorTrail ancestors={ancestors} projectKey={projectKey} />
         <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--color-text-secondary)]">
           {type?.name ?? ''}
         </span>
-        <TicketKeyBadge spaceKey={spaceKey} number={ticket.number} />
+        <TicketKeyBadge projectKey={projectKey} number={ticket.number} />
         <div className="ml-auto">
           <SaveStatusIndicator status={editor.saveStatus} />
         </div>
@@ -125,26 +125,38 @@ export default function TicketFullView({
               <TicketAttributePanel
                 ticket={ticket}
                 workspaceSlug={workspaceSlug}
-                spaceKey={spaceKey}
-                statuses={statuses}
+                projectKey={projectKey}
                 principals={principals}
                 parentTicket={parentTicket}
                 canEdit={canEdit}
                 archived={archived}
                 busy={busy}
                 priority={editor.priority}
+                storyPoints={editor.storyPoints}
+                startDate={editor.startDate}
                 dueDate={editor.dueDate}
-                onChangeStatus={onChangeStatus}
+                versions={vocabulary.versions}
+                teams={vocabulary.teams}
+                fixVersions={vocabulary.fixVersions}
+                sprint={vocabulary.sprint}
+                teamId={vocabulary.teamId}
+                onSetFixVersion={(versionId, attach) => void vocabulary.setFixVersion(versionId, attach)}
+                onChangeTeam={(next) => void vocabulary.changeTeam(next)}
+                allLabels={allLabels}
+                onToggleLabel={onToggleLabel}
+                onCreateLabel={onCreateLabel}
                 onAssign={onAssign}
                 onUnassign={onUnassign}
                 onChangePriority={editor.changePriority}
+                onChangeStoryPoints={editor.changeStoryPoints}
+                onChangeStartDate={editor.changeStartDate}
                 onChangeDueDate={editor.changeDueDate}
                 onChangeParent={onChangeParent}
               />
             </TicketSection>
 
             <TicketSection title="子">
-              <TicketChildrenSection workspaceSlug={workspaceSlug} ticketId={ticket.id} spaceKey={spaceKey} statuses={statuses} />
+              <TicketChildrenSection workspaceSlug={workspaceSlug} ticketId={ticket.id} projectKey={projectKey} statuses={statuses} />
             </TicketSection>
           </div>
 
@@ -190,25 +202,8 @@ export default function TicketFullView({
               <h1 className="mb-3 text-xl font-semibold text-[var(--color-text-primary)]">{ticket.title}</h1>
             )}
 
-            <TicketLabelBar
-              attached={ticket.labels}
-              allLabels={allLabels}
-              canEdit={canEdit && !archived}
-              onToggle={onToggleLabel}
-              onCreate={onCreateLabel}
-            />
-
-            <TicketSection title="本文">
-              <Suspense fallback={<Loading />}>
-                <RichTextEditor
-                  value={docValue}
-                  editable={canEdit && !archived}
-                  onChange={editor.changeDoc}
-                  ariaLabel="チケットの本文"
-                  placeholder="本文を書く"
-                  className="rte-compact"
-                />
-              </Suspense>
+            <TicketSection title="説明">
+              <TicketDescriptionEditor value={docValue} editable={canEdit && !archived} onSave={editor.saveDoc} />
             </TicketSection>
 
             <TicketSection title="コメント">

@@ -296,139 +296,241 @@ export const KB_API = {
 } as const;
 
 /**
- * チケット・バックログ（既存の spaces に属する。routes_ticket.go 参照）。
+ * プロジェクト（バックログの入れ物）。routes_project.go 参照。
  *
- * KB_API と同じくワークスペースは URL の slug で指す。チケットはページのような個票の
- * grant を持たず、実効権限は常にスペース単位（設計 Ⅳ-H）なので、grants / principals 系の
- * ルートは無い（担当者候補の名前解決は KB_API.pagePrincipals を流用する。Ⅳ-G 参照）。
+ * URL は `/kb` の下に置かない。バックログはナレッジと別の製品で、projects はワークスペース
+ * しか参照しない（spaces への FK を持たない）。URL の階層もそれを表す。
+ */
+export const PROJECT_API = {
+  /** GET(一覧) / POST(作成) — /api/v2/workspaces/:slug/projects */
+  projects: (workspaceSlug: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects`,
+  /** GET(取得) / PATCH(改名) — /api/v2/workspaces/:slug/projects/:projectId */
+  project: (workspaceSlug: string, projectId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}`,
+} as const;
+
+/**
+ * スプリント（バックログの仕事を「いつやるか」でまとめる区切り。routes_sprint.go 参照）。
+ *
+ * 一覧と作成だけがプロジェクトの下。個々のスプリントへの操作は sprintId で一意に引けるので
+ * projectId を取らない（チケットの個票と同じ形）。
+ */
+/**
+ * PROJECT_VOCABULARY_API はプロジェクトの語彙（リリース版・チーム）と、
+ * 1 件のチケットへの付け外し。
+ *
+ * 版とチームは**プロジェクトの下**、付け外しは**チケットの下**に置く。
+ * 語彙を増やすのはプロジェクト全体に効く操作、付け外しは 1 件の記録、と役目が違うため。
+ */
+export const PROJECT_VOCABULARY_API = {
+  /** GET(一覧。?archived=1 で畳んだもの) / POST(作成) */
+  versions: (workspaceSlug: string, projectId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/versions`,
+  /** PATCH — 名前とリリース日。 */
+  version: (workspaceSlug: string, projectId: string, versionId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}`,
+  versionArchive: (workspaceSlug: string, projectId: string, versionId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/archive`,
+  versionRestore: (workspaceSlug: string, projectId: string, versionId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/restore`,
+  /** GET(付いている版) / PUT(付け外し。attach で「どちらにしたいか」を送る) */
+  ticketFixVersions: (workspaceSlug: string, ticketId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/fix-versions`,
+
+  /** GET(一覧。所属つき) / POST(作成) */
+  teams: (workspaceSlug: string, projectId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/teams`,
+  /** PATCH(改名) / DELETE(削除。付いていたチケットからは外れる) */
+  team: (workspaceSlug: string, projectId: string, teamId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/teams/${encodeURIComponent(teamId)}`,
+  /** PUT — 所属の付け外し（member で「どちらにしたいか」）。 */
+  teamMembers: (workspaceSlug: string, projectId: string, teamId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/teams/${encodeURIComponent(teamId)}/members`,
+  /** PUT — チケットの担当チーム（空文字で外す）。 */
+  ticketTeam: (workspaceSlug: string, ticketId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/team`,
+} as const;
+
+export const SPRINT_API = {
+  /** GET(一覧・件数つき) / POST(作成。必ず planned から) */
+  sprints: (workspaceSlug: string, projectId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/sprints`,
+  /** PATCH(名前・期間) / DELETE(削除。中のチケットはバックログへ戻る) */
+  sprint: (workspaceSlug: string, sprintId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/sprints/${encodeURIComponent(sprintId)}`,
+  /** PUT — 開始（active）・完了（completed）。戻す向きは 409。 */
+  sprintState: (workspaceSlug: string, sprintId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/sprints/${encodeURIComponent(sprintId)}/state`,
+  /** GET(中のチケット ID・並び順) / POST(入れる。別スプリントからなら移動) */
+  sprintTickets: (workspaceSlug: string, sprintId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/sprints/${encodeURIComponent(sprintId)}/tickets`,
+  /** DELETE — チケットをスプリントから外す（どのスプリントかは呼び出し側が知らなくてよい）。 */
+  ticketSprint: (workspaceSlug: string, ticketId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/sprint`,
+  /**
+   * PUT — スプリント内の並べ替え。どのスプリントかは URL に取らない
+   * （1 件のチケットは同時に 1 つのスプリントにしか入らないため）。
+   */
+  ticketSprintPosition: (workspaceSlug: string, ticketId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/sprint/position`,
+} as const;
+
+/**
+ * チケット・バックログ（projects に属する。routes_ticket.go 参照）。
+ *
+ * PROJECT_API と同じく `/kb` の下に置かない。ワークスペースは URL の slug で指す。
+ * チケットはページのような個票の grant を持たず、実効権限は常にワークスペース単位なので、
+ * grants / principals 系のルートは無い（担当者候補の名前解決は KB_API.pagePrincipals を流用する）。
  */
 export const TICKET_API = {
-  /** POST — /api/v2/kb/workspaces/:slug/spaces/:spaceId/tickets/enable。body は省略可 */
-  enable: (workspaceSlug: string, spaceId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/tickets/enable`,
   /**
-   * GET(一覧) / POST(作成) — /api/v2/kb/workspaces/:slug/spaces/:spaceId/tickets
+   * GET — /api/v2/workspaces/:slug/tickets/assigned
+   *
+   * 「自分の担当」。プロジェクトを横断するので URL にプロジェクトを取らない。誰の担当かは
+   * 常に呼び出した本人（他人の担当は取れない）。並びは状態の枠 → 状態 → 期限の順で返る。
+   */
+  assignedTickets: (workspaceSlug: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/assigned`,
+  /** POST — /api/v2/workspaces/:slug/projects/:projectId/tickets/enable。body は省略可 */
+  enable: (workspaceSlug: string, projectId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/tickets/enable`,
+  /**
+   * GET(一覧) / POST(作成) — /api/v2/workspaces/:slug/projects/:projectId/tickets
    *
    * 一覧のクエリは statusId / typeId / assigneePrincipalId / label / q（いずれも省略可）と
    * archived（'true' でアーカイブだけを返す。省略時は現役だけ。「込み」は取れない）。
    * unassigned / assignedToMe / assigneePrincipalId は互いに排他（同時指定は 400）。
    */
-  tickets: (workspaceSlug: string, spaceId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/tickets`,
+  tickets: (workspaceSlug: string, projectId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/tickets`,
   /**
-   * GET — /api/v2/kb/workspaces/:slug/spaces/:spaceId/tickets/counts
+   * GET — /api/v2/workspaces/:slug/projects/:projectId/tickets/counts
    *
    * サイドバー「保存した絞り込み」の件数バッジ（total / assignedToMe / overdue / unassigned）。
    * フロントエンドでは計算しない（自分の principal 解決・全件走査が要るため）。
    */
-  ticketCounts: (workspaceSlug: string, spaceId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/tickets/counts`,
-  /** GET — /api/v2/kb/workspaces/:slug/tickets/by-key/:key（例 FRESTYLE-12） */
+  ticketCounts: (workspaceSlug: string, projectId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/tickets/counts`,
+  /** GET — /api/v2/workspaces/:slug/tickets/by-key/:key（例 FRESTYLE-12） */
   ticketByKey: (workspaceSlug: string, key: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/by-key/${encodeURIComponent(key)}`,
-  /** GET(取得) / PUT(全置換) — /api/v2/kb/workspaces/:slug/tickets/:ticketId */
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/by-key/${encodeURIComponent(key)}`,
+  /** GET(取得) / PUT(全置換) — /api/v2/workspaces/:slug/tickets/:ticketId */
   ticket: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}`,
   /**
-   * GET — /api/v2/kb/tickets/:ticketId
+   * GET — /api/v2/tickets/:ticketId
    *
-   * /kb/tickets/{ticketId} の URL からの解決。ワークスペースを出さないための口で、
+   * /tickets/{ticketId} の URL からの解決。ワークスペースを出さないための口で、
    * 応答の workspaceSlug を以降の呼び出しに使う（KB_API.resolvePage と同じ役割）。
    */
-  resolveTicket: (ticketId: string) => `${API_V2}/kb/tickets/${encodeURIComponent(ticketId)}`,
+  resolveTicket: (ticketId: string) => `${API_V2}/tickets/${encodeURIComponent(ticketId)}`,
   /** POST(並び替え・204) — .../tickets/:ticketId/move。anchorTicketId 省略で末尾へ */
   moveTicket: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/move`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/move`,
   /** POST(アーカイブ) — .../tickets/:ticketId/archive */
   archiveTicket: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/archive`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/archive`,
   /** POST(復元) — .../tickets/:ticketId/restore */
   restoreTicket: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/restore`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/restore`,
   /** POST — .../tickets/:ticketId/status。resolution は category=done のときだけ意味を持つ */
   changeTicketStatus: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/status`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/status`,
   /** PUT — .../tickets/:ticketId/parent。parentId 省略でトップレベルへ */
   changeTicketParent: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/parent`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/parent`,
   /** PUT(設定) / DELETE(解除・204) — .../tickets/:ticketId/assignee */
   ticketAssignee: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/assignee`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/assignee`,
   /** GET — .../tickets/:ticketId/history（変更履歴・新しい順） */
+  /**
+   * GET(状態) / PUT(付け外し) — .../tickets/:ticketId/watch
+   *
+   * 監視は「担当」とは別物（担当は 1 人、監視は何人でも）。自分の分しか動かせない。
+   * 見る権限があれば足りる（編集できない人でも進み具合は追える）。
+   */
+  ticketWatch: (workspaceSlug: string, ticketId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/watch`,
   ticketHistory: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/history`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/history`,
   /** GET — .../tickets/:ticketId/children（直下の子・並び順。孫は含まない） */
   ticketChildren: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/children`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/children`,
   /** GET(一覧・古い順) / POST(投稿) — .../tickets/:ticketId/comments */
   ticketComments: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/comments`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/comments`,
   /** PUT(本文の置換) / DELETE(削除・204) — .../comments/:commentId。投稿者本人以外は 403 */
   ticketComment: (workspaceSlug: string, ticketId: string, commentId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/comments/${encodeURIComponent(commentId)}`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/comments/${encodeURIComponent(commentId)}`,
   /** GET — .../comments/:commentId/edits（編集前の本文・新しい順） */
   ticketCommentEdits: (workspaceSlug: string, ticketId: string, commentId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/comments/${encodeURIComponent(commentId)}/edits`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/comments/${encodeURIComponent(commentId)}/edits`,
   /**
    * PUT(付ける) / DELETE(外す) — .../comments/:commentId/reactions/:emoji。どちらも 204・冪等。
    *
    * 絵文字は URL の一部なので必ず encodeURIComponent を通す（生のままだと多バイト文字で経路が壊れる）。
    */
   ticketCommentReaction: (workspaceSlug: string, ticketId: string, commentId: string, emoji: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/comments/${encodeURIComponent(commentId)}/reactions/${encodeURIComponent(emoji)}`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/comments/${encodeURIComponent(commentId)}/reactions/${encodeURIComponent(emoji)}`,
   /**
-   * GET(一覧) / POST(作成) — /api/v2/kb/workspaces/:slug/spaces/:spaceId/ticket-statuses
+   * GET(一覧) / POST(作成) — /api/v2/workspaces/:slug/projects/:projectId/ticket-statuses
    *
    * 一覧の各行は activeTicketCount（現役チケットでの使用数）を持つ（管理画面の「使用中 N 件」）。
    */
-  /** GET(一覧) / POST(作成) — /api/v2/kb/workspaces/:slug/spaces/:spaceId/labels */
-  labels: (workspaceSlug: string, spaceId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/labels`,
+  /**
+   * GET(一覧) / POST(作成) — /api/v2/workspaces/:slug/labels
+   *
+   * ラベルの語彙は**ワークスペース単位**（プロジェクトの下ではない）。ページとチケットが
+   * 同じ行を引くため、どちらか一方の入れ物に属させられない。
+   */
+  labels: (workspaceSlug: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/labels`,
   /** PUT(更新) / DELETE(削除・204) — .../labels/:labelId。名前の重複は 409 label_name_taken */
-  label: (workspaceSlug: string, spaceId: string, labelId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/labels/${encodeURIComponent(labelId)}`,
+  label: (workspaceSlug: string, labelId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/labels/${encodeURIComponent(labelId)}`,
   /** PUT(付ける) / DELETE(外す) — .../tickets/:ticketId/labels/:labelId。どちらも 204・冪等 */
   ticketLabel: (workspaceSlug: string, ticketId: string, labelId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/labels/${encodeURIComponent(labelId)}`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/labels/${encodeURIComponent(labelId)}`,
   /** GET(一覧) / POST(確定) — .../tickets/:ticketId/attachments */
   ticketAttachments: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/attachments`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/attachments`,
   /** POST — .../attachments/upload-url。{contentType, size} → {url, key, expiresIn} */
   ticketAttachmentUploadUrl: (workspaceSlug: string, ticketId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/attachments/upload-url`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/attachments/upload-url`,
   /** GET — .../attachments/:attachmentId/download-url。期限付き URL を都度発行する（保存しない） */
   ticketAttachmentDownloadUrl: (workspaceSlug: string, ticketId: string, attachmentId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/attachments/${encodeURIComponent(attachmentId)}/download-url`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/attachments/${encodeURIComponent(attachmentId)}/download-url`,
   /** DELETE — .../attachments/:attachmentId（204。Cloud Storage の実ファイルは消えない） */
   ticketAttachment: (workspaceSlug: string, ticketId: string, attachmentId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/attachments/${encodeURIComponent(attachmentId)}`,
-  ticketStatuses: (workspaceSlug: string, spaceId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/ticket-statuses`,
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}/attachments/${encodeURIComponent(attachmentId)}`,
+  ticketStatuses: (workspaceSlug: string, projectId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/ticket-statuses`,
   /** PUT — .../ticket-statuses/:statusId（name / color / category をまとめて置換） */
-  ticketStatus: (workspaceSlug: string, spaceId: string, statusId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/ticket-statuses/${encodeURIComponent(statusId)}`,
+  ticketStatus: (workspaceSlug: string, projectId: string, statusId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/ticket-statuses/${encodeURIComponent(statusId)}`,
   /** POST(body 無し) — .../ticket-statuses/:statusId/set-initial */
-  setInitialTicketStatus: (workspaceSlug: string, spaceId: string, statusId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/ticket-statuses/${encodeURIComponent(statusId)}/set-initial`,
+  setInitialTicketStatus: (workspaceSlug: string, projectId: string, statusId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/ticket-statuses/${encodeURIComponent(statusId)}/set-initial`,
   /** POST(body 無し) — .../ticket-statuses/:statusId/archive。使用中は 409 status_in_use */
-  archiveTicketStatus: (workspaceSlug: string, spaceId: string, statusId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/ticket-statuses/${encodeURIComponent(statusId)}/archive`,
+  archiveTicketStatus: (workspaceSlug: string, projectId: string, statusId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/ticket-statuses/${encodeURIComponent(statusId)}/archive`,
   /** POST(body 無し) — .../ticket-statuses/:statusId/restore */
-  restoreTicketStatus: (workspaceSlug: string, spaceId: string, statusId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/ticket-statuses/${encodeURIComponent(statusId)}/restore`,
-  /** GET(一覧) / POST(作成) — /api/v2/kb/workspaces/:slug/spaces/:spaceId/ticket-types */
-  ticketTypes: (workspaceSlug: string, spaceId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/ticket-types`,
+  restoreTicketStatus: (workspaceSlug: string, projectId: string, statusId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/ticket-statuses/${encodeURIComponent(statusId)}/restore`,
+  /** GET(一覧) / POST(作成) — /api/v2/workspaces/:slug/projects/:projectId/ticket-types */
+  ticketTypes: (workspaceSlug: string, projectId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/ticket-types`,
   /** PUT — .../ticket-types/:typeId */
-  ticketType: (workspaceSlug: string, spaceId: string, typeId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/ticket-types/${encodeURIComponent(typeId)}`,
+  ticketType: (workspaceSlug: string, projectId: string, typeId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/ticket-types/${encodeURIComponent(typeId)}`,
   /** POST(body 無し) — .../ticket-types/:typeId/set-default */
-  setDefaultTicketType: (workspaceSlug: string, spaceId: string, typeId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/ticket-types/${encodeURIComponent(typeId)}/set-default`,
+  setDefaultTicketType: (workspaceSlug: string, projectId: string, typeId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/ticket-types/${encodeURIComponent(typeId)}/set-default`,
   /** POST(body 無し) — .../ticket-types/:typeId/archive。使用中は 409 type_in_use */
-  archiveTicketType: (workspaceSlug: string, spaceId: string, typeId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/ticket-types/${encodeURIComponent(typeId)}/archive`,
+  archiveTicketType: (workspaceSlug: string, projectId: string, typeId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/ticket-types/${encodeURIComponent(typeId)}/archive`,
   /** POST(body 無し) — .../ticket-types/:typeId/restore */
-  restoreTicketType: (workspaceSlug: string, spaceId: string, typeId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/spaces/${encodeURIComponent(spaceId)}/ticket-types/${encodeURIComponent(typeId)}/restore`,
+  restoreTicketType: (workspaceSlug: string, projectId: string, typeId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/ticket-types/${encodeURIComponent(typeId)}/restore`,
 } as const;

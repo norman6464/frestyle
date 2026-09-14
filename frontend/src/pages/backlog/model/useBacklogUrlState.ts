@@ -1,20 +1,7 @@
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-export type BacklogTab = 'tickets' | 'statuses' | 'types';
-
-const TABS: readonly BacklogTab[] = ['tickets', 'statuses', 'types'];
-
-/** 既定の面。URL に出さない（既定を省くと URL が短く保てる）。 */
-const DEFAULT_TAB: BacklogTab = 'tickets';
-
-function readTab(value: string | null): BacklogTab {
-  return TABS.includes(value as BacklogTab) ? (value as BacklogTab) : DEFAULT_TAB;
-}
-
 export interface BacklogUrlPatch {
-  tab?: BacklogTab;
-  archived?: boolean;
   selectedId?: string | null;
   statusId?: string | null;
   typeId?: string | null;
@@ -27,8 +14,10 @@ export interface BacklogUrlPatch {
 }
 
 /**
- * useBacklogUrlState は一覧の文脈（どの面か・アーカイブを見ているか・どのチケットを選んだか・
- * 絞り込み）を URL に載せる。
+ * useBacklogUrlState は一覧の文脈（どのチケットを選んだか・絞り込み）を URL の問い合わせに載せる。
+ *
+ * どの面かは**経路が持つ**（/backlog/:projectId・/settings・/archive）。面は戻る・進む・
+ * リンク共有の単位なので、問い合わせの飾りではなく経路そのものに出す。
  *
  * 画面の中に閉じた状態にすると、チケットを開いて戻ってきたときに絞り込みも選択も消える。
  * 戻る先が「現役の先頭」に固定されると、朝に何十件も捌く動きが成立しない。絞り込みの保存
@@ -40,8 +29,6 @@ export interface BacklogUrlPatch {
 export function useBacklogUrlState() {
   const [params, setParams] = useSearchParams();
 
-  const tab = readTab(params.get('tab'));
-  const archived = params.get('archived') === '1';
   const selectedId = params.get('ticket');
   const statusId = params.get('statusId');
   const typeId = params.get('typeId');
@@ -57,14 +44,6 @@ export function useBacklogUrlState() {
       setParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          if (patch.tab !== undefined) {
-            if (patch.tab === DEFAULT_TAB) next.delete('tab');
-            else next.set('tab', patch.tab);
-          }
-          if (patch.archived !== undefined) {
-            if (patch.archived) next.set('archived', '1');
-            else next.delete('archived');
-          }
           if (patch.selectedId !== undefined) {
             if (patch.selectedId) next.set('ticket', patch.selectedId);
             else next.delete('ticket');
@@ -127,8 +106,6 @@ export function useBacklogUrlState() {
     [setParams],
   );
 
-  const setTab = useCallback((value: BacklogTab) => update({ tab: value }), [update]);
-  const setArchived = useCallback((value: boolean) => update({ archived: value }), [update]);
   const selectTicket = useCallback((value: string | null) => update({ selectedId: value }), [update]);
   const setStatusId = useCallback((value: string | null) => update({ statusId: value }), [update]);
   const setTypeId = useCallback((value: string | null) => update({ typeId: value }), [update]);
@@ -142,12 +119,10 @@ export function useBacklogUrlState() {
   const setOverdue = useCallback((value: boolean) => update({ overdue: value }), [update]);
   const setQuery = useCallback((value: string) => update({ q: value }), [update]);
 
-  /** スペースを移ったときに前のスペースの文脈を持ち越さない。 */
+  /** プロジェクトを移ったときに前のプロジェクトの文脈を持ち越さない。 */
   const reset = useCallback(
     () =>
       update({
-        tab: DEFAULT_TAB,
-        archived: false,
         selectedId: null,
         statusId: null,
         typeId: null,
@@ -162,8 +137,6 @@ export function useBacklogUrlState() {
   );
 
   return {
-    tab,
-    archived,
     selectedId,
     statusId,
     typeId,
@@ -173,8 +146,6 @@ export function useBacklogUrlState() {
     assignedToMe,
     overdue,
     q,
-    setTab,
-    setArchived,
     selectTicket,
     setStatusId,
     setTypeId,

@@ -4,7 +4,7 @@ import TicketLabelBar from './TicketLabelBar';
 import type { Label } from '@/entities/ticket';
 
 function label(id: string, name: string, color: string): Label {
-  return { id, spaceId: 's-1', name, color, createdAt: '', updatedAt: '' };
+  return { id, name, color, createdAt: '', updatedAt: '' };
 }
 
 const allLabels: Label[] = [

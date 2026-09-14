@@ -3,7 +3,7 @@ import type { Label } from '@/entities/ticket';
 import { validateLabel, normalizeLabelColor } from '../lib/validateLabel';
 
 export interface TicketLabelPickerProps {
-  /** スペースに定義されている全ラベル。 */
+  /** ワークスペースに定義されている全ラベル。 */
   labels: Label[];
   /** このチケットに付いているラベルの ID。 */
   attachedIds: string[];

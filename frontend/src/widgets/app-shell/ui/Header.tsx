@@ -1,60 +1,52 @@
 import { useEffect, useState } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import {
   BellIcon,
   Bars3Icon,
   MagnifyingGlassIcon,
   ViewColumnsIcon,
-  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import Loading from '@/shared/ui/Loading';
 import HeaderUserMenu from './HeaderUserMenu';
 import { useSidebar } from '../model/useSidebar';
-import { usePanelMode } from '@/shared/lib/hooks/usePanelMode';
 import { NotificationRepository } from '@/entities/notification';
 import { ProfileRepository } from '@/entities/user';
-
-// ナビ項目・アクティブ判定は model/navigation に一元化してある
-// （サイドバー・モバイルメニューと共用の正典）。ここでは描画だけを行う。
-import { MAIN_NAV_ITEMS, navActive } from '../model/navigation';
-
-// ナレッジのサイドバー（frestyle.panel.note）を実際に描画しているページだけを対象にする。
-// /kb/tickets/:id・/kb/:workspaceSlug/members・旧 URL のページ写し替えにはサイドバーが
-// 無いため、それらは除く（/kb・/kb/:pageId のようにセグメントがちょうど 1 つの経路だけ通す）。
-function hasKbSidebar(pathname: string): boolean {
-  if (pathname === '/kb/backlog' || pathname.startsWith('/kb/backlog/')) return true;
-  if (pathname === '/kb/spaces' || pathname.startsWith('/kb/spaces/')) return true;
-  if (pathname === '/kb') return true;
-  return /^\/kb\/[^/]+$/.test(pathname);
-}
 
 interface HeaderProps {
   /** 中央の検索ボタン押下時に呼ぶ。AppShell が持つ既存の ⌘K パレットを開くだけで、
    *  ここでは検索の状態を持たない。 */
   onOpenSearch: () => void;
+  /** 左の柱が今開いているか。 */
+  globalSidebarOpen?: boolean;
+  /** 左の柱の開閉（広い画面）。状態は AppShell が持つ。 */
+  onToggleGlobalSidebar?: () => void;
+  /** 左の柱を引き出しとして開く（狭い画面）。 */
+  onOpenMobileSidebar?: () => void;
 }
 
 /**
- * Header — 上部固定のテキスト横並びナビ。常時表示（本文には重ねない・自動的には隠れない）。
+ * Header — 上部固定の帯。常時表示（本文には重ねない・自動的には隠れない）。
  *
- * 左: ロゴ ／ 中央左: テキストナビ（アイコンなし） ／ 中央: 検索ボタン ／
- * 右: 通知ベル + ユーザーメニュー。モバイルではハンバーガーで縦メニューを開く。
+ * 左: 柱の開閉 + ロゴ ／ 中央: 検索 ／ 右: 通知ベル + ユーザーメニュー。
+ * 行き先（ホーム・自分の担当・ナレッジ・バックログ）もワークスペース切替も**持たない**
+ * —— 左の柱（GlobalSidebar）が持つ。同じ行き先を 2 か所に置かない。
  *
- * ワークスペース切替は置かない（`KbSidebar` 先頭に既にあり、二重にしない）。
+ * 柱を開け閉めするボタンは**この 1 つだけ**。以前は「アプリの柱」と「画面の柱」で 2 本
+ * あったため、ほぼ同じ絵のボタンが 2 つ並んでどちらが何を閉じるのか見分けが付かなかった。
+ * 柱が 1 本になったので、ボタンも 1 つにして、いまの状態で絵を変える
+ * （開いている = ⬜|⬜ 押すと閉じる／閉じている = ☰ 押すと開く）。
  */
-export default function Header({ onOpenSearch }: HeaderProps) {
-  const location = useLocation();
+export default function Header({
+  onOpenSearch,
+  globalSidebarOpen = true,
+  onToggleGlobalSidebar,
+  onOpenMobileSidebar,
+}: HeaderProps) {
   const { handleLogout, loggingOut } = useSidebar();
-  // ⌘\ の切替はサイドバー本体（PeekablePanel）側が既に持っているので、ここでは二重に
-  // 登録しない（shortcut: false）。mode・toggle・openPeek/closePeek をここでも使う
-  // （usePanelMode は同じ storageKey を使う別インスタンス同士でこれらを同期する）。
-  const notePanel = usePanelMode('frestyle.panel.note', { shortcut: false });
-  const showNotePanelToggle = hasKbSidebar(location.pathname);
 
   const [profile, setProfile] = useState<{ displayName: string; avatarUrl: string | null; email: string } | null>(null);
   const [unread, setUnread] = useState(0);
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,49 +63,34 @@ export default function Header({ onOpenSearch }: HeaderProps) {
     return () => { cancelled = true; };
   }, []);
 
-  // ルート遷移でモバイルメニューを閉じる。
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname]);
-
-  // whitespace-nowrap: 区切りの無い日本語ラベルは、幅が足りないと文字単位で折り返され
-  // 「縦書きのように見える」崩れ方をする（実機で確認済み）。
-  const navLinkClass = (active: boolean) =>
-    `whitespace-nowrap px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-      active
-        ? 'bg-[var(--color-nav-active)] text-[var(--color-text-primary)]'
-        : 'text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)]'
-    }`;
-
   return (
     <>
       {loggingOut && <Loading fullscreen message="ログアウト中..." />}
       {/* 常時表示・不透明。本文とは縦に並ぶだけで重ねないので、半透明やぼかしは不要。 */}
       <header className="app-header-surface flex-shrink-0 h-14 flex items-center gap-2 px-3">
-        {/* サイドバーの固定表示 / 一時表示を切り替えるボタン。ナレッジのサイドバーが
-            あるページでは固定・一時どちらでも常時表示し、状態に応じてアイコンを
-            変える（固定中: ⬜|⬜ で「列（サイドバー）が今出ている、押すと閉じる」、
-            一時表示中: ☰ で「押すと固定表示する」）。✕ や «（ChevronDoubleLeft、
-            サイドバー内部の «と同じ見た目）は使わず、Bars3 ↔ ViewColumns の対で
-            今の状態と押すとどちらに変わるかが分かるようにする。
-            デスクトップのみ（一時表示/固定表示の機構自体がデスクトップ専用のため）。
-            一時表示中はポインタを乗せた瞬間に本文側のオーバーレイが浮く
-            （旧・本文側の ☰ と同じ挙動。固定中は見た目に影響しない）。 */}
-        {showNotePanelToggle && (
+        {/* 狭い画面: 三本線で柱を引き出しとして開く（行き先はすべて柱の中にある）。 */}
+        {onOpenMobileSidebar && (
           <button
             type="button"
-            onClick={notePanel.toggle}
-            onMouseEnter={notePanel.openPeek}
-            onMouseLeave={notePanel.closePeek}
-            title={notePanel.mode === 'pinned' ? 'サイドバーを閉じる' : 'サイドバーを固定表示する'}
-            aria-label={notePanel.mode === 'pinned' ? 'サイドバーを閉じる' : 'サイドバーを固定表示する'}
+            onClick={onOpenMobileSidebar}
+            aria-label="メニュー"
+            className="md:hidden p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
+          >
+            <Bars3Icon className="w-5 h-5" />
+          </button>
+        )}
+
+        {/* 広い画面: 柱の開閉。ヘッダーの一番左（柱の真上）に置く。 */}
+        {onToggleGlobalSidebar && (
+          <button
+            type="button"
+            onClick={onToggleGlobalSidebar}
+            title={globalSidebarOpen ? 'サイドバーを閉じる' : 'サイドバーを開く'}
+            aria-label={globalSidebarOpen ? 'サイドバーを閉じる' : 'サイドバーを開く'}
+            aria-expanded={globalSidebarOpen}
             className="hidden md:inline-flex p-1.5 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
           >
-            {notePanel.mode === 'pinned' ? (
-              <ViewColumnsIcon className="w-5 h-5" />
-            ) : (
-              <Bars3Icon className="w-5 h-5" />
-            )}
+            {globalSidebarOpen ? <ViewColumnsIcon className="w-5 h-5" /> : <Bars3Icon className="w-5 h-5" />}
           </button>
         )}
 
@@ -123,22 +100,11 @@ export default function Header({ onOpenSearch }: HeaderProps) {
           <span className="hidden sm:block text-sm font-semibold text-[var(--color-text-primary)]">FreStyle</span>
         </Link>
 
-        {/* デスクトップ: テキスト横並びナビ。
-            shrink-0 — 幅が足りなくなったときに縮めてよいのは中央の検索ボタン側であって
-            ここではない（縮むとラベルが文字単位で折り返される）。 */}
-        <nav className="hidden md:flex shrink-0 items-center gap-1" aria-label="メインナビゲーション">
-          {MAIN_NAV_ITEMS.map((item) => (
-            <Link key={item.id} to={item.to} className={navLinkClass(navActive(item, location.pathname))}>
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-
-        {/* 中央の検索ボタン。flex-1 の帯の中で justify-center することで、左（ロゴ＋ナビ）・
+        {/* 中央の検索ボタン。flex-1 の帯の中で justify-center することで、左（ロゴ）・
             右（utilities）の幅に関わらず帯の中央に来る（mx-auto だと右の ml-auto と
             auto マージンを取り合って中央からズレるため使わない）。 */}
         {/* min-w-0 が無いと、この flex-1 の子（ボタンの幅）がそのまま最小幅として扱われ、
-            幅が足りないときに縮む側にならない（代わりにナビが縮んで崩れる）。 */}
+            幅が足りないときに縮む側にならない。 */}
         <div className="hidden md:flex flex-1 min-w-0 justify-center px-4">
           <button
             type="button"
@@ -176,52 +142,17 @@ export default function Header({ onOpenSearch }: HeaderProps) {
             )}
           </Link>
 
-          {/* ユーザーメニュー（デスクトップ） */}
-          <div className="hidden md:block">
-            <HeaderUserMenu
-              displayName={profile?.displayName ?? ''}
-              avatarUrl={profile?.avatarUrl}
-              email={profile?.email ?? ''}
-              onLogout={handleLogout}
-            />
-          </div>
-
-          {/* モバイル: ハンバーガー */}
-          <button
-            type="button"
-            onClick={() => setMobileOpen((p) => !p)}
-            aria-label="メニュー"
-            aria-expanded={mobileOpen}
-            className="md:hidden p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
-          >
-            {mobileOpen ? <XMarkIcon className="w-5 h-5" /> : <Bars3Icon className="w-5 h-5" />}
-          </button>
+          {/* ユーザーメニュー。狭い画面でも出す —— ログアウトの入口がここしか無いため
+              （以前は三本線の縦メニューが持っていたが、そこは柱の引き出しになった）。
+              名前の文字は sm 未満で畳まれ、丸い顔だけが残る。 */}
+          <HeaderUserMenu
+            displayName={profile?.displayName ?? ''}
+            avatarUrl={profile?.avatarUrl}
+            email={profile?.email ?? ''}
+            onLogout={handleLogout}
+          />
         </div>
       </header>
-
-      {/* モバイルメニュー */}
-      {mobileOpen && (
-        <div className="app-header-surface md:hidden">
-          <nav className="px-3 py-2 space-y-0.5" aria-label="モバイルナビゲーション">
-            {MAIN_NAV_ITEMS.map((item) => (
-              <Link key={item.id} to={item.to} className={`block ${navLinkClass(navActive(item, location.pathname))}`}>
-                {item.label}
-              </Link>
-            ))}
-            <div className="my-1 border-t border-surface-3" />
-            <Link to="/settings" className={`block ${navLinkClass(location.pathname === '/settings')}`}>
-              設定
-            </Link>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="block w-full text-left px-3 py-1.5 rounded-md text-sm font-medium text-[var(--color-text-muted)] hover:bg-red-900/10 hover:text-red-700 transition-colors"
-            >
-              ログアウト
-            </button>
-          </nav>
-        </div>
-      )}
     </>
   );
 }

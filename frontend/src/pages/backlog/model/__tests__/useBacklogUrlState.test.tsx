@@ -18,51 +18,53 @@ function renderAt(initial: string) {
 }
 
 describe('useBacklogUrlState', () => {
-  it('何も付いていない URL は既定（チケットの面・現役・未選択）', () => {
-    const { result } = renderAt('/kb/backlog/s-1');
-    expect(result.current.state).toMatchObject({ tab: 'tickets', archived: false, selectedId: null });
+  it('何も付いていない URL は既定（未選択・絞り込み無し）', () => {
+    const { result } = renderAt('/backlog/s-1');
+    expect(result.current.state).toMatchObject({ selectedId: null, statusId: null, assignedToMe: false });
   });
 
-  it('URL から面・アーカイブ・選択を読む', () => {
-    const { result } = renderAt('/kb/backlog/s-1?tab=statuses&archived=1&ticket=t-9');
-    expect(result.current.state).toMatchObject({ tab: 'statuses', archived: true, selectedId: 't-9' });
+  it('URL から選択を読む', () => {
+    const { result } = renderAt('/backlog/s-1?ticket=t-9');
+    expect(result.current.state.selectedId).toBe('t-9');
   });
 
-  it('知らない面の名前は既定に落とす', () => {
-    const { result } = renderAt('/kb/backlog/s-1?tab=nonsense');
-    expect(result.current.state.tab).toBe('tickets');
+  // 面は経路（/backlog/:projectId/settings 等）が持つ。問い合わせに tab が残っていても
+  // この hook は解釈しないし、消しもしない（知らない鍵には触らないため）。
+  it('面は問い合わせに持たない', () => {
+    const { result } = renderAt('/backlog/s-1?tab=statuses');
+    expect(result.current.state).not.toHaveProperty('tab');
+    expect(result.current.state).not.toHaveProperty('setTab');
   });
 
   it('選んだチケットを URL に載せ、他の項目は残す', () => {
-    const { result } = renderAt('/kb/backlog/s-1?archived=1');
+    const { result } = renderAt('/backlog/s-1?statusId=st-1');
     act(() => result.current.state.selectTicket('t-9'));
     expect(result.current.search).toContain('ticket=t-9');
-    expect(result.current.search).toContain('archived=1');
+    expect(result.current.search).toContain('statusId=st-1');
   });
 
   it('既定の値は URL に書かない', () => {
-    const { result } = renderAt('/kb/backlog/s-1?tab=types&archived=1&ticket=t-9');
-    act(() => result.current.state.setTab('tickets'));
-    act(() => result.current.state.setArchived(false));
+    const { result } = renderAt('/backlog/s-1?ticket=t-9&statusId=st-1');
     act(() => result.current.state.selectTicket(null));
+    act(() => result.current.state.setStatusId(null));
     expect(result.current.search).toBe('');
   });
 
-  it('スペースを移ったときは文脈ごと捨てる', () => {
-    const { result } = renderAt('/kb/backlog/s-1?tab=statuses&archived=1&ticket=t-9');
+  it('プロジェクトを移ったときは文脈ごと捨てる', () => {
+    const { result } = renderAt('/backlog/s-1?statusId=st-1&assignedToMe=1&ticket=t-9');
     act(() => result.current.state.reset());
     expect(result.current.search).toBe('');
   });
 
   it('チケット以外のクエリには触らない', () => {
-    const { result } = renderAt('/kb/backlog/s-1?from=notification');
+    const { result } = renderAt('/backlog/s-1?from=notification');
     act(() => result.current.state.selectTicket('t-9'));
     expect(result.current.search).toContain('from=notification');
   });
 
   it('URL から絞り込み(状態・種別・担当・期限切れ・題名検索)を読む', () => {
     const { result } = renderAt(
-      '/kb/backlog/s-1?statusId=st-1&typeId=ty-1&assignedToMe=1&overdue=1&q=%E8%AA%8D%E8%A8%BC',
+      '/backlog/s-1?statusId=st-1&typeId=ty-1&assignedToMe=1&overdue=1&q=%E8%AA%8D%E8%A8%BC',
     );
     expect(result.current.state).toMatchObject({
       statusId: 'st-1',
@@ -75,7 +77,7 @@ describe('useBacklogUrlState', () => {
   });
 
   it('担当の絞り込みは assigneePrincipalId・unassigned・assignedToMe が互いに排他', () => {
-    const { result } = renderAt('/kb/backlog/s-1?assigneePrincipalId=p-1');
+    const { result } = renderAt('/backlog/s-1?assigneePrincipalId=p-1');
     act(() => result.current.state.setAssignedToMe(true));
     expect(result.current.state.assignedToMe).toBe(true);
     expect(result.current.state.assigneePrincipalId).toBeNull();
@@ -90,7 +92,7 @@ describe('useBacklogUrlState', () => {
   });
 
   it('reset は絞り込みも含めてすべて捨てる', () => {
-    const { result } = renderAt('/kb/backlog/s-1?statusId=st-1&assignedToMe=1&q=x');
+    const { result } = renderAt('/backlog/s-1?statusId=st-1&assignedToMe=1&q=x');
     act(() => result.current.state.reset());
     expect(result.current.search).toBe('');
   });

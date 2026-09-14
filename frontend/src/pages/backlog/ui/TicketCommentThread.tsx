@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { TicketComment, TicketCommentSegment } from '@/entities/ticket';
+import type { TicketComment, TicketCommentBlock } from '@/entities/ticket';
 import type { KbWorkspaceMember } from '@/entities/kb';
 import type { CommentThread } from '../lib/buildCommentTree';
 import TicketCommentItem from './TicketCommentItem';
@@ -11,8 +11,8 @@ export interface TicketCommentThreadProps {
   ticketId: string;
   /** 返信欄の '@' 候補。 */
   members: KbWorkspaceMember[];
-  onReply: (parentCommentId: string, body: TicketCommentSegment[]) => Promise<void>;
-  onEdit: (commentId: string, body: TicketCommentSegment[]) => Promise<void>;
+  onReply: (parentCommentId: string, body: TicketCommentBlock[]) => Promise<void>;
+  onEdit: (commentId: string, body: TicketCommentBlock[]) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onReact: (commentId: string, emoji: string) => void;
   resolveMentionName: (userId: string) => string | null;

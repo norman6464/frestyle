@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { useState } from 'react';
 import {
   TicketKeyBadge,
   type Label,
@@ -8,21 +8,22 @@ import {
   type UpdateTicketInput,
 } from '@/entities/ticket';
 import type { KbGrantablePrincipal } from '@/entities/kb';
-import Loading from '@/shared/ui/Loading';
-import { SaveStatusIndicator, emptyRichDoc, isRichDoc } from '@/shared/ui/RichTextEditor';
+import { emptyRichDoc, isRichDoc } from '@/shared/ui/RichTextEditor';
 import { useTicketEditor } from '../model/useTicketEditor';
 import TicketAttachmentSection from './TicketAttachmentSection';
 import TicketAttributePanel from './TicketAttributePanel';
 import TicketChildrenSection from './TicketChildrenSection';
 import TicketCommentSection from './TicketCommentSection';
-import TicketLabelBar from './TicketLabelBar';
+import TicketDescriptionEditor from './TicketDescriptionEditor';
 import TicketSection from './TicketSection';
-
-const RichTextEditor = lazy(() => import('@/shared/ui/RichTextEditor').then((m) => ({ default: m.RichTextEditor })));
+import { useTicketVocabulary } from '../model/useTicketVocabulary';
+import TicketStatusSelect from './TicketStatusSelect';
+import TicketWatchButton from './TicketWatchButton';
+import { formatTicketTimestamp } from '../lib/formatTicketTimestamp';
 
 export interface TicketDetailPanelProps {
   ticket: Ticket;
-  spaceKey: string;
+  projectKey: string;
   workspaceSlug: string;
   statuses: TicketStatus[];
   types: TicketType[];
@@ -50,7 +51,7 @@ export interface TicketDetailPanelProps {
  */
 export default function TicketDetailPanel({
   ticket,
-  spaceKey,
+  projectKey,
   workspaceSlug,
   statuses,
   types,
@@ -69,10 +70,15 @@ export default function TicketDetailPanel({
   onCreateLabel,
   onChangeParent,
 }: TicketDetailPanelProps) {
-  const type = types.find((t) => t.id === ticket.typeId);
   const archived = ticket.archivedAt !== null;
 
+  const type = types.find((t) => t.id === ticket.typeId);
+  // 版・チーム（プロジェクトの語彙）と、このチケットに付いている分・所属スプリント。
+  const vocabulary = useTicketVocabulary(workspaceSlug, ticket.projectId, ticket.id, ticket.teamId);
   const editor = useTicketEditor(ticket, canEdit && !archived, (input) => onUpdate(ticket.id, input));
+  // 添付とサブタスクの件数。数えるのは各節の中（自前の取得を持つ）なので、報告を受けて見出しへ回す。
+  const [attachmentCount, setAttachmentCount] = useState<number | null>(null);
+  const [childCount, setChildCount] = useState<number | null>(null);
   const docValue = isRichDoc(editor.doc) ? editor.doc : emptyRichDoc();
 
   return (
@@ -81,20 +87,25 @@ export default function TicketDetailPanel({
     // ホイール操作を飲み込んで器までスクロールが届かなくなる（実測で確認）。
     // flex-1 / min-h-0 も親が flex コンテナではないため効かない。素の中身として置く。
     <div className="px-3 py-3" tabIndex={0}>
-      <div className="mb-1.5 flex items-center gap-2">
-        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--color-text-secondary)]">
+      {/* 先頭行（パンくず）。親とキーで「どのチケットか」を示す（設計 13）。
+          器の見出しは「チケット」のままなので、身元はここが唯一の出どころになる。 */}
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)]">
+        {parentTicket ? (
+          <>
+            <span className="truncate">{parentTicket.title}</span>
+            <span className="text-[var(--color-text-faint)]">/</span>
+          </>
+        ) : (
+          <>
+            <span>親なし</span>
+            <span className="text-[var(--color-text-faint)]">/</span>
+          </>
+        )}
+        <TicketKeyBadge projectKey={projectKey} number={ticket.number} />
+        <span className="rounded bg-surface-2 px-1.5 py-0.5 font-semibold text-[var(--color-text-secondary)]">
           {type?.name ?? ''}
         </span>
-        <TicketKeyBadge spaceKey={spaceKey} number={ticket.number} />
       </div>
-
-      <TicketLabelBar
-        attached={ticket.labels}
-        allLabels={allLabels}
-        canEdit={canEdit && !archived}
-        onToggle={onToggleLabel}
-        onCreate={onCreateLabel}
-      />
 
       {canEdit && !archived ? (
         <input
@@ -103,69 +114,118 @@ export default function TicketDetailPanel({
           onChange={(e) => editor.changeTitle(e.target.value)}
           onBlur={editor.commitTitle}
           aria-label="題名"
-          className="mb-3 w-full bg-transparent text-lg font-bold text-[var(--color-text-primary)] focus:outline-none"
+          className="mb-3 w-full bg-transparent text-lg font-bold leading-snug text-[var(--color-text-primary)] focus:outline-none"
         />
       ) : (
-        <h6 className="mb-3 text-lg font-bold text-[var(--color-text-primary)]">{ticket.title}</h6>
+        <h6 className="mb-3 text-lg font-bold leading-snug text-[var(--color-text-primary)]">{ticket.title}</h6>
       )}
 
-      <TicketSection title="本文" action={<SaveStatusIndicator status={editor.saveStatus} />}>
-        <Suspense fallback={<Loading />}>
-          <RichTextEditor
-            value={docValue}
-            editable={canEdit && !archived}
-            onChange={editor.changeDoc}
-            ariaLabel="チケットの本文"
-            placeholder="本文を書く"
-            className="rte-compact"
-          />
-        </Suspense>
-      </TicketSection>
-
-      <TicketAttributePanel
-        ticket={ticket}
-        workspaceSlug={workspaceSlug}
-        spaceKey={spaceKey}
-        statuses={statuses}
-        principals={principals}
-        parentTicket={parentTicket}
-        canEdit={canEdit}
-        archived={archived}
-        busy={busy}
-        priority={editor.priority}
-        dueDate={editor.dueDate}
-        onChangeStatus={(statusId) => void onChangeStatus(statusId)}
-        onAssign={(principalId) => void onAssign(principalId)}
-        onUnassign={() => void onUnassign()}
-        onChangePriority={editor.changePriority}
-        onChangeDueDate={editor.changeDueDate}
-        onChangeParent={(parentId) => void onChangeParent(parentId)}
-      />
-
-      <TicketSection title="子">
-        <TicketChildrenSection workspaceSlug={workspaceSlug} ticketId={ticket.id} spaceKey={spaceKey} statuses={statuses} />
-      </TicketSection>
-
-      <TicketSection title="添付">
-        <TicketAttachmentSection workspaceSlug={workspaceSlug} ticketId={ticket.id} canEdit={canEdit && !archived} />
-      </TicketSection>
-
-      <TicketSection title="コメント">
-        <TicketCommentSection workspaceSlug={workspaceSlug} ticketId={ticket.id} compact />
-      </TicketSection>
-
-      {canEdit && (
-        <TicketSection title="操作">
+      {/* 状態の変更と、チケットそのものへの操作。題名のすぐ下に置く（設計 12 の並び）。 */}
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <TicketWatchButton workspaceSlug={workspaceSlug} ticketId={ticket.id} />
+        <TicketStatusSelect
+          statuses={statuses}
+          statusId={ticket.statusId}
+          canEdit={canEdit && !archived}
+          busy={busy}
+          onChange={(statusId) => void onChangeStatus(statusId)}
+        />
+        {canEdit && (
           <button
             type="button"
             onClick={() => void (archived ? onRestore() : onArchive())}
             disabled={busy}
-            className="rounded border border-surface-3 px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:opacity-50"
+            className="rounded-md border border-surface-3 px-2.5 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 disabled:opacity-50"
           >
             {archived ? '現役に戻す' : 'アーカイブ'}
           </button>
-        </TicketSection>
-      )}
+        )}
+      </div>
+
+      <TicketSection title="説明" collapsible>
+        <TicketDescriptionEditor value={docValue} editable={canEdit && !archived} onSave={editor.saveDoc} />
+      </TicketSection>
+
+      {/* 添付とサブタスクは「無いことの方が多い」節。中身は載せたまま畳んでおき、件数だけ
+          見出しに出す。開かずとも 0 と分かるので、空の説明文で縦を食わずに済む。
+          件数が入ったら開いた状態で始める（有るものを隠さない）。 */}
+      <TicketSection
+        title="添付ファイル"
+        collapsible
+        mountWhenClosed
+        count={attachmentCount ?? undefined}
+        defaultOpen={false}
+        key={`attachments-${ticket.id}`}
+      >
+        <TicketAttachmentSection
+          workspaceSlug={workspaceSlug}
+          ticketId={ticket.id}
+          canEdit={canEdit && !archived}
+          onCountChange={setAttachmentCount}
+        />
+      </TicketSection>
+
+      <TicketSection
+        title="サブタスク"
+        collapsible
+        mountWhenClosed
+        count={childCount ?? undefined}
+        defaultOpen={false}
+        key={`children-${ticket.id}`}
+      >
+        <TicketChildrenSection
+          workspaceSlug={workspaceSlug}
+          ticketId={ticket.id}
+          projectKey={projectKey}
+          statuses={statuses}
+          onCountChange={setChildCount}
+        />
+      </TicketSection>
+
+      <TicketSection title="詳細" collapsible>
+        <TicketAttributePanel
+          ticket={ticket}
+          workspaceSlug={workspaceSlug}
+          projectKey={projectKey}
+          principals={principals}
+          parentTicket={parentTicket}
+          canEdit={canEdit}
+          archived={archived}
+          busy={busy}
+          priority={editor.priority}
+          storyPoints={editor.storyPoints}
+          startDate={editor.startDate}
+          dueDate={editor.dueDate}
+          versions={vocabulary.versions}
+          teams={vocabulary.teams}
+          fixVersions={vocabulary.fixVersions}
+          sprint={vocabulary.sprint}
+          teamId={vocabulary.teamId}
+          onSetFixVersion={(versionId, attach) => void vocabulary.setFixVersion(versionId, attach)}
+          onChangeTeam={(next) => void vocabulary.changeTeam(next)}
+          allLabels={allLabels}
+          onToggleLabel={onToggleLabel}
+          onCreateLabel={onCreateLabel}
+          onAssign={(principalId) => void onAssign(principalId)}
+          onUnassign={() => void onUnassign()}
+          onChangePriority={editor.changePriority}
+          onChangeStoryPoints={editor.changeStoryPoints}
+          onChangeStartDate={editor.changeStartDate}
+          onChangeDueDate={editor.changeDueDate}
+          onChangeParent={(parentId) => void onChangeParent(parentId)}
+        />
+      </TicketSection>
+
+      {/* 作成・更新はどの項目より後ろ。読む順の最後に来るのが自然（設計 15）。 */}
+      <p className="mb-5 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+        作成日 {formatTicketTimestamp(ticket.createdAt)}
+        <br />
+        更新日 {formatTicketTimestamp(ticket.updatedAt)}
+      </p>
+
+      <TicketSection title="アクティビティ">
+        <TicketCommentSection workspaceSlug={workspaceSlug} ticketId={ticket.id} compact />
+      </TicketSection>
     </div>
   );
 }

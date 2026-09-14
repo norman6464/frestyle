@@ -190,8 +190,13 @@ export const Mention = Node.create<MentionOptions, MentionStorage>({
 /**
  * CommentComposerEnter は Enter を「改行」に固定する（送信は別のボタン、という既存の
  * ふつうの textarea と同じ振る舞いを保つ）。既定のブロック分割（新しい段落）ではなく
- * hardBreak を挿入する — 発言の本文は段落を持たない一列のノード配列なので、複数段落を
- * 作らせない。
+ * hardBreak を挿入する — 段落を Enter で増やせてしまうと、書式バーに無い操作で本文の
+ * 形が変わって読み手には区別が付かないため。
+ *
+ * 箇条書きの中だけは例外で、次の項目を作る（splitListItem）。ここを素通し（false）に
+ * して ListItem 自身の Enter に任せる手もあるが、keymap どうしの評価順は拡張の優先度で
+ * 決まって見えにくいので、この拡張の中で明示的に呼ぶ。項目の中で行を折りたいときは
+ * Shift-Enter（常に hardBreak）。
  *
  * '@' の候補一覧が開いている間は何もしない（false を返す）。tiptap は
  * addKeyboardShortcuts（keymap）と Suggestion の handleKeyDown（生の ProseMirror
@@ -203,13 +208,16 @@ export const Mention = Node.create<MentionOptions, MentionStorage>({
 export const CommentComposerEnter = Extension.create({
   name: 'commentComposerEnter',
   addKeyboardShortcuts() {
-    const handleEnter = () => {
-      if (mentionPluginKey.getState(this.editor.state)?.active) return false;
-      return this.editor.commands.setHardBreak();
-    };
     return {
-      Enter: handleEnter,
-      'Shift-Enter': handleEnter,
+      Enter: () => {
+        if (mentionPluginKey.getState(this.editor.state)?.active) return false;
+        if (this.editor.isActive('listItem')) return this.editor.commands.splitListItem('listItem');
+        return this.editor.commands.setHardBreak();
+      },
+      'Shift-Enter': () => {
+        if (mentionPluginKey.getState(this.editor.state)?.active) return false;
+        return this.editor.commands.setHardBreak();
+      },
     };
   },
 });

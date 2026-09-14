@@ -4,16 +4,16 @@ import { TicketRepository, type TicketCounts } from '@/entities/ticket';
 interface CountsTarget {
   key: string;
   workspaceSlug: string;
-  spaceId: string;
+  projectId: string;
 }
 
-function targetOf(workspaceSlug: string | undefined, spaceId: string | undefined): CountsTarget | null {
-  if (!workspaceSlug || !spaceId) return null;
-  return { key: `${workspaceSlug} ${spaceId}`, workspaceSlug, spaceId };
+function targetOf(workspaceSlug: string | undefined, projectId: string | undefined): CountsTarget | null {
+  if (!workspaceSlug || !projectId) return null;
+  return { key: `${workspaceSlug} ${projectId}`, workspaceSlug, projectId };
 }
 
 /**
- * useTicketSavedFilterCounts はサイドバー「保存した絞り込み」の件数バッジ
+ * useBacklogFilterCounts はバックログのサイドバー「保存した絞り込み」の件数バッジ
  * （自分の担当・期限切れ・未割り当て）を読む。件数はワークスペース全チケットの走査と
  * 自分の principal 解決が要るため、backend の GetTicketCounts を叩くだけでフロントでは
  * 計算しない。
@@ -21,14 +21,14 @@ function targetOf(workspaceSlug: string | undefined, spaceId: string | undefined
  * 失敗しても壊れず null（0 件と同じ表示）にする（HeaderRecentPagesNav と同じ fail-open。
  * ナビゲーションの補助表示でしかなく、ここでエラーを出しても行き止まりにしかならない）。
  */
-export function useTicketSavedFilterCounts(
+export function useBacklogFilterCounts(
   workspaceSlug: string | undefined,
-  spaceId: string | undefined,
+  projectId: string | undefined,
 ): TicketCounts | null {
   const [counts, setCounts] = useState<TicketCounts | null>(null);
   const active = useRef<CountsTarget | null>(null);
   const seq = useRef(0);
-  const target = targetOf(workspaceSlug, spaceId);
+  const target = targetOf(workspaceSlug, projectId);
   const targetKey = target?.key ?? null;
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export function useTicketSavedFilterCounts(
       return;
     }
     const request = ++seq.current;
-    void TicketRepository.fetchTicketCounts(target.workspaceSlug, target.spaceId)
+    void TicketRepository.fetchTicketCounts(target.workspaceSlug, target.projectId)
       .then((result) => {
         if (active.current?.key !== target.key || seq.current !== request) return;
         setCounts(result);

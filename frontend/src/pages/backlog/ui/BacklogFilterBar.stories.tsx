@@ -7,7 +7,7 @@ const statuses: TicketStatus[] = [
   {
     id: 'st-1',
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     name: 'To Do',
     category: 'todo',
     color: '#5b6b7a',
@@ -21,7 +21,7 @@ const statuses: TicketStatus[] = [
   {
     id: 'st-2',
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     name: '開発',
     category: 'in_progress',
     color: '#a0661a',
@@ -38,7 +38,7 @@ const types: TicketType[] = [
   {
     id: 'ty-1',
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     name: '開発タスク',
     hierarchyLevel: 0,
     color: '#2563eb',
@@ -54,8 +54,8 @@ const types: TicketType[] = [
 ];
 
 const labels: Label[] = [
-  { id: 'l-1', spaceId: 's-1', name: '不具合', color: '#b3392c', createdAt: '', updatedAt: '' },
-  { id: 'l-2', spaceId: 's-1', name: 'frontend', color: '#2f6b47', createdAt: '', updatedAt: '' },
+  { id: 'l-1', name: '不具合', color: '#b3392c', createdAt: '', updatedAt: '' },
+  { id: 'l-2', name: 'frontend', color: '#2f6b47', createdAt: '', updatedAt: '' },
 ];
 
 const meta = {

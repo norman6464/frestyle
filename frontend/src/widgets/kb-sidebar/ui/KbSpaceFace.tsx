@@ -3,7 +3,6 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   BookOpenIcon,
   ChevronUpDownIcon,
-  ClipboardDocumentListIcon,
   EllipsisHorizontalIcon,
   FolderIcon,
   PlusIcon,
@@ -23,8 +22,6 @@ export interface KbSpaceFaceProps {
   workspaceSlug: string;
   workspaceCanManage: boolean;
   archivedMode: boolean;
-  /** バックログの現役チケット数。まだ取れていなければ null（バッジを出さない）。 */
-  ticketCount: number | null;
   /** ページをスペース直下に作る（作成後の題名入力・遷移は呼び出し側が持つ）。 */
   onCreatePage: () => void;
   /** テンプレートから作った直後のページへの遷移・木への反映は呼び出し側が持つ。 */
@@ -55,15 +52,14 @@ function spaceInitials(key: string): string {
 /**
  * KbSpaceFace は「今いるスペース」の顔。角の印・名前・種別と鍵を出し、そこを押すと
  * 他のスペースへ移れる（切替はこのサイドバーが持つ — ヘッダーには置かない）。
- * その下に固定ナビ 5 項目（概要・ナレッジ・お気に入り・バックログ・メンバー）を並べ、
- * バックログには現役チケット数のバッジを付ける。
+ * その下に固定ナビ 4 項目（概要・ナレッジ・お気に入り・メンバー）を並べる。バックログは
+ * ここには置かない — ナレッジとは別の製品で、入れ物（プロジェクト）もスペースとは別のため。
  */
 export default function KbSpaceFace({
   space,
   workspaceSlug,
   workspaceCanManage,
   archivedMode,
-  ticketCount,
   onCreatePage,
   onCreatedFromTemplate,
   onRenameSpace,
@@ -212,13 +208,6 @@ export default function KbSpaceFace({
           <NavLink to={`/kb/spaces/${space.id}/favorites`} className={({ isActive }) => navItemClass(isActive)}>
             <StarIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span className="truncate">お気に入り</span>
-          </NavLink>
-          <NavLink to={`/kb/backlog/${space.id}`} className={({ isActive }) => navItemClass(isActive)}>
-            <ClipboardDocumentListIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate">バックログ</span>
-            {ticketCount !== null && (
-              <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-muted)]">{ticketCount}</span>
-            )}
           </NavLink>
           <NavLink to={`/kb/spaces/${space.id}/members`} className={({ isActive }) => navItemClass(isActive)}>
             <UsersIcon className="h-4 w-4 shrink-0" aria-hidden="true" />

@@ -23,7 +23,7 @@ function status(over: Partial<TicketStatus>): TicketStatus {
   return {
     id: 'st-1',
     workspaceId: 'w-1',
-    spaceId: 's-1',
+    projectId: 's-1',
     name: 'To Do',
     category: 'todo',
     color: '#5b6b7a',

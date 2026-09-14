@@ -6,7 +6,7 @@ import { routerWithParam, withApi, withToast, type ApiStubs } from '../../../../
 const status = (over: Record<string, unknown> = {}) => ({
   id: 'st-1',
   workspaceId: 'w-1',
-  spaceId: 's-1',
+  projectId: 'p-1',
   name: 'To Do',
   category: 'todo',
   color: '#5b6b7a',
@@ -21,7 +21,7 @@ const status = (over: Record<string, unknown> = {}) => ({
 const type = (over: Record<string, unknown> = {}) => ({
   id: 'ty-1',
   workspaceId: 'w-1',
-  spaceId: 's-1',
+  projectId: 'p-1',
   name: '開発タスク',
   hierarchyLevel: 0,
   color: '#2563eb',
@@ -40,7 +40,7 @@ const permission = { canView: true, canComment: true, canEdit: true, canManage: 
 const ticket = (over: Record<string, unknown> = {}) => ({
   id: 't-1',
   workspaceId: 'w-1',
-  spaceId: 's-1',
+  projectId: 'p-1',
   number: 102,
   typeId: 'ty-1',
   statusId: 'st-1',
@@ -51,13 +51,15 @@ const ticket = (over: Record<string, unknown> = {}) => ({
   createdByUserId: 1,
   createdAt: '2026-09-08T00:00:00Z',
   updatedAt: '2026-09-09T00:00:00Z',
-  labels: [{ id: 'l-1', spaceId: 's-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' }],
+  labels: [{ id: 'l-1', projectId: 'p-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' }],
   ancestors: [],
   permission,
   ...over,
 });
 
-const spaces = [{ id: 's-1', key: 'FRESTYLE', name: 'frestyle', visibility: 'workspace', createdAt: '2026-01-01T00:00:00Z' }];
+const projects = [
+  { id: 'p-1', workspaceId: 'w-1', key: 'frestyle', name: 'frestyle', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+];
 
 function resolvedResponse(ticketOver: Record<string, unknown> = {}, canEdit = true) {
   return {
@@ -69,23 +71,30 @@ function resolvedResponse(ticketOver: Record<string, unknown> = {}, canEdit = tr
 }
 
 // withApi は URL の部分一致で当たる（method は見ない）。より具体的なパスを、
-// それを含む一般的なパス（/kb/workspaces/acme/spaces 等）より先に置く。
+// それを含む一般的なパスより先に置く。
+//
+// とくに表示キーからの解決（'/tickets/t-1'）は最後に置くこと。この文字列は
+// '/workspaces/acme/tickets/t-1/history' などにも含まれるので、先に置くと履歴・発言・
+// 添付・子の宛先を全部飲み込み、どれも解決の応答（groups を持たない）が返る。
 function baseApi(over: ApiStubs = {}): ApiStubs {
   return {
-    '/kb/tickets/t-1': resolvedResponse(),
-    '/kb/workspaces/acme/tickets/t-1/history': { groups: [] },
-    '/kb/workspaces/acme/tickets/t-1/comments': { comments: [] },
-    '/kb/workspaces/acme/tickets/t-1/attachments': { attachments: [] },
-    '/kb/workspaces/acme/tickets/t-1/children': { tickets: [] },
+    '/workspaces/acme/tickets/t-1/history': { groups: [] },
+    '/workspaces/acme/tickets/t-1/comments': { comments: [] },
+    '/workspaces/acme/tickets/t-1/attachments': { attachments: [] },
+    '/workspaces/acme/tickets/t-1/children': { tickets: [] },
     '/profile/me': { userId: 1, displayName: 'norman6464', email: '', bio: '', avatarUrl: '', status: '', updatedAt: '' },
-    '/kb/workspaces/acme/spaces/s-1/ticket-statuses': { statuses: [status()] },
-    '/kb/workspaces/acme/spaces/s-1/ticket-types': { types: [type()] },
-    '/kb/workspaces/acme/spaces/s-1/labels': {
-      labels: [{ id: 'l-1', spaceId: 's-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' }],
+    '/workspaces/acme/projects/p-1/ticket-statuses': { statuses: [status()] },
+    '/workspaces/acme/projects/p-1/ticket-types': { types: [type()] },
+    '/workspaces/acme/labels': {
+      labels: [{ id: 'l-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' }],
     },
-    // 担当の表示名解決（usePrincipalNames）が経由するページ木。空でよい。
-    '/kb/workspaces/acme/spaces/s-1/pages': { pages: [], hasHiddenChildren: false },
-    '/kb/workspaces/acme/spaces': spaces,
+    // useTicketPage は表示キー（FRESTYLE-102）のために projects.key を単体で引く。
+    // 一覧の宛先より先に置く（前方一致だと一覧の形（{projects: [...]}）が返ってしまい、
+    // key が取れずキーが「-102」になる）。
+    '/workspaces/acme/projects/p-1': projects[0],
+    '/workspaces/acme/projects': { projects },
+    // 上のどれよりも広く当たるので最後（先頭のコメント参照）。
+    '/tickets/t-1': resolvedResponse(),
     ...over,
   };
 }
@@ -94,7 +103,7 @@ const meta = {
   title: 'pages/backlog/KbTicketPage',
   component: KbTicketPage,
   parameters: { layout: 'fullscreen' },
-  decorators: [withToast, routerWithParam('/kb/tickets/:ticketId', '/kb/tickets/t-1')],
+  decorators: [withToast, routerWithParam('/tickets/:ticketId', '/tickets/t-1')],
 } satisfies Meta<typeof KbTicketPage>;
 
 export default meta;
@@ -116,7 +125,7 @@ export const 祖先あり: Story = {
   decorators: [
     withApi(
       baseApi({
-        '/kb/tickets/t-1': resolvedResponse({
+        '/tickets/t-1': resolvedResponse({
           ancestors: [
             ticket({ id: 't-root', number: 3, title: '検索まわりの改善' }),
             ticket({ id: 't-mid', number: 9, title: '絞り込みの見直し' }),
@@ -142,7 +151,7 @@ export const 読むだけ: Story = {
   decorators: [
     withApi(
       baseApi({
-        '/kb/tickets/t-1': resolvedResponse({ permission: { ...permission, canEdit: false } }, false),
+        '/tickets/t-1': resolvedResponse({ permission: { ...permission, canEdit: false } }, false),
       }),
     ),
   ],
@@ -161,7 +170,7 @@ export const アーカイブ済み: Story = {
   decorators: [
     withApi(
       baseApi({
-        '/kb/tickets/t-1': resolvedResponse({ archivedAt: '2026-09-10T00:00:00Z' }),
+        '/tickets/t-1': resolvedResponse({ archivedAt: '2026-09-10T00:00:00Z' }),
       }),
     ),
   ],
@@ -177,7 +186,7 @@ export const アーカイブ済み: Story = {
 export const 見つからない: Story = {
   decorators: [
     withApi({
-      '/kb/tickets/t-1': () => {
+      '/tickets/t-1': () => {
         const err = new Error('not found') as Error & { isAxiosError: boolean; response: unknown };
         err.isAxiosError = true;
         err.response = { status: 404, data: { error: 'not_found' } };
@@ -196,7 +205,7 @@ export const 変更履歴あり: Story = {
   decorators: [
     withApi(
       baseApi({
-        '/kb/workspaces/acme/tickets/t-1/history': {
+        '/workspaces/acme/tickets/t-1/history': {
           groups: [
             {
               id: 'g-1',
