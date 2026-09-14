@@ -89,13 +89,19 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   const sprints = useSprints(workspaceSlug ?? undefined, project?.id);
   // どのチケットがどのスプリントに入っているかは ID だけ引き、中身は一覧の応答から引き当てる。
   const openSprints = sprints.sprints.filter((sprint) => sprint.state !== 'completed');
-  const { bySprint, error: sprintTicketsError } = useSprintTickets(
+  const { bySprint, error: sprintTicketsError, reload: reloadSprintTickets } = useSprintTickets(
     workspaceSlug ?? undefined,
     openSprints.map((sprint) => sprint.id),
   );
   // スプリント側が読めなかったことは必ず画面に出す。黙って隠すと、スプリントに
   // 入っているはずのチケットがバックログに並んだまま「そういう状態だ」と読めてしまう。
   const sprintError = sprints.error ?? sprintTicketsError;
+  // 一覧の「再読み込み」はチケットの一覧しか取り直さないので、スプリント側の失敗は
+  // そのままでは戻せない。知らせるだけで終わらせず、その場でやり直せるようにする。
+  const retrySprints = () => {
+    void sprints.reload();
+    void reloadSprintTickets();
+  };
   const { principals, nameOf, initialsOf } = usePrincipalNames(workspaceSlug ?? undefined);
 
   /**
@@ -310,9 +316,16 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       // 「スプリントの中身が空なのか、読めなかったのか」は必ず区別させる。
                       <p
                         role="status"
-                        className="mx-4 mt-3 rounded-md border border-surface-3 bg-surface-2 px-3 py-2 text-xs text-[var(--color-text-muted)]"
+                        className="mx-4 mt-3 flex items-center gap-2 rounded-md border border-surface-3 bg-surface-2 px-3 py-2 text-xs text-[var(--color-text-muted)]"
                       >
-                        {sprintError}
+                        <span>{sprintError}</span>
+                        <button
+                          type="button"
+                          onClick={retrySprints}
+                          className="rounded border border-surface-3 px-2 py-0.5 font-medium text-[var(--color-text-secondary)] hover:bg-surface-1"
+                        >
+                          再試行
+                        </button>
                       </p>
                     )}
                     <BacklogList
