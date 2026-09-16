@@ -1,8 +1,5 @@
 name: CI - Backend (Go)
 
-# 目的: backend/ の整形・lint・単体テスト（race）・生成物の drift 検査・ビルドと、実 PostgreSQL に対する結合テストを行う。
-# カバレッジは計測も閾値も設けない（数値を満たすためだけのテストが書かれるのを避ける）。
-# backend/** とこのファイル自身の変更でだけ発火する。
 on:
   push:
     branches: [main]
@@ -15,7 +12,6 @@ on:
       - 'backend/**'
       - '.github/workflows/ci-backend-go.yml'
 
-# PR への連続 push は古い実行をキャンセルする。main への push はキャンセルしない。
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -38,8 +34,6 @@ jobs:
           go-version: '1.26'
           cache-dependency-path: backend/go.sum
 
-      # Makefile が go install / curl で入れるツール（sqlc / gofumpt / atlas）のバイナリ。
-      # 版は Makefile に書いてあるので、Makefile が変わればキャッシュも作り直される。
       - name: Cache Go tool binaries
         uses: actions/cache@v6
         with:
@@ -58,7 +52,6 @@ jobs:
             exit 1
           fi
 
-      # 未整形があれば失敗。ローカルは `make fmt`（gofumpt -w）で直す。
       - name: gofumpt check
         run: |
           make ensure-gofumpt
@@ -70,15 +63,12 @@ jobs:
             exit 1
           fi
 
-      # govet / staticcheck / errcheck 等の既定 linter に加え、backend/.golangci.yml で有効化した linter を実行する。
-      # build tag は backend/.golangci.yml の run.build-tags で指定する（ここに args で足すとローカルと CI の対象集合がずれる）。
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
           working-directory: backend
 
-      # 実際に呼ぶコードパスに該当する既知 CVE だけを報告する。stdlib の CVE が頻出するため非ブロッキング。
       - name: govulncheck (advisory)
         continue-on-error: true
         run: |
@@ -95,9 +85,6 @@ jobs:
       - name: go test (race)
         run: go test -race ./...
 
-      # schema.hcl から生成する schema.gen.sql / 02-schema.sql が最新か検証する（make schema-gen 忘れの検知）。
-      # Atlas は runner の docker で使い捨て PostgreSQL を自分で立てる。dev-url は pg_trgm 入りの自前イメージ
-      # （backend/scripts/atlas-dev/Dockerfile）。schema.hcl の gin_trgm_ops 索引が素の postgres では inspect に失敗するため。
       - name: schema drift check (schema.hcl -> schema.gen.sql)
         run: |
           make schema-gen
@@ -108,11 +95,9 @@ jobs:
             exit 1
           fi
 
-      # sqlc 生成物（internal/adapter/persistence/sqlcgen/）がスキーマ・クエリと一致しているか検証する。
       - name: sqlc drift check
         run: |
           make sqlc
-          # 未追跡の新規生成ファイルも検知するため porcelain で判定する。
           if [ -n "$(git status --porcelain -- internal/adapter/persistence/sqlcgen/)" ]; then
             echo "::error::sqlc generated code is out of date. Run 'make sqlc' in backend/ and commit internal/adapter/persistence/sqlcgen/."
             git status --porcelain -- internal/adapter/persistence/sqlcgen/
@@ -120,16 +105,12 @@ jobs:
             exit 1
           fi
 
-      # sqlc.yaml の rules で WHERE の無い UPDATE / DELETE 等の危険な SQL を弾く（実 DB は不要）。
       - name: sqlc vet (dangerous SQL)
         run: make sqlc-vet
 
       - name: go build
         run: go build ./...
 
-  # 本物の PostgreSQL を docker compose で起動し、-tags=integration のテストだけを回す。
-  # 結合テストは testsupport の advisory lock で 1 テスト関数ずつ直列化されるため、1 ジョブにまとめると
-  # 所要時間が shard の合計になる。persistence（最も重い）とそれ以外の 2 shard を別 runner で並列に走らせる。
   integration:
     name: integration tests (postgres)
     strategy:
@@ -151,7 +132,6 @@ jobs:
       - name: go mod download
         run: go mod download
 
-      # Docker Hub の pull は transient に timeout することがあるためリトライする。
       - name: Start PostgreSQL (docker compose)
         run: |
           for i in 1 2 3; do
@@ -161,10 +141,6 @@ jobs:
           done
           docker compose -f docker-compose.integration.yml up -d --wait
 
-      # -run Integration で結合テストだけ回す（TEST_DATABASE_URL を持つこのジョブで単体を再実行すると
-      # env 依存の単体テストが誤検知し得る）。-race は付けない（競合検査は test ジョブが担う）。
-      # shard 1 = internal/adapter/persistence、shard 2 = それ以外を go list で動的に求める
-      # （新しいパッケージに結合テストが増えても shard 一覧の更新漏れで CI から漏れない）。
       - name: Run integration tests (-tags=integration, shard ${{ matrix.shard }})
         env:
           TEST_DATABASE_URL: postgres://frestyle:frestyle@localhost:5433/frestyle_integration?sslmode=disable

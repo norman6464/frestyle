@@ -84,7 +84,6 @@ pnpm run e2e:local    # ローカルビルド + API モックの認証導線 E2E
 - **単体**: 依存を interface で差し替え（**手書き fake が基本**・状態 / 戻り値を検証。`testify/mock` は相互作用が仕様のときだけ）
 - **結合**: handler（httptest で本物の Gin ルータ）/ repository（`//go:build integration` で本物の Postgres）
 - **E2E**: 本番スモーク + ローカルモック（`/auth/me` のレスポンスで認証状態を制御。本番の認証基盤/DB に触れない）
-- **カバレッジの閾値は設けない**。数値を満たすためだけのテストが書かれ、問題の検出に向かなくなるため。テストは「壊れたら困る振る舞い」に対して書く
 
 **テストの哲学は古典学派（Classicist / Detroit）**を採用する。本物を使えるところは本物（実 DB・実ルータ）、扱いにくい依存だけ手書き fake に差し替え、検証は状態 / 出力。`testify/mock`（相互作用検証）は「呼ばれたこと自体が仕様」のときだけ。詳細は [トップ README のテスト節](./README.md) と `IaC リポ/docs/25` / `26`。
 
@@ -96,7 +95,6 @@ PR では変更したパスに対応するものだけが走る（一覧と方�
 
 - backend（`backend/**`）: **gofumpt(整形強制)** / go mod tidy / golangci-lint / govulncheck(advisory) / **go test -race** / schema・sqlc drift / sqlc vet / build / 結合テスト(Postgres)
 - frontend（`frontend/**`）: tsc / ESLint(max-warnings=0) / build / **Vitest** / Storybook テスト / knip・size-limit(advisory) / ローカルモック E2E（Playwright）
-- 依存・Dockerfile 等の変更時: Trivy（修正版のある HIGH/CRITICAL で fail）
 - 本番スモーク E2E は PR では走らない（デプロイ後にだけ走る）
 
 本リポジトリに `docs/` フォルダは置かない（README はアプリケーションの説明に限定）。取り組んだ内容・手順は **Jira チケット**に残し、必要なら該当ディレクトリの README を更新する。設計・運用の詳細は private リポ（`frestyle-pdm` / `frestyle-infrastructure`）の `docs/` に置く。
@@ -124,22 +122,7 @@ lefthook install                 # リポジトリごとに 1 回
 
 テスト用の固定値など**機密でない**ものが誤検知されたら、`.gitleaks.toml` の `allowlist` に追加する（実機密を広く allowlist しないこと）。
 
-## 7. デプロイ（本番保護）
-
-いずれも**マージ即本番反映ではない**。手動 `workflow_dispatch`（`confirm=deploy`）で起動し、`deploy` job は
-`production` Environment（required reviewers = `@norman6464`）の**承認待ちで停止**する。
-
-- **backend**（`cd-backend.yml`）: Artifact Registry へ push → Cloud Run の新リビジョン作成 → `/api/v2/health` で確認
-- **frontend**（`cd-frontend.yml`）: Firebase Hosting へデプロイ → 配信された HTML が今回の資産を指すことを確認。`release/v*` タグ push でも起動できる
-
-```bash
-gh workflow run cd-backend.yml --ref main -f confirm=deploy
-gh workflow run cd-frontend.yml --ref main -f confirm=deploy
-```
-
-ロールバック手順は `.github/workflows/README.md` を参照。
-
-## 8. マージ権限
+## 7. マージ権限
 
 - `main` はブランチ保護下（force-push・削除は禁止）。**PR承認・CI green は GitHub 側の必須設定にはなっていない**（`required_pull_request_reviews.required_approving_review_count` は 0、`required_status_checks` は未設定。`enforce_admins` は on だが、そもそもゲートが無いため意味を持たない）。運用上はレビューを得てからのマージを基本とする。
 - リポジトリ管理者（`@norman6464`）は admin 権限で要件をバイパスできる（`gh pr merge --admin`）。緊急時・自分の PR の最終マージ用。

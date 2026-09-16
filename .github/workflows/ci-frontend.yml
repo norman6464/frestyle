@@ -1,8 +1,5 @@
 name: CI - Frontend (Vite + Vitest)
 
-# 目的: frontend/ の typecheck / lint / build、Vitest（unit・storybook）、knip / size-limit（非ブロッキング）を行う。
-# カバレッジは計測も閾値も設けない（数値を満たすためだけのテストが書かれるのを避ける）。デプロイは cd-frontend.yml。
-# frontend/**・CD の門番スクリプト・このファイル自身の変更でだけ発火する。
 on:
   pull_request:
     branches: [main]
@@ -17,7 +14,6 @@ on:
       - '.github/scripts/**'
       - '.github/workflows/ci-frontend.yml'
 
-# PR への連続 push は古い実行をキャンセルする。main への push はキャンセルしない。
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -37,11 +33,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # push しないので GITHUB_TOKEN を作業ツリーに残さない。
           persist-credentials: false
 
-      # pnpm は packageManager の版で入れ、setup-node の cache: 'pnpm' より前に置く（無いとキャッシュ復元が失敗する）。
-      # package_json_file はこの action に defaults.run.working-directory が効かないため明示する。
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -57,14 +50,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # test ファイルは tsconfig.exclude で除外済み。
       - name: TypeScript type-check
         run: pnpm exec tsc --noEmit
 
       - name: ESLint (max-warnings=0)
         run: pnpm exec eslint . --max-warnings=0
 
-      # ビルドが通るかだけ確認する。VITE_* はダミーで良い（コード量は本番と同じ）。
       - name: Build (verify only)
         env:
           VITE_API_BASE_URL: https://example.invalid
@@ -75,8 +66,6 @@ jobs:
           VITE_OIDC_SCOPE: openid profile email offline_access
         run: pnpm run build
 
-      # 本番バンドル（gzip）を計測して Job Summary に出す。上限は .size-limit.json。
-      # continue-on-error はこの step だけ（install / build の失敗は job を赤くする）。
       - name: Run size-limit (report only)
         continue-on-error: true
         run: |
@@ -92,18 +81,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 
-      # 認可の設定が無くてもビルドできること（発行者が無いあいだもフロントを出せること）を確かめる。
       - name: 認可の設定が無くてもビルドできる
         env:
           VITE_API_BASE_URL: https://example.invalid
         run: pnpm run build
 
-      # CD の門番（.github/scripts/check-auth-config.sh）が正例・負例とも正しく判定するかを確かめる。
       - name: 門番が正しく通し・正しく止めることを確かめる
         run: "${{ github.workspace }}/.github/scripts/test-check-auth-config.sh"
 
-      # 未使用ファイル / 未使用依存 / 未宣言依存を検出して Job Summary に出す（設定: frontend/knip.json）。
-      # continue-on-error はこの step だけ。knip の exit code は Summary 出力後もそのまま返す。
       - name: Run knip (report only)
         continue-on-error: true
         run: |
@@ -117,7 +102,6 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 
-  # Vitest 単体テスト（jsdom）。
   vitest-unit:
     name: Vitest unit
     runs-on: ubuntu-latest
@@ -146,7 +130,6 @@ jobs:
       - name: Run Vitest
         run: pnpm exec vitest run
 
-  # Storybook の story を headless Chromium で実行する（vitest.config.js の projects.storybook）。カバレッジは測らない。
   vitest-storybook:
     name: Vitest storybook
     runs-on: ubuntu-latest
@@ -172,7 +155,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Chromium 本体をキャッシュする（lockfile が変わらなければ playwright の版も変わらない）。
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v6
@@ -180,7 +162,6 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
 
-      # キャッシュが効いたときは入れ直さない（--with-deps の apt だけで 15〜25 秒かかる）。
       - name: Install Playwright Chromium (Storybook tests)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium

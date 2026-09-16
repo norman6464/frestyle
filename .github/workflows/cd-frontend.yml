@@ -1,8 +1,5 @@
 name: CD - Frontend Deploy to Firebase Hosting
 
-# 目的: フロントエンドをビルドして Firebase Hosting にデプロイする。
-# 起動は workflow_dispatch（手動）と release/v* タグ push のみ。
-
 on:
   workflow_dispatch:
     inputs:
@@ -21,17 +18,13 @@ on:
       - 'release/v*'
 
 env:
-  # WIF でデプロイ用サービスアカウントを引き受ける（長寿命のキーは発行しない）。
-  # 定義: frestyle-infrastructure の terraform（Firebase Hosting 用 WIF pool/provider）。
   GCP_WORKLOAD_IDENTITY_PROVIDER: projects/691431142080/locations/global/workloadIdentityPools/github/providers/github-actions
   GCP_SERVICE_ACCOUNT: frestyle-frontend-deploy@frestyle-507912.iam.gserviceaccount.com
-  # backend の GCP プロジェクト（frestyle-prod）とは別プロジェクト。表示名がどちらも「FreStyle」なので必ず ID で指定する。
   FIREBASE_PROJECT_ID: frestyle-507912
 
 permissions:
   contents: read
 
-# 並行 deploy でリリース順が入れ替わらないよう直列化する。
 concurrency:
   group: cd-frontend-${{ github.ref }}
   cancel-in-progress: false
@@ -55,8 +48,6 @@ jobs:
     timeout-minutes: 12
     needs: [guard]
     if: always() && (github.event_name == 'push' || needs.guard.result == 'success')
-    # install / build は第三者のコードを実行するため、この job には GCP を触れる権限を与えない
-    # （id-token: write があると、侵害された依存が本番サービスアカウントを引き受けられる）。
     permissions:
       contents: read
     defaults:
@@ -64,34 +55,20 @@ jobs:
         working-directory: ./frontend
 
     env:
-      # 公開 JS に焼き込まれる値なので Secret にしない。
       VITE_API_BASE_URL: https://api.frestyle.dev
 
-      # Firebase のクライアント設定は公開 JS に焼き込まれる値で Secret にしない（守りは GCIP の authorizedDomains）。
-      # 値は GCP プロジェクト frestyle-507912 の Web アプリのもの。
-      #
-      # auth_mode が unconfigured のときは空にする。値を焼き込んだまま「止める」と宣言すると check-auth-config.sh が落とす。
-      # 条件は != で書く。Actions の && / || は値を返す演算子で空文字は偽なので、`cond && '' || '値'` は常に '値' に落ちる。
-      # タグ push は inputs が無く auth_mode は空文字 → 「設定あり」側に倒れる。
       VITE_FIREBASE_API_KEY: ${{ inputs.auth_mode != 'unconfigured' && 'AIzaSyBccI4D5QmiY3M1il3Kq80yhSNCXVasJVw' || '' }}
       VITE_FIREBASE_AUTH_DOMAIN: ${{ inputs.auth_mode != 'unconfigured' && 'frestyle-507912.firebaseapp.com' || '' }}
       VITE_FIREBASE_PROJECT_ID: ${{ inputs.auth_mode != 'unconfigured' && 'frestyle-507912' || '' }}
 
-      # VITE_OIDC_* は渡さない。Dex（ローカル開発の発行者）専用で、本番ビルドに混ぜると resolveAuthMode が二重に設定を見つける。
-
     steps:
       - uses: actions/checkout@v6
 
-      # 認可の設定と宣言（auth_mode）の整合を .github/scripts/check-auth-config.sh で確かめる
-      # （正例・負例は ci-frontend.yml が毎回試す）。タグ push は inputs を持てないので auth_mode は configured になる。
       - name: 認可の設定と宣言が噛み合っているか確かめる
         env:
           AUTH_MODE: ${{ inputs.auth_mode || 'configured' }}
-        # build job は working-directory が ./frontend なので絶対パスで指す。
         run: "${{ github.workspace }}/.github/scripts/check-auth-config.sh"
 
-      # pnpm は packageManager の版で入れ、setup-node の cache: 'pnpm' より前に置く（無いとキャッシュ復元が失敗する）。
-      # package_json_file はこの action に defaults.run.working-directory が効かないため明示する。
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -107,15 +84,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # build は dist/app.html（SPA フォールバック）も作る（scripts/make-app-shell.mjs）。
       - name: Build
         run: pnpm run build
 
       - name: Verify SPA fallback shell
         run: test -f dist/app.html
 
-      # deploy job へはビルド成果物と firebase.json だけを渡す（deploy 側は checkout しない）。
-      # firebase.json の "public": "frontend/dist" はリポジトリ直下からの相対パスなので、ダウンロード側でも同じ配置に復元する。
       - name: Upload built assets
         uses: actions/upload-artifact@v7
         with:
@@ -131,37 +105,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [build]
-    # production Environment の required reviewers が承認するまで本番には反映されない。
     environment: production
-    # id-token: write は WIF に必要。第三者コードを実行しないこの job にだけ与える。checkout しないので contents は付けない
-    # （同一 run の artifact 取得に GITHUB_TOKEN の権限は要らない）。
     permissions:
       id-token: write
 
     steps:
-      # frontend-dist に frontend/dist と firebase.json の両方が入っている。path を . にしてリポジトリ直下からの相対配置のまま復元する。
       - name: Download built assets
         uses: actions/download-artifact@v7
         with:
           name: frontend-dist
           path: .
 
-      # WIF の一時認証情報は Application Default Credentials として書き出され、firebase-tools が自動で拾う
-      # （firebase login や FIREBASE_TOKEN は要らない）。
       - name: Authenticate to GCP (WIF)
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
-      # --non-interactive が無いと確認プロンプトで無応答のままハングする。
-      # 版は厳密に固定する。この job だけが本番デプロイ用 SA を引き受けており、版無しの npx は毎回最新版を取ってくる。上げるときは手で書き換える。
-      # --ignore-scripts で依存の install スクリプトを走らせない（deploy に要る経路は壊れない。唯一の native 依存 re2 は firebase serve 専用）。
       - name: Deploy to Firebase Hosting
         run: npx --yes --ignore-scripts firebase-tools@15.30.0 deploy --only hosting --project "${{ env.FIREBASE_PROJECT_ID }}" --non-interactive
 
-      # deploy 成功は「リリース登録できた」こと止まりなので、配信された実物を見る。
-      # 自動検証は常に成功する既定ドメイン frestyle-dev.web.app を対象にする（カスタムドメインは証明書のタイミングで遅れ得る）。
       - name: 配信された実物を確かめる
         env:
           AUTH_MODE: ${{ inputs.auth_mode || 'configured' }}
@@ -173,13 +136,11 @@ jobs:
             exit 1
           fi
 
-          # SPA の入口として最低限これが無いと、何も描画されない。
           if ! grep -q 'id="root"' /tmp/index.html; then
             echo "::error::配信された HTML に描画先が見つかりません"
             exit 1
           fi
 
-          # 200 でもエッジが古い HTML を返していることがある。今回の資産名（内容ハッシュ付き）を指しているかまで見る。
           missing_assets=""
           for asset in $(grep -o 'assets/[A-Za-z0-9._-]*\.js' frontend/dist/index.html | sort -u); do
             grep -q "${asset}" /tmp/index.html || missing_assets="${missing_assets} ${asset}"
@@ -189,7 +150,6 @@ jobs:
             exit 1
           fi
 
-          # 入口が指す JS を 1 本引いて、実際に取得できることまで確かめる。
           entry=$(grep -o 'assets/[A-Za-z0-9._-]*\.js' /tmp/index.html | head -1)
           entry_code=$(curl -sS -o /tmp/entry.js -w '%{http_code}' --max-time 30 "https://frestyle-dev.web.app/${entry}")
           if [ "${entry_code}" != "200" ]; then

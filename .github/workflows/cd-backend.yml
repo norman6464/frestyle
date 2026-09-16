@@ -1,16 +1,5 @@
 name: CD - Backend Deploy to Cloud Run
 
-# 目的: バックエンドの Docker image を Artifact Registry に push し、Cloud Run の新リビジョンを作る。
-# 起動は workflow_dispatch のみ。main への push では動かない。
-#
-# release/v* タグ push は持たない。本番デプロイ用の WIF binding（インフラ側 Terraform）は
-# refs/heads/main 上の実行にだけ許可されており、タグ経路を足すにはインフラ側の binding 追加が先。
-#
-# Cloud Run サービス・Artifact Registry・WIF は infra リポの Terraform が管理し、env / secret も Terraform 側が持つ
-# （ignore_changes でイメージは追跡しない）。本 CD はイメージの差し替えだけを行う。
-# 認証は GitHub OIDC + Workload Identity Federation。長寿命のサービスアカウントキーは発行しない。
-# 詳細は .github/workflows/README.md 参照
-
 on:
   workflow_dispatch:
     inputs:
@@ -20,20 +9,16 @@ on:
         type: string
 
 env:
-  # インフラ側 Terraform（backend_image_repo / github_workload_identity_provider /
-  # github_deploy_service_account の各 output）の実値。
   GCP_WORKLOAD_IDENTITY_PROVIDER: projects/654858357747/locations/global/workloadIdentityPools/github/providers/github-actions
   GCP_SERVICE_ACCOUNT: frestyle-prod-github-deploy@frestyle-prod.iam.gserviceaccount.com
   GCP_PROJECT_ID: frestyle-prod
   GCP_REGION: asia-northeast1
-  # Cloud Run サービスのコンテナは fre-style の 1 本のみ。
   IMAGE_REPO: asia-northeast1-docker.pkg.dev/frestyle-prod/frestyle-prod-backend/fre-style
   CLOUD_RUN_SERVICE: frestyle-prod-backend
 
 permissions:
   contents: read
 
-# 並行 deploy で意図しないイメージが反映されないよう直列化する。進行中の deploy は中断しない。
 concurrency:
   group: cd-backend-${{ github.ref }}
   cancel-in-progress: false
@@ -55,8 +40,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [guard]
-    # 第三者のコード（Go の依存モジュール）を取り込んでビルドするため、GCP を触れる権限は
-    # Artifact Registry への push に必要な id-token: write だけにする。
     permissions:
       id-token: write
       contents: read
@@ -87,8 +70,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # Cloud Run は arm64 イメージを受け付けない。buildx の既定 builder が multi-arch 設定でも
-      # 暗黙に変わらないよう --platform を明示する。
       - name: Build and push production image (Go backend)
         working-directory: backend
         run: |
@@ -105,7 +86,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    # production Environment の required reviewers が承認するまで本番には反映されない。
     environment: production
 
     steps:
@@ -118,7 +98,6 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # gcloud run services update は新リビジョンが Ready になるまで待ち、失敗すれば非 0 で終わる。
       - name: Deploy new revision to Cloud Run
         run: |
           gcloud run services update "${{ env.CLOUD_RUN_SERVICE }}" \
@@ -128,7 +107,6 @@ jobs:
             --image "${{ needs.build-and-push.outputs.image_tag }}" \
             --quiet
 
-      # gcloud の Ready 待ちはコンテナの起動確認まで。アプリ + DB 疎通は /api/v2/health で確かめる。
       - name: Verify health (Cloud Run direct URL)
         run: |
           for i in 1 2 3 4 5; do
@@ -142,7 +120,6 @@ jobs:
           echo "❌ Health check failed after 5 attempts"
           exit 1
 
-      # カスタムドメインは Google 管理証明書の発行タイミング次第で未発行のことがあるため失敗させない。
       - name: Verify health (custom domain, best-effort)
         continue-on-error: true
         run: |

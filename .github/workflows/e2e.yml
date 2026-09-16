@@ -1,9 +1,5 @@
 name: E2E - Playwright Smoke
 
-# 目的: Playwright + Chromium による E2E を 2 種類実行する。失敗時は report / trace / screenshot / video を artifact に残す。
-#   smoke        : 本番 (https://frestyle.dev) に対する認証前スモーク。cd-* の成功後（workflow_run）と手動でのみ走る
-#   local-mocked : ローカルビルド + API モックによる認証付き導線・主要画面の検証。PR / main push（frontend/** と本ファイル）で走る
-
 on:
   workflow_run:
     workflows:
@@ -27,8 +23,6 @@ on:
         required: false
         default: 'https://frestyle.dev'
 
-# PR への連続 push は古い実行をキャンセルする。デプロイ後の smoke は run ごとに別グループにして、
-# 連続デプロイ時に pending の run が 1 件に畳まれないようにする。
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'workflow_run' && github.run_id || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -39,7 +33,6 @@ permissions:
 jobs:
   smoke:
     name: Playwright Smoke (Chromium)
-    # workflow_run は CD が失敗・キャンセルされても発火するため、成功時に限る。
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
@@ -52,11 +45,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # デプロイした commit のテストを使う（既定は main の最新になる）。
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      # pnpm は packageManager の版で入れ、setup-node の cache: 'pnpm' より前に置く（無いとキャッシュ復元が失敗する）。
-      # package_json_file はこの action に defaults.run.working-directory が効かないため明示する。
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -79,7 +69,6 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
 
-      # キャッシュが効いたときは入れ直さない（--with-deps の apt だけで 15〜25 秒かかる）。
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
@@ -139,13 +128,10 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
 
-      # キャッシュが効いたときは入れ直さない（--with-deps の apt だけで 15〜25 秒かかる）。
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
 
-      # VITE_API_BASE_URL='' で同一オリジン相対（/api/v2/*）にし、index.html の CSP connect-src 'self' に収める。
-      # cross-origin のダミーホストだと CSP でブロックされ Playwright route にモックが届かない。
       - name: Build (same-origin / API モック前提)
         env:
           VITE_API_BASE_URL: ''
