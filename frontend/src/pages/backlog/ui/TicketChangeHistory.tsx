@@ -1,5 +1,6 @@
 import type { TicketChangeGroup } from '@/entities/ticket';
 import Loading from '@/shared/ui/Loading';
+import { formatMonthDay, formatHourMinute } from '@/shared/lib/formatters';
 
 export interface TicketChangeHistoryProps {
   history: TicketChangeGroup[];
@@ -51,7 +52,7 @@ export default function TicketChangeHistory({ history, loading, error }: TicketC
       {history.flatMap((group) =>
         group.items.map((item) => (
           <li key={item.id} className="flex items-baseline gap-2 text-xs">
-            <span className="flex-shrink-0 text-[var(--color-text-muted)]">{formatDateTime(group.createdAt)}</span>
+            <span className="flex-shrink-0 text-[var(--color-text-muted)]">{formatMonthDay(group.createdAt)} {formatHourMinute(group.createdAt)}</span>
             <span className="text-[var(--color-text-secondary)]">
               {FIELD_LABEL[item.field] ?? item.field}を
               {item.oldLabel && <b> {item.oldLabel}</b>}

@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import type { Notification } from '../model/types';
+import { formatDateTime } from '@/shared/lib/formatters';
 
 /**
  * 通知種別のバッジ文言。キーは backend が実際に入れる値と一致させること。
@@ -50,7 +51,7 @@ export default memo(function NotificationItem({ notification, onMarkAsRead }: No
           <p className="text-xs text-[var(--color-text-muted)]">{notification.body}</p>
           {/* 時刻は情報なので faint（飾り用の淡さ）ではなく muted を使う。faint は白地で 1.5:1 しかない。 */}
           <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
-            {new Date(notification.createdAt).toLocaleString('ja-JP')}
+            {formatDateTime(notification.createdAt)}
           </p>
         </div>
         {!notification.isRead && (
