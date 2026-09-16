@@ -1,12 +1,8 @@
 name: CI - Backend (Go)
 
-# backend/ に触れない PR・push では走らせない（Actions の課金分数の節約）。
-# 対象は backend/ 配下（go.mod / Makefile / docker-compose.integration.yml を含む）と
-# このファイル自身。ルート直下に backend のビルドへ影響するファイルは無い。
-#
-# 将来「必須ステータスチェック」にする場合は注意: paths で発火しなかったワークフローの
-# チェックは pending のまま残り PR がマージできなくなる。その時はここを外し、変更検知
-# ジョブ + 各ジョブの if: で飛ばす方式（判定ジョブ分 +1 分/イベント）へ切り替える。
+# 目的: backend/ の整形・lint・単体テスト（race + coverage）・生成物の drift 検査・ビルドと、
+# 実 PostgreSQL に対する結合テストを行い、単体 + 結合の合算カバレッジが floor を下回ったら落とす。
+# backend/** とこのファイル自身の変更でだけ発火する。
 on:
   push:
     branches: [main]
@@ -19,8 +15,7 @@ on:
       - 'backend/**'
       - '.github/workflows/ci-backend-go.yml'
 
-# PR に続けて push したとき、古い実行を止めて分数を節約する。main への push は止めない
-# （マージ後の main を最後まで検証する）。
+# PR への連続 push は古い実行をキャンセルする。main への push はキャンセルしない。
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -30,7 +25,7 @@ permissions:
 
 jobs:
   test:
-    name: vet / test / build
+    name: lint / test / build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -43,10 +38,17 @@ jobs:
           go-version: '1.26'
           cache-dependency-path: backend/go.sum
 
+      # Makefile が go install / curl で入れるツール（sqlc / gofumpt / atlas）のバイナリ。
+      # 版は Makefile に書いてあるので、Makefile が変わればキャッシュも作り直される。
+      - name: Cache Go tool binaries
+        uses: actions/cache@v6
+        with:
+          path: ~/go/bin
+          key: go-bin-${{ runner.os }}-${{ hashFiles('backend/Makefile') }}
+
       - name: go mod download
         run: go mod download
 
-      # go.mod / go.sum が tidy か検証する（未使用依存・取りこぼしを CI で検知）。
       - name: go mod tidy check
         run: |
           go mod tidy
@@ -56,15 +58,10 @@ jobs:
             exit 1
           fi
 
-      # gofumpt 未整形のコードがあれば失敗させる。
-      # gofmt は構文整形のみだが gofumpt はその上位互換で、空行・連続宣言の整列・
-      # 不要な括弧改行など「人が迷う整形」も機械的に統一する。Effective Go の
-      # "gofmt'd code is the standard" を一段強く CI で強制する入り口チェック。
-      # `gofumpt -l .` が 1 ファイルでも出したら fail にし、ローカル `make fmt`
-      # (= gofumpt -w) で直してもらう運用にする。生成コードは gofumpt clean のため除外不要。
+      # 未整形があれば失敗。ローカルは `make fmt`（gofumpt -w）で直す。
       - name: gofumpt check
         run: |
-          go install mvdan.cc/gofumpt@v0.10.0
+          make ensure-gofumpt
           unformatted=$("$(go env GOPATH)/bin/gofumpt" -l .)
           if [ -n "$unformatted" ]; then
             echo "::error::The following files are not gofumpt-formatted:"
@@ -73,29 +70,15 @@ jobs:
             exit 1
           fi
 
-      - name: go vet
-        run: go vet ./...
-
-      # golangci-lint(v2) で複数 linter を一括実行する。default の
-      # staticcheck / errcheck / govet / ineffassign / unused に加え、
-      # errorlint(errors.Is/As・%w 強制) / bodyclose(HTTP body リーク) /
-      # gosec(セキュリティ) / misspell / unconvert を有効化。設定は backend/.golangci.yml。
-      # 従来の単体 staticcheck step を置き換える(staticcheck は golangci に内包)。
-      # 解析対象の build tag は backend/.golangci.yml の run.build-tags で指定する
-      # (integration を含む)。ここに args で足すとローカルの `golangci-lint run` と
-      # CI で見る集合がずれ、「ローカルでは出るが CI では出ない」を再発させるため。
+      # govet / staticcheck / errcheck 等の既定 linter に加え、backend/.golangci.yml で有効化した linter を実行する。
+      # build tag は backend/.golangci.yml の run.build-tags で指定する（ここに args で足すとローカルと CI の対象集合がずれる）。
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
           working-directory: backend
 
-      # govulncheck は Go 公式の脆弱性スキャナ。実際に呼んでいるコードパスに該当する
-      # 既知 CVE だけを報告する。stdlib の CVE は Go パッチ追随次第で頻出するため、
-      # CI を止めずに「可視化」目的の非ブロッキング（continue-on-error）にする。
-      # ブロッキングなセキュリティ検査は golangci-lint の gosec（依存の脆弱性は trivy）が担う。
-      # 関数・ファイルをまたいだ taint tracking のような横断的なデータフロー検出は
-      # 現状カバーできていない（gosec は同一関数内のパターン検出が中心）。
+      # 実際に呼ぶコードパスに該当する既知 CVE だけを報告する。stdlib の CVE が頻出するため非ブロッキング。
       - name: govulncheck (advisory)
         continue-on-error: true
         run: |
@@ -109,17 +92,10 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # race detector + カバレッジ計測。rate limiter / JWT キャッシュ等の並行コードの
-      # データ競合を CI で検出する。
-      #
-      # ここは build tag 無し = 単体テストだけの計測で、これ単独では総カバレッジにならない。
-      # 実 PostgreSQL が要るコード（repository のクエリ）は 1 行も通らないため、
-      # 結合側の計測（integration ジョブ）と合算する。合算と floor 判定は coverage ジョブが行う。
+      # 単体テスト分のカバレッジ。結合分との合算と floor 判定は coverage ジョブが行う。
       - name: go test (race + coverage)
         run: go test -race -covermode=atomic -coverprofile=coverage-unit.out ./...
 
-      # 単体側のプロファイルを coverage ジョブへ渡す。ジョブごとに runner（ファイルシステム）が
-      # 別なので、ジョブをまたぐファイルの受け渡しは artifact 経由でしかできない。
       - name: Upload unit coverage profile
         uses: actions/upload-artifact@v7
         with:
@@ -129,18 +105,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      # スキーマ正本（internal/infra/database/schema/schema.hcl）から機械生成した
-      # schema.gen.sql / scripts/local-db-init/02-schema.sql が最新かを検証する。
-      # schema.hcl を直接触っても make schema-gen を忘れると、sqlc の入力・結合テスト・
-      # ローカル初回起動のどれもが古い定義のまま取り残される。
-      # Atlas は差分計算のために使い捨ての PostgreSQL を runner 上の docker デーモンで
-      # 自分で立てる（ubuntu-latest には標準で入っている）ので、このジョブが別途
-      # PostgreSQL サービスを用意する必要はない。dev-url は素の postgres イメージではなく
-      # pg_trgm を作成済みの自前イメージ（make ensure-atlas-dev-image・
-      # backend/scripts/atlas-dev/Dockerfile）——schema.hcl が gin_trgm_ops の索引を
-      # 宣言しており、拡張の無い dev db では inspect が失敗するため。
-      # Atlas の版は backend/Makefile の ATLAS_VERSION 固定（生成物は版で差分が出るため
-      # ここでは版を書かず Makefile を唯一の出どころにする）。
+      # schema.hcl から生成する schema.gen.sql / 02-schema.sql が最新か検証する（make schema-gen 忘れの検知）。
+      # Atlas は runner の docker で使い捨て PostgreSQL を自分で立てる。dev-url は pg_trgm 入りの自前イメージ
+      # （backend/scripts/atlas-dev/Dockerfile）。schema.hcl の gin_trgm_ops 索引が素の postgres では inspect に失敗するため。
       - name: schema drift check (schema.hcl -> schema.gen.sql)
         run: |
           make schema-gen
@@ -151,15 +118,11 @@ jobs:
             exit 1
           fi
 
-      # sqlc 生成物 (internal/adapter/persistence/sqlcgen/) がスキーマ・クエリと一致しているかを
-      # 検証する。schema.gen.sql は起動時（結合テスト・ローカル初回起動）に流す実 DDL そのものなので、
-      # 列の型を変えたのに `make sqlc` を忘れると「実スキーマと Go の型が食い違ったまま」マージされる。
-      # sqlc の版は backend/Makefile の SQLC_VERSION 固定（生成物は版で差分が出るため
-      # ここでは版を書かず Makefile を唯一の出どころにする）。
+      # sqlc 生成物（internal/adapter/persistence/sqlcgen/）がスキーマ・クエリと一致しているか検証する。
       - name: sqlc drift check
         run: |
           make sqlc
-          # 変更だけでなく未追跡の新規生成ファイルも検知するため porcelain で判定する。
+          # 未追跡の新規生成ファイルも検知するため porcelain で判定する。
           if [ -n "$(git status --porcelain -- internal/adapter/persistence/sqlcgen/)" ]; then
             echo "::error::sqlc generated code is out of date. Run 'make sqlc' in backend/ and commit internal/adapter/persistence/sqlcgen/."
             git status --porcelain -- internal/adapter/persistence/sqlcgen/
@@ -167,42 +130,16 @@ jobs:
             exit 1
           fi
 
-      # sqlc vet: sqlc.yaml 末尾の rules をクエリ 1 本ずつに当てる静的検査。
-      # drift check（上）は「生成物がクエリと一致しているか」しか見ない。vet は
-      # 「SQL としては正しいが実行すると事故る」書き方 — 例えば WHERE の無い
-      # UPDATE / DELETE — を弾く。ORM を廃して生 SQL に統一した以上、ORM が
-      # 暗黙に持っていた安全弁の代わりはここしかない。
-      # 実 DB は要らない（sqlc/db-prepare は使っていない。理由は sqlc.yaml に記載）。
+      # sqlc.yaml の rules で WHERE の無い UPDATE / DELETE 等の危険な SQL を弾く（実 DB は不要）。
       - name: sqlc vet (dangerous SQL)
         run: make sqlc-vet
 
       - name: go build
-        run: go build -trimpath -ldflags="-s -w" -o /tmp/frestyle-backend ./cmd/server
+        run: go build ./...
 
-      - name: Show binary size
-        run: ls -lh /tmp/frestyle-backend
-
-  # repository(adapter/persistence) 層の結合テストを、本物の PostgreSQL に対して回す。
-  # docker-compose.integration.yml で postgres-integration-test を起動し、
-  # -tags=integration のテストだけを実行する（単体ジョブとは独立）。
-  #
-  # 2 shard に分けて並列化する。結合テストを持つ 5 パッケージのうち
-  # internal/adapter/persistence 1 つだけが実測 112s と突出して重く、残り 4 つ
-  # （internal/handler・internal/infra/database・internal/testsupport・internal/usecase/user）
-  # を合わせても実測 94s 程度なので、「persistence だけ」と「それ以外全部」の 2 分割が
-  # 一番割に合う（3 分割以上にしても支配的な persistence 単独の時間は縮まらず、
-  # docker compose のイメージ pull・コンテナ起動という shard ごとに重複するオーバーヘッドが
-  # 増えるだけで損をする）。
-  #
-  # 「それ以外」を固定のパッケージ列挙にせず go list で動的に求めているのは、
-  # 将来 persistence 以外の新しいパッケージに結合テストが増えたとき、shard 一覧の
-  # 更新を忘れて CI から静かに漏れる事故を防ぐため（追加分は自動的に shard 2 に入る）。
+  # 本物の PostgreSQL を docker compose で起動し、-tags=integration のテストだけを回す。
   integration:
     name: integration tests (postgres)
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -218,9 +155,7 @@ jobs:
       - name: go mod download
         run: go mod download
 
-      # 本物の PostgreSQL を起動し healthcheck が通るまで待つ（--wait）。
-      # Docker Hub の pull は runner 上で transient に timeout することがあるためリトライする。
-      # shard ごとに別 runner（別 VM）なので、同じポートを使っても衝突しない。
+      # Docker Hub の pull は transient に timeout することがあるためリトライする。
       - name: Start PostgreSQL (docker compose)
         run: |
           for i in 1 2 3; do
@@ -230,48 +165,20 @@ jobs:
           done
           docker compose -f docker-compose.integration.yml up -d --wait
 
-      # -run Integration で結合テスト（命名規約: テスト名に Integration を含む）だけを回す。
-      # 単体テストは test ジョブで実行済みで、TEST_DATABASE_URL を env に持つこのジョブで
-      # 再実行すると env 依存の単体テストが誤検知し得るため。
-      #
-      # shard 1 = internal/adapter/persistence 単独。shard 2 = それ以外全部
-      # （go list ./... から persistence を除いた残りを xargs で go test の引数に渡す。
-      # シェル変数へ一度代入して展開すると、パッケージ一覧が改行区切りである一方
-      # word-splitting が効かない実行環境があり得るため、xargs に直接流して確実に
-      # 1 パッケージ 1 引数へ分解する）。
-      #
-      # カバレッジも取る。repository(internal/adapter/persistence) のクエリは実 DB を叩いて
-      # 初めて通るので、この計測がないと「結合テストで毎回検証しているコードが 0%」として
-      # 総カバレッジに乗ってしまう。合算と floor 判定は coverage ジョブが行う
-      # （shard ごとのプロファイルはファイル名を分け、coverage ジョブで両方まとめて合算する）。
-      #
-      # -covermode=atomic は test ジョブ（-race のため atomic）と mode を揃えるため。
-      # 既定は set で、mode の違うプロファイル同士は連結できない。
-      # -race は従来どおり付けない。ここは実 DB 相手の I/O 待ちが主で、並行コードの
-      # データ競合検査は test ジョブが担っているため。
-      - name: Run integration tests (-tags=integration, shard ${{ matrix.shard }})
+      # -run Integration で結合テストだけ回す（TEST_DATABASE_URL を持つこのジョブで単体を再実行すると
+      # env 依存の単体テストが誤検知し得る）。-covermode=atomic は test ジョブと揃える（mode が違うプロファイルは連結できない）。
+      # -race は付けない（競合検査は test ジョブが担う）。
+      - name: Run integration tests (-tags=integration)
         env:
           TEST_DATABASE_URL: postgres://frestyle:frestyle@localhost:5433/frestyle_integration?sslmode=disable
-        run: |
-          if [ "${{ matrix.shard }}" = "1" ]; then
-            go test -tags=integration -run Integration -covermode=atomic \
-              -coverprofile=coverage-integration-1.out ./internal/adapter/persistence
-          else
-            go list ./... | grep -v '/internal/adapter/persistence$' | xargs go test \
-              -tags=integration -run Integration -covermode=atomic \
-              -coverprofile=coverage-integration-2.out
-          fi
+        run: go test -tags=integration -run Integration -covermode=atomic -coverprofile=coverage-integration.out ./...
 
-      # 結合側のプロファイルを coverage ジョブへ渡す。ジョブごとに runner（ファイルシステム）が
-      # 別なので、ジョブをまたぐファイルの受け渡しは artifact 経由でしかできない。
-      # shard ごとにファイル名・artifact 名を分けないと、2 つの shard が同じ名前の
-      # artifact を同時に upload しようとして衝突する。
       - name: Upload integration coverage profile
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-integration-${{ matrix.shard }}
+          name: coverage-integration
           # path はジョブの working-directory ではなくワークスペース起点で解決される。
-          path: backend/coverage-integration-${{ matrix.shard }}.out
+          path: backend/coverage-integration.out
           if-no-files-found: error
           retention-days: 7
 
@@ -279,37 +186,14 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.integration.yml down -v
 
-  # 単体（test ジョブ）と結合（integration ジョブ）のカバレッジを合算し、floor 判定を 1 回だけ行う。
-  #
-  # なぜ計測が 2 つのジョブに分かれているのか:
-  #   - test ジョブ … -race（データ競合検出）付きで単体テストを回す。DB は要らない。
-  #   - integration ジョブ … 本物の PostgreSQL を起動して -tags=integration のテストを回す。
-  #     -race は付けない（データ競合の検査は test ジョブが担う）。
-  #   前提（-race の要否 / 実 DB の要否）が違うので 1 コマンドにまとめられず、並列に走らせている。
-  #   その代わり、カバレッジは 2 本のプロファイルに分かれる。
-  #
-  # なぜ合算が必要なのか:
-  #   repository（internal/adapter/persistence）のクエリは sqlc 生成コードを実 DB に対して
-  #   叩いて初めて実行される。単体側のプロファイルには 1 行も現れないので、単体だけを数えると
-  #   「結合テストが毎回検証しているコードがテストされていない」ように見え、総カバレッジが
-  #   実態よりかなり低く出る（単体のみ 45.0% → 合算 64.0%）。
-  #
-  # どう合算しているのか（外部ツールは使わない）:
-  #   Go の coverprofile は 1 行目が "mode: <set|count|atomic>"、以降が
-  #   「<ファイル>:<開始>,<終了> <実行文数> <実行回数>」の行の集まり。
-  #   mode 行を 1 本だけ残して残りを単純に連結すれば、go tool cover が読み込み時に
-  #   同じ位置のブロックを見つけて実行回数を足し合わせ、1 ブロックへ畳んでくれる
-  #   （golang.org/x/tools/cover ParseProfiles の挙動）。つまり「どちらかで実行されたら実行済み」
-  #   の合算になる。gocovmerge のような外部ツールは要らない。条件は mode が揃っていることだけで、
-  #   両ジョブとも -covermode=atomic を明示しているのはこのため。
+  # 単体（test）と結合（integration）のカバレッジを合算し、floor 判定を 1 回だけ行う。
+  # persistence のクエリは結合側でしか通らないので、単体だけでは実態より低く出る。
   coverage:
     name: coverage floor (unit + integration)
     runs-on: ubuntu-latest
     needs: [test, integration]
-    # needs のどちらかが失敗すると、既定ではこのジョブは実行されず skip になる。
-    # skip された check は branch protection 上「成功」と同じ扱いなので、
-    # 落ちているはずの PR がマージ可能に見えてしまう。always() で必ず起動し、
-    # 前段の結果は下の step で自分で確かめて落とす。
+    # needs が失敗すると既定ではこのジョブは skip になり、skip は branch protection 上「成功」扱いになる。
+    # always() で必ず起動し、前段の結果は下の step で自分で確かめて落とす。
     if: always()
     defaults:
       run:
@@ -328,70 +212,39 @@ jobs:
           go-version: '1.26'
           cache-dependency-path: backend/go.sum
 
-      # go tool cover -func は「どのブロックがどの関数か」を出すためにリポジトリのソースを
-      # 読む（プロファイルに入っているのはファイルパスと行範囲だけ）。読むファイルは
-      # モジュール経由で解決されるため、解決が依存の有無に左右されないよう先に揃えておく。
-      # setup-go のキャッシュが効くので通常は数秒で終わる。
+      # go tool cover -func はソースをモジュール経由で読むため、先に依存を揃える。
       - name: go mod download
         run: go mod download
 
-      # プロファイルを backend/ 直下へ取り出す（後続の go tool cover が
-      # モジュール内から相対解決できる場所に置く）。
       - name: Download unit coverage profile
         uses: actions/download-artifact@v7
         with:
           name: coverage-unit
           path: backend
 
-      # integration は 2 shard 分（coverage-integration-1 / coverage-integration-2）ある。
-      # ファイル名がそれぞれ違うので merge-multiple で同じディレクトリへまとめて出しても
-      # 衝突しない。
-      - name: Download integration coverage profiles (2 shards)
+      - name: Download integration coverage profile
         uses: actions/download-artifact@v7
         with:
-          pattern: coverage-integration-*
+          name: coverage-integration
           path: backend
-          merge-multiple: true
 
-      # 合算した総カバレッジを PR の Checks サマリに出し、floor を下回ったら fail させる。
-      #
-      # COVERAGE_MIN は回帰防止のための下限。domain の定数群 / docs（生成物）/ cmd /
-      # 薄い infra ラッパなど 0% のパッケージも分母に入る総計なので、個々のパッケージの
-      # 水準よりは低い値になる。
-      #
-      # 根拠（この値をどう決めたか）: ローカルで CI と同じ手順
-      # （-race 付き単体 + 専用 postgres コンテナに対する -tags=integration -run Integration）
-      # で計測した実測値。単体のみ 46.3% / 結合のみ 33.6% / 合算 68.1%（macOS）。
-      # 言語ランタイムの有無で環境差が出ていた internal/infra/sandbox は無くなったため、
-      # CI（Linux）側で計測し直しても大きくは動かない見込み。
-      # 実測 68.1% に対して 2pt ほどの余裕を見て 66 とする。テストを消す・減らす変更が
-      # 引っかかる程度には高く、環境差で誤検知しない程度には低い値。
+      # coverprofile は 1 行目が mode 行、以降が <file>:<range> <stmts> <count>。mode 行を 1 本残して残りを連結すれば
+      # go tool cover が同一ブロックの count を足し合わせる（外部ツール不要。条件は mode が揃っていること）。
+      # COVERAGE_MIN は 0% のパッケージ（domain の定数群 / cmd / 薄い infra）も分母に含む総計の下限。
       - name: merge profiles + coverage gate
         env:
           COVERAGE_MIN: '66'
         run: |
-          # mode が食い違うプロファイルは連結できない（go tool cover が読めない、
-          # あるいは実行回数の意味がずれる）。どれかの -covermode 指定が消えたら
-          # 黙って壊れるのではなく、ここで理由付きで落とす。
-          for f in coverage-unit.out coverage-integration-1.out coverage-integration-2.out; do
+          for f in coverage-unit.out coverage-integration.out; do
             if ! head -1 "$f" | grep -qx 'mode: atomic'; then
               echo "::error::${f} の 1 行目が 'mode: atomic' ではありません（各ジョブの -covermode=atomic を確認してください）: $(head -1 "$f")"
               exit 1
             fi
           done
 
-          # 結合テスト 2 shard 分をまず 1 本に合算する(表示用。集計対象自体は
-          # 下の coverage-merged.out がまとめて持つ)。
           {
             echo 'mode: atomic'
-            grep -h -v '^mode:' coverage-integration-1.out coverage-integration-2.out
-          } > coverage-integration.out
-
-          # mode 行を 1 本だけ書き、残りは全プロファイルをそのまま連結する。
-          # 同じブロックが複数回現れても go tool cover 側で実行回数が合算される。
-          {
-            echo 'mode: atomic'
-            grep -h -v '^mode:' coverage-unit.out coverage-integration-1.out coverage-integration-2.out
+            grep -h -v '^mode:' coverage-unit.out coverage-integration.out
           } > coverage-merged.out
 
           unit=$(go tool cover -func=coverage-unit.out | tail -1 | awk '{print $3}')
@@ -404,7 +257,7 @@ jobs:
             echo "| 計測 | カバレッジ |"
             echo "| --- | --- |"
             echo "| 単体のみ (race) | ${unit} |"
-            echo "| 結合のみ (postgres・2 shard 合算) | ${integration} |"
+            echo "| 結合のみ (postgres) | ${integration} |"
             echo "| **合算（判定対象）** | **${total}** |"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "unit: ${unit} / integration: ${integration} / merged: ${total} (min ${COVERAGE_MIN}%)"
