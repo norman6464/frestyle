@@ -182,12 +182,15 @@ jobs:
 
       # Chromium 本体をキャッシュする（lockfile が変わらなければ playwright の版も変わらない）。
       - name: Cache Playwright browsers
+        id: playwright-cache
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
 
+      # キャッシュが効いたときは入れ直さない（--with-deps の apt だけで 15〜25 秒かかる）。
       - name: Install Playwright Chromium (Storybook tests)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run Storybook tests (browser)

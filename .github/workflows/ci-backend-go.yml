@@ -138,8 +138,14 @@ jobs:
         run: go build ./...
 
   # 本物の PostgreSQL を docker compose で起動し、-tags=integration のテストだけを回す。
+  # 結合テストは testsupport の advisory lock で 1 テスト関数ずつ直列化されるため、1 ジョブにまとめると
+  # 所要時間が shard の合計になる。persistence（最も重い）とそれ以外の 2 shard を別 runner で並列に走らせる。
   integration:
     name: integration tests (postgres)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -168,17 +174,27 @@ jobs:
       # -run Integration で結合テストだけ回す（TEST_DATABASE_URL を持つこのジョブで単体を再実行すると
       # env 依存の単体テストが誤検知し得る）。-covermode=atomic は test ジョブと揃える（mode が違うプロファイルは連結できない）。
       # -race は付けない（競合検査は test ジョブが担う）。
-      - name: Run integration tests (-tags=integration)
+      # shard 1 = internal/adapter/persistence、shard 2 = それ以外を go list で動的に求める
+      # （新しいパッケージに結合テストが増えても shard 一覧の更新漏れで CI から漏れない）。
+      - name: Run integration tests (-tags=integration, shard ${{ matrix.shard }})
         env:
           TEST_DATABASE_URL: postgres://frestyle:frestyle@localhost:5433/frestyle_integration?sslmode=disable
-        run: go test -tags=integration -run Integration -covermode=atomic -coverprofile=coverage-integration.out ./...
+        run: |
+          if [ "${{ matrix.shard }}" = "1" ]; then
+            go test -tags=integration -run Integration -covermode=atomic \
+              -coverprofile=coverage-integration-1.out ./internal/adapter/persistence
+          else
+            go list ./... | grep -v '/internal/adapter/persistence$' | xargs go test \
+              -tags=integration -run Integration -covermode=atomic \
+              -coverprofile=coverage-integration-2.out
+          fi
 
       - name: Upload integration coverage profile
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-integration
+          name: coverage-integration-${{ matrix.shard }}
           # path はジョブの working-directory ではなくワークスペース起点で解決される。
-          path: backend/coverage-integration.out
+          path: backend/coverage-integration-${{ matrix.shard }}.out
           if-no-files-found: error
           retention-days: 7
 
@@ -222,11 +238,12 @@ jobs:
           name: coverage-unit
           path: backend
 
-      - name: Download integration coverage profile
+      - name: Download integration coverage profiles (2 shards)
         uses: actions/download-artifact@v7
         with:
-          name: coverage-integration
+          pattern: coverage-integration-*
           path: backend
+          merge-multiple: true
 
       # coverprofile は 1 行目が mode 行、以降が <file>:<range> <stmts> <count>。mode 行を 1 本残して残りを連結すれば
       # go tool cover が同一ブロックの count を足し合わせる（外部ツール不要。条件は mode が揃っていること）。
@@ -235,7 +252,7 @@ jobs:
         env:
           COVERAGE_MIN: '66'
         run: |
-          for f in coverage-unit.out coverage-integration.out; do
+          for f in coverage-unit.out coverage-integration-1.out coverage-integration-2.out; do
             if ! head -1 "$f" | grep -qx 'mode: atomic'; then
               echo "::error::${f} の 1 行目が 'mode: atomic' ではありません（各ジョブの -covermode=atomic を確認してください）: $(head -1 "$f")"
               exit 1
@@ -244,7 +261,12 @@ jobs:
 
           {
             echo 'mode: atomic'
-            grep -h -v '^mode:' coverage-unit.out coverage-integration.out
+            grep -h -v '^mode:' coverage-integration-1.out coverage-integration-2.out
+          } > coverage-integration.out
+
+          {
+            echo 'mode: atomic'
+            grep -h -v '^mode:' coverage-unit.out coverage-integration-1.out coverage-integration-2.out
           } > coverage-merged.out
 
           unit=$(go tool cover -func=coverage-unit.out | tail -1 | awk '{print $3}')
@@ -257,7 +279,7 @@ jobs:
             echo "| 計測 | カバレッジ |"
             echo "| --- | --- |"
             echo "| 単体のみ (race) | ${unit} |"
-            echo "| 結合のみ (postgres) | ${integration} |"
+            echo "| 結合のみ (postgres・2 shard 合算) | ${integration} |"
             echo "| **合算（判定対象）** | **${total}** |"
           } >> "$GITHUB_STEP_SUMMARY"
           echo "unit: ${unit} / integration: ${integration} / merged: ${total} (min ${COVERAGE_MIN}%)"
