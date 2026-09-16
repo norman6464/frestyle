@@ -1,7 +1,7 @@
 name: CI - Frontend (Vite + Vitest)
 
-# 目的: frontend/ の typecheck / lint / build、Vitest（unit・storybook）とカバレッジ閾値、
-# knip / size-limit（非ブロッキング）を行う。デプロイは cd-frontend.yml。
+# 目的: frontend/ の typecheck / lint / build、Vitest（unit・storybook）、knip / size-limit（非ブロッキング）を行う。
+# カバレッジは計測も閾値も設けない（数値を満たすためだけのテストが書かれるのを避ける）。デプロイは cd-frontend.yml。
 # frontend/**・CD の門番スクリプト・このファイル自身の変更でだけ発火する。
 on:
   pull_request:
@@ -117,9 +117,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 
-  # Vitest 単体テスト（jsdom）。カバレッジ閾値は vitest.config.js の thresholds がそのまま効く。
+  # Vitest 単体テスト（jsdom）。
   vitest-unit:
-    name: Vitest unit + coverage gate
+    name: Vitest unit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -143,16 +143,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run Vitest (coverage gate)
-        run: |
-          set -o pipefail
-          pnpm exec vitest run --coverage --coverage.reporter=text-summary | tee /tmp/vitest-out.txt
-          {
-            echo "## Frontend test coverage"
-            echo '```'
-            grep -A6 "Coverage report" /tmp/vitest-out.txt || true
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Run Vitest
+        run: pnpm exec vitest run
 
   # Storybook の story を headless Chromium で実行する（vitest.config.js の projects.storybook）。カバレッジは測らない。
   vitest-storybook:

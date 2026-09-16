@@ -26,17 +26,9 @@ export default defineConfig({
     }
   },
   test: {
+    // 閾値は設けない（数値を満たすためだけのテストが書かれるのを避ける）。手元で `vitest run --coverage` を見る用。
     coverage: {
-      provider: 'v8',
-      // 閾値ゲート: 下回ると `vitest run --coverage` が非ゼロ終了し CI を fail させる。
-      // 現状 lines 88.6 / statements 87.6 / functions 86.1 / branches 83.4 を基準に、
-      // 揺らぎ分のマージンを引いた floor。カバレッジ向上に合わせて適宜引き上げる。
-      thresholds: {
-        lines: 85,
-        statements: 85,
-        functions: 80,
-        branches: 78
-      }
+      provider: 'v8'
     },
     projects: [{
       extends: true,
