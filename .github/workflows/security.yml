@@ -1,0 +1,108 @@
+name: Security Scan (gitleaks + Trivy)
+
+# 目的: シークレット漏洩（gitleaks）と依存ライブラリの既知脆弱性・Dockerfile/IaC の誤設定
+# （Trivy）を 1 つのジョブで検知する。
+#
+# 旧 secret-scan.yml / trivy.yml を統合した。どちらも 10〜20 秒で終わるのに別ジョブだったため、
+# Actions の課金（ジョブごとに 1 分単位で切り上げ）が毎回 2 分かかっていた。1 ジョブに並べて 1 分にする。
+#
+# - gitleaks: PR / 週次で git 履歴全体をスキャン。GitHub の Push Protection（既知パターン）に加え、
+#   汎用パターン・高エントロピー文字列・既存履歴も含めて多層防御する。
+#   設定はリポジトリ直下の .gitleaks.toml（デフォルトルール + ローカル/テスト値の allowlist）
+# - Trivy: govulncheck（Go・呼び出しパス基準・advisory）を補完し、npm/Go の依存を CVE データベースで
+#   横断的に検査する。修正版が存在する HIGH/CRITICAL のみを fail 条件にして actionable に保つ。
+#   PR では依存・Dockerfile・compose 等が変わったときだけ走らせ、週次では常に走らせる。
+#   - --ignore-unfixed: 修正版が無い CVE では落とさない（対応不能なノイズを除外）
+#   - secret スキャンは gitleaks が担うため Trivy では無効
+#
+# main への push では走らせない。main は PR 経由でしか更新されず同じ差分を PR で検査済みで、
+# 週次の全履歴・全依存スキャンも残るため。
+
+on:
+  pull_request:
+  schedule:
+    - cron: '0 3 * * 1' # 毎週月曜 03:00 UTC
+  workflow_dispatch:
+
+# PR に続けて push したとき、古い実行を止めて分数を節約する。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: gitleaks + trivy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # 全履歴を取得して履歴スキャン（gitleaks）と差分検知（origin/<base>）を可能にする
+
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      # git 履歴全体をスキャンする。検出があれば exit code 1 で CI を落とす。
+      - name: Run gitleaks
+        run: gitleaks git --no-banner --redact --verbose --exit-code 1
+
+      # PR では Trivy の対象が変わったときだけ走らせる。
+      #   backend : go.mod / go.sum（依存 CVE）と Dockerfile / compose / .tf（misconfig）
+      #   frontend: package.json / pnpm-lock.yaml（依存 CVE）
+      #   共通    : .trivyignore とこのファイル自身
+      # schedule / 手動では常に両方走らせる。信頼できない base_ref は env 経由で渡す。
+      - name: Detect Trivy targets
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "origin/${BASE_REF}...HEAD")
+          common='^(\.trivyignore|\.github/workflows/security\.yml)$'
+          backend='^backend/(go\.mod|go\.sum|.*Dockerfile.*|.*\.ya?ml|.*\.tf)$'
+          frontend='^frontend/(package\.json|pnpm-lock\.yaml)$'
+          if echo "$changed" | grep -Eq "$common|$backend"; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$changed" | grep -Eq "$common|$frontend"; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "changed files:"; echo "$changed"
+
+      - name: Install Trivy
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.frontend == 'true'
+        env:
+          TRIVY_VERSION: '0.71.0'
+        run: |
+          curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -o /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          sudo mv /tmp/trivy /usr/local/bin/trivy
+          trivy --version
+
+      # backend: 依存 CVE（go.mod）+ Dockerfile の誤設定
+      - name: Trivy scan (backend)
+        if: steps.changes.outputs.backend == 'true'
+        run: trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress backend
+
+      # frontend: 依存 CVE（pnpm-lock.yaml）
+      - name: Trivy scan (frontend)
+        if: steps.changes.outputs.frontend == 'true'
+        run: trivy fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress frontend

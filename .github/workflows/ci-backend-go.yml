@@ -1,12 +1,29 @@
 name: CI - Backend (Go)
 
-# path フィルタは付けない: 必須ステータスチェック（branch protection）として使うため、
-# 対象外パスの PR でも必ず report されるよう全 PR / main push で走らせる。
+# backend/ に触れない PR・push では走らせない（Actions の課金分数の節約）。
+# 対象は backend/ 配下（go.mod / Makefile / docker-compose.integration.yml を含む）と
+# このファイル自身。ルート直下に backend のビルドへ影響するファイルは無い。
+#
+# 将来「必須ステータスチェック」にする場合は注意: paths で発火しなかったワークフローの
+# チェックは pending のまま残り PR がマージできなくなる。その時はここを外し、変更検知
+# ジョブ + 各ジョブの if: で飛ばす方式（判定ジョブ分 +1 分/イベント）へ切り替える。
 on:
   push:
     branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend-go.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend-go.yml'
+
+# PR に続けて push したとき、古い実行を止めて分数を節約する。main への push は止めない
+# （マージ後の main を最後まで検証する）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

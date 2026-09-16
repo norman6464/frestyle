@@ -4,13 +4,18 @@ name: Mutation Testing (non-blocking)
 # 実装を機械的に書き換えて (>=→> 等) 炙り出し、テストの実質的な質を測る。
 #
 # 運用 (Zenn の定番):
-#   - PR: 変更差分だけを light 実行。ジョブ単位で非ブロッキング (continue-on-error) にし、
-#     セットアップ失敗も含め既存 CI を一切ブロックしない。
+#   - PR: `mutation` ラベルを付けた PR だけ、変更差分を light 実行。ジョブ単位で
+#     非ブロッキング (continue-on-error) にし、セットアップ失敗も含め既存 CI を一切
+#     ブロックしない。以前は全 PR で走らせていたが、結果を見る運用も閾値も無い段階で
+#     毎回 1 分ずつ課金されていたため opt-in にした（Actions の課金分数の節約）。
 #   - nightly: モジュール/src 全体を実行し、レポートを artifact 保存。
 #   - 閾値 (gating) は本ワークフローでは設定しない。数値が安定してから別途。
 on:
   pull_request:
     branches: [main]
+    # labeled: ラベルを付けた瞬間に走る。synchronize: ラベル付きの PR に push したとき走る。
+    # ラベルの無い PR ではジョブが skip されるだけで課金されない。
+    types: [labeled, synchronize]
   schedule:
     - cron: '0 16 * * *' # 01:00 JST (夜間停止帯と無関係。本番には触れない)
   workflow_dispatch:
@@ -26,6 +31,8 @@ permissions:
 jobs:
   backend-mutation:
     name: Gremlins (Go mutation)
+    # PR では `mutation` ラベルが付いているときだけ。nightly / 手動は常に。
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'mutation')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     # ジョブ全体を非ブロッキングにする (checkout/setup/install の失敗でも PR を止めない)。
@@ -80,7 +87,7 @@ jobs:
   frontend-mutation:
     name: Stryker (JS/TS mutation)
     # 当面 nightly / 手動のみ。PR-light は初期テスト実行が CI で失敗する問題を
-    # 解消してから再有効化する。gremlins(backend)は PR でも回す。
+    # 解消してから再有効化する。gremlins(backend)は `mutation` ラベル付き PR でも回す。
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 40

@@ -6,10 +6,28 @@ CI と CD を **完全に分離** しています。テスト・ビルド検証�
 
 | ファイル | 種別 | トリガー | やること |
 |---|---|---|---|
-| `ci-backend-go.yml` | CI | PR / push to main（`backend/**`） | `go build` / `go vet` / `go test` + 結合テスト（実 PostgreSQL） |
-| `ci-frontend.yml` | CI | PR / push to main（`frontend/**`） | `pnpm test` + `pnpm run build` |
+| `ci-backend-go.yml` | CI | PR / push to main（`backend/**` と本ファイルの変更時のみ） | `go build` / `go vet` / `go test` + 結合テスト（実 PostgreSQL） |
+| `ci-frontend.yml` | CI | PR / push to main（`frontend/**` と本ファイルの変更時のみ） | lint / typecheck / build + Vitest（unit・storybook）+ knip + size-limit |
+| `e2e.yml` | CI | local-mocked: PR / push to main（`frontend/**`）・ smoke: **cd-* の成功後**（`workflow_run`）と手動 | Playwright。smoke は本番 https://frestyle.dev への外形監視、local-mocked は API モックでの導線検証 |
+| `security.yml` | CI | PR / 週次 / 手動 | gitleaks（履歴含む秘密スキャン）+ Trivy（依存 CVE・Dockerfile/IaC 誤設定。PR では依存・Dockerfile 等が変わったときだけ） |
+| `mutation.yml` | CI（非ブロッキング） | nightly / 手動 / **`mutation` ラベル付き PR** | gremlins（Go）・Stryker（JS/TS）のミューテーションテスト |
 | `cd-backend.yml` | CD | **workflow_dispatch のみ** | Artifact Registry へ push + Cloud Run の新リビジョン作成（Cloud Run サービス自体は infra リポの Terraform が管理。ECS / CFn 依存は撤去済み） |
 | `cd-frontend.yml` | CD | **workflow_dispatch のみ** + tag `release/v*` | Firebase Hosting へデプロイ |
+
+### 課金分数を増やさないための約束
+
+private リポジトリの Actions は無料枠が月 2,000 分で、**ジョブごとに 1 分単位で切り上げ**て課金される
+（10 秒のジョブも 1 分）。2026-09 に private のまま無料枠を使い切って CI が止まった。現在は public に
+しているため GitHub-hosted runner の分数は課金されないが、private に戻したときに同じ事故を繰り返さない
+よう、次の方針で運用している。
+
+- CI は変更に関係するパスでだけ発火させる（`paths:`）。branch protection の必須チェックにはしていない
+  （paths で発火しなかったワークフローのチェックは pending のまま残り、PR がマージできなくなるため。
+  必須にするなら変更検知ジョブ + `if:` 方式へ切り替える）
+- 全ワークフローに `concurrency` を付け、PR への連続 push では古い実行をキャンセルする（main push は止めない）
+- 数十秒で終わる検査を別ジョブにしない（切り上げで 1 分ずつ増える）。gitleaks と Trivy を 1 ジョブにしたのはこのため
+- 本番を叩くスモークはデプロイ後にだけ走らせる。PR の時点では本番は変わっていない
+- 新しいジョブや shard を足すときは、1 イベントあたりの課金分数がいくつ増えるかを PR に書く
 
 `cd-backend.yml` が tag push を持たないのは、本番デプロイ用の WIF binding（インフラ側
 Terraform）が `refs/heads/main` 上の実行にしか許可されていないため（`release/v*` タグは
@@ -121,6 +139,7 @@ gh run list --workflow=cd-backend.yml --limit 5
 |---|:-:|:-:|:-:|:-:|
 | ci-backend-go | ✅ (go vet/test/build + 結合テスト) | – | – | – |
 | ci-frontend | ✅ | – | – | – |
+| e2e / security / mutation | ✅ | – | – | – |
 | cd-backend | – | ✅ (Artifact Registry) | ✅ | – |
 | cd-frontend | – | – | – | ✅ |
 

@@ -1,13 +1,17 @@
 name: E2E - Playwright Smoke
 
-# 目的: 本番 (https://frestyle.dev) に対する
-# 認証前スモーク E2E を Playwright + Chromium で実行する。
+# 目的: Playwright + Chromium による E2E を 2 種類実行する。
+#   smoke        : 本番 (https://frestyle.dev) に対する認証前スモーク（外形監視）
+#   local-mocked : ローカルビルド + API モックによる認証付き導線・主要画面の検証
 # 失敗時は html report / trace / screenshot / video を artifact に残す。
 #
 # トリガー:
-#   - main への push（cd-frontend / cd-backend が走った後の確認）
-#   - PR (frontend / 主要 workflow / E2E 自体への変更)
-#   - workflow_dispatch（任意のタイミングで実行）
+#   - workflow_run（cd-frontend / cd-backend の完了後）: smoke のみ。
+#     本番を叩く検証は「本番が変わった直後」にだけ意味がある。以前は PR / main push でも
+#     走らせていたが、デプロイは手動なので PR や main push の時点で本番は変わっておらず、
+#     PR の検証にならないうえ、本番側の障害で無関係な PR が赤くなっていた。
+#   - PR / main push (frontend / 本ファイルへの変更): local-mocked のみ
+#   - workflow_dispatch（任意のタイミングで実行）: smoke のみ
 #
 # CodeBuild ではなく Actions に統一する判断:
 #   - API は public ALB 経由でアクセス可能で VPC 内疎通は不要
@@ -15,13 +19,16 @@ name: E2E - Playwright Smoke
 #   - 既存 cd-* / scheduled-* と同 platform に集約してログ・通知を一元管理
 
 on:
+  workflow_run:
+    workflows:
+      - 'CD - Frontend Deploy to Firebase Hosting'
+      - 'CD - Backend Deploy to Cloud Run'
+    types: [completed]
   push:
     branches: [main]
     paths:
       - 'frontend/**'
       - '.github/workflows/e2e.yml'
-      - '.github/workflows/cd-frontend.yml'
-      - '.github/workflows/cd-backend.yml'
   pull_request:
     branches: [main]
     paths:
@@ -34,12 +41,22 @@ on:
         required: false
         default: 'https://frestyle.dev'
 
+# PR に続けて push したとき、古い実行を止めて分数を節約する。main への push は止めない。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 jobs:
   smoke:
     name: Playwright Smoke (Chromium)
+    # デプロイが成功した直後と手動実行のときだけ。workflow_run は CD が失敗・キャンセル
+    # されても発火するため、conclusion を見て成功時に限る。
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -96,6 +113,8 @@ jobs:
   # 本番の発行者 / DB に触れず、/api/v2/** を Playwright route でモックして検証する。
   local-mocked:
     name: Playwright Local (mocked API)
+    # PR と main push のときだけ（本番のデプロイ後・手動実行では走らせない）。
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:

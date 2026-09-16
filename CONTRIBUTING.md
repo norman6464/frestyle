@@ -111,7 +111,7 @@ PR では次が走る（詳細は `IaC リポ/docs/23` / `24`）:
 | 層 | 仕組み |
 |---|---|
 | push 時 | **GitHub Push Protection**（既知パターンの秘密を含む push をブロック。有効化済み） |
-| CI | **gitleaks**（`.github/workflows/secret-scan.yml`）— PR / main / 週次で**履歴含め**スキャン。検出で CI が落ちる |
+| CI | **gitleaks**（`.github/workflows/security.yml`）— PR / 週次で**履歴含め**スキャン。検出で CI が落ちる |
 | コミット前（手元） | **lefthook + gitleaks** の pre-commit フック |
 
 pre-commit フックの有効化（推奨）:
