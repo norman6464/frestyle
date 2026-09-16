@@ -11,7 +11,7 @@ FreStyle の開発に参加するための規約をまとめます。
 
 ## 1. セットアップ
 
-起動手順・ローカルログイン（Dex）・DB のやり直し方は [トップ README](./README.md#セットアップ) にまとめてある。ここでは重複させない（2 箇所に同じ手順を書くと片方だけ更新されてドリフトする — 実際に `frontend/.env` と `.env.example` の間で起きた）。
+起動手順・ローカルログイン（Dex）・DB のやり直し方は [トップ README](./README.md#セットアップ) にまとめてある。ここでは重複させない（2 箇所に同じ手順を書くと片方だけ更新されてドリフトする）。
 
 DB 接続情報・環境変数は `.env`（gitignore 済）に置き、**絶対にコミットしない**。
 
@@ -57,7 +57,7 @@ handler  →  usecase  →  repository(port) / infra  →  domain
 
 - handler は repository / infra を直接呼ばず、必ず usecase を経由する（wiring の `router.go` / `routes_*.go` は例外）
 - usecase は `*gin.Context` / `net/http` を参照しない
-- domain は他層に依存しない（標準ライブラリ + GORM tag のみ）
+- domain は他層に依存しない（標準ライブラリのみ）
 - repository は **interface（`usecase/repository/`）** と **実装（`adapter/persistence/`）** を分離
 - 1 usecase = 1 ビジネスルール（`struct + New...UseCase + Execute`）。集約系の例外は許容
 
@@ -77,7 +77,7 @@ make test-integration  # docker-compose で本物の PostgreSQL に対する結�
 # フロントエンド
 cd frontend
 pnpm run test:run     # Vitest
-ppnpm run e2e          # Playwright 本番スモーク
+pnpm run e2e          # Playwright 本番スモーク
 pnpm run e2e:local    # ローカルビルド + API モックの認証導線 E2E（要 build）
 ```
 
@@ -92,11 +92,13 @@ pnpm run e2e:local    # ローカルビルド + API モックの認証導線 E2E
 
 ## 5. CI / 品質ゲート
 
-PR では次が走る（詳細は `IaC リポ/docs/23` / `24`）:
+PR では変更したパスに対応するものだけが走る（一覧と方針は `.github/workflows/README.md`）:
 
-- backend: **gofumpt(整形強制)** / vet / staticcheck / go mod tidy / **race + coverage(floor)** / govulncheck(advisory) / build / 結合テスト(Postgres)
-- frontend: tsc / ESLint(max-warnings=0) / **Vitest + coverage 閾値** / build
-- 全体: E2E（Playwright スモーク + ローカルモック）
+- backend（`backend/**`）: **gofumpt(整形強制)** / go mod tidy / golangci-lint / govulncheck(advisory) / **race + coverage** / schema・sqlc drift / sqlc vet / build / 結合テスト(Postgres) / **合算カバレッジ floor**（`COVERAGE_MIN`）
+- frontend（`frontend/**`）: tsc / ESLint(max-warnings=0) / build / **Vitest + coverage 閾値** / Storybook テスト / knip・size-limit(advisory) / ローカルモック E2E（Playwright）
+- 依存・Dockerfile 等の変更時: Trivy（修正版のある HIGH/CRITICAL で fail）
+- opt-in: `mutation` ラベルを付けた PR で gremlins（非ブロッキング）
+- 本番スモーク E2E は PR では走らない（デプロイ後にだけ走る）
 
 本リポジトリに `docs/` フォルダは置かない（README はアプリケーションの説明に限定）。取り組んだ内容・手順は **Jira チケット**に残し、必要なら該当ディレクトリの README を更新する。設計・運用の詳細は private リポ（`frestyle-pdm` / `frestyle-infrastructure`）の `docs/` に置く。
 
@@ -111,7 +113,7 @@ PR では次が走る（詳細は `IaC リポ/docs/23` / `24`）:
 | 層 | 仕組み |
 |---|---|
 | push 時 | **GitHub Push Protection**（既知パターンの秘密を含む push をブロック。有効化済み） |
-| CI | **gitleaks**（`.github/workflows/security.yml`）— PR / 週次で**履歴含め**スキャン。検出で CI が落ちる |
+| PR レビュー | **CodeRabbit**（gitleaks を含む。手動トリガー） |
 | コミット前（手元） | **lefthook + gitleaks** の pre-commit フック |
 
 pre-commit フックの有効化（推奨）:
@@ -125,20 +127,18 @@ lefthook install                 # リポジトリごとに 1 回
 
 ## 7. デプロイ（本番保護）
 
-いずれも**マージ即本番反映ではない**（誤起動の保険）。
+いずれも**マージ即本番反映ではない**。手動 `workflow_dispatch`（`confirm=deploy`）で起動し、`deploy` job は
+`production` Environment（required reviewers = `@norman6464`）の**承認待ちで停止**する。
 
-- **backend は CodePipeline（ECS Blue/Green）経由**。green を**本番投入前に test listener で検証**してから、CodeDeploy で手動トラフィック移行 → Canary（10%→全体）。異常時は 5xx アラームで**自動ロールバック**。切替はダウンタイムゼロ。
-  - 注: ECS が CODE_DEPLOY controller のため、旧 `cd-backend.yml`（GitHub Actions ローリング）の `force-new-deployment` は**使えない**。backend のデプロイは CodePipeline 一本。
-- **frontend は手動**（`workflow_dispatch` + `confirm=deploy`）。`production` Environment（required reviewers = `@norman6464`）の**承認待ちで停止**する。
+- **backend**（`cd-backend.yml`）: Artifact Registry へ push → Cloud Run の新リビジョン作成 → `/api/v2/health` で確認
+- **frontend**（`cd-frontend.yml`）: Firebase Hosting へデプロイ → 配信された HTML が今回の資産を指すことを確認。`release/v*` タグ push でも起動できる
 
 ```bash
-# backend: パイプライン起動 → green を test listener で検証 → CodeDeploy でトラフィック移行を承認
-aws codepipeline start-pipeline-execution --name frestyle-prod-pipeline
-# frontend: 起動 → GitHub Actions 画面で承認すると反映される
-gh workflow run "CD - Frontend Deploy to S3 + CloudFront" -R norman6464/frestyle -f confirm=deploy
+gh workflow run cd-backend.yml --ref main -f confirm=deploy
+gh workflow run cd-frontend.yml --ref main -f confirm=deploy
 ```
 
-> backend の Blue/Green デプロイ手順の詳細（test 検証・トラフィック移行・ロールバック）は IaC リポの `docs/30` を参照。
+ロールバック手順は `.github/workflows/README.md` を参照。
 
 ## 8. マージ権限
 
