@@ -10,7 +10,6 @@ CI と CD を **完全に分離** しています。テスト・ビルド検証�
 | `ci-frontend.yml` | CI | PR / push to main（`frontend/**`・`.github/scripts/**`・本ファイルの変更時のみ） | tsc / ESLint / build / size-limit(advisory) / knip(advisory) + Vitest unit（カバレッジ閾値）+ Storybook テスト |
 | `e2e.yml` | CI | local-mocked: PR / push to main（`frontend/**`）・ smoke: **cd-* の成功後**（`workflow_run`）と手動 | Playwright。smoke は本番 https://frestyle.dev への外形監視、local-mocked は API モックでの導線検証 |
 | `security.yml` | CI | PR（依存・Dockerfile・compose 等の変更時のみ）/ 週次 / 手動 | Trivy（依存 CVE・Dockerfile/IaC 誤設定。修正版のある HIGH/CRITICAL で fail） |
-| `mutation.yml` | CI（非ブロッキング） | 週次 / 手動 / **`mutation` ラベル付き PR** | gremlins（Go）のミューテーションテスト。Stryker（JS/TS）は CI から外しており手元で `pnpm exec stryker run` |
 | `cd-backend.yml` | CD | **workflow_dispatch のみ** | Artifact Registry へ push + Cloud Run の新リビジョン作成（Cloud Run サービス自体は infra リポの Terraform が管理） |
 | `cd-frontend.yml` | CD | **workflow_dispatch のみ** + tag `release/v*` | Firebase Hosting へデプロイ |
 
@@ -120,7 +119,7 @@ gh run list --workflow=cd-backend.yml --limit 5
 |---|:-:|:-:|:-:|:-:|
 | ci-backend-go | ✅ (lint / test / build + 結合テスト) | – | – | – |
 | ci-frontend | ✅ | – | – | – |
-| e2e / security / mutation | ✅ | – | – | – |
+| e2e / security | ✅ | – | – | – |
 | cd-backend | – | ✅ (Artifact Registry) | ✅ | – |
 | cd-frontend | – | – | – | ✅ |
 

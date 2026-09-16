@@ -97,7 +97,6 @@ PR では変更したパスに対応するものだけが走る（一覧と方�
 - backend（`backend/**`）: **gofumpt(整形強制)** / go mod tidy / golangci-lint / govulncheck(advisory) / **race + coverage** / schema・sqlc drift / sqlc vet / build / 結合テスト(Postgres) / **合算カバレッジ floor**（`COVERAGE_MIN`）
 - frontend（`frontend/**`）: tsc / ESLint(max-warnings=0) / build / **Vitest + coverage 閾値** / Storybook テスト / knip・size-limit(advisory) / ローカルモック E2E（Playwright）
 - 依存・Dockerfile 等の変更時: Trivy（修正版のある HIGH/CRITICAL で fail）
-- opt-in: `mutation` ラベルを付けた PR で gremlins（非ブロッキング）
 - 本番スモーク E2E は PR では走らない（デプロイ後にだけ走る）
 
 本リポジトリに `docs/` フォルダは置かない（README はアプリケーションの説明に限定）。取り組んだ内容・手順は **Jira チケット**に残し、必要なら該当ディレクトリの README を更新する。設計・運用の詳細は private リポ（`frestyle-pdm` / `frestyle-infrastructure`）の `docs/` に置く。
