@@ -6,9 +6,10 @@ CI と CD を **完全に分離** しています。テスト・ビルド検証�
 
 | ファイル | 種別 | トリガー | やること |
 |---|---|---|---|
-| `ci-backend-go.yml` | CI | PR / push to main（`backend/**`） | `go build` / `go vet` / `go test` + 結合テスト（実 PostgreSQL） |
-| `ci-frontend.yml` | CI | PR / push to main（`frontend/**`） | `pnpm test` + `pnpm run build` |
-| `cd-backend.yml` | CD | **workflow_dispatch のみ** | Artifact Registry へ push + Cloud Run の新リビジョン作成（Cloud Run サービス自体は infra リポの Terraform が管理。ECS / CFn 依存は撤去済み） |
+| `ci-backend-go.yml` | CI | PR / push to main（`backend/**` と本ファイルの変更時のみ） | gofumpt / go mod tidy / golangci-lint / govulncheck(advisory) / `go test -race` / schema・sqlc drift / sqlc vet / `go build` + 結合テスト（実 PostgreSQL、2 shard）|
+| `ci-frontend.yml` | CI | PR / push to main（`frontend/**`・`.github/scripts/**`・本ファイルの変更時のみ） | tsc / ESLint / build / size-limit(advisory) / knip(advisory) + Vitest unit + Storybook テスト |
+| `e2e.yml` | CI | local-mocked: PR / push to main（`frontend/**`）・ smoke: **cd-* の成功後**（`workflow_run`）と手動 | Playwright。smoke は本番 https://frestyle.dev への外形監視、local-mocked は API モックでの導線検証 |
+| `cd-backend.yml` | CD | **workflow_dispatch のみ** | Artifact Registry へ push + Cloud Run の新リビジョン作成 |
 | `cd-frontend.yml` | CD | **workflow_dispatch のみ** + tag `release/v*` | Firebase Hosting へデプロイ |
 
 `cd-backend.yml` が tag push を持たないのは、本番デプロイ用の WIF binding（インフラ側
@@ -27,11 +28,9 @@ API の URL・GCIP（Firebase Authentication）のクライアント設定（`VI
 Firebase のクライアント設定を Secret にしないのは、**隠せる種類の値ではない**ため。
 ビルド成果物の JS に焼き込まれ、frestyle.dev を開いた誰もが読める。鍵ではなく
 「どのプロジェクトへ話しかけるか」の宛先で、守りは GCIP 側の許可ドメイン
-（`authorizedDomains`）と Auth の規則が担う。Secret に入れると隠せている気がして
-実際には隠れていない、という食い違いだけが残る。
+（`authorizedDomains`）と Auth の規則が担う。
 
-（旧 `VITE_OIDC_AUTHORIZE_URI` / `VITE_OIDC_CLIENT_ID` は参照しなくなった。`VITE_OIDC_*` は
-Dex＝ローカル開発の発行者専用で、本番のビルドには渡さない。）
+`VITE_OIDC_*` は Dex（ローカル開発の発行者）専用で、本番のビルドには渡さない。
 
 GCP 認証はどちらのワークフローも Workload Identity Federation（WIF）で、実行のたびに一時認証情報を
 引き受ける（長寿命のサービスアカウントキーは発行しない）。WIF pool/provider・サービスアカウントは
@@ -42,20 +41,6 @@ infra リポの Terraform が管理する。
 | `cd-backend.yml` | GCP サービスアカウント `frestyle-prod-github-deploy@frestyle-prod.iam.gserviceaccount.com`（WIF pool `github`） | frestyle-infrastructure の Terraform（Cloud Run 用 WIF pool/provider） |
 | `cd-frontend.yml` | GCP サービスアカウント `frestyle-frontend-deploy@frestyle-507912.iam.gserviceaccount.com`（WIF pool `github`） | frestyle-infrastructure の Terraform（Firebase Hosting 用 WIF pool/provider） |
 
-> **失効待ち（ワークフローは参照しないが、認証情報としてはまだ有効）**:
-> ワークフローから参照されなくなっても、認証情報そのものは失効させるまで有効なままで、
-> 漏えいすれば悪用できる。次は発行元で失効させるまで「廃止済み」とは扱わない。
->
-> | Secret / 認証情報 | 失効手順 |
-> |---|---|
-> | `IAC_REPO_TOKEN` | PAT を revoke → GitHub Secrets からも削除 |
->
-> 失効まで終えたら、この表から下の「廃止済み」へ移す。
->
-> **廃止済み Secrets**（認証情報ではない / 参照されない）:
-> `IAC_REPO`、および旧認証基盤の parameter-overrides 用に使っていた `*_CLIENT_ID` 系の secrets
-> （Cloud Run の env / secrets は infra リポの Terraform が持つ）。GitHub Secrets 側に残っていても参照されない。
-
 ### Secrets 一覧確認
 
 ```bash
@@ -65,8 +50,7 @@ gh secret list -R norman6464/frestyle
 ## 設計方針
 
 ### 1. CI と CD を分離
-- 旧: `back-deploy.yml` / `front-deploy.yml` が `push to main` で test → build → deploy を一気に実行
-- 新: CI（テスト・検証）と CD（デプロイ）を別ファイルに分離。**CD は GCP リソースを触る**ため、明示的なトリガーでのみ動かす
+- CI（テスト・検証）と CD（デプロイ）は別ファイル。**CD は GCP リソースを触る**ため、明示的なトリガーでのみ動かす
 
 ### 2. 通常 push では CD は動かない
 - main にマージしただけではデプロイされない
@@ -84,7 +68,7 @@ gh secret list -R norman6464/frestyle
 1. GitHub UI: Actions → 対象ワークフロー（`CD - Backend Deploy to Cloud Run` 等）を開く
 2. 「Run workflow」ボタン → ブランチ選択（通常 `main`）
 3. `confirm` 欄に **`deploy`** と入力 → Run
-4. backend の `deploy` job は production Environment の required reviewers 承認待ちで止まる。GitHub UI で承認する
+4. `deploy` job は production Environment の required reviewers 承認待ちで止まる。GitHub UI で承認する
 5. 完了を待つ
 
 ### B. リリースタグ付与でのデプロイ（frontend のみ）
@@ -119,8 +103,9 @@ gh run list --workflow=cd-backend.yml --limit 5
 
 | ワークフロー | テスト | Docker image push | Cloud Run deploy | Firebase Hosting deploy |
 |---|:-:|:-:|:-:|:-:|
-| ci-backend-go | ✅ (go vet/test/build + 結合テスト) | – | – | – |
+| ci-backend-go | ✅ (lint / test / build + 結合テスト) | – | – | – |
 | ci-frontend | ✅ | – | – | – |
+| e2e | ✅ | – | – | – |
 | cd-backend | – | ✅ (Artifact Registry) | ✅ | – |
 | cd-frontend | – | – | – | ✅ |
 
@@ -136,5 +121,4 @@ gcloud run services update frestyle-prod-backend \
   --image asia-northeast1-docker.pkg.dev/frestyle-prod/frestyle-prod-backend/fre-style:<過去のcommit sha>
 ```
 
-Cloud Run は指定した image 参照をそのままデプロイするため、ECS の task-definition が
-`:latest` を動的解決していた頃のような「意図しない古い image を掴む」問題は無い。
+Cloud Run は指定した image 参照をそのままデプロイする。

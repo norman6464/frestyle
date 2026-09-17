@@ -1,27 +1,16 @@
 name: E2E - Playwright Smoke
 
-# 目的: 本番 (https://frestyle.dev) に対する
-# 認証前スモーク E2E を Playwright + Chromium で実行する。
-# 失敗時は html report / trace / screenshot / video を artifact に残す。
-#
-# トリガー:
-#   - main への push（cd-frontend / cd-backend が走った後の確認）
-#   - PR (frontend / 主要 workflow / E2E 自体への変更)
-#   - workflow_dispatch（任意のタイミングで実行）
-#
-# CodeBuild ではなく Actions に統一する判断:
-#   - API は public ALB 経由でアクセス可能で VPC 内疎通は不要
-#   - OIDC AssumeRole は今回 不要（外形監視）
-#   - 既存 cd-* / scheduled-* と同 platform に集約してログ・通知を一元管理
-
 on:
+  workflow_run:
+    workflows:
+      - 'CD - Frontend Deploy to Firebase Hosting'
+      - 'CD - Backend Deploy to Cloud Run'
+    types: [completed]
   push:
     branches: [main]
     paths:
       - 'frontend/**'
       - '.github/workflows/e2e.yml'
-      - '.github/workflows/cd-frontend.yml'
-      - '.github/workflows/cd-backend.yml'
   pull_request:
     branches: [main]
     paths:
@@ -34,12 +23,19 @@ on:
         required: false
         default: 'https://frestyle.dev'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_run' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 jobs:
   smoke:
     name: Playwright Smoke (Chromium)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -48,14 +44,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      # pnpm は packageManager フィールドの版で入れる（端末・CI・Docker で同じ解決にする）。
-      # setup-node のキャッシュ復元より前に置くこと（pnpm が無いと cache: 'pnpm' が失敗する）。
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          # この action は run ステップではないので defaults.run.working-directory が
-          # 効かない。リポジトリ直下に package.json は無いので、版を読む先を明示する。
           package_json_file: frontend/package.json
 
       - name: Setup Node.js
@@ -68,7 +62,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run Playwright smoke
@@ -92,10 +94,9 @@ jobs:
           path: frontend/test-results/
           retention-days: 7
 
-  # ローカルビルド + API モックによる「認証付き導線・主要画面」E2E。
-  # 本番の発行者 / DB に触れず、/api/v2/** を Playwright route でモックして検証する。
   local-mocked:
     name: Playwright Local (mocked API)
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -105,13 +106,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # pnpm は packageManager フィールドの版で入れる（端末・CI・Docker で同じ解決にする）。
-      # setup-node のキャッシュ復元より前に置くこと（pnpm が無いと cache: 'pnpm' が失敗する）。
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          # この action は run ステップではないので defaults.run.working-directory が
-          # 効かない。リポジトリ直下に package.json は無いので、版を読む先を明示する。
           package_json_file: frontend/package.json
 
       - name: Setup Node.js
@@ -124,12 +121,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
 
-      # VITE_API_BASE_URL='' で同一オリジン相対 (/api/v2/*) にする。これにより index.html の
-      # CSP connect-src 'self' に収まり、Playwright route がモックを差し込める（cross-origin の
-      # ダミーホストは CSP でブロックされ route に到達しないため）。
       - name: Build (same-origin / API モック前提)
         env:
           VITE_API_BASE_URL: ''

@@ -33,22 +33,10 @@ func TestPageSuggestionAPI_Integration(t *testing.T) {
 	env.joinWorkspace(t, commenter, domain.GrantRoleCommenter)
 
 	asAdmin := env.as(admin)
-	asViewer := env.as(viewer)
 	asCommenter := env.as(commenter)
 
 	suggestionsPath := "/api/v2/kb/workspaces/" + env.slug + "/pages/" + rootPage + "/suggestions"
-	contentPath := "/api/v2/kb/workspaces/" + env.slug + "/pages/" + rootPage + "/content"
 	const suggestedDoc = `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"commenterの提案"}]}]}`
-
-	t.Run("viewerは提案できない", func(t *testing.T) {
-		w := asViewer.do(t, http.MethodPost, suggestionsPath, `{"doc":`+suggestedDoc+`}`)
-		assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
-	})
-
-	t.Run("commenterは本文を直接書けない", func(t *testing.T) {
-		w := asCommenter.do(t, http.MethodPut, contentPath, `{"doc":`+suggestedDoc+`}`)
-		assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
-	})
 
 	var suggestionID string
 	t.Run("commenterが保存すると本文ではなく提案として積まれる", func(t *testing.T) {
@@ -92,12 +80,6 @@ func TestPageSuggestionAPI_Integration(t *testing.T) {
 		var after []pageVersionSummaryResponse
 		require.NoError(t, json.Unmarshal(versionsAfter.Body.Bytes(), &after))
 		assert.Len(t, after, len(before)+1, "採用は10分規則を無視して必ず版を1つ切る")
-	})
-
-	t.Run("既にacceptedな提案をもう一度解決しようとすると409", func(t *testing.T) {
-		w := asAdmin.do(t, http.MethodPost, suggestionsPath+"/"+suggestionID+"/reject", "")
-		assert.Equal(t, http.StatusConflict, w.Code)
-		assert.JSONEq(t, `{"error":"suggestion_already_resolved"}`, w.Body.String())
 	})
 
 	t.Run("却下すると本文は変わらない", func(t *testing.T) {

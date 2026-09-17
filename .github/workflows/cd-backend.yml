@@ -1,33 +1,5 @@
 name: CD - Backend Deploy to Cloud Run
 
-# 目的: バックエンドを Cloud Run にデプロイする。CI と分離し、明示的トリガーのみで動く。
-# トリガー:
-#   - workflow_dispatch（手動） : 唯一の起動経路
-#
-# release/v* タグ push は持たない。本番デプロイ用の WIF binding（インフラ側 Terraform）は
-# `norman6464/frestyle` の refs/heads/main 上の実行（push / workflow_dispatch /
-# environment: production の job）にだけ許可されており、タグからの実行は含まれない。
-# タグ経路を復活させたい場合は、インフラ側で binding を先に追加すること
-# （本ワークフロー側の変更だけでは通らない）。
-#
-# main への通常 push でも動かない。ドキュメント変更などで誤ってデプロイされない。
-#
-# 仕組み:
-#   1) Docker image を Artifact Registry に push（:latest と :${sha} の両方）
-#   2) Cloud Run の新リビジョンを作成し、Ready になるまで待つ（gcloud run services update は
-#      デフォルトで同期的に待つ。ECS の force-new-deployment + wait services-stable のような
-#      2 段階の手順は要らない）
-#
-# Cloud Run サービス・Artifact Registry・WIF は infra リポの Terraform が管理する。
-# 本 CD はイメージの build/push と Cloud Run への反映だけを担い、インフラ定義には触れない。
-# env / secret は Cloud Run 側の Terraform が持ち、ignore_changes でイメージを追跡しない
-# （CD はイメージだけを差し替える）。
-#
-# 認証: GitHub OIDC + Workload Identity Federation（google-github-actions/auth@v2）。
-#       長寿命のサービスアカウントキーは発行しない。
-#
-# 詳細は .github/workflows/README.md 参照
-
 on:
   workflow_dispatch:
     inputs:
@@ -37,22 +9,16 @@ on:
         type: string
 
 env:
-  # インフラ側 Terraform（backend_image_repo / github_workload_identity_provider /
-  # github_deploy_service_account の各 output）の実値。
   GCP_WORKLOAD_IDENTITY_PROVIDER: projects/654858357747/locations/global/workloadIdentityPools/github/providers/github-actions
   GCP_SERVICE_ACCOUNT: frestyle-prod-github-deploy@frestyle-prod.iam.gserviceaccount.com
   GCP_PROJECT_ID: frestyle-prod
   GCP_REGION: asia-northeast1
-  # Cloud Run サービスのコンテナは fre-style の 1 本のみ。
   IMAGE_REPO: asia-northeast1-docker.pkg.dev/frestyle-prod/frestyle-prod-backend/fre-style
   CLOUD_RUN_SERVICE: frestyle-prod-backend
 
 permissions:
   contents: read
 
-# 同時実行を直列化する。Cloud Run の新リビジョン作成はアトミックだが、
-# 並行 deploy で意図しないイメージが反映される事故を防ぐ。
-# 進行中の deploy は中断しない（cancel-in-progress: false）。後続 run は待機して順に実行する。
 concurrency:
   group: cd-backend-${{ github.ref }}
   cancel-in-progress: false
@@ -74,9 +40,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [guard]
-    # 第三者のコード（Go の依存モジュール）を取り込んでビルドするため、この job には
-    # GCP を触れる権限を最小限にする。id-token: write は Artifact Registry への push
-    # そのものに必要（WIF でサービスアカウントを引き受ける）。
     permissions:
       id-token: write
       contents: read
@@ -107,9 +70,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # Cloud Run は arm64 イメージを受け付けない。--platform を忘れないこと
-      # （GitHub-hosted runner は amd64 だが、buildx の既定 builder が multi-arch 設定だと
-      # 暗黙に変わることがあるため明示する）。
       - name: Build and push production image (Go backend)
         working-directory: backend
         run: |
@@ -126,8 +86,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    # 本番反映ジョブは production Environment に紐付け、required reviewers の承認待ちで止める。
-    # ＝ 誰が起動しても、norman6464 が承認するまで本番には反映されない。
     environment: production
 
     steps:
@@ -140,12 +98,6 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # gcloud run services update はデフォルトで同期的に待つ（新リビジョンが Ready になり
-      # トラフィックを受け始めるまでコマンドが返らない。失敗すれば非 0 で終わる）。
-      # ECS の force-new-deployment + 別ステップでの wait のような 2 段階の手順は要らない。
-      #
-      # env / secret は infra リポの Terraform（Cloud Run 側）が持ち、ignore_changes で
-      # イメージだけを追跡しない設定にしてある。ここではイメージの差し替えだけを行う。
       - name: Deploy new revision to Cloud Run
         run: |
           gcloud run services update "${{ env.CLOUD_RUN_SERVICE }}" \
@@ -155,8 +107,6 @@ jobs:
             --image "${{ needs.build-and-push.outputs.image_tag }}" \
             --quiet
 
-      # gcloud 側の Ready 待ちはコンテナの起動確認でしかない。アプリ + DB 疎通まで含めた
-      # 本当の健全性は、実際に /api/v2/health を叩いて確かめる。
       - name: Verify health (Cloud Run direct URL)
         run: |
           for i in 1 2 3 4 5; do
@@ -170,8 +120,6 @@ jobs:
           echo "❌ Health check failed after 5 attempts"
           exit 1
 
-      # カスタムドメイン api.frestyle.dev は Google 管理証明書の発行タイミング次第で
-      # 未発行のことがあるため、ここは失敗させない（自動検証は上の直結 URL を正とする）。
       - name: Verify health (custom domain, best-effort)
         continue-on-error: true
         run: |

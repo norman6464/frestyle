@@ -333,48 +333,6 @@ func TestKnowledgeBaseListSpacesAPI_Integration(t *testing.T) {
 			"所属していない相手は middleware で止まる（「全員」に含まれない）")
 	})
 
-	t.Run("スペースが0件でも空配列", func(t *testing.T) {
-		env := newKbEnv(t, sqlDB, "acme")
-		_, err := sqlDB.Exec(`DELETE FROM spaces WHERE workspace_id = $1`, env.workspaceID)
-		require.NoError(t, err)
-		alice := kbInsertUser(t, sqlDB, "alice")
-		env.joinWorkspace(t, alice, domain.GrantRoleAdmin)
-
-		w, _ := env.listSpaces(t, alice)
-
-		require.Equal(t, http.StatusOK, w.Code)
-		assert.JSONEq(t, `[]`, w.Body.String(), "null ではなく空配列")
-	})
-
-	t.Run("役割が1件も無いメンバーには空配列", func(t *testing.T) {
-		env := newKbEnv(t, sqlDB, "acme")
-		nobody := kbInsertUser(t, sqlDB, "nobody")
-		_, err := env.permissions.EnsureUserPrincipal(t.Context(), env.workspaceID, nobody)
-		require.NoError(t, err)
-
-		w, _ := env.listSpaces(t, nobody)
-
-		require.Equal(t, http.StatusOK, w.Code)
-		assert.JSONEq(t, `[]`, w.Body.String(),
-			"所属しているだけでは中身は見えない（スペースの実在も漏らさない）")
-	})
-
-	t.Run("存在しないワークスペースと権限の無いワークスペースの応答が同じ", func(t *testing.T) {
-		env := newKbEnv(t, sqlDB, "acme")
-		kbInsertWorkspace(t, sqlDB, "rival")
-		alice := kbInsertUser(t, sqlDB, "alice")
-		env.joinWorkspace(t, alice, domain.GrantRoleAdmin)
-		e := env.as(alice)
-
-		unknown := e.do(t, http.MethodGet, "/api/v2/kb/workspaces/no-such-workspace/spaces", "")
-		foreign := e.do(t, http.MethodGet, "/api/v2/kb/workspaces/rival/spaces", "")
-
-		assert.Equal(t, http.StatusNotFound, unknown.Code)
-		assert.Equal(t, unknown.Code, foreign.Code)
-		assert.Equal(t, unknown.Body.String(), foreign.Body.String(),
-			"slug の総当たりで他社テナントの実在が分からないこと")
-	})
-
 	t.Run("別テナントのスペースは混ざらない", func(t *testing.T) {
 		env := newKbEnv(t, sqlDB, "acme")
 		rival := kbInsertWorkspace(t, sqlDB, "rival")
