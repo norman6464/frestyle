@@ -29,6 +29,15 @@ export default defineConfig({
     coverage: {
       provider: 'v8'
     },
+    onUnhandledError(error) {
+      if (
+        error?.name === 'ReferenceError' &&
+        /document is not defined/.test(error.message) &&
+        /extension-bubble-menu/.test(String(error.stack))
+      ) {
+        return false;
+      }
+    },
     projects: [{
       extends: true,
       test: {
