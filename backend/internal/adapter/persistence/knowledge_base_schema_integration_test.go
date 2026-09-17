@@ -649,51 +649,6 @@ func createPageSnapshot(t *testing.T, db *sql.DB, pageID string) {
 	require.NoError(t, insertPageSnapshot(db, pageID, `{"type":"doc","content":[]}`))
 }
 
-// insertPageSearch / createPageSearch は page_search へ検証用の行を入れる。
-// UpsertPageSearch と同じ形（page_id, workspace_id, title, body）で、TruncateAll の
-// 掃除漏れを見つけるためだけに使う（本物の抽出ロジックは usecase/kb 側で検証する）。
-func insertPageSearch(db *sql.DB, workspaceID, pageID string) error {
-	_, err := db.Exec(
-		`INSERT INTO page_search (page_id, workspace_id, title, body) VALUES ($1, $2, $3, $4)`,
-		pageID, workspaceID, "検証用ページ", "検証用の本文",
-	)
-	return err
-}
-
-func createPageSearch(t *testing.T, db *sql.DB, workspaceID, pageID string) {
-	t.Helper()
-	require.NoError(t, insertPageSearch(db, workspaceID, pageID))
-}
-
-// insertPageLink / createPageLink は page_links へ検証用の行を入れる。
-func insertPageLink(db *sql.DB, sourceBlockID, targetPageID string) error {
-	_, err := db.Exec(
-		`INSERT INTO page_links (source_block_id, target_page_id) VALUES ($1, $2)`,
-		sourceBlockID, targetPageID,
-	)
-	return err
-}
-
-func createPageLink(t *testing.T, db *sql.DB, sourceBlockID, targetPageID string) {
-	t.Helper()
-	require.NoError(t, insertPageLink(db, sourceBlockID, targetPageID))
-}
-
-// insertPageTicketLink / createPageTicketLink は page_ticket_links へ検証用の行を入れる
-// （insertPageLink / createPageLink のチケット版。段 5）。
-func insertPageTicketLink(db *sql.DB, sourceBlockID, targetTicketID string) error {
-	_, err := db.Exec(
-		`INSERT INTO page_ticket_links (source_block_id, target_ticket_id) VALUES ($1, $2)`,
-		sourceBlockID, targetTicketID,
-	)
-	return err
-}
-
-func createPageTicketLink(t *testing.T, db *sql.DB, sourceBlockID, targetTicketID string) {
-	t.Helper()
-	require.NoError(t, insertPageTicketLink(db, sourceBlockID, targetTicketID))
-}
-
 func countRows(t *testing.T, db *sql.DB, table string) int {
 	t.Helper()
 	var n int
@@ -736,67 +691,4 @@ func requirePgError(t *testing.T, err error, sqlState, constraint string) {
 	require.ErrorAs(t, err, &pgErr)
 	require.Equalf(t, sqlState, pgErr.Code, "SQLSTATE が想定と異なります: %v", err)
 	require.Equalf(t, constraint, pgErr.ConstraintName, "効いた制約が想定と異なります: %v", err)
-}
-
-// seedPermissionRows は権限モデルの各テーブルへ検証用の行を 1 つずつ入れる
-// （TruncateAll の掃除漏れを見つけるため、全テーブルに行がある状態を作る）。
-func seedPermissionRows(t *testing.T, db *sql.DB, workspaceID, spaceID, pageID string) {
-	t.Helper()
-	var userID uint64
-	require.NoError(t, db.QueryRow(
-		`INSERT INTO users (email, name, created_at, updated_at)
-		 VALUES ($1, 'truncate', now(), now()) RETURNING id`,
-		"truncate+"+newID()+"@example.test",
-	).Scan(&userID))
-
-	userPrincipal, groupPrincipal := newID(), newID()
-	_, err := db.Exec(
-		`INSERT INTO principals (id, workspace_id, kind, user_id) VALUES ($1, $2, 'user', $3)`,
-		userPrincipal, workspaceID, userID,
-	)
-	require.NoError(t, err)
-	_, err = db.Exec(
-		`INSERT INTO principals (id, workspace_id, kind, name) VALUES ($1, $2, 'group', '掃除確認')`,
-		groupPrincipal, workspaceID,
-	)
-	require.NoError(t, err)
-	_, err = db.Exec(
-		`INSERT INTO principals (id, workspace_id, kind, space_id) VALUES ($1, $2, 'space_all', $3)`,
-		newID(), workspaceID, spaceID,
-	)
-	require.NoError(t, err)
-
-	linkPrincipal := newID()
-	_, err = db.Exec(
-		`INSERT INTO principals (id, workspace_id, kind, page_id) VALUES ($1, $2, 'share_link', $3)`,
-		linkPrincipal, workspaceID, pageID,
-	)
-	require.NoError(t, err)
-
-	_, err = db.Exec(
-		`INSERT INTO principal_members (workspace_id, group_principal_id, member_principal_id)
-		 VALUES ($1, $2, $3)`, workspaceID, groupPrincipal, userPrincipal,
-	)
-	require.NoError(t, err)
-	_, err = db.Exec(
-		`INSERT INTO workspace_grants (workspace_id, principal_id, "role") VALUES ($1, $2, 'admin')`,
-		workspaceID, userPrincipal,
-	)
-	require.NoError(t, err)
-	_, err = db.Exec(
-		`INSERT INTO space_grants (workspace_id, space_id, principal_id, "role") VALUES ($1, $2, $3, 'editor')`,
-		workspaceID, spaceID, userPrincipal,
-	)
-	require.NoError(t, err)
-	_, err = db.Exec(
-		`INSERT INTO page_grants (workspace_id, page_id, principal_id, "role") VALUES ($1, $2, $3, 'viewer')`,
-		workspaceID, pageID, userPrincipal,
-	)
-	require.NoError(t, err)
-	_, err = db.Exec(
-		`INSERT INTO share_links (id, workspace_id, page_id, principal_id, capability, token_hash, created_by_user_id)
-		 VALUES ($1, $2, $3, $4, 'view', sha256($5::bytea), $6)`,
-		newID(), workspaceID, pageID, linkPrincipal, []byte(newID()), userID,
-	)
-	require.NoError(t, err)
 }

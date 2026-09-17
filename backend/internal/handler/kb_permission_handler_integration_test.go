@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/norman6464/frestyle/backend/internal/domain"
@@ -135,153 +134,9 @@ func kbInsertChildPage(t *testing.T, db *sql.DB, workspaceID, spaceID, parentID 
 	return id
 }
 
-func (e *kbPermEnv) fill(s string) string {
-	return strings.NewReplacer(
-		"{slug}", e.slug,
-		"{space}", e.spaceID,
-		"{page}", e.childPage,
-		"{target}", e.targetPrincipal,
-		"{group}", e.groupPrincipal,
-		"{link}", e.shareLinkID,
-		"{user}", strconv.FormatUint(e.target, 10),
-	).Replace(s)
-}
-
-// kbPermCase は権限操作の 1 経路。missing は対象を存在しない ID に差し替えたパス。
-type kbPermCase struct {
-	name     string
-	method   string
-	path     string
-	missing  []string
-	body     string
-	okStatus int
-}
-
-// kbMissingIntegrationUUID は存在しない UUID（実在する ID と同じ形にする — 形式不正で弾かれると
-// 「権限が無い」経路を通っていないのに 404 が返り、テストが空振りする）。
-const kbMissingIntegrationUUID = "0198a000-0000-7000-8000-0000000000ff"
-
 // kbMissingIntegrationUserID は存在しないユーザー ID
 // （users は他の結合テストと共有するので、実在しそうにない大きな値を使う）。
 const kbMissingIntegrationUserID = "987654321"
-
-// kbPermCases は「権限そのものを変える」全経路。
-var kbPermCases = []kbPermCase{
-	{
-		name: "ワークスペース権限付与", method: http.MethodPut,
-		path:    "/api/v2/kb/workspaces/{slug}/grants/{target}",
-		missing: []string{"/api/v2/kb/workspaces/{slug}/grants/" + kbMissingIntegrationUUID},
-		body:    `{"role":"editor"}`, okStatus: http.StatusOK,
-	},
-	{
-		name: "ワークスペース権限取り消し", method: http.MethodDelete,
-		path:     "/api/v2/kb/workspaces/{slug}/grants/{target}",
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/grants/" + kbMissingIntegrationUUID},
-		okStatus: http.StatusNoContent,
-	},
-	{
-		name: "スペース権限付与", method: http.MethodPut,
-		path: "/api/v2/kb/workspaces/{slug}/spaces/{space}/grants/{target}",
-		missing: []string{
-			"/api/v2/kb/workspaces/{slug}/spaces/" + kbMissingIntegrationUUID + "/grants/{target}",
-			"/api/v2/kb/workspaces/{slug}/spaces/{space}/grants/" + kbMissingIntegrationUUID,
-		},
-		body: `{"role":"editor"}`, okStatus: http.StatusOK,
-	},
-	{
-		name: "スペース権限取り消し", method: http.MethodDelete,
-		path:     "/api/v2/kb/workspaces/{slug}/spaces/{space}/grants/{target}",
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/spaces/" + kbMissingIntegrationUUID + "/grants/{target}"},
-		okStatus: http.StatusNoContent,
-	},
-	{
-		name: "ページ権限一覧", method: http.MethodGet,
-		path:     "/api/v2/kb/workspaces/{slug}/pages/{page}/grants",
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingIntegrationUUID + "/grants"},
-		okStatus: http.StatusOK,
-	},
-	{
-		name: "ページ権限付与", method: http.MethodPut,
-		path: "/api/v2/kb/workspaces/{slug}/pages/{page}/grants/{target}",
-		missing: []string{
-			"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingIntegrationUUID + "/grants/{target}",
-			"/api/v2/kb/workspaces/{slug}/pages/{page}/grants/" + kbMissingIntegrationUUID,
-		},
-		body: `{"role":"editor"}`, okStatus: http.StatusOK,
-	},
-	{
-		name: "ページ権限取り消し", method: http.MethodDelete,
-		path: "/api/v2/kb/workspaces/{slug}/pages/{page}/grants/{target}",
-		missing: []string{
-			"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingIntegrationUUID + "/grants/{target}",
-		},
-		okStatus: http.StatusNoContent,
-	},
-	{
-		name: "権限を張れる相手の一覧", method: http.MethodGet,
-		path:     "/api/v2/kb/workspaces/{slug}/pages/{page}/principals",
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingIntegrationUUID + "/principals"},
-		okStatus: http.StatusOK,
-	},
-	{
-		// 段 2: 招待だけで principal・権限は発生しない（本人が受諾するまで）ため、
-		// 返す主体が無くなり 204 に変わった（それまでは 200 + 主体の JSON）。
-		name: "メンバー招待", method: http.MethodPut,
-		path:     "/api/v2/kb/workspaces/{slug}/members/{user}",
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/members/" + kbMissingIntegrationUserID},
-		okStatus: http.StatusNoContent,
-	},
-	{
-		name: "メンバー削除", method: http.MethodDelete,
-		path:     "/api/v2/kb/workspaces/{slug}/members/{user}",
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/members/" + kbMissingIntegrationUserID},
-		okStatus: http.StatusNoContent,
-	},
-	{
-		name: "グループ作成", method: http.MethodPost,
-		path: "/api/v2/kb/workspaces/{slug}/groups",
-		body: `{"name":"運用チーム"}`, okStatus: http.StatusCreated,
-	},
-	{
-		name: "グループメンバー追加", method: http.MethodPut,
-		path:     "/api/v2/kb/workspaces/{slug}/groups/{group}/members/{user}",
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/groups/" + kbMissingIntegrationUUID + "/members/{user}"},
-		okStatus: http.StatusNoContent,
-	},
-	{
-		name: "グループメンバー削除", method: http.MethodDelete,
-		path:     "/api/v2/kb/workspaces/{slug}/groups/{group}/members/{user}",
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/groups/" + kbMissingIntegrationUUID + "/members/{user}"},
-		okStatus: http.StatusNoContent,
-	},
-	{
-		name: "スペース全員主体の用意", method: http.MethodPut,
-		path:     "/api/v2/kb/workspaces/{slug}/spaces/{space}/principals/everyone",
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/spaces/" + kbMissingIntegrationUUID + "/principals/everyone"},
-		okStatus: http.StatusOK,
-	},
-	{
-		name: "共有リンク一覧", method: http.MethodGet,
-		path:     "/api/v2/kb/workspaces/{slug}/pages/{page}/share-links",
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingIntegrationUUID + "/share-links"},
-		okStatus: http.StatusOK,
-	},
-	{
-		name: "共有リンク発行", method: http.MethodPost,
-		path:    "/api/v2/kb/workspaces/{slug}/pages/{page}/share-links",
-		missing: []string{"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingIntegrationUUID + "/share-links"},
-		body:    `{"capability":"view"}`, okStatus: http.StatusCreated,
-	},
-	{
-		name: "共有リンク失効", method: http.MethodDelete,
-		path: "/api/v2/kb/workspaces/{slug}/pages/{page}/share-links/{link}",
-		missing: []string{
-			"/api/v2/kb/workspaces/{slug}/pages/{page}/share-links/" + kbMissingIntegrationUUID,
-			"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingIntegrationUUID + "/share-links/{link}",
-		},
-		okStatus: http.StatusNoContent,
-	},
-}
 
 // kbDeniedBody は権限操作 API の唯一の拒否応答。バイト列で固定する。
 const kbDeniedBody = `{"error":"not_found"}`
