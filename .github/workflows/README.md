@@ -9,7 +9,7 @@ CI と CD を **完全に分離** しています。テスト・ビルド検証�
 | `ci-backend-go.yml` | CI | PR / push to main（`backend/**` と本ファイルの変更時のみ） | gofumpt / go mod tidy / golangci-lint / govulncheck(advisory) / `go test -race` / schema・sqlc drift / sqlc vet / `go build` + 結合テスト（実 PostgreSQL、2 shard）|
 | `ci-frontend.yml` | CI | PR / push to main（`frontend/**`・`.github/scripts/**`・本ファイルの変更時のみ） | tsc / ESLint / build / size-limit(advisory) / knip(advisory) + Vitest unit + Storybook テスト |
 | `e2e.yml` | CI | local-mocked: PR / push to main（`frontend/**`）・ smoke: **cd-* の成功後**（`workflow_run`）と手動 | Playwright。smoke は本番 https://frestyle.dev への外形監視、local-mocked は API モックでの導線検証 |
-| `cd-backend.yml` | CD | **workflow_dispatch のみ** | Artifact Registry へ push + Cloud Run の新リビジョン作成（Cloud Run サービス自体は infra リポの Terraform が管理） |
+| `cd-backend.yml` | CD | **workflow_dispatch のみ** | Artifact Registry へ push + Cloud Run の新リビジョン作成 |
 | `cd-frontend.yml` | CD | **workflow_dispatch のみ** + tag `release/v*` | Firebase Hosting へデプロイ |
 
 `cd-backend.yml` が tag push を持たないのは、本番デプロイ用の WIF binding（インフラ側

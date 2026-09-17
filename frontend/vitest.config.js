@@ -26,7 +26,6 @@ export default defineConfig({
     }
   },
   test: {
-    // 閾値は設けない（数値を満たすためだけのテストが書かれるのを避ける）。手元で `vitest run --coverage` を見る用。
     coverage: {
       provider: 'v8'
     },

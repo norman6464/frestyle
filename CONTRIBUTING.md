@@ -87,19 +87,7 @@ pnpm run e2e:local    # ローカルビルド + API モックの認証導線 E2E
 
 ---
 
-## 5. CI / 品質ゲート
-
-PR では変更したパスに対応するものだけが走る（一覧と方針は `.github/workflows/README.md`）:
-
-- backend（`backend/**`）: **gofumpt(整形強制)** / go mod tidy / golangci-lint / govulncheck(advisory) / **go test -race** / schema・sqlc drift / sqlc vet / build / 結合テスト(Postgres)
-- frontend（`frontend/**`）: tsc / ESLint(max-warnings=0) / build / **Vitest** / Storybook テスト / knip・size-limit(advisory) / ローカルモック E2E（Playwright）
-- 本番スモーク E2E は PR では走らない（デプロイ後にだけ走る）
-
-本リポジトリに `docs/` フォルダは置かない（README はアプリケーションの説明に限定）。取り組んだ内容・手順は **Jira チケット**に残し、必要なら該当ディレクトリの README を更新する。設計・運用の詳細は private リポ（`frestyle-pdm` / `frestyle-infrastructure`）の `docs/` に置く。
-
----
-
-## 6. シークレット / セキュリティ
+## 5. シークレット / セキュリティ
 
 秘密情報（クラウドの API キー / DB パスワード / トークン等）は `.env`（gitignore 済）か Secrets Manager に置き、**コード・docs に直書きしない**。
 
@@ -109,7 +97,6 @@ PR では変更したパスに対応するものだけが走る（一覧と方�
 |---|---|
 | push 時 | **GitHub Push Protection**（既知パターンの秘密を含む push をブロック。有効化済み） |
 | PR レビュー | **CodeRabbit**（gitleaks を含む。手動トリガー） |
-| コミット前（手元） | **lefthook + gitleaks** の pre-commit フック |
 
 pre-commit フックの有効化（推奨）:
 
@@ -120,8 +107,7 @@ lefthook install                 # リポジトリごとに 1 回
 
 テスト用の固定値など**機密でない**ものが誤検知されたら、`.gitleaks.toml` の `allowlist` に追加する（実機密を広く allowlist しないこと）。
 
-## 7. マージ権限
+## 6. マージ権限
 
 - `main` はブランチ保護下（force-push・削除は禁止）。**PR承認・CI green は GitHub 側の必須設定にはなっていない**（`required_pull_request_reviews.required_approving_review_count` は 0、`required_status_checks` は未設定。`enforce_admins` は on だが、そもそもゲートが無いため意味を持たない）。運用上はレビューを得てからのマージを基本とする。
-- リポジトリ管理者（`@norman6464`）は admin 権限で要件をバイパスできる（`gh pr merge --admin`）。緊急時・自分の PR の最終マージ用。
 - メンバーを追加するときは **Write / Maintain ロール**で（Admin ロールはバイパスできてしまうため避ける）。
