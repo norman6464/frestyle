@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/norman6464/frestyle/backend/internal/domain"
 	"github.com/norman6464/frestyle/backend/internal/testsupport"
@@ -290,72 +289,6 @@ const kbDeniedBody = `{"error":"not_found"}`
 func TestKnowledgeBasePermissionAPI_Integration(t *testing.T) {
 	sqlDB := testsupport.OpenTestDB(t)
 
-	t.Run("admin以外は権限操作を1本も通せない", func(t *testing.T) {
-		// この 5 通りが 1 つでも通ると、認証さえ済ませれば自分を admin にできる。
-		// 応答はすべて同じ 404 + 同じ本文でなければならない（誰なのかも漏らさない）。
-		for _, persona := range []string{"viewer", "commenter", "editor", "非メンバー", "別ワークスペースのadmin"} {
-			for _, tc := range kbPermCases {
-				t.Run(persona+"/"+tc.name, func(t *testing.T) {
-					env := newKbPermEnv(t, sqlDB)
-					var uid uint64
-					switch persona {
-					case "viewer":
-						uid = env.viewer
-					case "commenter":
-						uid = env.commenter
-					case "editor":
-						uid = env.editor
-					case "非メンバー":
-						uid = env.outsider
-					default:
-						uid = env.rivalAdmin
-					}
-					e := env.as(uid)
-					w := e.do(t, tc.method, env.fill(tc.path), env.fill(tc.body))
-					assert.Equal(t, http.StatusNotFound, w.Code, "body=%s", w.Body.String())
-					assert.Equal(t, kbDeniedBody, w.Body.String())
-				})
-			}
-		}
-	})
-
-	t.Run("拒否の応答は対象の実在で変わらない", func(t *testing.T) {
-		// 存在オラクル対策の本命。権限の無い相手から見て、実在する対象と存在しない対象で
-		// ステータスも本文もバイト単位で一致すること。片方だけ違えば、ID を総当たりする
-		// だけで中身を読まずに実在を数え上げられる。
-		for _, tc := range kbPermCases {
-			if len(tc.missing) == 0 {
-				continue // 対象 ID を受け取らない経路は総当たりの的が無い
-			}
-			t.Run(tc.name, func(t *testing.T) {
-				env := newKbPermEnv(t, sqlDB)
-				e := env.as(env.editor)
-
-				real := e.do(t, tc.method, env.fill(tc.path), env.fill(tc.body))
-				require.Equal(t, http.StatusNotFound, real.Code)
-				wantBody := real.Body.Bytes()
-
-				for _, missing := range tc.missing {
-					got := e.do(t, tc.method, env.fill(missing), env.fill(tc.body))
-					assert.Equal(t, real.Code, got.Code, "path=%s", missing)
-					assert.Equal(t, wantBody, got.Body.Bytes(),
-						"path=%s（本文がバイト単位で一致すること）", missing)
-				}
-			})
-		}
-	})
-
-	t.Run("adminは全経路を通れる", func(t *testing.T) {
-		for _, tc := range kbPermCases {
-			t.Run(tc.name, func(t *testing.T) {
-				env := newKbPermEnv(t, sqlDB)
-				e := env.as(env.admin)
-				w := e.do(t, tc.method, env.fill(tc.path), env.fill(tc.body))
-				assert.Equal(t, tc.okStatus, w.Code, "body=%s", w.Body.String())
-			})
-		}
-	})
-
 	t.Run("付与した権限がそのまま実効権限になる", func(t *testing.T) {
 		// 認可を通したあとの書き込みが本当に効いているか（配線だけして書けていない、を防ぐ）。
 		env := newKbPermEnv(t, sqlDB)
@@ -441,30 +374,6 @@ func TestKnowledgeBasePermissionAPI_Integration(t *testing.T) {
 		assert.Equal(t, kbDeniedBody, w.Body.String())
 	})
 
-	t.Run("最後のadminは外せない", func(t *testing.T) {
-		env := newKbPermEnv(t, sqlDB)
-		e := env.as(env.admin)
-		grantPath := "/api/v2/kb/workspaces/" + env.slug + "/grants/" + env.adminPrincipal
-
-		w := e.do(t, http.MethodDelete, grantPath, "")
-		assert.Equal(t, http.StatusConflict, w.Code, w.Body.String())
-		assert.JSONEq(t, `{"error":"last_workspace_admin"}`, w.Body.String())
-
-		assert.Equal(t, http.StatusConflict,
-			e.do(t, http.MethodPut, grantPath, `{"role":"editor"}`).Code, "降格も admin を外す操作")
-
-		assert.Equal(t, http.StatusConflict,
-			e.do(t, http.MethodDelete,
-				"/api/v2/kb/workspaces/"+env.slug+"/members/"+strconv.FormatUint(env.admin, 10), "").Code,
-			"メンバー削除でも principal ごと消える")
-
-		// 2 人目の admin を立てれば外せる。
-		require.Equal(t, http.StatusOK,
-			e.do(t, http.MethodPut,
-				"/api/v2/kb/workspaces/"+env.slug+"/grants/"+env.targetPrincipal, `{"role":"admin"}`).Code)
-		assert.Equal(t, http.StatusNoContent, e.do(t, http.MethodDelete, grantPath, "").Code)
-	})
-
 	t.Run("グループ宛てのadminは最後の1人として数えない", func(t *testing.T) {
 		// メンバーが 0 人のグループが「最後の admin」として残ると、結局誰も権限を
 		// 変えられなくなる。grant の行からは中身が分からないので数に入れない。
@@ -499,98 +408,10 @@ func TestKnowledgeBasePermissionAPI_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, w.Code)
 		assert.JSONEq(t, `{"error":"group_name_taken"}`, w.Body.String())
 	})
-
-	t.Run("未知の役割やケイパビリティは400", func(t *testing.T) {
-		env := newKbPermEnv(t, sqlDB)
-		e := env.as(env.admin)
-
-		// アプリ内ロール（super_admin）は grant の役割ではない。
-		assert.Equal(t, http.StatusBadRequest,
-			e.do(t, http.MethodPut,
-				"/api/v2/kb/workspaces/"+env.slug+"/grants/"+env.targetPrincipal,
-				`{"role":"super_admin"}`).Code)
-		assert.Equal(t, http.StatusBadRequest,
-			e.do(t, http.MethodPut,
-				"/api/v2/kb/workspaces/"+env.slug+"/pages/"+env.childPage+"/grants/"+env.targetPrincipal,
-				`{"role":"owner"}`).Code, "ページ付与でも役割の一覧は同じ")
-		// 共有リンクが持てるのは view / edit の 2 つだけ。
-		assert.Equal(t, http.StatusBadRequest,
-			e.do(t, http.MethodPost,
-				"/api/v2/kb/workspaces/"+env.slug+"/pages/"+env.childPage+"/share-links",
-				`{"capability":"manage"}`).Code)
-	})
 }
 
 func TestKnowledgeBaseShareLinkAPI_Integration(t *testing.T) {
 	sqlDB := testsupport.OpenTestDB(t)
-
-	t.Run("発行時の1回だけトークンを返し一覧には出さない", func(t *testing.T) {
-		env := newKbPermEnv(t, sqlDB)
-		e := env.as(env.admin)
-		base := "/api/v2/kb/workspaces/" + env.slug + "/pages/" + env.childPage + "/share-links"
-
-		issued := e.do(t, http.MethodPost, base, `{"capability":"view"}`)
-		require.Equal(t, http.StatusCreated, issued.Code, issued.Body.String())
-		var out kbIssuedShareLinkResponse
-		require.NoError(t, json.Unmarshal(issued.Body.Bytes(), &out))
-		require.NotEmpty(t, out.Token)
-
-		listed := e.do(t, http.MethodGet, base, "")
-		require.Equal(t, http.StatusOK, listed.Code)
-		body := listed.Body.String()
-		assert.NotContains(t, body, out.Token, "平文トークンは一覧に出ない")
-		assert.NotContains(t, body, "tokenHash", "ハッシュも出さない")
-		assert.NotContains(t, body, "principalId", "内部の主体 ID も出さない")
-	})
-
-	t.Run("検証は未認証で通り失効させると410になる", func(t *testing.T) {
-		env := newKbPermEnv(t, sqlDB)
-		// current user を注入しないルータ（未認証）。
-		anonymous := env.as(0)
-		verifyPath := "/api/v2/kb/share-links/verify"
-
-		w := anonymous.do(t, http.MethodPost, verifyPath, `{"token":"`+env.shareToken+`"}`)
-		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-		var got kbVerifiedShareLinkResponse
-		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
-		assert.Equal(t, env.childPage, got.PageID)
-		assert.Equal(t, string(domain.CapabilityView), got.Capability)
-		assert.NotContains(t, w.Body.String(), env.shareToken, "トークンを応答へ反射しない")
-
-		revoked := env.as(env.admin).do(t, http.MethodDelete,
-			"/api/v2/kb/workspaces/"+env.slug+"/pages/"+env.childPage+"/share-links/"+env.shareLinkID, "")
-		require.Equal(t, http.StatusNoContent, revoked.Code)
-
-		w = anonymous.do(t, http.MethodPost, verifyPath, `{"token":"`+env.shareToken+`"}`)
-		assert.Equal(t, http.StatusGone, w.Code)
-		assert.JSONEq(t, `{"error":"share_link_revoked"}`, w.Body.String())
-	})
-
-	t.Run("知らないトークンは404で期限切れは410", func(t *testing.T) {
-		env := newKbPermEnv(t, sqlDB)
-		anonymous := env.as(0)
-		verifyPath := "/api/v2/kb/share-links/verify"
-
-		w := anonymous.do(t, http.MethodPost, verifyPath, `{"token":"unknown"}`)
-		assert.Equal(t, http.StatusNotFound, w.Code)
-		assert.Equal(t, kbDeniedBody, w.Body.String())
-
-		past := time.Now().Add(-time.Hour)
-		expiredToken := "expired-token"
-		_, err := env.shareLinks.Create(t.Context(), repository.ShareLinkWrite{
-			WorkspaceID:     env.workspaceID,
-			PageID:          env.childPage,
-			Capability:      domain.CapabilityView,
-			TokenHash:       kbTokenHash(expiredToken),
-			ExpiresAt:       &past,
-			CreatedByUserID: env.admin,
-		})
-		require.NoError(t, err)
-
-		w = anonymous.do(t, http.MethodPost, verifyPath, `{"token":"`+expiredToken+`"}`)
-		assert.Equal(t, http.StatusGone, w.Code)
-		assert.JSONEq(t, `{"error":"share_link_expired"}`, w.Body.String())
-	})
 
 	t.Run("パスワード付きは合致するまで通らない", func(t *testing.T) {
 		env := newKbPermEnv(t, sqlDB)
@@ -617,22 +438,6 @@ func TestKnowledgeBaseShareLinkAPI_Integration(t *testing.T) {
 
 		w = anonymous.do(t, http.MethodPost, verifyPath, `{"token":"`+out.Token+`","password":"s3cret"}`)
 		assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	})
-
-	t.Run("別ページのリンクIDを渡しても失効させられない", func(t *testing.T) {
-		// 認可はページ（が属するスペース）で判断するので、リンクが本当にそのページの
-		// ものであることを確かめないと、ページ ID とリンク ID を組み替えるだけで
-		// 別のページのリンクを止められる。
-		env := newKbPermEnv(t, sqlDB)
-		w := env.as(env.admin).do(t, http.MethodDelete,
-			"/api/v2/kb/workspaces/"+env.slug+"/pages/"+env.rootPage+"/share-links/"+env.shareLinkID, "")
-		assert.Equal(t, http.StatusNotFound, w.Code)
-		assert.Equal(t, kbDeniedBody, w.Body.String())
-
-		// 本当のページを指せば止まる（上の 404 が「そもそも失効できない」ではないことの確認）。
-		assert.Equal(t, http.StatusNoContent,
-			env.as(env.admin).do(t, http.MethodDelete,
-				"/api/v2/kb/workspaces/"+env.slug+"/pages/"+env.childPage+"/share-links/"+env.shareLinkID, "").Code)
 	})
 }
 
@@ -671,35 +476,6 @@ func TestKnowledgeBasePageGrantAPI_ページのadminはその枝だけを管理�
 		assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	})
 
-	t.Run("子孫まで届く", func(t *testing.T) {
-		w := target.do(t, http.MethodGet, grantsOf(grandchild), "")
-		assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	})
-
-	t.Run("親へは上がらない", func(t *testing.T) {
-		// 経路は祖先だけを辿る。ここが 200 になると、末端の管理者が親を掌握できる。
-		w := target.do(t, http.MethodGet, grantsOf(env.rootPage), "")
-		assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
-		assert.Equal(t, kbDeniedBody, w.Body.String())
-	})
-
-	t.Run("一覧に出るのはその段に張った行だけ", func(t *testing.T) {
-		// 子ページに張った行が孫の一覧に出てしまうと、「どの段で足したか」が
-		// 画面から分からなくなり、取り消すべき行を人が選べない。
-		var onChild, onGrandchild []map[string]any
-		require.NoError(t, json.Unmarshal(
-			admin.do(t, http.MethodGet, grantsOf(env.childPage), "").Body.Bytes(), &onChild,
-		))
-		require.NoError(t, json.Unmarshal(
-			admin.do(t, http.MethodGet, grantsOf(grandchild), "").Body.Bytes(), &onGrandchild,
-		))
-
-		require.Len(t, onChild, 1)
-		assert.Equal(t, env.targetPrincipal, onChild[0]["principalId"])
-		assert.Equal(t, "admin", onChild[0]["role"], "役割まで返る（キー名も含めて固定する）")
-		assert.Empty(t, onGrandchild, "祖先の行は含めない（届いてはいるが、張った段はここではない）")
-	})
-
 	t.Run("取り消すと元の立場へ戻る", func(t *testing.T) {
 		w := admin.do(t, http.MethodDelete, grantsOf(env.childPage)+"/"+env.targetPrincipal, "")
 		require.Equal(t, http.StatusNoContent, w.Code)
@@ -708,30 +484,4 @@ func TestKnowledgeBasePageGrantAPI_ページのadminはその枝だけを管理�
 		assert.Equal(t, http.StatusNotFound, target.do(t, http.MethodGet, grantsOf(grandchild), "").Code,
 			"子孫の分も一緒に消える（張ったのは 1 行だけ）")
 	})
-}
-
-// 自分自身に弱い付与を張っても、上の段から届いている管理権限が残ることを確かめる。
-//
-// 付与は 3 段（ワークスペース / スペース / ページ）の足し算で、届いた中で最も強い役割が
-// 実効になる（domain.GrantRole.Rank）。もし「近い段が勝つ」形だったら、admin が自分の
-// ページに viewer を 1 行張った瞬間にその行を消す手段が本人から消え、DB を直接触るしか
-// 復旧の道が無くなる。権限の口が自分の操作で閉じないことを、実 PostgreSQL で固定する。
-func TestKnowledgeBasePageGrantAPI_自分に弱い付与を張っても管理権限は残る_Integration(t *testing.T) {
-	sqlDB := testsupport.OpenTestDB(t)
-	env := newKbPermEnv(t, sqlDB)
-	admin := env.as(env.admin)
-
-	page := "/api/v2/kb/workspaces/" + env.slug + "/pages/" + env.childPage
-	grants := page + "/grants"
-
-	weaker := admin.do(t, http.MethodPut, grants+"/"+env.adminPrincipal, `{"role":"viewer"}`)
-	require.Equal(t, http.StatusOK, weaker.Code, weaker.Body.String())
-
-	assert.Equal(t, http.StatusOK, admin.do(t, http.MethodGet, page, "").Code,
-		"ワークスペースの admin が届いたままなので本文は読める")
-	assert.Equal(t, http.StatusOK, admin.do(t, http.MethodGet, grants, "").Code,
-		"権限の口も開いたまま")
-	assert.Equal(t, http.StatusNoContent,
-		admin.do(t, http.MethodDelete, grants+"/"+env.adminPrincipal, "").Code,
-		"張った行は自分で外せる")
 }

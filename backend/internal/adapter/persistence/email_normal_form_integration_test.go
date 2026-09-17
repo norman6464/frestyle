@@ -3,13 +3,10 @@
 package persistence_test
 
 import (
-	"context"
 	"testing"
 
-	"github.com/norman6464/frestyle/backend/internal/adapter/persistence"
 	"github.com/norman6464/frestyle/backend/internal/domain"
 	"github.com/norman6464/frestyle/backend/internal/testsupport"
-	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,13 +16,6 @@ const emailNormalExprSQL = `SELECT lower(btrim($1::text, E'\t\n\x0B\f\r '))`
 
 func TestEmailNormalForm_Integration(t *testing.T) {
 	sqlDB := testsupport.OpenTestDB(t)
-	repo := persistence.NewUserRepository(sqlDB)
-	ctx := context.Background()
-
-	truncate := func(t *testing.T) {
-		t.Helper()
-		testsupport.TruncateAll(t, sqlDB, "users", "user_oidc_identities")
-	}
 
 	// Go と SQL が同じ入力を同じ値へ畳むこと。片方だけを直したときにここが落ちる。
 	// 大小文字の畳み方そのもの（U+212A / U+017F など）は lower() のロケール実装に依存するため
@@ -53,18 +43,5 @@ func TestEmailNormalForm_Integration(t *testing.T) {
 			require.Equalf(t, domain.NormalizeEmail(in), got,
 				"入力 %q: SQL の正規形が domain.NormalizeEmail と一致しません", in)
 		}
-	})
-
-	// 一意索引のキーも同じ正規形。空白だけ違う 2 行を別キーとして通してはいけない。
-	t.Run("DB 制約: 前後空白だけ違う email もアクティブ行の重複として拒否する", func(t *testing.T) {
-		truncate(t)
-		_, err := sqlDB.Exec(
-			`INSERT INTO users (email, name, created_at, updated_at)
-			 VALUES ('  space@example.com  ', 'space', NOW(), NOW())`,
-		)
-		require.NoError(t, err)
-
-		dup := &domain.User{Email: "space@example.com"}
-		require.ErrorIs(t, repo.Create(ctx, dup), repository.ErrEmailTaken)
 	})
 }

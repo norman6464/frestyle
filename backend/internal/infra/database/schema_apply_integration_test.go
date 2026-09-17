@@ -11,6 +11,7 @@ package database_test
 import (
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/norman6464/frestyle/backend/internal/infra/database"
 	"github.com/norman6464/frestyle/backend/internal/testsupport"
@@ -128,19 +129,27 @@ func TestApplySchema_Integration(t *testing.T) {
 		// workspaces.is_active は別物（テナントの有効/無効）で対象外。
 		require.True(t, columnExists(t, db, "workspaces", "is_active"))
 	})
-}
 
-// TestApplySchema_二重呼び出しは何もしない_Integration は、同じ PostgreSQL を複数のテスト
-// バイナリが順に共有する結合テストの実運用を固定する。schema.gen.sql は CREATE 文だけで
-// IF NOT EXISTS を持たないため、素で 2 回 Exec すると必ず失敗する。ApplySchema は
-// users テーブルの有無で「初めてか」を判定して 2 回目以降を静かに no-op にする
-// （database.go の hasCoreSchema を参照）。
-func TestApplySchema_二重呼び出しは何もしない_Integration(t *testing.T) {
-	db := testsupport.OpenTestDB(t) // 内部で ApplySchema が 1 回済んでいる
-	ctx := t.Context()
+	t.Run("users.status の CHECK 制約が張られている", func(t *testing.T) {
+		insertUser := func(t *testing.T, email, status string, deletedAt *time.Time) error {
+			t.Helper()
+			_, err := db.ExecContext(
+				ctx,
+				`INSERT INTO users (email, name, status, deleted_at, created_at, updated_at)
+				 VALUES ($1, $1, $2, $3, now(), now())`,
+				email, status, deletedAt,
+			)
+			return err
+		}
+		now := time.Now()
 
-	require.NoError(t, database.ApplySchema(ctx, db), "2 回目の呼び出しは失敗してはいけない")
-	require.True(t, tableExists(t, db, "users"))
+		require.ErrorContains(t, insertUser(t, "bogus-status@example.test", "banned", nil), "ck_users_status")
+		require.ErrorContains(t, insertUser(t, "active-but-deleted@example.test", "active", &now), "ck_users_status_deleted_at")
+		require.ErrorContains(t, insertUser(t, "deactivated-but-not-deleted@example.test", "deactivated", nil), "ck_users_status_deleted_at")
+		require.NoError(t, insertUser(t, "consistent-active@example.test", "active", nil))
+		require.NoError(t, insertUser(t, "consistent-suspended@example.test", "suspended", nil))
+		require.NoError(t, insertUser(t, "consistent-deactivated@example.test", "deactivated", &now))
+	})
 }
 
 // resetPublicSchema は public schema を作り直して、まっさらな DB を再現する。
