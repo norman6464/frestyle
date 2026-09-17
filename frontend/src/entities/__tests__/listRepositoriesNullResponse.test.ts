@@ -5,7 +5,7 @@ vi.mock('@/shared/api/axios', () => ({
 }));
 
 import apiClient from '@/shared/api/axios';
-// 各 Slice の Public API（index.ts）経由で参照する（FSD の境界ルール / CLAUDE.md §2.5）。
+// 各 Slice の Public API（index.ts）経由で参照する（FSD の境界ルール / AGENTS.md §2.5）。
 import { NotificationRepository } from '@/entities/notification';
 
 const mockGet = vi.mocked(apiClient.get);

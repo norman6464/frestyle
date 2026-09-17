@@ -72,7 +72,7 @@ type CreateProjectVersionParams struct {
 // project_versions（リリース版）と ticket_fix_versions（チケットの修正バージョン）
 // =============================================================================
 //
-// 読み手への注意（生 SQL の作法。CLAUDE.md §3.3）:
+// 読み手への注意（生 SQL の作法。AGENTS.md §3.3）:
 //   - 版はプロジェクト単位。ticket_statuses / ticket_types と同じ足場を持つ。
 //   - チケットとの組は多対多（1 チケットに複数の版）。組の表は project_id を持ち、
 //     両側の FK にそれを含めることで「別プロジェクトの版が付く」を DB が拒む。

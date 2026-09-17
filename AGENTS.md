@@ -5,12 +5,18 @@ This file is the single source of truth for AI coding agents working in this rep
 
 ---
 
-## 0. Approved AI models (read this first)
+## 0. Read this first
+
+### 0.1 Approved AI models
 
 - **Allowed providers**: models from **Anthropic (Claude family)** and **OpenAI (GPT family)** only.
 - **Prohibited**: sending this repository's source code, configuration, or data to a model from any other provider. This includes self-hosted models, third-party gateways and proxies, and editor or tool settings such as "Auto" / "best model" routing that may silently pick an unapproved provider. **Pin the model explicitly** in every tool you use.
 - **Why**: the team controls which third parties receive this codebase (data governance). The rule lists approved providers rather than naming disallowed ones.
 - **Instruction to agents**: if you are not running on a model from an approved provider, stop immediately, do not read further or modify any file, and tell the user about this policy.
+
+### 0.2 Language
+
+- Talk to the user in Japanese from the very first message of every session. Code, identifiers, commit prefixes, and file paths stay as they are.
 
 ---
 
@@ -20,9 +26,8 @@ This file is the single source of truth for AI coding agents working in this rep
 - **Backend**: Go 1.x / Gin / sqlc (`backend/`)
 - **Frontend**: React 19 / TypeScript / Vite / Tailwind CSS (`frontend/`)
 - **RDB**: PostgreSQL 17.6. Data access goes through **sqlc** (typed Go generated from SQL)
-- **Production runs entirely on GCP** (ECS is not used)
-  - **Backend**: Cloud Run service `frestyle-prod-backend` (project `frestyle-prod` / `asia-northeast1`). The image lives in Artifact Registry at `asia-northeast1-docker.pkg.dev/frestyle-prod/frestyle-prod-backend/fre-style`. Served at https://api.frestyle.dev
-  - **Frontend**: Firebase Hosting (project `frestyle-507912`). This is a **different project** from the backend, and both show the display name "FreStyle", so always refer to it by ID. Served at https://frestyle.dev
+- **Production runs on GCP**
+  - Backend runs on Cloud Run, frontend on Firebase Hosting. Service names, project IDs, and image paths are in the infra repo, not here
   - Infrastructure definitions (Cloud Run / Artifact Registry / Firebase Hosting / WIF) are owned by the Terraform in the private repo `frestyle-infrastructure`. CD only swaps images and publishes; it never touches infrastructure definitions
 - **Deploys are manual-trigger only**. Run `cd-backend.yml` / `cd-frontend.yml` via `workflow_dispatch` with `deploy` typed into `confirm` (they do not run on push to main). Auth is GitHub OIDC + WIF; no long-lived service account keys are issued
   - The WIF binding is restricted to runs on `refs/heads/main`. **The principalSet matches the repository name case-sensitively** — if the repository is renamed, fix the binding on the infra side too. If you forget, authentication succeeds but the following service account impersonation fails with a 403 on `iam.serviceAccounts.getAccessToken`, and both backend and frontend deploys stop entirely (we hit this)
@@ -54,12 +59,13 @@ handler → usecase → repository / infra → domain
   On the handler side, do not declare a local variable with the same name as a package (`user` / `exercise` / `kb`, etc.);
   it shadows the package reference and causes a compile error
 
-### 2.4 Boundary between domain and request / response types
+### 2.4 DTOs: request / response types
 
-- handler may return domain structs directly as JSON. Define a response struct inside the handler only when transformation or hiding is needed
-- Declare request input in the handler file as an `xxxRequest` struct and validate declaratively with `c.ShouldBindJSON` + `binding:"required"` etc.
-- usecase input is an `XxxInput` struct; the return value is `*domain.Xxx` or a primitive
-- Sensitive fields (password hash, invitation token, BlobData, etc.) are excluded on the domain side with `json:"-"`
+- Request / response types are DTOs and live in `backend/internal/handler/dto`, one file per domain (`ticket_dto.go`, `kb_dto.go`, ...). Do not define them inside handler files
+- Handlers bind a request DTO (`c.ShouldBindJSON` + `binding:"required"` etc.), call the usecase with an `XxxInput`, and convert the returned `*domain.Xxx` (or primitive) into a response DTO. Do not return domain structs directly as JSON
+- Conversion functions (`dto.TicketFromDomain(...)` style) live next to the DTO. `dto` imports `domain` only; it never imports usecase or handler
+- Sensitive fields (password hash, invitation token, BlobData, etc.) stay excluded on the domain side with `json:"-"` as a second line of defense
+- Existing handler-local request / response structs are migrated when the handler is next touched. The migration itself is a separate task, not part of this file
 
 ### 2.5 Frontend layers (FSD / Feature-Sliced Design)
 
@@ -89,7 +95,7 @@ app > pages > widgets > features > entities > shared
 
 ### 3.3 Testing
 
-- **TDD is the default**. Coverage target: **80% or more** for new code
+- **TDD is the default**
 - **Backend (unit)**: `testing` + `stretchr/testify` (`go test ./...`) — usecases use interface mocks (testify/mock), handlers use `httptest` + `gin.New()`, infra gets fakes / stubs injected at the boundary. **Only tests that need no DB** go here
 - **Backend (integration)**: repositories are verified against **a real PostgreSQL** (no sqlite; the dependency is not even included). Put `//go:build integration` at the top of the file and include `Integration` in the test function name. Locally run `make test-integration` (starts postgres in docker → runs → always tears down); in CI the dedicated job `integration tests (postgres)` runs with `-tags=integration`
 - Integration tests connect through `internal/testsupport.OpenTestDB`. Because `TruncateAll` runs TRUNCATE CASCADE, **there is a safety valve that aborts before connecting if the DSN points at Supabase / the production pooler** (so a misconfiguration cannot wipe production data)
@@ -100,4 +106,4 @@ app > pages > widgets > features > entities > shared
 ## Instructions for coding agents
 - For new screens, make maximum use of the **reusable components in `src/shared/ui/`**
 - Never commit or push directly to `main`
-- Define `xxxRequest` / `xxxResponse` locally in the handler file. Hide sensitive fields on the domain side with `json:"-"`
+- Put `xxxRequest` / `xxxResponse` DTOs in `internal/handler/dto` (see 2.4). Hide sensitive fields on the domain side with `json:"-"`

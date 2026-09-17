@@ -363,7 +363,7 @@ VALUES
   (gen_random_uuid(), :'kb_workspace_id', :'kb_page_architecture_id', NULL, 'a1', 'paragraph',
    '{}'::jsonb, '[{"type":"text","text":"handler → usecase → repository/infra → domain の一方向依存です。"}]'::jsonb),
   (gen_random_uuid(), :'kb_workspace_id', :'kb_page_architecture_id', NULL, 'a2', 'paragraph',
-   '{}'::jsonb, '[{"type":"text","text":"詳しくはリポジトリ直下の CLAUDE.md を参照してください。"}]'::jsonb);
+   '{}'::jsonb, '[{"type":"text","text":"詳しくはリポジトリ直下の AGENTS.md を参照してください。"}]'::jsonb);
 
 -- 「よくある質問」(ハンドブック側)
 INSERT INTO blocks (id, workspace_id, page_id, parent_id, "position", type, attrs, inline)
