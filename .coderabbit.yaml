@@ -3,7 +3,7 @@ language: "ja-JP"
 reviews:
   # assertive: より厳格で網羅的なレビュー。chill より多くの潜在問題を指摘する。
   profile: "assertive"
-  # レビュー未解決でマージを強制ブロックはしない (admin merge 運用 CLAUDE.md §4.2 と両立)。
+  # レビュー未解決でマージを強制ブロックはしない (admin merge 運用と両立)。
   request_changes_workflow: false
   high_level_summary: true
   changed_files_summary: true
@@ -49,7 +49,7 @@ reviews:
     - path: "backend/internal/domain/**"
       instructions: >-
         domain 層。他層 (handler/usecase/repository/infra) を import していないか (標準ライブラリ + GORM/JSON タグのみ)。
-        機密フィールドに json:"-" が付いているか。EAV (汎用 key-value 属性バッグ) になっていないか (CLAUDE.md §3.6)。
+        機密フィールドに json:"-" が付いているか。EAV (汎用 key-value 属性バッグ) になっていないか。
     - path: "backend/internal/adapter/persistence/**"
       instructions: >-
         repository 実装。interface (usecase/repository) を満たしているか。SQL/GORM で N+1・インジェクション・
@@ -76,7 +76,7 @@ reviews:
         pull_request_target の乱用や、信頼できない入力の shell 展開によるインジェクションが無いか。
     - path: "**/*.md"
       instructions: >-
-        ドキュメント / 教材。他社プロダクト・他社サービス名を「〜風」等の比喩で使っていないか (CLAUDE.md §3.1.1)。
+        ドキュメント / 教材。他社プロダクト・他社サービス名を「〜風」等の比喩で使っていないか。
         秘匿情報 (接続情報 / secret 名 / 内部運用の詳細) が公開リポに書かれていないか。
 
   tools:
