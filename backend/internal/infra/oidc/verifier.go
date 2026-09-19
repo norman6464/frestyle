@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"math/big"
 	"net/http"
@@ -39,10 +40,16 @@ type Verifier struct {
 	// triedAt は取得を試みた時刻。成功だけ記録すると発行者に届かない間ずっと stale 扱いになり、
 	// 待ち時間の長い取得が全リクエストで直列に並んでしまう。
 	triedAt time.Time
+	// signatureRefreshAt は署名失敗を契機に JWKS を再取得した時刻。
+	signatureRefreshAt time.Time
 	// refreshMu は JWKS 再取得を 1 本に直列化し、未知 kid 同時多発時のスパイクを防ぐ。
 	refreshMu sync.Mutex
 	// refreshCooldown は未知 kid によるリフェッチ連打を防ぐ最小間隔。
 	refreshCooldown time.Duration
+	// jwksCacheTTL は JWKS キャッシュの有効期限。
+	jwksCacheTTL time.Duration
+	// jwksMaxStale は refresh 失敗時に古い JWKS キャッシュを許容する最大期間。
+	jwksMaxStale time.Duration
 	// leeway は時計ずれを吸収する許容誤差。
 	leeway time.Duration
 }
@@ -82,6 +89,10 @@ type Config struct {
 	// **ClientID は常に受け入れる**（置き換えにしない）。id_token の aud は client_id なので、
 	// 置き換えにすると「プロジェクト識別子を設定したらログインが全員落ちる」ことになる。
 	Audiences []string
+	// JWKSCacheTTL は JWKS キャッシュの有効期限。
+	JWKSCacheTTL time.Duration
+	// JWKSMaxStale は refresh 失敗時に古い JWKS キャッシュを許容する最大期間。
+	JWKSMaxStale time.Duration
 }
 
 // NewVerifier は設定から Verifier を組み立てる。必須項目が欠けていればエラーを返す。
@@ -112,6 +123,14 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 			auds = append(auds, a)
 		}
 	}
+	jwksCacheTTL := cfg.JWKSCacheTTL
+	if jwksCacheTTL <= 0 {
+		jwksCacheTTL = 1 * time.Hour
+	}
+	jwksMaxStale := cfg.JWKSMaxStale
+	if jwksMaxStale <= 0 {
+		jwksMaxStale = 24 * time.Hour
+	}
 	return &Verifier{
 		issuer:          cfg.Issuer,
 		jwksURI:         cfg.JWKSURI,
@@ -121,6 +140,8 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 		keys:            map[string]*rsa.PublicKey{},
 		refreshCooldown: 1 * time.Minute,
 		leeway:          60 * time.Second,
+		jwksCacheTTL:    jwksCacheTTL,
+		jwksMaxStale:    jwksMaxStale,
 	}, nil
 }
 
@@ -195,7 +216,16 @@ func (v *Verifier) parse(ctx context.Context, token string) (map[string]any, err
 		return nil, err
 	}
 	if err := verifyRS256(parts[0]+"."+parts[1], parts[2], key); err != nil {
-		return nil, err
+		if !errors.Is(err, ErrJWTBadSignature) {
+			return nil, err
+		}
+		newKey, err := v.refreshKeyForKid(ctx, kid, key)
+		if err != nil {
+			return nil, err
+		}
+		if err := verifyRS256(parts[0]+"."+parts[1], parts[2], newKey); err != nil {
+			return nil, err
+		}
 	}
 
 	claims, err := decodeJSONSegment(parts[1])
@@ -279,7 +309,7 @@ func (v *Verifier) acceptsAudience(aud string) bool {
 
 // keyForKid は kid に対応する RSA 公開鍵を返す。キャッシュに無ければ JWKS を再取得する。
 func (v *Verifier) keyForKid(ctx context.Context, kid string) (*rsa.PublicKey, error) {
-	if key, ok := v.lookup(kid); ok {
+	if key, ok := v.lookupFresh(kid); ok {
 		return key, nil
 	}
 
@@ -287,7 +317,7 @@ func (v *Verifier) keyForKid(ctx context.Context, kid string) (*rsa.PublicKey, e
 	v.refreshMu.Lock()
 	defer v.refreshMu.Unlock()
 
-	if key, ok := v.lookup(kid); ok {
+	if key, ok := v.lookupFresh(kid); ok {
 		return key, nil
 	}
 	v.mu.RLock()
@@ -298,6 +328,39 @@ func (v *Verifier) keyForKid(ctx context.Context, kid string) (*rsa.PublicKey, e
 	if !stale {
 		return nil, ErrJWTUnknownKey
 	}
+	if err := v.refresh(ctx); err != nil {
+		if key, ok := v.lookupStale(kid); ok {
+			return key, nil
+		}
+		return nil, err
+	}
+	if key, ok := v.lookup(kid); ok {
+		return key, nil
+	}
+	return nil, ErrJWTUnknownKey
+}
+
+func (v *Verifier) refreshKeyForKid(
+	ctx context.Context,
+	kid string,
+	oldKey *rsa.PublicKey,
+) (*rsa.PublicKey, error) {
+	v.refreshMu.Lock()
+	defer v.refreshMu.Unlock()
+	if key, ok := v.lookup(kid); ok && key != oldKey {
+		return key, nil
+	}
+	v.mu.RLock()
+	canRefresh := v.signatureRefreshAt.IsZero() ||
+		time.Since(v.signatureRefreshAt) > v.refreshCooldown
+	v.mu.RUnlock()
+	if !canRefresh {
+		return oldKey, nil
+	}
+	v.mu.Lock()
+	v.signatureRefreshAt = time.Now()
+	v.mu.Unlock()
+
 	if err := v.refresh(ctx); err != nil {
 		return nil, err
 	}
@@ -315,6 +378,38 @@ func (v *Verifier) lookup(kid string) (*rsa.PublicKey, bool) {
 	return key, ok
 }
 
+func (v *Verifier) lookupFresh(kid string) (*rsa.PublicKey, bool) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	key, ok := v.keys[kid]
+	if !ok {
+		return nil, false
+	}
+	if v.fetchedAt.IsZero() {
+		return nil, false
+	}
+	if time.Since(v.fetchedAt) > v.jwksCacheTTL {
+		return nil, false
+	}
+	return key, true
+}
+
+func (v *Verifier) lookupStale(kid string) (*rsa.PublicKey, bool) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	key, ok := v.keys[kid]
+	if !ok {
+		return nil, false
+	}
+	if v.fetchedAt.IsZero() {
+		return nil, false
+	}
+	if time.Since(v.fetchedAt) > v.jwksMaxStale {
+		return nil, false
+	}
+	return key, true
+}
+
 // jwk は JWKS 内の 1 鍵を表す。
 type jwk struct {
 	Kid string `json:"kid"`
@@ -330,12 +425,35 @@ type jwk struct {
 const maxJWKSBytes = 1 << 20 // 1 MiB
 
 // refresh は JWKS を取得してキャッシュを差し替える。
-func (v *Verifier) refresh(ctx context.Context) error {
+func (v *Verifier) refresh(ctx context.Context) (retErr error) {
+	v.mu.RLock()
+	fetchedAt := v.fetchedAt
+	v.mu.RUnlock()
 	// 試みた時刻は、成功しても失敗しても記録する（keyForKid の間隔判定の根拠）。
 	defer func() {
 		v.mu.Lock()
 		v.triedAt = time.Now()
 		v.mu.Unlock()
+	}()
+	defer func() {
+		cacheAge := time.Duration(0)
+		if !fetchedAt.IsZero() {
+			cacheAge = time.Since(fetchedAt)
+		}
+
+		if retErr != nil {
+			slog.ErrorContext(
+				ctx, "oidc jwks refresh failed",
+				slog.Duration("cache_age", cacheAge),
+				slog.Any("error", retErr),
+			)
+			return
+		}
+
+		slog.InfoContext(
+			ctx, "oidc jwks refresh succeeded",
+			slog.Duration("cache_age", cacheAge),
+		)
 	}()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, v.jwksURI, nil)
