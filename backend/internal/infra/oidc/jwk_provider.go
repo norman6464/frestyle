@@ -26,7 +26,7 @@ type jwk struct {
 
 // maxJWKSBytes は JWKS 応答の読み取り上限。発行者が壊れて巨大な応答を返したときに
 // メモリを食い尽くさないための蓋。
-const maxJWKSBytes = 1 << 20 // 1 MiB
+const maxJWKSBytes = 1024 * 1024 // 1 MiB
 
 // NISTのRSA鍵長の推奨に合わせ、2048bit未満のRSA署名鍵は受け入れない。。
 const minRSAModulusBits = 2048
@@ -55,6 +55,7 @@ func (k jwk) generateRSAPublicKey() (*rsa.PublicKey, error) {
 	if n.BitLen() < minRSAModulusBits {
 		return nil, errors.New("oidc: jwk modulus too small")
 	}
+	// rsa.PublicKey.E は int 型のため、検証済みの指数を int に変換する。
 	return &rsa.PublicKey{N: n, E: int(e)}, nil
 }
 
