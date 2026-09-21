@@ -3,14 +3,11 @@ package oidc
 import (
 	"context"
 	"crypto/rsa"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"math"
 	"math/big"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,29 +16,29 @@ import (
 
 // jwk は JWKS 内の 1 鍵を表す。
 type jwk struct {
-	Kid string `json:"kid"`
-	Kty string `json:"kty"`
-	Use string `json:"use"`
-	Alg string `json:"alg"`
-	N   string `json:"n"`
-	E   string `json:"e"`
+	Kid      string `json:"kid"`
+	Kty      string `json:"kty"`
+	Use      string `json:"use"`
+	Alg      string `json:"alg"`
+	Modulus  string `json:"n"`
+	Exponent string `json:"e"`
 }
 
 // maxJWKSBytes は JWKS 応答の読み取り上限。発行者が壊れて巨大な応答を返したときに
 // メモリを食い尽くさないための蓋。
 const maxJWKSBytes = 1 << 20 // 1 MiB
 
-// minRSAModulusBits は受け入れる RSA 公開鍵の最小の大きさ。
-// 小さすぎる鍵は署名を偽造できるので、発行者が何を返してきても受け取らない。
+// NISTのRSA鍵長の推奨に合わせ、2048bit未満のRSA署名鍵は受け入れない。。
 const minRSAModulusBits = 2048
 
-// toRSAPublicKey は JWK の n / e から rsa.PublicKey を組み立てる。
-func (k jwk) toRSAPublicKey() (*rsa.PublicKey, error) {
-	nBytes, err := base64URLDecode(k.N)
+// generateRSAPublicKey は JWK に含まれる RSA 公開鍵の
+// Modulus（法）と Exponent（公開指数）から rsa.PublicKey を生成する。
+func (k jwk) generateRSAPublicKey() (*rsa.PublicKey, error) {
+	nBytes, err := base64URLDecode(k.Modulus)
 	if err != nil {
 		return nil, err
 	}
-	eBytes, err := base64URLDecode(k.E)
+	eBytes, err := base64URLDecode(k.Exponent)
 	if err != nil {
 		return nil, err
 	}
@@ -62,14 +59,14 @@ func (k jwk) toRSAPublicKey() (*rsa.PublicKey, error) {
 }
 
 type jwkProvider struct {
-	jwksURI    string
-	httpClient *http.Client
+	jwksEndpointURL string
+	fetcher         *jwksFetcher
 
-	mu        sync.RWMutex
-	keys      map[string]*rsa.PublicKey
-	fetchedAt time.Time
+	jwksStateMu sync.RWMutex
+	keys        map[string]*rsa.PublicKey
+	fetchedAt   time.Time
 
-	// triedAt は取得を試みた時刻。成功だけ記録すると発行者に届かない間ずっと stale 扱いになり、
+	// triedAt は取得を試みた時刻。成功だけ記録すると発行者に届かない間も毎回再取得可能と判定され、
 	// 待ち時間の長い取得が全リクエストで直列に並んでしまう。
 	triedAt time.Time
 
@@ -90,14 +87,14 @@ type jwkProvider struct {
 }
 
 func newJWKProvider(
-	jwksURI string,
-	httpClient *http.Client,
+	jwksEndpointURL string,
+	fetcher *jwksFetcher,
 	refreshCooldown time.Duration,
 	jwksCacheTTL time.Duration,
 ) *jwkProvider {
 	return &jwkProvider{
-		jwksURI:         jwksURI,
-		httpClient:      httpClient,
+		jwksEndpointURL: jwksEndpointURL,
+		fetcher:         fetcher,
 		keys:            map[string]*rsa.PublicKey{},
 		refreshCooldown: refreshCooldown,
 		jwksCacheTTL:    jwksCacheTTL,
@@ -107,57 +104,82 @@ func newJWKProvider(
 
 func cacheTTLFromHeader(cacheControl string, fallback time.Duration) time.Duration {
 	for _, directive := range strings.Split(cacheControl, ",") {
-		directive = strings.TrimSpace(directive)
-
-		if !strings.HasPrefix(directive, "max-age=") {
+		value, found := strings.CutPrefix(strings.TrimSpace(directive), "max-age=")
+		if !found {
 			continue
 		}
 
-		seconds, err := strconv.Atoi(strings.TrimPrefix(directive, "max-age="))
-		if err != nil || seconds < 0 {
-			return fallback
+		seconds, err := strconv.Atoi(value)
+		if err == nil && seconds >= 0 {
+			return time.Duration(seconds) * time.Second
 		}
-
-		return time.Duration(seconds) * time.Second
 	}
 
 	return fallback
 }
 
 func (p *jwkProvider) getFreshKey(kid string) (*rsa.PublicKey, bool) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	p.jwksStateMu.RLock()
+	defer p.jwksStateMu.RUnlock()
 
 	key, ok := p.keys[kid]
-	if !ok {
+	if !ok || p.fetchedAt.IsZero() || time.Since(p.fetchedAt) > p.cacheTTL {
 		return nil, false
 	}
-	if p.fetchedAt.IsZero() {
-		return nil, false
-	}
-	if time.Since(p.fetchedAt) > p.cacheTTL {
-		return nil, false
-	}
+
 	return key, true
 }
 
 func (p *jwkProvider) lookup(kid string) (*rsa.PublicKey, bool) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	p.jwksStateMu.RLock()
+	defer p.jwksStateMu.RUnlock()
 
 	key, ok := p.keys[kid]
 	return key, ok
 }
 
+func buildSigningKeys(jwks []jwk) map[string]*rsa.PublicKey {
+	keys := make(map[string]*rsa.PublicKey, len(jwks))
+
+	for _, key := range jwks {
+		if key.Kty != "RSA" || key.Kid == "" {
+			continue
+		}
+		if key.Use != "" && key.Use != "sig" {
+			continue
+		}
+		if key.Alg != "" && key.Alg != "RS256" {
+			continue
+		}
+
+		publicKey, err := key.generateRSAPublicKey()
+		if err != nil {
+			continue
+		}
+
+		keys[key.Kid] = publicKey
+	}
+
+	return keys
+}
+
+func (p *jwkProvider) fetchJWKS(ctx context.Context) ([]jwk, time.Duration, error) {
+	return p.fetcher.fetch(
+		ctx,
+		p.jwksEndpointURL,
+		p.jwksCacheTTL,
+	)
+}
+
 func (p *jwkProvider) refresh(ctx context.Context) (retErr error) {
-	p.mu.RLock()
+	p.jwksStateMu.RLock()
 	fetchedAt := p.fetchedAt
-	p.mu.RUnlock()
+	p.jwksStateMu.RUnlock()
 	// 試みた時刻は、成功しても失敗しても記録する（keyForKid の間隔判定の根拠）。
 	defer func() {
-		p.mu.Lock()
+		p.jwksStateMu.Lock()
 		p.triedAt = time.Now()
-		p.mu.Unlock()
+		p.jwksStateMu.Unlock()
 	}()
 	defer func() {
 		cacheAge := time.Duration(0)
@@ -180,56 +202,22 @@ func (p *jwkProvider) refresh(ctx context.Context) (retErr error) {
 		)
 	}()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.jwksURI, nil)
+	jwks, cacheTTL, err := p.fetchJWKS(ctx)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrJWKSUnavailable, err)
+		return err
 	}
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrJWKSUnavailable, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: status %d", ErrJWKSUnavailable, resp.StatusCode)
-	}
-	cacheTTL := cacheTTLFromHeader(
-		resp.Header.Get("Cache-Control"),
-		p.jwksCacheTTL,
-	)
-	var doc struct {
-		Keys []jwk `json:"keys"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJWKSBytes)).Decode(&doc); err != nil {
-		return fmt.Errorf("%w: %w", ErrJWKSUnavailable, err)
-	}
-	keys := make(map[string]*rsa.PublicKey, len(doc.Keys))
-	for _, k := range doc.Keys {
-		if k.Kty != "RSA" || k.Kid == "" {
-			continue
-		}
-		// use / alg が明示されているなら、署名用の RS256 鍵だけを取り込む。
-		// 暗号化用の鍵まで署名鍵として使うと、鍵の用途の分離が崩れる。
-		if k.Use != "" && k.Use != "sig" {
-			continue
-		}
-		if k.Alg != "" && k.Alg != "RS256" {
-			continue
-		}
-		pub, err := k.toRSAPublicKey()
-		if err != nil {
-			continue
-		}
-		keys[k.Kid] = pub
-	}
+
+	keys := buildSigningKeys(jwks)
+
 	// 空 / 壊れた JWKS で有効なキャッシュを潰さない（認証の全断を避ける）。
 	if len(keys) == 0 {
 		return fmt.Errorf("%w: no usable rsa keys", ErrJWKSUnavailable)
 	}
-	p.mu.Lock()
+	p.jwksStateMu.Lock()
 	p.keys = keys
 	p.fetchedAt = time.Now()
 	p.cacheTTL = cacheTTL
-	p.mu.Unlock()
+	p.jwksStateMu.Unlock()
 	return nil
 }
 
@@ -245,12 +233,12 @@ func (p *jwkProvider) keyForKid(ctx context.Context, kid string) (*rsa.PublicKey
 	if key, ok := p.getFreshKey(kid); ok {
 		return key, nil
 	}
-	p.mu.RLock()
+	p.jwksStateMu.RLock()
 	// 成功時刻ではなく「試みた時刻」で間隔を測る。成功だけを見ると、発行者に
-	// 届かない間は毎回 stale になり、タイムアウト待ちが全リクエストで直列に並ぶ。
-	stale := time.Since(p.triedAt) > p.refreshCooldown
-	p.mu.RUnlock()
-	if !stale {
+	// 届かない間も毎回再取得可能と判定され、タイムアウト待ちが全リクエストで直列に並ぶ。
+	cooldownElapsed := time.Since(p.triedAt) > p.refreshCooldown
+	p.jwksStateMu.RUnlock()
+	if !cooldownElapsed {
 		return nil, ErrJWTUnknownKey
 	}
 	if err := p.refresh(ctx); err != nil {
@@ -272,16 +260,16 @@ func (p *jwkProvider) refreshKeyForKid(
 	if key, ok := p.lookup(kid); ok && key != oldKey {
 		return key, nil
 	}
-	p.mu.RLock()
+	p.jwksStateMu.RLock()
 	canRefresh := p.signatureRefreshAt.IsZero() ||
 		time.Since(p.signatureRefreshAt) > p.refreshCooldown
-	p.mu.RUnlock()
+	p.jwksStateMu.RUnlock()
 	if !canRefresh {
 		return oldKey, nil
 	}
-	p.mu.Lock()
+	p.jwksStateMu.Lock()
 	p.signatureRefreshAt = time.Now()
-	p.mu.Unlock()
+	p.jwksStateMu.Unlock()
 
 	if err := p.refresh(ctx); err != nil {
 		return nil, err

@@ -20,21 +20,27 @@ import (
 )
 
 const (
-	defaultJWKSCacheTTL = time.Hour
+	defaultJWKSCacheTTL        = time.Hour
+	defaultJWKSRefreshCooldown = time.Minute
 )
 
 // Verifier は発行者が署名した JWT を検証する。署名を確かめずに payload を読むと sub でも
 // 役割でも好きに名乗れてしまうので、保護されたルートの認可より前に必ずここを通す。
 type Verifier struct {
-	issuer    string
-	audiences []string
-	clientID  string
+	issuer   string
+	aud      []string
+	clientID string
 
-	// jwk は JWKS の取得・キャッシュ・再取得を管理する。
 	jwk *jwkProvider
 
 	// leeway は時計ずれを吸収する許容誤差。
 	leeway time.Duration
+}
+type signatureVerificationInput struct {
+	kid          string
+	signingInput string
+	signature    string
+	key          *rsa.PublicKey
 }
 
 // 検証失敗の sentinel エラー。呼び出し側は errors.Is で分岐できる。
@@ -108,27 +114,27 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 	if jwksCacheTTL <= 0 {
 		jwksCacheTTL = defaultJWKSCacheTTL
 	}
-	httpClient := &http.Client{Timeout: 5 * time.Second}
+	fetcher := newJWKSFetcher()
 
 	jwk := newJWKProvider(
 		cfg.JWKSURI,
-		httpClient,
-		1*time.Minute,
+		fetcher,
+		defaultJWKSRefreshCooldown,
 		jwksCacheTTL,
 	)
 	return &Verifier{
-		issuer:    cfg.Issuer,
-		audiences: auds,
-		clientID:  cfg.ClientID,
-		jwk:       jwk,
-		leeway:    60 * time.Second,
+		issuer:   cfg.Issuer,
+		aud:      auds,
+		clientID: cfg.ClientID,
+		jwk:      jwk,
+		leeway:   60 * time.Second,
 	}, nil
 }
 
 // WithHTTPClient はテストで通信先を差し替えるための設定。
 func (v *Verifier) WithHTTPClient(client *http.Client) *Verifier {
 	if client != nil {
-		v.jwk.httpClient = client
+		v.jwk.fetcher = newJWKSFetcherWithClient(client)
 	}
 	return v
 }
@@ -197,10 +203,12 @@ func (v *Verifier) parse(ctx context.Context, token string) (map[string]any, err
 	}
 	if err := v.verifySignatureWithRefresh(
 		ctx,
-		kid,
-		parts[0]+"."+parts[1],
-		parts[2],
-		key,
+		signatureVerificationInput{
+			kid:          kid,
+			signingInput: parts[0] + "." + parts[1],
+			signature:    parts[2],
+			key:          key,
+		},
 	); err != nil {
 		return nil, err
 	}
@@ -214,22 +222,19 @@ func (v *Verifier) parse(ctx context.Context, token string) (map[string]any, err
 
 func (v *Verifier) verifySignatureWithRefresh(
 	ctx context.Context,
-	kid string,
-	signingInput string,
-	signature string,
-	key *rsa.PublicKey,
+	input signatureVerificationInput,
 ) error {
-	if err := verifyRS256(signingInput, signature, key); err != nil {
+	if err := verifyRS256(input.signingInput, input.signature, input.key); err != nil {
 		if !errors.Is(err, ErrJWTBadSignature) {
 			return err
 		}
 
-		newKey, err := v.jwk.refreshKeyForKid(ctx, kid, key)
+		newKey, err := v.jwk.refreshKeyForKid(ctx, input.kid, input.key)
 		if err != nil {
 			return err
 		}
 
-		if err := verifyRS256(signingInput, signature, newKey); err != nil {
+		if err := verifyRS256(input.signingInput, input.signature, newKey); err != nil {
 			return err
 		}
 	}
@@ -301,7 +306,7 @@ func (v *Verifier) audienceMatches(raw any) bool {
 }
 
 func (v *Verifier) acceptsAudience(aud string) bool {
-	for _, want := range v.audiences {
+	for _, want := range v.aud {
 		if aud == want {
 			return true
 		}
