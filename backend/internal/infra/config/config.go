@@ -83,9 +83,9 @@ type OIDCConfig struct {
 	JWKSURI string
 	// Audiences は ID トークンの aud に含まれていることを要求する値（カンマ区切り）。
 	// GCIP は aud に client_id ではなく GCP のプロジェクト ID を入れる。
-	Audiences    []string
+	Audiences []string
+	// JWKSCacheTTL は JWKS キャッシュの有効期限。
 	JWKSCacheTTL time.Duration
-	JWKSMaxStale time.Duration
 }
 
 // Configured は認証に必要な設定が揃っているかを返す。
@@ -93,24 +93,26 @@ func (c OIDCConfig) Configured() bool {
 	return c.Issuer != "" && c.JWKSURI != "" && len(c.Audiences) > 0
 }
 
-func Load() (*Config, error) {
-	var jwksCacheTTL time.Duration
-	if raw := os.Getenv("OIDC_JWKS_CACHE_TTL"); raw != "" {
-		var err error
-		jwksCacheTTL, err = time.ParseDuration(raw)
-		if err != nil {
-			return nil, fmt.Errorf("invalid OIDC_JWKS_CACHE_TTL: %w", err)
-		}
+func getDurationEnv(key string) (time.Duration, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return 0, nil
 	}
 
-	var jwksMaxStale time.Duration
-	if raw := os.Getenv("OIDC_JWKS_MAX_STALE"); raw != "" {
-		var err error
-		jwksMaxStale, err = time.ParseDuration(raw)
-		if err != nil {
-			return nil, fmt.Errorf("invalid OIDC_JWKS_MAX_STALE: %w", err)
-		}
+	duration, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", key, err)
 	}
+
+	return duration, nil
+}
+
+func Load() (*Config, error) {
+	jwksCacheTTL, err := getDurationEnv("OIDC_JWKS_CACHE_TTL")
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
 		AppEnv:      getEnvOrDefault("APP_ENV", "local"),
 		ServerPort:  getEnvOrDefault("PORT", "8080"),
@@ -127,7 +129,6 @@ func Load() (*Config, error) {
 			JWKSURI:      os.Getenv("OIDC_JWKS_URI"),
 			Audiences:    splitAndTrim(os.Getenv("OIDC_AUDIENCES")),
 			JWKSCacheTTL: jwksCacheTTL,
-			JWKSMaxStale: jwksMaxStale,
 		},
 		Images: ImagesConfig{
 			Bucket: os.Getenv("IMAGES_BUCKET"),

@@ -60,7 +60,6 @@ func main() {
 		JWKSURI:      cfg.OIDC.JWKSURI,
 		Audiences:    cfg.OIDC.Audiences,
 		JWKSCacheTTL: cfg.OIDC.JWKSCacheTTL,
-		JWKSMaxStale: cfg.OIDC.JWKSMaxStale,
 	})
 	if err != nil {
 		fatal("oidc verifier init failed", err)
