@@ -21,18 +21,24 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const GROUPS: { title: string; names: FsIconName[] }[] = [
-  { title: '全体ナビ・殻', names: ['home', 'assigned', 'knowledge', 'backlog', 'bell', 'settings', 'search', 'user', 'logout', 'menu', 'panel'] },
+  { title: '全体ナビ・殻', names: ['home', 'assigned', 'knowledge', 'backlog', 'bell', 'settings', 'search', 'user', 'logout', 'login', 'menu', 'panel'] },
   {
     title: '操作',
     names: [
-      'plus', 'x', 'check', 'chevron-down', 'chevron-right', 'chevron-left', 'chevron-up-down', 'chevron-double-down',
+      'plus', 'x', 'check', 'chevron-down', 'chevron-up', 'chevron-right', 'chevron-left', 'chevron-up-down',
+      'chevron-double-down', 'chevron-double-right', 'chevron-double-left',
       'arrow-right', 'arrow-up', 'arrow-down', 'arrow-up-right', 'filter', 'more', 'trash', 'pencil', 'archive',
-      'archive-restore', 'sprint', 'calendar', 'clock', 'tag', 'paperclip', 'comment', 'eye', 'eye-off', 'refresh',
+      'archive-restore', 'sprint', 'calendar', 'clock', 'tag', 'paperclip', 'comment', 'chat', 'eye', 'eye-off',
+      'refresh', 'copy', 'clipboard', 'clipboard-check', 'clipboard-list', 'camera', 'grid', 'folder', 'lock', 'ban',
     ],
+  },
+  {
+    title: '人・もの',
+    names: ['users', 'user-plus', 'user-minus', 'star', 'book', 'image', 'document', 'document-text', 'chart', 'smile', 'sparkles'],
   },
   { title: '状態（形で区別）', names: ['status-todo', 'status-progress', 'status-done'] },
   { title: '優先度（向きで読む）', names: ['priority-high', 'priority-medium', 'priority-low'] },
-  { title: '知らせ', names: ['alert-circle', 'info', 'alert-triangle', 'check-circle', 'inbox'] },
+  { title: '知らせ', names: ['alert-circle', 'info', 'alert-triangle', 'check-circle', 'help-circle', 'lightbulb', 'inbox'] },
 ];
 
 /** 全部。名前つきで並べ、欠けや線の乱れを目で確かめる。 */

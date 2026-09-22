@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { TicketRepository } from '@/entities/ticket';
+import { fsIcon } from '@/shared/ui';
 
 export interface TicketWatchButtonProps {
   workspaceSlug: string;
@@ -57,7 +57,7 @@ export default function TicketWatchButton({ workspaceSlug, ticketId }: TicketWat
 
   if (!ready) return null;
 
-  const Icon = watching ? EyeIcon : EyeSlashIcon;
+  const Icon = watching ? fsIcon('eye') : fsIcon('eye-off');
 
   return (
     <button

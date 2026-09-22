@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { CalendarDaysIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { formatTicketKey, type AssignedTicket } from '@/entities/ticket';
 import { dueDateLabel, dueState, localToday } from '../lib/dueDate';
+import { FsIcon } from '@/shared/ui';
 
 export interface AssignedTicketRowProps {
   ticket: AssignedTicket;
@@ -38,7 +38,7 @@ export default function AssignedTicketRow({ ticket, today = localToday() }: Assi
       <span className="col-start-1 row-start-2 flex min-w-0 flex-col gap-2 sm:col-start-2 sm:row-start-1 sm:items-end">
         {ticket.dueDate && (
           <span className={`inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums ${deadline === 'overdue' ? 'font-semibold text-danger-ink' : 'text-[var(--color-text-muted)]'}`}>
-            <CalendarDaysIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
+            <FsIcon name="calendar" className="h-4 w-4 shrink-0" />
             <span>{deadline === 'overdue' ? '期限超過' : deadline === 'today' ? '今日が期限' : '期限'}</span>
             <time dateTime={ticket.dueDate}>{dueDateLabel(ticket.dueDate, today)}</time>
           </span>
@@ -51,7 +51,7 @@ export default function AssignedTicketRow({ ticket, today = localToday() }: Assi
           </span>
         </span>
       </span>
-      <ChevronRightIcon aria-hidden="true" className="col-start-2 row-start-1 h-4 w-4 text-[var(--color-text-muted)] sm:col-start-3" />
+      <FsIcon name="chevron-right" className="col-start-2 row-start-1 h-4 w-4 text-[var(--color-text-muted)] sm:col-start-3" />
     </Link>
   );
 }

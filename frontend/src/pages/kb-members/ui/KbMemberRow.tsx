@@ -1,6 +1,6 @@
-import { ArrowPathIcon, NoSymbolIcon, UserMinusIcon } from '@heroicons/react/24/outline';
 import type { KbAdminWorkspaceMember, KbGrantRole } from '@/entities/kb';
 import Avatar from '@/shared/ui/Avatar';
+import { FsIcon } from '@/shared/ui';
 
 const ROLE_OPTIONS: { value: KbGrantRole; label: string }[] = [
   { value: 'admin', label: 'admin' },
@@ -99,7 +99,7 @@ export default function KbMemberRow({
                 title="復帰させる"
                 className="inline-flex min-h-11 items-center gap-2 rounded-md border border-surface-3 px-3 text-sm text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
               >
-                <ArrowPathIcon className="h-4 w-4" aria-hidden="true" />
+                <FsIcon name="refresh" className="h-4 w-4" />
                 復帰
               </button>
             ) : (
@@ -111,7 +111,7 @@ export default function KbMemberRow({
                 title="アカウントを停止する"
                 className="inline-flex min-h-11 items-center gap-2 rounded-md border border-surface-3 px-3 text-sm text-[var(--color-text-muted)] hover:bg-warning-soft hover:text-warning focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
               >
-                <NoSymbolIcon className="h-4 w-4" aria-hidden="true" />
+                <FsIcon name="ban" className="h-4 w-4" />
                 停止
               </button>
             )}
@@ -123,7 +123,7 @@ export default function KbMemberRow({
               title="ワークスペースから外す"
               className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-[var(--color-text-muted)] hover:bg-danger-soft hover:text-danger-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
             >
-              <UserMinusIcon className="h-4 w-4" aria-hidden="true" />
+              <FsIcon name="user-minus" className="h-4 w-4" />
               外す
             </button>
           </div>

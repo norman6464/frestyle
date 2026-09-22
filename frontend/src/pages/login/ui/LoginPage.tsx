@@ -5,9 +5,9 @@ import InputField from '@/shared/ui/InputField';
 import SNSSignInButton from '@/shared/ui/SNSSignInButton';
 import LinkText from '@/shared/ui/LinkText';
 import { AuthUnavailableNotice } from '@/features/auth';
-import { CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { toChangeHandler } from '@/shared/lib/formHandlers';
 import { useLoginPage } from '../model/useLoginPage';
+import { FsIcon } from '@/shared/ui';
 
 /**
  * ログイン画面。
@@ -52,7 +52,7 @@ export default function LoginPage() {
           role="status"
           className="mb-4 flex items-center justify-center gap-1 rounded-lg border border-success-border bg-success-soft p-3 text-center font-medium text-success"
         >
-          <CheckCircleIcon className="h-4 w-4" aria-hidden="true" />
+          <FsIcon name="check-circle" className="h-4 w-4" />
           {flashMessage}
         </p>
       )}
@@ -62,7 +62,7 @@ export default function LoginPage() {
           role="alert"
           className="mb-4 flex items-center justify-center gap-1 rounded-lg border border-danger-border bg-danger-soft p-3 text-center font-medium text-danger-ink"
         >
-          <ExclamationCircleIcon className="h-4 w-4" aria-hidden="true" />
+          <FsIcon name="alert-circle" className="h-4 w-4" />
           {errorMessage}
         </p>
       )}

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
 import type { SharePrincipal, ShareRole, ShareRow as ShareRowData } from '../model/types';
 import ShareRow from './ShareRow';
 import { ROLES, displayName } from '../model/labels';
+import { FsIcon } from '@/shared/ui';
 
 export interface SharePanelProps {
   /** いま開いている対象の名前（何を共有しているかの手がかり）。 */
@@ -86,7 +86,7 @@ export default function SharePanel({
           aria-label="共有を閉じる"
           className="-mr-1 inline-flex shrink-0 items-center justify-center rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-surface-2"
         >
-          <XMarkIcon className="h-4 w-4" />
+          <FsIcon name="x" className="h-4 w-4" />
         </button>
       </header>
 

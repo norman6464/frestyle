@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import { PlusIcon } from '@heroicons/react/24/outline';
-import { EmptyState, Loading } from '@/shared/ui';
-import { CalendarDaysIcon } from '@heroicons/react/24/outline';
+import { EmptyState, Loading, FsIcon, fsIcon } from '@/shared/ui';
 import type { Ticket } from '@/entities/ticket';
 import { useSprints } from '../model/useSprints';
 import { useSprintTickets } from '../model/useSprintTickets';
@@ -123,7 +121,7 @@ export default function SprintBoard({
               onClick={() => setCreating(true)}
               className="flex items-center gap-1.5 rounded-lg border border-surface-3 bg-surface-1 px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
             >
-              <PlusIcon className="h-4 w-4" aria-hidden="true" />
+              <FsIcon name="plus" className="h-4 w-4" />
               スプリントを作成
             </button>
           )}
@@ -132,7 +130,7 @@ export default function SprintBoard({
 
       {sprints.length === 0 ? (
         <EmptyState
-          icon={CalendarDaysIcon}
+          icon={fsIcon('calendar')}
           title="スプリントがありません"
           description="「いつやるか」で仕事を区切るとき、ここにスプリントを作ります。"
         />

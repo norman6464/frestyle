@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { EllipsisHorizontalIcon } from '@heroicons/react/24/outline';
 import Avatar from '@/shared/ui/Avatar';
 import ConfirmModal from '@/shared/ui/ConfirmModal';
 import { formatDateTime, formatTime } from '@/shared/lib/formatters';
@@ -11,6 +10,7 @@ import TicketCommentBody from './TicketCommentBody';
 import TicketCommentComposer from './TicketCommentComposer';
 import TicketCommentEditHistory from './TicketCommentEditHistory';
 import TicketReactionBar from './TicketReactionBar';
+import { FsIcon } from '@/shared/ui';
 
 export interface TicketCommentItemProps {
   comment: TicketComment;
@@ -170,7 +170,7 @@ export default function TicketCommentItem({
                 aria-expanded={menuOpen}
                 className="grid h-5 w-5 place-items-center rounded text-[var(--color-text-muted)] hover:bg-surface-2"
               >
-                <EllipsisHorizontalIcon className="h-4 w-4" aria-hidden="true" />
+                <FsIcon name="more" className="h-4 w-4" />
               </button>
               {menuOpen && (
                 <ul className="absolute left-0 top-full z-10 mt-1 w-28 rounded-md border border-surface-3 bg-surface-1 py-1 shadow-lg">

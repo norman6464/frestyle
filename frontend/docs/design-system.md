@@ -112,7 +112,7 @@ ST01 の指定は本文 14–18px。`role="alert"` / `role="status"` の文言�
 
 ### アイコン
 
-`src/shared/ui/icons/` に FreStyle 専用の線アイコン一式（`FsIcon`、46 種）と、空状態・失敗の絵
+`src/shared/ui/icons/` に FreStyle 専用の線アイコン一式（`FsIcon`、76 種）と、空状態・失敗の絵
 （`FsIllustration`、4 種）を持つ。形の定義は `fsIconParts.ts`、描くのは `FsIcon.tsx`、
 「`className` を受け取る部品」として渡すための工場は `fsIconFactory.tsx`。
 
@@ -126,9 +126,18 @@ ST01 の指定は本文 14–18px。`role="alert"` / `role="status"` の文言�
 * 空状態の絵は二色刷り。面は `--fs-action-soft`、線は文字色、差し色 `--fs-action` は 1 か所だけ。
   生の色値を持たないので配色の変更に追随する。
 
-heroicons は残っている（57 ファイル）。殻（全体ナビ・ヘッダー・ユーザーメニュー）、バックログ配下、
-状態ピル、共通の選択欄と空状態を置き換えた。残りは触った画面から順に寄せる。
-**同じ画面に 2 系統のアイコンを混ぜないこと**（線の太さが違うのが一目で分かる）。
+heroicons は**撤去済み**（`@heroicons/react` は依存からも外した）。最後に残っていた 57 ファイルを
+一括で寄せ、足りなかった 27 種（document / users / star / book / lock / clipboard 系 / chat / login …）を
+同じ約束で描き足した。線の太さが 1 種類になったので、画面をまたいでも絵の重さが揃う。
+
+* `<XxxIcon className=… aria-hidden="true" />` は `<FsIcon name="…" className=… />` に。飾りは既定で
+  aria-hidden なので個別指定は要らない。
+* `icon={XxxIcon}` のように**部品として**渡していた所（`EmptyState` / `FeatureCard` / `Toast` の表）は
+  `fsIcon('name')`。`ComponentType<{ className? }>` を返すので受け側は変えない。
+* `shared/ui` の中から `@/shared/ui`（自分の barrel）を読まない。`./icons/FsIcon` と相対で書く
+  （FSD の自スライス参照禁止・index.ts との循環を避ける）。
+* 新しい絵が要るときは heroicons を戻さず `fsIconParts.ts` に描き足す。**同じ画面に 2 系統の
+  アイコンを混ぜない**（線の太さが違うのが一目で分かる）。
 
 ファイル名を `FsIcon.tsx` と大文字小文字だけ違う名前にしてはいけない。macOS は区別せず、
 片方がもう片方を上書きする（実際に起きた）。

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { EllipsisHorizontalIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { FsIcon } from '@/shared/ui';
 
 export interface KbSectionHeadingProps {
   /** 節の名前（「チームスペース」「プライベート」）。 */
@@ -79,7 +79,7 @@ export default function KbSectionHeading({
             aria-label={`${label} の操作`}
             className="rounded p-0.5 text-[var(--color-text-tertiary)] hover:bg-surface-3"
           >
-            <EllipsisHorizontalIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            <FsIcon name="more" className="h-3.5 w-3.5" />
           </button>
         )}
         {onAdd && (
@@ -90,7 +90,7 @@ export default function KbSectionHeading({
             title={addLabel}
             className="rounded p-0.5 text-[var(--color-text-tertiary)] hover:bg-surface-3"
           >
-            <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            <FsIcon name="plus" className="h-3.5 w-3.5" />
           </button>
         )}
       </div>

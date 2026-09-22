@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { EllipsisHorizontalIcon, PlusIcon } from '@heroicons/react/24/outline';
-import { ConfirmModal } from '@/shared/ui';
+import { ConfirmModal, FsIcon } from '@/shared/ui';
 import type { KbDropTarget, KbMoveActions } from '@/entities/kb';
 
 export interface KbRowActionsProps {
@@ -93,7 +92,7 @@ export default function KbRowActions({
             aria-label={`${label} の操作`}
             className="rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-3"
           >
-            <EllipsisHorizontalIcon className="h-4 w-4" aria-hidden="true" />
+            <FsIcon name="more" className="h-4 w-4" />
           </button>
 
           {menuOpen && (
@@ -184,7 +183,7 @@ export default function KbRowActions({
         title="中にページを作成"
         className="rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-3"
       >
-        <PlusIcon className="h-4 w-4" aria-hidden="true" />
+        <FsIcon name="plus" className="h-4 w-4" />
       </button>
 
       {onDelete && (

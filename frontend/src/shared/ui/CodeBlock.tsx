@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { ClipboardDocumentCheckIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { extractLanguage, extractTextContent } from '@/shared/lib/markdownContent';
+import FsIcon from './icons/FsIcon';
 
 /**
  * AI 応答の Markdown 内コードブロックに、言語名表示 + コピーボタン付きのヘッダを足す。
@@ -76,12 +76,12 @@ export default function CodeBlock({ children }: { children: ReactNode }) {
         >
           {copied ? (
             <>
-              <ClipboardDocumentCheckIcon className="w-3.5 h-3.5 text-success" />
+              <FsIcon name="clipboard-check" className="w-3.5 h-3.5 text-success" />
               <span>コピー済み</span>
             </>
           ) : (
             <>
-              <ClipboardDocumentIcon className="w-3.5 h-3.5" />
+              <FsIcon name="clipboard" className="w-3.5 h-3.5" />
               <span>コピー</span>
             </>
           )}

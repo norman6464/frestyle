@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  XMarkIcon,
-  ChevronDoubleLeftIcon,
-  ChevronDoubleRightIcon,
-} from '@heroicons/react/24/outline';
 import { usePanelMode } from '@/shared/lib/hooks/usePanelMode';
 import { useResizablePanel } from '@/shared/lib/hooks/useResizablePanel';
 import { useMobileDrawerFocus } from '@/shared/lib/hooks/useMobileDrawerFocus';
+import { FsIcon } from '@/shared/ui';
 
 // リサイズの既定幅・下限・上限（画面幅に対する割合）。固定表示・通常表示どちらでも共通。
 const RESIZE_DEFAULT_WIDTH = 288; // w-72 相当
@@ -209,7 +205,7 @@ function PeekablePanel({
                 aria-label="サイドバーを閉じる"
                 className="p-1 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
               >
-                <ChevronDoubleLeftIcon className="w-4 h-4" />
+                <FsIcon name="chevron-double-left" className="w-4 h-4" />
               </button>
               <PanelTooltip label="サイドバーを閉じる" align="right" />
             </span>
@@ -264,7 +260,7 @@ function PeekablePanel({
                 aria-label="サイドバーを固定表示する"
                 className="p-1 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
               >
-                <ChevronDoubleRightIcon className="w-4 h-4" />
+                <FsIcon name="chevron-double-right" className="w-4 h-4" />
               </button>
               <PanelTooltip label="サイドバーを固定表示する" align="right" />
             </span>
@@ -345,7 +341,7 @@ export default function SecondaryPanel({
               className="inline-flex items-center justify-center rounded-md hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
               aria-label="パネルを閉じる"
             >
-              <XMarkIcon className="w-4 h-4 text-[var(--color-text-muted)]" />
+              <FsIcon name="x" className="w-4 h-4 text-[var(--color-text-muted)]" />
             </button>
           </div>
         </div>
@@ -375,7 +371,7 @@ export default function SecondaryPanel({
             aria-label="パネルを開く"
             className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
           >
-            <ChevronDoubleRightIcon className="w-4 h-4" />
+            <FsIcon name="chevron-double-right" className="w-4 h-4" />
           </button>
         </div>
       ) : (
@@ -395,7 +391,7 @@ export default function SecondaryPanel({
                   aria-label="パネルを折りたたむ"
                   className="p-1 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
                 >
-                  <ChevronDoubleLeftIcon className="w-4 h-4" />
+                  <FsIcon name="chevron-double-left" className="w-4 h-4" />
                 </button>
               ) : undefined)
             }

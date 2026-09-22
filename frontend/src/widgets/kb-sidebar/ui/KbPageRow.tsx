@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRightIcon } from '@heroicons/react/24/outline';
 import { kbMoveActions, type KbDropTarget, type KbPageTreeNode } from '@/entities/kb';
 import KbRowActions from './KbRowActions';
 import KbInlineRename from './KbInlineRename';
 import KbPageGlyph from './KbPageGlyph';
 import { dropZoneFromEvent, type KbDropZone } from '../model/dropZone';
+import { FsIcon } from '@/shared/ui';
 
 /** 1 段下がるごとの字下げ幅（px）。三角の幅とほぼ同じにして、段が目で追えるようにする。 */
 export const KB_INDENT_PX = 14;
@@ -166,10 +166,7 @@ export default function KbPageRow({
           aria-label={expanded ? `${page.title} を閉じる` : `${page.title} を開く`}
           className="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-3"
         >
-          <ChevronRightIcon
-            className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
-            aria-hidden="true"
-          />
+          <FsIcon name="chevron-right" className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`} />
         </button>
       ) : (
         // 子が無い行は三角の位置に小さな「・」を置く。空白だと「まだ読み込んでいない」

@@ -15,15 +15,9 @@ import Loading from '@/shared/ui/Loading';
 import EmptyState from '@/shared/ui/EmptyState';
 import ConfirmModal from '@/shared/ui/ConfirmModal';
 import Button from '@/shared/ui/Button';
-import { Disclosure, SidebarSection } from '@/shared/ui';
+import { Disclosure, SidebarSection, FsIcon, fsIcon } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
-import {
-  DocumentTextIcon,
-  ChatBubbleLeftRightIcon,
-  ClockIcon,
-  LightBulbIcon,
-} from '@heroicons/react/24/outline';
 import { useKbPageDoc } from '../model/useKbPageDoc';
 import { createSubpage } from '../model/createSubpage';
 import { resolveEntryPageId } from '../model/resolveEntryPage';
@@ -560,7 +554,7 @@ export default function KbPage() {
           {!pageId && !entryResolving && (
             <EmptyState
               headingLevel={1}
-              icon={DocumentTextIcon}
+              icon={fsIcon('document-text')}
               title="まだページがありません"
               description="メニューの「ナレッジ」からページを作成してください。"
             />
@@ -575,7 +569,7 @@ export default function KbPage() {
           {pageId && !loading && error && (
             <EmptyState
               headingLevel={1}
-              icon={DocumentTextIcon}
+              icon={fsIcon('document-text')}
               title="ページを開けません"
               description={error}
               action={{ label: 'スペース一覧へ戻る', onClick: () => navigate('/kb/spaces') }}
@@ -608,7 +602,7 @@ export default function KbPage() {
               )}
               {!suggestionDraft.open && versions.selected && !versions.selected.loading && versions.selected.error && (
                 <EmptyState
-                  icon={ClockIcon}
+                  icon={fsIcon('clock')}
                   title="この版を開けません"
                   description={versions.selected.error}
                   action={{ label: '現在の版に戻る', onClick: versions.clearSelection }}
@@ -667,7 +661,7 @@ export default function KbPage() {
                   }
                   className="relative inline-flex items-center gap-2 rounded-md border border-surface-3 px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
                 >
-                  <ChatBubbleLeftRightIcon aria-hidden="true" className="h-4 w-4" />
+                  <FsIcon name="chat" className="h-4 w-4" />
                   コメント
                   {unresolvedCommentCount > 0 && (
                     <span className="absolute -right-1 -top-1 h-4 min-w-[16px] rounded-full bg-danger px-1 text-center text-[10px] leading-4 text-white">
@@ -686,7 +680,7 @@ export default function KbPage() {
                   aria-label="提案"
                   className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
                 >
-                  <LightBulbIcon aria-hidden="true" className="h-4 w-4" />
+                  <FsIcon name="lightbulb" className="h-4 w-4" />
                   提案
                 </button>
                 {/*
@@ -745,7 +739,7 @@ export default function KbPage() {
                   aria-label="履歴"
                   className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
                 >
-                  <ClockIcon aria-hidden="true" className="h-4 w-4" />
+                  <FsIcon name="clock" className="h-4 w-4" />
                   履歴
                 </button>
                 {/*

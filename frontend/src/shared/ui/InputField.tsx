@@ -1,7 +1,7 @@
 import { ChangeEvent, useRef, useState, type HTMLInputAutoCompleteAttribute } from 'react';
-import { XMarkIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/solid';
 import FormFieldError from './FormFieldError';
 import { getFieldBorderClass } from '@/shared/lib/fieldStyles';
+import FsIcon from './icons/FsIcon';
 
 interface InputFieldProps {
   label: string;
@@ -85,7 +85,7 @@ export default function InputField({
             aria-label={showPassword ? 'パスワードを非表示' : 'パスワードを表示'}
             className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
-            {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+            {showPassword ? <FsIcon name="eye-off" className="w-5 h-5" /> : <FsIcon name="eye" className="w-5 h-5" />}
           </button>
         ) : value && !disabled ? (
           <button
@@ -94,7 +94,7 @@ export default function InputField({
             aria-label="入力をクリア"
             className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
-            <XMarkIcon className="w-5 h-5" />
+            <FsIcon name="x" className="w-5 h-5" />
           </button>
         ) : null}
       </div>

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useNotification } from '../model/useNotification';
-import { Button, EmptyState, Loading } from '@/shared/ui';
+import { Button, EmptyState, Loading, FsIcon, fsIcon } from '@/shared/ui';
 import { NotificationItem } from '@/entities/notification';
-import { BellIcon, CheckIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 export default function NotificationPage() {
   const { notifications, unreadCount, loading, error, markAsRead, markAllAsRead, refresh } =
@@ -27,7 +26,7 @@ export default function NotificationPage() {
             disabled={loading}
             className="min-h-11 shrink-0 self-start"
           >
-            <CheckIcon aria-hidden="true" className="h-4 w-4" />
+            <FsIcon name="check" className="h-4 w-4" />
             すべて既読にする
           </Button>
         )}
@@ -51,7 +50,7 @@ export default function NotificationPage() {
           role="alert"
           className="mb-5 flex flex-wrap items-start gap-3 rounded-2xl border border-surface-3 bg-surface-1 p-5"
         >
-          <ExclamationTriangleIcon aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-text-muted)]" />
+          <FsIcon name="alert-triangle" className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-text-muted)]" />
           <div className="min-w-0 flex-1 basis-40">
             <p className="text-sm font-medium text-[var(--color-text-primary)]">{error}</p>
             <p className="mt-1 text-sm leading-relaxed text-[var(--color-text-muted)]">
@@ -82,7 +81,7 @@ export default function NotificationPage() {
           <section aria-label="通知の一覧" className="rounded-2xl border border-surface-3 bg-surface-1 py-16">
             <h2 className="sr-only">通知の一覧</h2>
             <EmptyState
-              icon={BellIcon}
+              icon={fsIcon('bell')}
               title={filter === 'unread' ? '未読の通知はありません' : '通知はありません'}
               description={filter === 'unread' ? '確認済みの通知は「すべて」から見返せます。' : 'お知らせが届くとここに表示されます'}
             />

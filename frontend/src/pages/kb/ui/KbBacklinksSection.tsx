@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRightIcon } from '@heroicons/react/24/outline';
 import { KbPageGlyph } from '@/widgets/kb-sidebar';
 import type { KbPage } from '@/entities/kb';
+import { FsIcon } from '@/shared/ui';
 
 export interface KbBacklinksSectionProps {
   /** このページを参照しているページの一覧。 */
@@ -46,10 +46,7 @@ export default function KbBacklinksSection({ pages, loading }: KbBacklinksSectio
         aria-expanded={open}
         className="flex items-center gap-1 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
       >
-        <ChevronRightIcon
-          className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
-          aria-hidden="true"
-        />
+        <FsIcon name="chevron-right" className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
         このページを参照しているページ（{pages.length}）
       </button>
       {open && (

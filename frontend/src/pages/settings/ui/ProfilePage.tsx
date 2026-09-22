@@ -7,7 +7,7 @@ import Avatar from '@/shared/ui/Avatar';
 import Loading from '@/shared/ui/Loading';
 import { useProfileEdit } from '../model/useProfileEdit';
 import { useProfileImageUpload } from '../model/useProfileImageUpload';
-import { CameraIcon } from '@heroicons/react/24/outline';
+import { FsIcon } from '@/shared/ui';
 
 export default function ProfilePage() {
   const { form, message, setMessage, loading, submitting, updateField, handleUpdate } = useProfileEdit();
@@ -52,7 +52,7 @@ export default function ProfilePage() {
               className="min-h-11"
               aria-label="プロフィール画像を変更"
             >
-              <CameraIcon aria-hidden="true" className="w-4 h-4" />
+              <FsIcon name="camera" className="w-4 h-4" />
               画像を変更
             </Button>
             <input

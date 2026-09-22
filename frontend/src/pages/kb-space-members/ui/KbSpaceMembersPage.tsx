@@ -1,7 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ExclamationCircleIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { KbSidebar } from '@/widgets/kb-sidebar';
-import { Loading, SidebarSection } from '@/shared/ui';
+import { Loading, SidebarSection, fsIcon } from '@/shared/ui';
 import { useKbSpaceEntry, KbSpaceTabs } from '@/entities/kb';
 import Avatar from '@/shared/ui/Avatar';
 import EmptyState from '@/shared/ui/EmptyState';
@@ -88,7 +87,7 @@ function MembersList({ workspaceSlug, spaceId }: { workspaceSlug: string; spaceI
     return (
       <EmptyState
         headingLevel={2}
-        icon={ExclamationCircleIcon}
+        icon={fsIcon('alert-circle')}
         title="メンバーを読み込めませんでした"
         description="通信が切れたか、一時的な不調です。"
         action={{ label: '再読み込み', onClick: retry }}
@@ -97,7 +96,7 @@ function MembersList({ workspaceSlug, spaceId }: { workspaceSlug: string; spaceI
   }
 
   if (!loading && members.length === 0) {
-    return <EmptyState headingLevel={2} icon={UsersIcon} title="このスペースにはまだメンバーがいません" />;
+    return <EmptyState headingLevel={2} icon={fsIcon('users')} title="このスペースにはまだメンバーがいません" />;
   }
 
   return (

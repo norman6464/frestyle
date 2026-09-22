@@ -5,9 +5,9 @@ import InputField from '@/shared/ui/InputField';
 import SNSSignInButton from '@/shared/ui/SNSSignInButton';
 import LinkText from '@/shared/ui/LinkText';
 import { AuthUnavailableNotice } from '@/features/auth';
-import { ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { toChangeHandler } from '@/shared/lib/formHandlers';
 import { useSignupPage } from '../model/useSignupPage';
+import { FsIcon } from '@/shared/ui';
 
 /**
  * アカウント作成画面。`pages/login/ui/LoginPage.tsx` と対になる。
@@ -53,7 +53,7 @@ export default function SignupPage() {
           role="alert"
           className="mb-4 flex items-center justify-center gap-1 rounded-lg border border-danger-border bg-danger-soft p-3 text-center font-medium text-danger-ink"
         >
-          <ExclamationCircleIcon className="h-4 w-4" aria-hidden="true" />
+          <FsIcon name="alert-circle" className="h-4 w-4" />
           {errorMessage}
         </p>
       )}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { ArrowPathIcon, DocumentIcon, PhotoIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { TicketRepository, type TicketAttachment } from '@/entities/ticket';
 import { formatFileSize } from '../lib/formatFileSize';
+import { FsIcon, fsIcon } from '@/shared/ui';
 
 export interface TicketAttachmentRowProps {
   workspaceSlug: string;
@@ -41,7 +41,7 @@ export default function TicketAttachmentRow({
     }
   };
 
-  const Icon = attachment.contentType.startsWith('image/') ? PhotoIcon : DocumentIcon;
+  const Icon = attachment.contentType.startsWith('image/') ? fsIcon('image') : fsIcon('document');
 
   return (
     <li className="flex items-center gap-2 rounded border border-surface-3 px-2 py-1.5 text-xs">
@@ -72,9 +72,9 @@ export default function TicketAttachmentRow({
           className="flex-none rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-2 hover:text-danger-ink disabled:opacity-50"
         >
           {busy ? (
-            <ArrowPathIcon className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            <FsIcon name="refresh" className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <TrashIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            <FsIcon name="trash" className="h-3.5 w-3.5" />
           )}
         </button>
       )}

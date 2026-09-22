@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { NodeViewContent, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
-import { CheckIcon, ChevronDownIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
 import { filterLanguages, languageLabel, sanitizeCodeBlockLanguage } from './codeBlockLanguages';
+import FsIcon from '../icons/FsIcon';
 
 /**
  * CodeBlockView はコードブロックの NodeView。
@@ -74,7 +74,7 @@ export default function CodeBlockView({ node, updateAttributes, editor }: NodeVi
             className="rte-codeblock-lang"
           >
             {languageLabel(language)}
-            <ChevronDownIcon className="h-3 w-3" aria-hidden="true" />
+            <FsIcon name="chevron-down" className="h-3 w-3" />
           </button>
 
           {menuOpen && (
@@ -103,7 +103,7 @@ export default function CodeBlockView({ node, updateAttributes, editor }: NodeVi
                       className={`rte-codeblock-item ${item.id === language ? 'is-active' : ''}`}
                     >
                       <span className="flex-1 truncate">{item.label}</span>
-                      {item.id === language && <CheckIcon className="h-3.5 w-3.5" aria-hidden="true" />}
+                      {item.id === language && <FsIcon name="check" className="h-3.5 w-3.5" />}
                     </li>
                   ))
                 )}
@@ -120,9 +120,9 @@ export default function CodeBlockView({ node, updateAttributes, editor }: NodeVi
           className="rte-codeblock-copy"
         >
           {copied ? (
-            <CheckIcon className="h-3.5 w-3.5 text-success" aria-hidden="true" />
+            <FsIcon name="check" className="h-3.5 w-3.5 text-success" />
           ) : (
-            <DocumentDuplicateIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            <FsIcon name="copy" className="h-3.5 w-3.5" />
           )}
         </button>
       </div>

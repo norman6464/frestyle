@@ -1,9 +1,9 @@
 import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import type { KbPageTemplate } from '@/entities/kb';
 import Button from '@/shared/ui/Button';
 import ConfirmModal from '@/shared/ui/ConfirmModal';
+import { FsIcon } from '@/shared/ui';
 
 export interface KbTemplatePickerModalProps {
   isOpen: boolean;
@@ -142,7 +142,7 @@ export default function KbTemplatePickerModal({
             aria-label="閉じる"
             className="rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-2"
           >
-            <XMarkIcon className="h-4 w-4" aria-hidden="true" />
+            <FsIcon name="x" className="h-4 w-4" />
           </button>
         </div>
 
@@ -184,7 +184,7 @@ export default function KbTemplatePickerModal({
                           aria-label={`${template.name} を削除`}
                           className="shrink-0 rounded p-1 text-[var(--color-text-muted)] opacity-0 transition-opacity hover:bg-surface-3 focus-visible:opacity-100 group-hover:opacity-100"
                         >
-                          <TrashIcon className="h-4 w-4" aria-hidden="true" />
+                          <FsIcon name="trash" className="h-4 w-4" />
                         </button>
                       )}
                     </li>

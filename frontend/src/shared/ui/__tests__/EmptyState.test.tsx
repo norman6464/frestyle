@@ -1,18 +1,18 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import EmptyState from '../EmptyState';
-import { ChatBubbleLeftRightIcon, SparklesIcon } from '@heroicons/react/24/outline';
+import { fsIcon } from '../icons/fsIconFactory';
 
 describe('EmptyState', () => {
   it('タイトルを表示する', () => {
-    render(<EmptyState icon={ChatBubbleLeftRightIcon} title="データがありません" />);
+    render(<EmptyState icon={fsIcon('chat')} title="データがありません" />);
     expect(screen.getByText('データがありません')).toBeDefined();
   });
 
   it('説明文を表示する', () => {
     render(
       <EmptyState
-        icon={ChatBubbleLeftRightIcon}
+        icon={fsIcon('chat')}
         title="テスト"
         description="詳しい説明テキスト"
       />
@@ -24,7 +24,7 @@ describe('EmptyState', () => {
     const onClick = vi.fn();
     render(
       <EmptyState
-        icon={ChatBubbleLeftRightIcon}
+        icon={fsIcon('chat')}
         title="テスト"
         action={{ label: 'ユーザーを追加', onClick }}
       />
@@ -36,18 +36,18 @@ describe('EmptyState', () => {
   });
 
   it('アクションなしの場合ボタンを表示しない', () => {
-    render(<EmptyState icon={ChatBubbleLeftRightIcon} title="テスト" />);
+    render(<EmptyState icon={fsIcon('chat')} title="テスト" />);
     expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('アイコンが表示される', () => {
-    const { container } = render(<EmptyState icon={ChatBubbleLeftRightIcon} title="テスト" />);
+    const { container } = render(<EmptyState icon={fsIcon('chat')} title="テスト" />);
     const svg = container.querySelector('svg');
     expect(svg).toBeTruthy();
   });
 
   it('説明文なしの場合説明が表示されない', () => {
-    const { container } = render(<EmptyState icon={ChatBubbleLeftRightIcon} title="テスト" />);
+    const { container } = render(<EmptyState icon={fsIcon('chat')} title="テスト" />);
     const paragraphs = container.querySelectorAll('p');
     // タイトルのみ
     const texts = Array.from(paragraphs).map(p => p.textContent);
@@ -56,7 +56,7 @@ describe('EmptyState', () => {
 
   it('異なるアイコンでも正しく表示される', () => {
     const { container } = render(
-      <EmptyState icon={SparklesIcon} title="AIアシスタントへようこそ" description="質問や相談を何でも聞いてください" />
+      <EmptyState icon={fsIcon('sparkles')} title="AIアシスタントへようこそ" description="質問や相談を何でも聞いてください" />
     );
     expect(screen.getByText('AIアシスタントへようこそ')).toBeDefined();
     expect(screen.getByText('質問や相談を何でも聞いてください')).toBeDefined();
@@ -64,7 +64,7 @@ describe('EmptyState', () => {
   });
 
   it('タイトルがh3要素で表示される', () => {
-    render(<EmptyState icon={ChatBubbleLeftRightIcon} title="見出しテスト" />);
+    render(<EmptyState icon={fsIcon('chat')} title="見出しテスト" />);
     const heading = screen.getByText('見出しテスト');
     expect(heading.tagName).toBe('H3');
   });
@@ -73,7 +73,7 @@ describe('EmptyState', () => {
     const onClick = vi.fn();
     render(
       <EmptyState
-        icon={ChatBubbleLeftRightIcon}
+        icon={fsIcon('chat')}
         title="テスト"
         description="説明テキスト"
         action={{ label: '操作', onClick }}
@@ -84,7 +84,7 @@ describe('EmptyState', () => {
   });
 
   it('アイコンがページ背景と同色(bg-surface-2)の丸い背景内に表示される', () => {
-    const { container } = render(<EmptyState icon={ChatBubbleLeftRightIcon} title="テスト" />);
+    const { container } = render(<EmptyState icon={fsIcon('chat')} title="テスト" />);
     const iconWrapper = container.querySelector('.bg-surface-2.rounded-full');
     expect(iconWrapper).toBeTruthy();
     expect(iconWrapper?.querySelector('svg')).toBeTruthy();
