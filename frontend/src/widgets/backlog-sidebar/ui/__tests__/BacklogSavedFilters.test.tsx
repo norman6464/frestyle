@@ -37,11 +37,11 @@ describe('BacklogSavedFilters', () => {
 
   it('期限切れが 1 件以上のときだけ赤で出す', () => {
     const { unmount } = renderIt({ total: 10, assignedToMe: 0, overdue: 2, unassigned: 0 });
-    expect(screen.getByText('2')).toHaveClass('text-red-600');
+    expect(screen.getByText('2')).toHaveClass('text-danger-ink');
     unmount();
 
     renderIt({ total: 10, assignedToMe: 0, overdue: 0, unassigned: 0 });
-    expect(screen.getAllByText('0')[1]).not.toHaveClass('text-red-600');
+    expect(screen.getAllByText('0')[1]).not.toHaveClass('text-danger-ink');
   });
 
   it('件数がまだ取れていなければ数字を出さず、行だけ出す', () => {

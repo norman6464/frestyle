@@ -28,8 +28,8 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center px-4">
-          <div className="bg-rose-900/30 rounded-full p-4 mb-4">
-            <ExclamationTriangleIcon className="w-8 h-8 text-rose-700" />
+          <div className="bg-danger-soft rounded-full p-4 mb-4">
+            <ExclamationTriangleIcon className="w-8 h-8 text-danger-ink" />
           </div>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-1">エラーが発生しました</h2>
           <p className="text-sm text-[var(--color-text-muted)] mb-4 max-w-sm">

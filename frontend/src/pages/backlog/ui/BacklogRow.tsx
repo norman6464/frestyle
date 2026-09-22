@@ -33,7 +33,7 @@ export interface BacklogRowProps {
  * 文字も併記して、色や記号を知らなくても読めるようにする。
  */
 const PRIORITY_VIEW: Record<number, { label: string; mark: string; className: string }> = {
-  1: { label: '高', mark: '▲', className: 'text-red-600' },
+  1: { label: '高', mark: '▲', className: 'text-danger-ink' },
   2: { label: '中', mark: '−', className: 'text-[var(--color-text-tertiary)]' },
   3: { label: '低', mark: '▼', className: 'text-[var(--color-text-muted)]' },
 };

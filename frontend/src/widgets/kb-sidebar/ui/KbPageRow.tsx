@@ -106,11 +106,11 @@ export default function KbPageRow({
   // 見た目でも別にする。同じ強調にすると、どちらになるのか落とすまで分からない。
   const dropClass =
     dropZone === 'into'
-      ? 'ring-1 ring-inset ring-brand-400'
+      ? 'ring-1 ring-inset ring-brand-600'
       : dropZone === 'before'
-        ? 'border-t-2 border-brand-400'
+        ? 'border-t-2 border-brand-600'
         : dropZone === 'after'
-          ? 'border-b-2 border-brand-400'
+          ? 'border-b-2 border-brand-600'
           : '';
 
   const draggable = !archivedMode;
@@ -154,7 +154,7 @@ export default function KbPageRow({
       className={`group flex items-center gap-1 rounded-md border-l-2 pr-1 transition-colors ${
         // いま開いている行は**背景と字の太さ・左罫**で示す。文字色まで変えると、行の中の
         // 操作メニューまで色を継ぎ、木全体が青く見える（文字は黒で揃える）。
-        active ? 'border-brand-400 bg-brand-500/10' : 'border-transparent hover:bg-surface-2'
+        active ? 'border-brand-600 bg-brand-500/10' : 'border-transparent hover:bg-surface-2'
       } ${dragging ? 'opacity-60' : ''} ${dropClass}`}
       style={{ paddingLeft: depth * KB_INDENT_PX }}
     >

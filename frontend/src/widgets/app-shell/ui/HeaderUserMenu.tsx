@@ -63,7 +63,7 @@ export default function HeaderUserMenu({
             <Menu.Separator className="my-1 h-px bg-[var(--fs-menu-border)]" />
             <Menu.Item
               onClick={onLogout}
-              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-red-700 outline-none data-[highlighted]:bg-red-50"
+              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-danger-ink outline-none data-[highlighted]:bg-danger-soft"
             >
               <ArrowLeftOnRectangleIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
               ログアウト

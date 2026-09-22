@@ -190,7 +190,7 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
         <p className="px-2 py-2 text-xs text-[var(--color-text-muted)]">読み込み中…</p>
       )}
       {workspacesError && (
-        <div className="px-2 py-2 text-xs text-red-600">
+        <div className="px-2 py-2 text-xs text-danger-ink">
           <p>{workspacesError}</p>
           <button type="button" onClick={retryWorkspaces} className="mt-0.5 underline hover:no-underline">
             再試行
@@ -214,7 +214,7 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
         <p className="px-2 py-1 text-xs text-[var(--color-text-muted)]">読み込み中…</p>
       )}
       {activeSlug && !space && spacesError && (
-        <div className="px-2 py-1 text-xs text-red-600">
+        <div className="px-2 py-1 text-xs text-danger-ink">
           <p>{spacesError}</p>
         </div>
       )}
@@ -273,7 +273,7 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
               <p className="px-2 py-1 text-xs text-[var(--color-text-muted)]">読み込み中…</p>
             )}
             {spaceState.error && (
-              <div className="px-2 py-1 text-xs text-red-600">
+              <div className="px-2 py-1 text-xs text-danger-ink">
                 <p>{spaceState.error}</p>
                 <button type="button" onClick={retrySpace} className="mt-0.5 underline hover:no-underline">
                   再試行

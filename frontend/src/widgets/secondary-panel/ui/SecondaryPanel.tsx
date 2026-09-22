@@ -134,8 +134,8 @@ function ResizeHandle({
       <div
         className={`mx-auto h-full w-0.5 transition-colors ${
           isResizing
-            ? 'bg-brand-400'
-            : 'bg-transparent group-hover/resize:bg-brand-300 group-focus-visible/resize:bg-brand-400'
+            ? 'bg-brand-600'
+            : 'bg-transparent group-hover/resize:bg-brand-500 group-focus-visible/resize:bg-brand-600'
         }`}
       />
     </div>
@@ -249,7 +249,7 @@ function PeekablePanel({
         onMouseEnter={panel.openPeek}
         onMouseLeave={panel.closePeek}
         style={{ top: 'calc(var(--app-header-h) + 8px)' }}
-        className={`hidden md:flex fixed left-0 bottom-2 z-40 w-72 flex-col overflow-hidden rounded-r-xl border border-surface-3 bg-[var(--color-nav)] shadow-xl transition-all duration-200 ease-out ${
+        className={`hidden md:flex fixed left-0 bottom-2 z-40 w-72 flex-col overflow-hidden rounded-r-xl border border-surface-3 bg-[var(--color-nav)] shadow-xl transition-all duration-base ease-out ${
           panel.isPeeking ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 pointer-events-none'
         }`}
       >
@@ -329,7 +329,7 @@ export default function SecondaryPanel({
         aria-modal={mobileOpen || undefined}
         aria-label={title}
         tabIndex={-1}
-        className={`fixed inset-y-0 ${mobileSide.edge} z-50 w-[min(100vw,24rem)] bg-[var(--color-nav)] ${mobileSide.border} border-surface-3 flex flex-col transform transition-transform duration-200 motion-reduce:transition-none md:hidden ${
+        className={`fixed inset-y-0 ${mobileSide.edge} z-50 w-[min(100vw,24rem)] bg-[var(--color-nav)] ${mobileSide.border} border-surface-3 flex flex-col transform transition-transform duration-base motion-reduce:transition-none md:hidden ${
           mobileOpen ? 'visible translate-x-0' : `invisible ${mobileSide.closed}`
         }`}
       >

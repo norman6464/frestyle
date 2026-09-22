@@ -40,7 +40,7 @@ export default function HomeWorkSection() {
                 <span className="block font-medium leading-relaxed [overflow-wrap:anywhere] group-hover:underline underline-offset-4">{ticket.title}</span>
                 <span className="mt-2 flex flex-wrap items-center gap-3 text-xs">
                   <span className="inline-flex items-center gap-1.5 rounded bg-surface-2 px-2 py-1"><span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: ticket.statusColor }} />{ticket.statusName}</span>
-                  {ticket.dueDate && <span className={ticket.dueDate < today ? 'font-medium text-red-700' : 'text-[var(--color-text-muted)]'}>{ticket.dueDate < today ? '期限超過' : ticket.dueDate === today ? '今日が期限' : '期限'} <time dateTime={ticket.dueDate}>{ticket.dueDate.replaceAll('-', '/')}</time></span>}
+                  {ticket.dueDate && <span className={ticket.dueDate < today ? 'font-medium text-danger-ink' : 'text-[var(--color-text-muted)]'}>{ticket.dueDate < today ? '期限超過' : ticket.dueDate === today ? '今日が期限' : '期限'} <time dateTime={ticket.dueDate}>{ticket.dueDate.replaceAll('-', '/')}</time></span>}
                 </span>
               </span>
               <ChevronRightIcon aria-hidden="true" className="mt-6 h-4 w-4 text-[var(--color-text-muted)]" />

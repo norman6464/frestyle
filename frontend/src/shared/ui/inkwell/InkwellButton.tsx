@@ -85,7 +85,7 @@ export default function InkwellButton({
         if (!disabled) addRipple(e);
         onPointerDown?.(e);
       }}
-      className={`relative inline-flex items-center justify-center gap-2 overflow-hidden rounded font-roboto font-medium uppercase leading-[1.75] tracking-[0.02857em] transition-[background-color,box-shadow,border-color] duration-200 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inkwell-primary/50 disabled:pointer-events-none disabled:text-inkwell-text-disabled ${stateClass} ${SIZE[size]} ${
+      className={`relative inline-flex items-center justify-center gap-2 overflow-hidden rounded font-roboto font-medium uppercase leading-[1.75] tracking-[0.02857em] transition-[background-color,box-shadow,border-color] duration-base select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inkwell-primary/50 disabled:pointer-events-none disabled:text-inkwell-text-disabled ${stateClass} ${SIZE[size]} ${
         fullWidth ? 'w-full' : ''
       } ${className}`}
       {...props}

@@ -37,7 +37,7 @@ export default function TicketChangeHistory({ history, loading, error }: TicketC
 
   if (error) {
     return (
-      <p role="alert" className="text-xs leading-relaxed text-red-700">
+      <p role="alert" className="text-sm leading-relaxed text-danger-ink">
         {error}
       </p>
     );

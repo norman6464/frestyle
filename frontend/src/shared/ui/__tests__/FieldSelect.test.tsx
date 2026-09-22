@@ -18,7 +18,9 @@ describe('FieldSelect', () => {
     const trigger = screen.getByRole('combobox', { name: '状態' });
     expect(trigger).toHaveTextContent('未着手');
     await user.click(trigger);
-    await user.click(screen.getByRole('option', { name: '進行中' }));
+    // 候補は別の器（ポータル）へ後から描かれる。getBy で即座に探すと、
+    // 実行が遅くなったときだけ「まだ無い」で落ちる。出てくるまで待つ。
+    await user.click(await screen.findByRole('option', { name: '進行中' }));
     expect(onChange).toHaveBeenCalledWith('doing');
   });
 

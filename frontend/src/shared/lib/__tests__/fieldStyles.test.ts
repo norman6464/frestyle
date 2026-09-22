@@ -4,8 +4,8 @@ import { getFieldBorderClass } from '../fieldStyles';
 describe('getFieldBorderClass', () => {
   it('エラーありの場合はrose系のクラスを返す', () => {
     const result = getFieldBorderClass(true);
-    expect(result).toContain('border-rose-500');
-    expect(result).toContain('focus:border-rose-500');
+    expect(result).toContain('border-danger');
+    expect(result).toContain('focus:border-danger');
   });
 
   it('エラーなしの場合はbrand系のクラスを返す', () => {

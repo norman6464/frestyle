@@ -27,7 +27,7 @@ export const 件数あり: Story = {
       '/backlog/s-1?assignedToMe=1',
     );
     await expect(canvas.getByText('4')).toBeVisible();
-    await expect(canvas.getByText('2')).toHaveClass(/text-red-600/);
+    await expect(canvas.getByText('2')).toHaveClass(/text-danger-ink/);
   },
 };
 
@@ -35,7 +35,7 @@ export const 件数あり: Story = {
 export const 期限切れなし: Story = {
   args: { counts: { total: 12, assignedToMe: 4, overdue: 0, unassigned: 3 } },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByText('0')).not.toHaveClass(/text-red-600/);
+    await expect(within(canvasElement).getByText('0')).not.toHaveClass(/text-danger-ink/);
   },
 };
 

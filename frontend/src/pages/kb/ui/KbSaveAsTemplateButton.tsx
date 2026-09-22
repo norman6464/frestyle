@@ -88,7 +88,7 @@ export default function KbSaveAsTemplateButton({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 disabled={saving}
-                className="w-full rounded border border-surface-3 bg-surface-1 px-2 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                className="w-full rounded border border-surface-3 bg-surface-1 px-2 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-brand-600 focus:outline-none disabled:opacity-60"
               />
             </div>
             <fieldset className="flex flex-col gap-1">
@@ -115,7 +115,7 @@ export default function KbSaveAsTemplateButton({
               </label>
             </fieldset>
             {error && (
-              <p role="alert" className="text-xs leading-relaxed text-red-600">
+              <p role="alert" className="text-sm leading-relaxed text-danger-ink">
                 {error}
               </p>
             )}

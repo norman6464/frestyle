@@ -47,7 +47,7 @@ export default function InkwellTextField({
         />
         <label
           htmlFor={inputId}
-          className={`pointer-events-none absolute left-2 top-4 origin-[0] -translate-y-[1.65rem] scale-75 cursor-text bg-white px-1 text-base transition-all duration-150 peer-placeholder-shown:translate-y-0 peer-placeholder-shown:scale-100 peer-focus:-translate-y-[1.65rem] peer-focus:scale-75 ${
+          className={`pointer-events-none absolute left-2 top-4 origin-[0] -translate-y-[1.65rem] scale-75 cursor-text bg-white px-1 text-base transition-all duration-fast peer-placeholder-shown:translate-y-0 peer-placeholder-shown:scale-100 peer-focus:-translate-y-[1.65rem] peer-focus:scale-75 ${
             error
               ? 'text-inkwell-error'
               : 'text-inkwell-text-secondary peer-focus:text-inkwell-primary peer-disabled:text-inkwell-text-disabled'

@@ -18,7 +18,7 @@ const VARIANT: Record<ButtonVariant, string> = {
     'border border-[var(--color-border-hover)] bg-surface-1 hover:bg-surface-2 active:bg-surface-3 text-[var(--color-text-secondary)]',
   ghost: 'hover:bg-surface-2 active:bg-surface-3 text-[var(--color-text-secondary)]',
   // primary と同じ理由で 600 から始める（白文字に対し red-500 は 3.76:1 で未達、600 は 4.8:1）。
-  danger: 'bg-red-600 hover:bg-red-700 active:bg-red-800 text-white',
+  danger: 'bg-danger hover:bg-danger-hover active:bg-danger-active text-white',
 };
 
 const SIZE: Record<ButtonSize, string> = {
@@ -45,10 +45,10 @@ export default function Button({
       aria-busy={loading || undefined}
       disabled={disabled || loading}
       className={[
-        'font-medium transition-colors duration-150 motion-reduce:transition-none',
+        'font-medium transition-colors duration-fast motion-reduce:transition-none',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         'inline-flex items-center justify-center gap-2',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2',
         VARIANT[variant],
         SIZE[size],
         fullWidth ? 'w-full' : '',

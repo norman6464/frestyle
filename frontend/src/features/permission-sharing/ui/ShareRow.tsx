@@ -56,7 +56,7 @@ export default function ShareRow({ row, disabled, onChangeRole, onRemove }: Shar
         onClick={onRemove}
         disabled={disabled}
         aria-label={`${name} を外す`}
-        className="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-45"
+        className="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-danger-soft hover:text-danger-ink disabled:opacity-45"
       >
         <XMarkIcon className="h-4 w-4" />
       </button>

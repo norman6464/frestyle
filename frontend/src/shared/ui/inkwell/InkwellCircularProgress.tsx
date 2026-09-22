@@ -47,7 +47,7 @@ export default function InkwellCircularProgress({
           stroke="currentColor"
           strokeWidth={thickness}
           strokeLinecap="round"
-          className="text-inkwell-primary transition-[stroke-dashoffset] duration-300 ease-inkwell-standard"
+          className="text-inkwell-primary transition-[stroke-dashoffset] duration-slow ease-inkwell-standard"
           strokeDasharray={circumference}
           strokeDashoffset={dash}
         />

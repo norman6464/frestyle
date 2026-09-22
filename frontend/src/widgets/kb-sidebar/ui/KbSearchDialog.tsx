@@ -168,7 +168,7 @@ export default function KbSearchDialog({ workspaceSlug, spaces, onClose }: KbSea
             <p className="px-2 py-6 text-center text-xs text-[var(--color-text-muted)]">検索中…</p>
           )}
           {status === 'error' && (
-            <div className="px-2 py-6 text-center text-xs text-red-600">
+            <div className="px-2 py-6 text-center text-xs text-danger-ink">
               <p>検索に失敗しました</p>
               <button
                 type="button"

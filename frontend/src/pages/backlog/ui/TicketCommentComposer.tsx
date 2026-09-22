@@ -203,7 +203,7 @@ export default function TicketCommentComposer({
 
   return (
     <div>
-      <div className="overflow-hidden rounded-lg border border-brand-400 bg-surface-1">
+      <div className="overflow-hidden rounded-lg border border-brand-600 bg-surface-1">
         {editor && <CommentFormatBar editor={editor} disabled={submitting} />}
         <div className="p-3">
         <EditorContent editor={editor} />
@@ -228,7 +228,7 @@ export default function TicketCommentComposer({
         </div>
       </div>
       {error && (
-        <p role="alert" className="mt-1.5 text-xs leading-relaxed text-red-700">
+        <p role="alert" className="mt-1.5 text-sm leading-relaxed text-danger-ink">
           {error}
         </p>
       )}

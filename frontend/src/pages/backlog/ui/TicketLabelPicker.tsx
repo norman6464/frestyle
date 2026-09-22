@@ -121,7 +121,7 @@ export default function TicketLabelPicker({ labels, attachedIds, onToggle, onCre
         </button>
       </div>
       {error && (
-        <p role="alert" className="mt-1 text-xs text-red-700">
+        <p role="alert" className="mt-1 text-sm text-danger-ink">
           {error}
         </p>
       )}

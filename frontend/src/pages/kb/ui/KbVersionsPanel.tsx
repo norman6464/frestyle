@@ -74,7 +74,7 @@ export default function KbVersionsPanel({
       )}
 
       {!loading && error && (
-        <p role="alert" className="text-xs leading-relaxed text-red-600">
+        <p role="alert" className="text-sm leading-relaxed text-danger-ink">
           {error}
         </p>
       )}

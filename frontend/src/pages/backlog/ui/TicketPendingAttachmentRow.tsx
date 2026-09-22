@@ -27,14 +27,14 @@ export default function TicketPendingAttachmentRow({ pending, onRetry, onDismiss
           {formatFileSize(pending.file.size)}
         </span>
         {pending.status === 'uploading' && (
-          <span role="status" className="flex-none text-[11px] text-[var(--color-text-muted)]">
+          <span role="status" className="flex-none text-sm text-[var(--color-text-muted)]">
             アップロード中…
           </span>
         )}
       </div>
       {pending.status === 'failed' && (
         <div className="mt-1 flex items-center gap-2 pl-6">
-          <span role="alert" className="min-w-0 flex-1 truncate text-[11px] text-red-700" title={pending.error ?? ''}>
+          <span role="alert" className="min-w-0 flex-1 truncate text-sm text-danger-ink" title={pending.error ?? ''}>
             {pending.error}
           </span>
           <button

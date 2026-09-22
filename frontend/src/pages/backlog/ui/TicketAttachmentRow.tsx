@@ -59,7 +59,7 @@ export default function TicketAttachmentRow({
         {formatFileSize(attachment.sizeBytes)}
       </span>
       {downloadFailed && (
-        <span role="alert" className="flex-none text-[11px] text-red-700">
+        <span role="alert" className="flex-none text-sm text-danger-ink">
           取得できませんでした
         </span>
       )}
@@ -69,7 +69,7 @@ export default function TicketAttachmentRow({
           onClick={onRemove}
           disabled={busy}
           aria-label={`${attachment.filename} を削除`}
-          className="flex-none rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-2 hover:text-red-700 disabled:opacity-50"
+          className="flex-none rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-2 hover:text-danger-ink disabled:opacity-50"
         >
           {busy ? (
             <ArrowPathIcon className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />

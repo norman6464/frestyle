@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",
+    "@fontsource-variable/noto-sans-jp": "^5.3.0",
     "@fontsource/roboto": "^5.2.10",
     "@heroicons/react": "^2.2.0",
     "@reduxjs/toolkit": "^2.9.0",

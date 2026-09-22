@@ -9,9 +9,9 @@ const SAVE_STATUS_CONFIG: Record<
   Exclude<SaveStatus, 'idle'>,
   { label: string; color: string }
 > = {
-  unsaved: { label: '未保存', color: 'text-amber-700' },
+  unsaved: { label: '未保存', color: 'text-warning' },
   saving: { label: '保存中...', color: 'text-[var(--color-text-muted)]' },
-  saved: { label: '保存済み', color: 'text-emerald-700' },
+  saved: { label: '保存済み', color: 'text-success' },
 };
 
 /**
@@ -23,7 +23,7 @@ export default function SaveStatusIndicator({ status }: { status: SaveStatus }) 
   }
   const { label, color } = SAVE_STATUS_CONFIG[status];
   return (
-    <span className={`text-xs ${color}`} role="status" aria-label="保存状態">
+    <span className={`text-sm ${color}`} role="status" aria-label="保存状態">
       {label}
     </span>
   );

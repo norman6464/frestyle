@@ -113,7 +113,7 @@ export default function KbPageCoverButton({ cover, canEdit, onChange }: KbPageCo
         </button>
       )}
       {validationError && (
-        <p role="alert" className="w-full text-xs text-red-600">
+        <p role="alert" className="w-full text-sm text-danger-ink">
           {validationError}
         </p>
       )}

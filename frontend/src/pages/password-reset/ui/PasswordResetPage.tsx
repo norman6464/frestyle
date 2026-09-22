@@ -25,7 +25,7 @@ export default function PasswordResetPage() {
       {mode === 'dex' && (
         <p
           role="status"
-          className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-center text-sm font-medium text-amber-800"
+          className="mb-4 rounded-lg border border-warning-border bg-warning-soft p-3 text-center text-sm font-medium text-warning"
         >
           ローカル開発の認証（Dex）はパスワード再設定に対応していません。
         </p>
@@ -55,7 +55,7 @@ export default function PasswordResetPage() {
       {mode === 'firebase' && submitted && (
         <p
           role="status"
-          className="mb-4 flex items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-center font-medium text-emerald-700"
+          className="mb-4 flex items-center justify-center gap-1 rounded-lg border border-success-border bg-success-soft p-3 text-center font-medium text-success"
         >
           <CheckCircleIcon className="h-4 w-4" aria-hidden="true" />
           該当するアカウントが存在する場合、パスワード再設定のご案内をお送りしました。

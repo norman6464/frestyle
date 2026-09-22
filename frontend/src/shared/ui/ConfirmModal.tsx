@@ -47,8 +47,8 @@ export default function ConfirmModal({
           className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-[var(--fs-dialog-border)] bg-[var(--fs-dialog-surface)] p-6 shadow-xl focus:outline-none"
         >
           <div className="mb-4 flex justify-center" aria-hidden="true">
-            <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${isDanger ? 'bg-red-50' : 'bg-brand-50'}`}>
-              {isDanger ? <TrashIcon className="h-6 w-6 text-red-700" /> : <QuestionMarkCircleIcon className="h-6 w-6 text-brand-700" />}
+            <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${isDanger ? 'bg-danger-soft' : 'bg-brand-50'}`}>
+              {isDanger ? <TrashIcon className="h-6 w-6 text-danger-ink" /> : <QuestionMarkCircleIcon className="h-6 w-6 text-brand-700" />}
             </div>
           </div>
           <Dialog.Title className="mb-2 text-center text-xl font-semibold text-[var(--fs-text-strong)]">
@@ -69,7 +69,7 @@ export default function ConfirmModal({
             <button
               type="button"
               onClick={onConfirm}
-              className={`min-h-11 flex-1 rounded-lg px-4 py-2.5 font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'}`}
+              className={`min-h-11 flex-1 rounded-lg px-4 py-2.5 font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${isDanger ? 'bg-danger hover:bg-danger-hover' : 'bg-brand-600 hover:bg-brand-700'}`}
             >
               {confirmText}
             </button>

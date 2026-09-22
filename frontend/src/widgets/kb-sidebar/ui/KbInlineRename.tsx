@@ -78,7 +78,7 @@ export default function KbInlineRename({
           onCancel();
         }
       }}
-      className="min-w-0 flex-1 rounded border border-brand-400 bg-surface-1 px-1 py-0.5 text-sm text-[var(--color-text-primary)] focus:outline-none"
+      className="min-w-0 flex-1 rounded border border-brand-600 bg-surface-1 px-1 py-0.5 text-sm text-[var(--color-text-primary)] focus:outline-none"
     />
   );
 }

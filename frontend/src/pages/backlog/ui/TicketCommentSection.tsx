@@ -97,7 +97,7 @@ export default function TicketCommentSection({ workspaceSlug, ticketId, compact 
       <div className="flex flex-col gap-2">
         {loading && <Loading size="small" />}
         {!loading && error && (
-          <p role="alert" className="text-xs text-red-700">
+          <p role="alert" className="text-sm text-danger-ink">
             {error}
           </p>
         )}
@@ -150,7 +150,7 @@ export default function TicketCommentSection({ workspaceSlug, ticketId, compact 
       {loading && <Loading />}
 
       {!loading && error && (
-        <div className="flex items-center gap-2 text-xs text-red-700">
+        <div className="flex items-center gap-2 text-xs text-danger-ink">
           <p role="alert" className="flex-1">
             {error}
           </p>

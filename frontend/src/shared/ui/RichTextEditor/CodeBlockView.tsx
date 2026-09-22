@@ -120,7 +120,7 @@ export default function CodeBlockView({ node, updateAttributes, editor }: NodeVi
           className="rte-codeblock-copy"
         >
           {copied ? (
-            <CheckIcon className="h-3.5 w-3.5 text-emerald-700" aria-hidden="true" />
+            <CheckIcon className="h-3.5 w-3.5 text-success" aria-hidden="true" />
           ) : (
             <DocumentDuplicateIcon className="h-3.5 w-3.5" aria-hidden="true" />
           )}

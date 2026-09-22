@@ -119,7 +119,7 @@ export default function SharePanel({
         )}
 
         {!loading && error && (
-          <p role="alert" className="py-2 text-xs leading-relaxed text-red-600">
+          <p role="alert" className="py-2 text-sm leading-relaxed text-danger-ink">
             {error}
           </p>
         )}

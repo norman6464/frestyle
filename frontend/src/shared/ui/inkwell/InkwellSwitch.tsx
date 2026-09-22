@@ -29,7 +29,7 @@ export default function InkwellSwitch({ label, className = '', id, checked, disa
         {/* トラック */}
         <span className="h-[14px] w-[34px] rounded-full bg-black/[0.38] transition-colors peer-checked:bg-inkwell-primary/50 peer-disabled:bg-black/[0.12]" />
         {/* サム（トラックの兄弟。ON で右へ移動＋色変化） */}
-        <span className="pointer-events-none absolute left-[10px] top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow-inkwell-1 transition-transform duration-200 peer-checked:translate-x-4 peer-checked:bg-inkwell-primary" />
+        <span className="pointer-events-none absolute left-[10px] top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow-inkwell-1 transition-transform duration-base peer-checked:translate-x-4 peer-checked:bg-inkwell-primary" />
       </span>
       {label && <span className="pl-1 pr-2 text-base">{label}</span>}
     </label>

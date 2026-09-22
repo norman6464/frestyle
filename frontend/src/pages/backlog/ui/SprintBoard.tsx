@@ -77,7 +77,7 @@ export default function SprintBoard({
 
   if (error) {
     return (
-      <p role="alert" className="px-4 py-6 text-sm text-red-700">
+      <p role="alert" className="px-4 py-6 text-sm text-danger-ink">
         {error}
       </p>
     );
@@ -96,7 +96,7 @@ export default function SprintBoard({
                 placeholder="スプリントの名前"
                 aria-label="スプリントの名前"
                 autoFocus
-                className="rounded-md border border-surface-3 px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-brand-400 focus:outline-none"
+                className="rounded-md border border-surface-3 px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-brand-600 focus:outline-none"
               />
               <button
                 type="button"

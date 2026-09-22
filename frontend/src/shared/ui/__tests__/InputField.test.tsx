@@ -89,7 +89,7 @@ describe('InputField', () => {
   it('エラー時にボーダーが赤色になる', () => {
     render(<InputField label="メール" name="email" value="" onChange={mockOnChange} error="エラー" />);
     const input = screen.getByLabelText('メール');
-    expect(input.className).toContain('border-rose-500');
+    expect(input.className).toContain('border-danger');
   });
 
   it('エラーがない場合はaria-invalidがfalseになる', () => {
@@ -106,7 +106,7 @@ describe('InputField', () => {
     render(<InputField label="メール" name="email" value="" onChange={mockOnChange} />);
     const input = screen.getByLabelText('メール');
     expect(input.className).toContain('border-surface-3');
-    expect(input.className).not.toContain('border-rose-500');
+    expect(input.className).not.toContain('border-danger');
   });
 
   it('disabled時にinputが無効化される', () => {

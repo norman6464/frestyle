@@ -45,3 +45,67 @@ PCでは本文と属性を2列にできるが、読み上げ・Tab順は本文�
 ## 実装と検証の境界
 
 本導入では共通の確認ダイアログ、ヘッダーのユーザーメニュー、チケット状態の選択を Base UI 化し、全画面チケット詳細で属性を段階表示・サブタスクを本文側へ移した。他の独自実装のダイアログ・メニュー・選択をすべて移行したわけではない。移行時は既存のAPI契約、権限、保存のタイミングを維持し、コンポーネントテストとStorybookの実ブラウザ検証を追加する。
+
+## トークンの実体
+
+設計の正本は `design/frestyle-studio-index.md` の ST01（`design/exports/frestyle-studio/og5Tk.png`）。
+値の実体は `src/app/styles/index.css` の `:root`、Tailwind への配線は `tailwind.config.js`。
+
+### 書体
+
+`--fs-font-sans` は Noto Sans JP の可変フォント。`@fontsource-variable/noto-sans-jp` を
+npm から取り込み、Vite に同一オリジンで配信させる。**Google Fonts の CDN は使えない**
+（`index.html` の CSP が `font-src 'self' data:`。CDN からの取得は無言で遮断され、既定書体のまま
+描画される）。代替は OS 標準の日本語ゴシックを字幅の近い順に並べ、取得前後で折り返しがずれる幅を
+抑える。`tailwind.config.js` の `fontFamily.sans` を差し替えているため、preflight 経由で
+アプリ全体の地の書体になる。
+
+unicode-range で 124 枚に分割されているので、5.6MB すべてが配信されるわけではない。日本語の
+画面で実際に落ちてくるのは かな帯 79KB + 使った漢字の帯 16KB 前後 × 数枚。ビルド成果物には
+woff2 が 156 個（`dist/assets` 合計 8.2MB）入る。`size-limit` は JS だけを見ているので
+この増加は予算に出ない。**配信量を測るときは JS の予算とは別に見ること。**
+
+### 状態色
+
+| トークン | 用途 |
+| --- | --- |
+| `success` / `success-soft` / `success-border` | 完了・保存済み・有効 |
+| `danger` / `danger-hover` / `danger-active` / `danger-soft` / `danger-border` | エラー・削除・期限超過（面と枠） |
+| `danger-ink` | エラーの文字とアイコン |
+| `warning` / `warning-soft` / `warning-border` | 未保存・停止中・下書き・版の閲覧中 |
+| `action-soft` | 青の淡い地（選択・強調の面。文字色には使わない） |
+
+`success` / `danger` は ST01 の SUCCESS #4D7C0F / ERROR #DC2626 と同値。
+
+`danger` だけ文字と面を分けている。ST01 の #DC2626 をそのまま淡赤の地 (`danger-soft`) に
+載せると 4.42:1 で基準 4.5 を割るため、文字は一段濃い `danger-ink` を使う
+（白地 5.94 / `danger-soft` の上 5.92）。面と枠はボードどおり #DC2626。
+`success` (白 4.99 / soft 4.59) と `warning` (白 5.02 / soft 4.82) は 1 色で両方満たすので分けない。`warning` はボードに
+無いため、画面側が既に使っていた琥珀を名前にしただけで新しい色相は足していない。
+
+導入前は**同じ「エラー」に red-600 / red-700 / red-800 / rose-500〜900 の 4 系統**、
+**同じ「成功」に green / emerald / lime の 3 系統**が並行していた。Tailwind 既定パレットの
+直書きは `src` から全廃し、色は必ずこのトークンを通す。
+
+ブランド色（`brand-*` = 押せる）と状態色（起きた結果）は役割が違う。混ぜない。
+色だけで意味を伝えないこと。エラー・期限超過・未保存には必ず文言かアイコンを添える。
+
+### フォーカスと輪郭
+
+`brand-400` (#60a5fa) は白地 2.33:1 で、枠線・輪郭に要る 3:1（WCAG 2.2 SC 1.4.11）に届かない。
+フォーカスリング・選択枠・ドラッグ位置の表示はすべて `brand-600`（白地 5.15:1）を使う。
+`brand-400` / `brand-300` は `src` から全廃した。
+
+### 動き
+
+`duration-fast` (120ms) / `duration-base` (180ms) / `duration-slow` (260ms) の 3 段だけ。
+fast は状態の切り替え、base は出現・移動、slow は面の入退場。退場は入場より短くする。
+緩急は `ease-fs-standard` / `ease-fs-decelerate` / `ease-fs-accelerate`。
+
+動きを減らす設定への対応は `index.css` の `prefers-reduced-motion` で一括して行う。
+部品ごとに `motion-reduce:` を付けて回らない（付け忘れが必ず出る）。
+
+### 文字サイズ
+
+ST01 の指定は本文 14–18px。`role="alert"` / `role="status"` の文言は本文として扱い、
+12px・11px だったものを 14px に揃えた。12px は補助ラベル・バッジ・メタ情報に限る。

@@ -70,10 +70,10 @@ describe('Button', () => {
       expect(cls).not.toContain('shadow-sm');
     });
 
-    it('danger: bg-red-600クラスが付く', () => {
+    it('danger: bg-dangerクラスが付く', () => {
       render(<Button variant="danger">テスト</Button>);
       // 白文字を載せる面は 600 から（red-500 は 3.76:1 で小さな文字の基準に届かない）。
-      expect(screen.getByRole('button').className).toContain('bg-red-600');
+      expect(screen.getByRole('button').className).toContain('bg-danger');
     });
 
     it('ghost: bg-brand-600クラスが付かない', () => {
@@ -118,6 +118,6 @@ describe('Button', () => {
     render(<Button>テスト</Button>);
     const cls = screen.getByRole('button').className;
     expect(cls).toContain('focus-visible:ring-2');
-    expect(cls).toContain('focus-visible:ring-brand-400');
+    expect(cls).toContain('focus-visible:ring-brand-600');
   });
 });

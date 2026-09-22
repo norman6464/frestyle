@@ -69,7 +69,7 @@ export default function TicketWatchButton({ workspaceSlug, ticketId }: TicketWat
       title={watching ? '監視をやめる' : '監視する'}
       className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50 ${
         watching
-          ? 'border-brand-400 bg-brand-100 text-brand-700'
+          ? 'border-brand-600 bg-brand-100 text-brand-700'
           : 'border-surface-3 text-[var(--color-text-secondary)] hover:bg-surface-2'
       }`}
     >

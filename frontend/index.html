@@ -84,10 +84,13 @@
         ]
       }
     </script>
-    <!-- theme 初期化は public/theme-init.js に外出し（CSP: script-src 'self' を満たすため） -->
-    <script src="/theme-init.js"></script>
   </head>
-  <body style="background-color: var(--color-surface, #1A1A1A);">
+  <!--
+    CSS が届く前の 1 フレームを白で塗る。--color-surface が定義されるのは index.css を
+    読んだ後なので、それまではここの代替値が出る。以前の代替値はダークテーマ時代の
+    #1A1A1A のままで、白いアプリが毎回黒く一瞬光ってから白へ戻っていた。
+  -->
+  <body style="background-color: var(--color-surface, #FFFFFF);">
     <div id="root"></div>
     <script type="module" src="/src/app/index.tsx"></script>
   </body>

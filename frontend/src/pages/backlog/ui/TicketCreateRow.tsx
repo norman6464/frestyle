@@ -54,7 +54,7 @@ export default function TicketCreateRow({ onCreate }: TicketCreateRowProps) {
       />
       <Button variant="secondary" className="min-h-11" disabled={!title.trim() || saving} loading={saving} onClick={() => void submit()}>追加</Button>
       {error && (
-        <span role="alert" className="w-full text-sm text-red-700">
+        <span role="alert" className="w-full text-sm text-danger-ink">
           {error}
         </span>
       )}

@@ -76,7 +76,7 @@ export default function InputField({
           autoComplete={autoComplete}
           aria-invalid={!!error}
           aria-describedby={[hint && `${name}-hint`, error && `${name}-error`].filter(Boolean).join(' ') || undefined}
-          className={`min-h-12 w-full border rounded-lg px-4 py-2.5 pr-14 text-base focus:outline-none focus:ring-2 transition-colors duration-150 motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed ${getFieldBorderClass(!!error)}`}
+          className={`min-h-12 w-full border rounded-lg px-4 py-2.5 pr-14 text-base focus:outline-none focus:ring-2 transition-colors duration-fast motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed ${getFieldBorderClass(!!error)}`}
         />
         {isPasswordField && !disabled ? (
           <button

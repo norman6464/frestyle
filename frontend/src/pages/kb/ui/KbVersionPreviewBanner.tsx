@@ -31,10 +31,10 @@ export default function KbVersionPreviewBanner({
   return (
     <div
       role="status"
-      className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-l-4 border-surface-3 border-l-amber-400 bg-amber-500/10 px-3 py-2.5"
+      className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-l-4 border-surface-3 border-l-warning bg-warning-soft px-3 py-2.5"
     >
       <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
-        <ClockIcon className="h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+        <ClockIcon className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
         <span>
           {formatMonthDay(createdAt)} {formatHourMinute(createdAt)} の版を表示中
         </span>

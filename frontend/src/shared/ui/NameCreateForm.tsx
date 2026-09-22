@@ -49,7 +49,7 @@ export default function NameCreateForm({ what, onCreate }: NameCreateFormProps) 
           type="text"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          className="w-full rounded border border-surface-3 bg-surface-1 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-400 focus:outline-none"
+          className="w-full rounded border border-surface-3 bg-surface-1 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-600 focus:outline-none"
         />
       </div>
       <button

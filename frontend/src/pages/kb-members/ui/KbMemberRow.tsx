@@ -77,11 +77,11 @@ export default function KbMemberRow({
         <span
           className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${
             suspended
-              ? 'bg-amber-50 text-amber-700'
+              ? 'bg-warning-soft text-warning'
               : 'bg-surface-2 text-[var(--color-text-tertiary)]'
           }`}
         >
-          <span className={`h-1.5 w-1.5 rounded-full ${suspended ? 'bg-amber-500' : 'bg-green-600'}`} />
+          <span className={`h-1.5 w-1.5 rounded-full ${suspended ? 'bg-warning' : 'bg-success'}`} />
           {suspended ? '停止中' : '有効'}
         </span>
       </td>
@@ -109,7 +109,7 @@ export default function KbMemberRow({
                 disabled={busy}
                 aria-label={`${member.name || '相手'} を停止する`}
                 title="アカウントを停止する"
-                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-surface-3 px-3 text-sm text-[var(--color-text-muted)] hover:bg-amber-50 hover:text-amber-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-surface-3 px-3 text-sm text-[var(--color-text-muted)] hover:bg-warning-soft hover:text-warning focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
               >
                 <NoSymbolIcon className="h-4 w-4" aria-hidden="true" />
                 停止
@@ -121,7 +121,7 @@ export default function KbMemberRow({
               disabled={busy}
               aria-label={`${member.name || '相手'} をワークスペースから外す`}
               title="ワークスペースから外す"
-              className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-[var(--color-text-muted)] hover:bg-red-50 hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-[var(--color-text-muted)] hover:bg-danger-soft hover:text-danger-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
             >
               <UserMinusIcon className="h-4 w-4" aria-hidden="true" />
               外す

@@ -138,7 +138,7 @@ export default function GlobalSidebar({
         onMouseEnter={collapsed ? panel.openPeek : undefined}
         onMouseLeave={collapsed ? panel.closePeek : undefined}
         className={[
-          'fixed inset-y-0 left-0 z-50 flex w-72 max-w-full flex-col border-r border-surface-3 bg-[var(--color-nav)] transition-all duration-200 ease-out motion-reduce:transition-none',
+          'fixed inset-y-0 left-0 z-50 flex w-72 max-w-full flex-col border-r border-surface-3 bg-[var(--color-nav)] transition-all duration-base ease-out motion-reduce:transition-none',
           mobileOpen ? 'visible translate-x-0' : 'invisible -translate-x-full',
           collapsed
             ? `md:bottom-2 md:left-0 md:top-[calc(var(--app-header-h)+8px)] md:z-40 md:w-64 md:rounded-r-xl md:border md:shadow-xl ${

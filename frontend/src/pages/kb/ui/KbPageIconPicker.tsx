@@ -112,7 +112,7 @@ export default function KbPageIconPicker({ current, onSelect, onClear, onClose }
               void submitDraft();
             }
           }}
-          className="min-w-0 flex-1 rounded border border-surface-3 bg-transparent px-2 py-1 text-sm text-[var(--color-text-primary)] outline-none focus:border-brand-400"
+          className="min-w-0 flex-1 rounded border border-surface-3 bg-transparent px-2 py-1 text-sm text-[var(--color-text-primary)] outline-none focus:border-brand-600"
         />
         <button
           type="button"
@@ -125,7 +125,7 @@ export default function KbPageIconPicker({ current, onSelect, onClear, onClose }
         </button>
       </div>
       {inputError && (
-        <p role="alert" className="mt-1 text-xs text-red-600">
+        <p role="alert" className="mt-1 text-sm text-danger-ink">
           {inputError}
         </p>
       )}

@@ -18,7 +18,7 @@ export default function TicketChildrenList({ tickets, loading, error, projectKey
   if (loading) return <Loading size="small" />;
   if (error) {
     return (
-      <p role="alert" className="text-xs text-red-700">
+      <p role="alert" className="text-sm text-danger-ink">
         {error}
       </p>
     );

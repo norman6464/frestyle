@@ -172,14 +172,14 @@ export default function TicketDescriptionEditor({
 
   return (
     <div>
-      <div className="overflow-hidden rounded-lg border border-brand-400">
+      <div className="overflow-hidden rounded-lg border border-brand-600">
         <TicketFormatBar editor={editor} disabled={saving} />
         <div className="p-3">
           <EditorContent editor={editor} />
         </div>
       </div>
       {error && (
-        <p role="alert" className="mt-1.5 text-xs leading-relaxed text-red-700">
+        <p role="alert" className="mt-1.5 text-sm leading-relaxed text-danger-ink">
           {error}
         </p>
       )}

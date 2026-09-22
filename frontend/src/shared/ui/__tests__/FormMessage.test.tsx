@@ -21,20 +21,6 @@ describe('FormMessage', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('エラーメッセージにエラースタイルが適用される', () => {
-    render(<FormMessage message={{ type: 'error', text: 'エラー' }} />);
-
-    const el = screen.getByText('エラー').closest('div');
-    expect(el?.className).toContain('rose');
-  });
-
-  it('成功メッセージに成功スタイルが適用される', () => {
-    render(<FormMessage message={{ type: 'success', text: '成功' }} />);
-
-    const el = screen.getByText('成功').closest('div');
-    expect(el?.className).toContain('emerald');
-  });
-
   it('エラーメッセージにExclamationCircleIconが表示される', () => {
     render(<FormMessage message={{ type: 'error', text: 'エラー' }} />);
 
@@ -60,11 +46,20 @@ describe('FormMessage', () => {
     expect(screen.getByText('<script>alert("xss")</script>')).toBeInTheDocument();
   });
 
-  it('エラーメッセージにborder-rose-800クラスが含まれる', () => {
-    render(<FormMessage message={{ type: 'error', text: 'テスト' }} />);
+  it('エラーは danger、成功は success のトークンで塗り分ける', () => {
+    const { unmount } = render(<FormMessage message={{ type: 'error', text: 'だめ' }} />);
+    const error = screen.getByText('だめ').closest('div');
+    expect(error?.className).toContain('bg-danger-soft');
+    expect(error?.className).toContain('text-danger-ink');
+    expect(error?.className).toContain('border-danger-border');
+    expect(error?.className).not.toContain('success');
+    unmount();
 
-    const el = screen.getByText('テスト').closest('div');
-    expect(el?.className).toContain('border');
+    render(<FormMessage message={{ type: 'success', text: 'できた' }} />);
+    const success = screen.getByText('できた').closest('div');
+    expect(success?.className).toContain('bg-success-soft');
+    expect(success?.className).toContain('text-success');
+    expect(success?.className).not.toContain('danger');
   });
 
   describe('自動消去', () => {

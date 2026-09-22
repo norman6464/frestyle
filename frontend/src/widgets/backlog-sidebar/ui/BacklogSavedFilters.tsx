@@ -36,7 +36,7 @@ export default function BacklogSavedFilters({ projectId, counts }: BacklogSavedF
             {count !== null && (
               <span
                 className={`shrink-0 text-xs tabular-nums ${
-                  warn && count > 0 ? 'font-semibold text-red-600' : 'text-[var(--color-text-muted)]'
+                  warn && count > 0 ? 'font-semibold text-danger-ink' : 'text-[var(--color-text-muted)]'
                 }`}
               >
                 {count}

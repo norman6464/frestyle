@@ -26,7 +26,7 @@ export interface SprintCardProps {
 const STATE_STYLE: Record<Sprint['state'], { label: string; className: string }> = {
   planned: { label: '計画中', className: 'bg-surface-3 text-[var(--color-text-secondary)]' },
   active: { label: '進行中', className: 'bg-brand-100 text-brand-700' },
-  completed: { label: '完了', className: 'bg-emerald-100 text-emerald-700' },
+  completed: { label: '完了', className: 'bg-success-soft text-success' },
 };
 
 /**
@@ -110,7 +110,7 @@ export default function SprintCard({
               type="button"
               onClick={onDelete}
               disabled={busy}
-              className="rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--color-text-muted)] transition-colors hover:text-red-700 disabled:opacity-50"
+              className="rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--color-text-muted)] transition-colors hover:text-danger-ink disabled:opacity-50"
             >
               削除
             </button>
@@ -229,7 +229,7 @@ function SprintEditForm({ sprint, busy, onCancel, onSubmit }: SprintEditFormProp
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-400 focus:outline-none"
+          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-600 focus:outline-none"
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
@@ -238,7 +238,7 @@ function SprintEditForm({ sprint, busy, onCancel, onSubmit }: SprintEditFormProp
           type="date"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
-          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-400 focus:outline-none"
+          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-600 focus:outline-none"
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
@@ -247,7 +247,7 @@ function SprintEditForm({ sprint, busy, onCancel, onSubmit }: SprintEditFormProp
           type="date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
-          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-400 focus:outline-none"
+          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-600 focus:outline-none"
         />
       </label>
       <button
@@ -267,7 +267,7 @@ function SprintEditForm({ sprint, busy, onCancel, onSubmit }: SprintEditFormProp
         キャンセル
       </button>
       {periodBroken && (
-        <p role="alert" className="w-full text-xs text-red-700">
+        <p role="alert" className="w-full text-sm text-danger-ink">
           終了は開始より後にしてください。
         </p>
       )}
