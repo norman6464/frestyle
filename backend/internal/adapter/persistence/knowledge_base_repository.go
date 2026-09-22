@@ -570,6 +570,22 @@ func (r *knowledgeBaseRepository) HasDescendant(ctx context.Context, workspaceID
 	})
 }
 
+// validatePagePlacement は階層ロックを取得したトランザクション内で呼ぶ。
+func validatePagePlacement(ctx context.Context, qtx *sqlcgen.Queries, workspaceID uuid.UUID, parent uuid.NullUUID, height int32) error {
+	var parentDepth int32
+	if parent.Valid {
+		dimensions, err := qtx.GetPageDepthAndHeight(ctx, sqlcgen.GetPageDepthAndHeightParams{WorkspaceID: workspaceID, PageID: parent.UUID})
+		if errors.Is(err, sql.ErrNoRows) {
+			return repository.ErrPageNotFound
+		}
+		if err != nil {
+			return err
+		}
+		parentDepth = dimensions.Depth
+	}
+	return domain.ValidatePageDepth(parentDepth, height)
+}
+
 func (r *knowledgeBaseRepository) CreatePage(ctx context.Context, page *domain.Page) error {
 	wsID, ok := kbParseID(page.WorkspaceID)
 	spID, ok2 := kbParseID(page.SpaceID)
@@ -591,6 +607,12 @@ func (r *knowledgeBaseRepository) CreatePage(ctx context.Context, page *domain.P
 
 	var created sqlcgen.Page
 	err = r.runInTx(ctx, func(qtx *sqlcgen.Queries) error {
+		if _, err := qtx.LockPageHierarchy(ctx, wsID); err != nil {
+			return err
+		}
+		if err := validatePagePlacement(ctx, qtx, wsID, parent, 0); err != nil {
+			return err
+		}
 		row, err := qtx.InsertPage(ctx, sqlcgen.InsertPageParams{
 			ID:              id,
 			WorkspaceID:     wsID,
@@ -748,6 +770,31 @@ func (r *knowledgeBaseRepository) MovePage(ctx context.Context, workspaceID, pag
 	}
 
 	return r.runInTx(ctx, func(qtx *sqlcgen.Queries) error {
+		if _, err := qtx.LockPageHierarchy(ctx, wsID); err != nil {
+			return err
+		}
+		// usecaseの確認後に別の移動が完了している場合も、ロック内で循環を拒否する。
+		if parent.Valid {
+			cycle, err := qtx.PageHasDescendant(ctx, sqlcgen.PageHasDescendantParams{
+				WorkspaceID: wsID, AncestorID: pgID, PageID: parent.UUID,
+			})
+			if err != nil {
+				return err
+			}
+			if cycle {
+				return domain.ErrPageCycle
+			}
+		}
+		dimensions, err := qtx.GetPageDepthAndHeight(ctx, sqlcgen.GetPageDepthAndHeightParams{WorkspaceID: wsID, PageID: pgID})
+		if errors.Is(err, sql.ErrNoRows) {
+			return repository.ErrPageNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if err := validatePagePlacement(ctx, qtx, wsID, parent, dimensions.Height); err != nil {
+			return err
+		}
 		current, err := findPageWith(ctx, qtx, workspaceID, pageID)
 		if err != nil {
 			return err

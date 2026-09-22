@@ -248,6 +248,8 @@ func respondKnowledgeBaseErr(c *gin.Context, err error) {
 		c.JSON(http.StatusConflict, errorResponse{Error: "parent_archived"})
 	case errors.Is(err, kb.ErrPageCycle):
 		c.JSON(http.StatusConflict, errorResponse{Error: "page_cycle"})
+	case errors.Is(err, domain.ErrPageDepthExceeded):
+		c.JSON(http.StatusConflict, errorResponse{Error: "page_depth_exceeded"})
 	case errors.Is(err, repository.ErrPageMoveVoidsSpaceGrant):
 		// 業務上の衝突であってサーバの故障ではない。既にアーカイブ済み・循環と同じ 409 に揃える
 		// （500 だと DB 障害と区別できず再試行してよいと誤解される）。
