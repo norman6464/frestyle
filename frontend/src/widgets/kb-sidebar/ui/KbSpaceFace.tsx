@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type Ref } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useDismissOnOutside } from '@/shared/lib/hooks/useDismissOnOutside';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { NameCreateForm, FsIcon } from '@/shared/ui';
 import { KbRepository, type KbMySpace, type KbPage, type KbSpace } from '@/entities/kb';
@@ -62,6 +63,16 @@ export default function KbSpaceFace({
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const templates = useKbPageTemplates(workspaceSlug, space.id, templatePickerOpen);
 
+  // 2 つのポップアップは、外を押すか Escape で閉じる。引き金とポップアップ本体は同じ行の
+  // 兄弟なので、それぞれ「中」と数える要素を組で渡す。同じ行の「ページを追加」や
+  // もう片方の引き金は外扱い（押せば閉じる）。
+  const switcherTriggerRef = useRef<HTMLButtonElement>(null);
+  const switcherMenuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  useDismissOnOutside(switcherOpen, [switcherTriggerRef, switcherMenuRef], () => setSwitcherOpen(false));
+  useDismissOnOutside(menuOpen, [menuTriggerRef, menuRef], () => setMenuOpen(false));
+
   const commitRename = async (name: string) => {
     try {
       await onRenameSpace(name);
@@ -101,8 +112,14 @@ export default function KbSpaceFace({
           </div>
         ) : (
           <button
+            ref={switcherTriggerRef}
             type="button"
-            onClick={() => setSwitcherOpen((prev) => !prev)}
+            onClick={() => {
+              // キーボードで開いたときも、もう片方が開いたままにならないようにする
+              // （マウスなら mousedown の時点で外扱いになって閉じている）。
+              setMenuOpen(false);
+              setSwitcherOpen((prev) => !prev);
+            }}
             aria-expanded={switcherOpen}
             aria-label="スペースを切り替える"
             className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left"
@@ -136,8 +153,12 @@ export default function KbSpaceFace({
               <FsIcon name="plus" className="h-4 w-4" />
             </button>
             <button
+              ref={menuTriggerRef}
               type="button"
-              onClick={() => setMenuOpen((prev) => !prev)}
+              onClick={() => {
+                setSwitcherOpen(false);
+                setMenuOpen((prev) => !prev);
+              }}
               aria-expanded={menuOpen}
               aria-label={`${space.name} の操作`}
               className="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-surface-3"
@@ -145,7 +166,10 @@ export default function KbSpaceFace({
               <FsIcon name="more" className="h-4 w-4" />
             </button>
             {menuOpen && (
-              <ul className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-surface-3 bg-surface-1 py-1 shadow-lg">
+              <ul
+                ref={menuRef}
+                className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-surface-3 bg-surface-1 py-1 shadow-lg"
+              >
                 <li>
                   <button
                     type="button"
@@ -177,6 +201,7 @@ export default function KbSpaceFace({
 
         {switcherOpen && (
           <KbSpaceSwitcherMenu
+            ref={switcherMenuRef}
             workspaceSlug={workspaceSlug}
             activeSpaceId={space.id}
             onCreateSpace={onCreateSpace}
@@ -226,11 +251,14 @@ export default function KbSpaceFace({
  * （スペースを作る手段が他に無くなるため、一覧と同じ場所に置く）。
  */
 function KbSpaceSwitcherMenu({
+  ref,
   workspaceSlug,
   activeSpaceId,
   onCreateSpace,
   onClose,
 }: {
+  /** ポップアップの枠。親が「外を押した」判定に使う。 */
+  ref: Ref<HTMLDivElement>;
   workspaceSlug: string;
   activeSpaceId: string;
   onCreateSpace: (input: { name: string; visibility?: 'workspace' | 'private' }) => Promise<KbSpace>;
@@ -270,7 +298,10 @@ function KbSpaceSwitcherMenu({
   };
 
   return (
-    <div className="absolute left-0 top-full z-20 mt-1 w-60 rounded-lg border border-surface-3 bg-surface-1 py-1 shadow-lg">
+    <div
+      ref={ref}
+      className="absolute left-0 top-full z-20 mt-1 w-60 rounded-lg border border-surface-3 bg-surface-1 py-1 shadow-lg"
+    >
       {mySpaces === null && <p className="px-3 py-1.5 text-sm text-[var(--color-text-muted)]">読み込み中…</p>}
       {mySpaces?.map((s) => (
         <Link
