@@ -90,6 +90,12 @@ SCOPE_TARGET = \
 # （Atlas は extension を管理しない＝作成も削除もしない。ここで先に作るだけで足りる）。
 # ローカルに psql が無い環境でも動くよう、使い捨ての postgres コンテナから叩く。
 #
+# TARGET は Supabase の **Session pooler**（aws-0-<region>.pooler.supabase.com:5432・IPv4）の
+# DSN を渡す。直結ホスト db.<ref>.supabase.co は IPv6 アドレスしか持たず、Docker Desktop の
+# コンテナは IPv6 で外へ出られないので、この psql が「Network unreachable」で止まる
+# （2026-09-22 に踏んだ。Mac 自体からは届くので Atlas 本体は通り、ここだけが落ちる）。
+# Transaction pooler（6543）は DDL・トランザクションの都合で使わない。
+#
 # WITH SCHEMA public と、その直後の確認がどちらも要る。
 #   - 置き場所を明示しないと、接続の search_path 次第で public 以外（Supabase なら
 #     extensions）に入りうる。Atlas は public だけを見るので、入っていても見えない
@@ -102,7 +108,17 @@ schema-ensure-pg-trgm:
 	@docker run --rm public.ecr.aws/docker/library/postgres:17.6-alpine \
 	  psql "$(TARGET)" -v ON_ERROR_STOP=1 \
 	  -c "CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;" \
-	  -c "DO \$$\$$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_opclass o JOIN pg_namespace n ON n.oid = o.opcnamespace WHERE o.opcname = 'gin_trgm_ops' AND n.nspname = 'public') THEN RAISE EXCEPTION 'gin_trgm_ops が public にありません。pg_trgm が別のスキーマに入っています（ALTER EXTENSION pg_trgm SET SCHEMA public; で移せます）'; END IF; END \$$\$$;"
+	  -c "DO \$$\$$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_opclass o JOIN pg_namespace n ON n.oid = o.opcnamespace WHERE o.opcname = 'gin_trgm_ops' AND n.nspname = 'public') THEN RAISE EXCEPTION 'gin_trgm_ops が public にありません。pg_trgm が別のスキーマに入っています（ALTER EXTENSION pg_trgm SET SCHEMA public; で移せます）'; END IF; END \$$\$$;" \
+	  || { \
+	    case "$(TARGET)" in \
+	      *@db.*.supabase.co*) \
+	        echo "" >&2; \
+	        echo "ヒント: TARGET が Supabase の直結ホスト（db.<ref>.supabase.co）です。このホストは IPv6 のみで、" >&2; \
+	        echo "        Docker のコンテナからは届きません（Network unreachable）。Supabase ダッシュボード → Connect →" >&2; \
+	        echo "        Session pooler（aws-0-<region>.pooler.supabase.com:5432）の DSN を TARGET に使ってください。" >&2 ;; \
+	    esac; \
+	    exit 1; \
+	  }
 
 .PHONY: ensure-atlas
 ensure-atlas:
