@@ -41,18 +41,34 @@ export const 閉じている: Story = {
   },
 };
 
+export const Escapeで閉じてフォーカスを戻す: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const portal = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getByRole('button', { name: '川野 拓馬' });
+    if (trigger.getAttribute('aria-expanded') !== 'true') await userEvent.click(trigger);
+    (await portal.findByRole('menuitem', { name: '設定' })).focus();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(async () => {
+      await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      await expect(trigger).toHaveFocus();
+    });
+  },
+};
+
 /** 開いたところ。メールアドレスと 2 つの項目が出る。 */
 export const 開いたところ: Story = {
   args: { email: 'takuma@example.com' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const portal = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole('button', { name: /川野 拓馬/ }));
     // メニューは 0.15 秒かけて現れる。出きる前に見ると opacity が 0 のままなので待つ。
     await waitFor(async () => {
-      await expect(canvas.getByText('takuma@example.com')).toBeVisible();
+      await expect(portal.getByText('takuma@example.com')).toBeVisible();
     });
-    await expect(canvas.getByRole('button', { name: '設定' })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'ログアウト' })).toBeVisible();
+    await expect(portal.getByRole('menuitem', { name: '設定' })).toBeVisible();
+    await expect(portal.getByRole('menuitem', { name: 'ログアウト' })).toBeVisible();
   },
 };
 
@@ -77,9 +93,10 @@ export const 補足つき: Story = {
   args: { email: 'takuma@example.com', subText: '開発チーム' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const portal = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole('button', { name: /川野 拓馬/ }));
     await waitFor(async () => {
-      await expect(canvas.getByText('開発チーム')).toBeVisible();
+      await expect(portal.getByText('開発チーム')).toBeVisible();
     });
   },
 };
@@ -102,12 +119,14 @@ export const ログアウト: Story = {
   args: { email: 'takuma@example.com' },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: /川野 拓馬/ }));
-    await userEvent.click(canvas.getByRole('button', { name: 'ログアウト' }));
+    const portal = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getByRole('button', { name: /川野 拓馬/ });
+    if (trigger.getAttribute('aria-expanded') !== 'true') await userEvent.click(trigger);
+    await userEvent.click(await portal.findByRole('menuitem', { name: 'ログアウト' }));
     await expect(args.onLogout).toHaveBeenCalledTimes(1);
     // 押したら閉じる。
     await waitFor(async () => {
-      await expect(canvas.queryByRole('button', { name: '設定' })).toBeNull();
+      await expect(portal.queryByRole('menuitem', { name: '設定' })).toBeNull();
     });
   },
 };

@@ -1,4 +1,4 @@
-import { ChangeEvent, useState } from 'react';
+import { ChangeEvent, useRef, useState, type HTMLInputAutoCompleteAttribute } from 'react';
 import { XMarkIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/solid';
 import FormFieldError from './FormFieldError';
 import { getFieldBorderClass } from '@/shared/lib/fieldStyles';
@@ -20,6 +20,8 @@ interface InputFieldProps {
   error?: string;
   disabled?: boolean;
   maxLength?: number;
+  autoComplete?: HTMLInputAutoCompleteAttribute;
+  hint?: string;
 }
 
 export default function InputField({
@@ -32,13 +34,14 @@ export default function InputField({
   error,
   disabled,
   maxLength,
+  autoComplete,
+  hint,
 }: InputFieldProps) {
-  const [inputValue, setInputValue] = useState(value || '');
+  const inputRef = useRef<HTMLInputElement>(null);
   const [showPassword, setShowPassword] = useState(false);
   const isPasswordField = type === 'password';
 
   const handleClear = () => {
-    setInputValue('');
     // 呼び出し側が e.target.value / e.target.name のみ参照する前提で
     // ChangeEvent<HTMLInputElement> 互換の最小オブジェクトを synthesize する。
     // 完全な ChangeEvent ではないが構造的に target.{name,value} を保証する。
@@ -48,6 +51,7 @@ export default function InputField({
       currentTarget: syntheticTarget,
     } as unknown as ChangeEvent<HTMLInputElement>;
     onChange(syntheticEvent);
+    inputRef.current?.focus();
   };
 
   return (
@@ -60,41 +64,41 @@ export default function InputField({
       </label>
       <div className="relative">
         <input
+          ref={inputRef}
           id={name}
           name={name}
           type={isPasswordField && showPassword ? 'text' : type}
-          value={inputValue}
-          onChange={(e) => {
-            setInputValue(e.target.value);
-            onChange(e);
-          }}
+          value={value}
+          onChange={onChange}
           placeholder={placeholder}
           disabled={disabled}
           maxLength={maxLength}
+          autoComplete={autoComplete}
           aria-invalid={!!error}
-          aria-describedby={error ? `${name}-error` : undefined}
-          className={`w-full border rounded-lg px-4 py-2.5 pr-10 focus:outline-none focus:ring-1 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${getFieldBorderClass(!!error)}`}
+          aria-describedby={[hint && `${name}-hint`, error && `${name}-error`].filter(Boolean).join(' ') || undefined}
+          className={`min-h-12 w-full border rounded-lg px-4 py-2.5 pr-14 text-base focus:outline-none focus:ring-2 transition-colors duration-fast motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed ${getFieldBorderClass(!!error)}`}
         />
         {isPasswordField && !disabled ? (
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             aria-label={showPassword ? 'パスワードを非表示' : 'パスワードを表示'}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--color-text-faint)] hover:text-[var(--color-text-tertiary)] transition-colors"
+            className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
             {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
           </button>
-        ) : inputValue && !disabled ? (
+        ) : value && !disabled ? (
           <button
             type="button"
             onClick={handleClear}
             aria-label="入力をクリア"
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--color-text-faint)] hover:text-[var(--color-text-tertiary)] transition-colors"
+            className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
             <XMarkIcon className="w-5 h-5" />
           </button>
         ) : null}
       </div>
+      {hint && <p id={`${name}-hint`} className="mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">{hint}</p>}
       <FormFieldError name={name} error={error} />
     </div>
   );

@@ -27,13 +27,13 @@ export const 選択中あり: Story = {
   },
 };
 
-export const 未選択_すべてdisabled: Story = {
+/** 行を選んでいないときは帯そのものを出さない。押せないボタンと案内文が居座らない。 */
+export const 未選択_帯を出さない: Story = {
   args: { selectedKey: null },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('button', { name: /1 つ上へ/ })).toBeDisabled();
-    await expect(canvas.getByRole('button', { name: /1 つ下へ/ })).toBeDisabled();
-    await expect(canvas.getByRole('button', { name: /末尾へ/ })).toBeDisabled();
+    await expect(canvas.queryByRole('button')).toBeNull();
+    await expect(canvasElement.textContent).toBe('');
   },
 };
 

@@ -30,7 +30,7 @@ export default function InkwellLinearProgress({
         <span className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-inkwell-primary animate-inkwell-bar motion-reduce:animate-none motion-reduce:w-1/3" />
       ) : (
         <span
-          className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-inkwell-primary transition-transform duration-300 ease-inkwell-standard"
+          className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-inkwell-primary transition-transform duration-slow ease-inkwell-standard"
           style={{ transform: `scaleX(${clamped / 100})` }}
         />
       )}

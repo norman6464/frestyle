@@ -145,7 +145,7 @@ export default function KbWorkspaceSwitcher({
                   type="button"
                   onClick={() => setDeleting(workspace)}
                   aria-label={`${workspace.name} を削除`}
-                  className="mr-1 shrink-0 rounded p-1 text-[var(--color-text-tertiary)] opacity-0 transition-opacity hover:bg-surface-3 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+                  className="mr-1 shrink-0 rounded p-1 text-[var(--color-text-tertiary)] opacity-0 transition-opacity hover:bg-surface-3 hover:text-danger-ink focus-visible:opacity-100 group-hover:opacity-100"
                 >
                   <TrashIcon className="h-4 w-4" aria-hidden="true" />
                 </button>

@@ -156,7 +156,7 @@ export default function KbTemplatePickerModal({
                 </div>
               )}
               {!loading && error && (
-                <p role="alert" className="text-xs leading-relaxed text-red-600">
+                <p role="alert" className="text-sm leading-relaxed text-danger-ink">
                   {error}
                 </p>
               )}
@@ -192,7 +192,7 @@ export default function KbTemplatePickerModal({
                 </ul>
               )}
               {deleteError && (
-                <p role="alert" className="mt-2 text-xs leading-relaxed text-red-600">
+                <p role="alert" className="mt-2 text-sm leading-relaxed text-danger-ink">
                   {deleteError}
                 </p>
               )}
@@ -214,11 +214,11 @@ export default function KbTemplatePickerModal({
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   disabled={submitting}
-                  className="w-full rounded border border-surface-3 bg-surface-1 px-2 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-brand-400 focus:outline-none disabled:opacity-60"
+                  className="w-full rounded border border-surface-3 bg-surface-1 px-2 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-brand-600 focus:outline-none disabled:opacity-60"
                 />
               </div>
               {submitError && (
-                <p role="alert" className="text-xs leading-relaxed text-red-600">
+                <p role="alert" className="text-sm leading-relaxed text-danger-ink">
                   {submitError}
                 </p>
               )}

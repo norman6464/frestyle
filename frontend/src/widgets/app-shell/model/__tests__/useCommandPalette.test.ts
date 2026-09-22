@@ -86,6 +86,24 @@ describe('useCommandPalette', () => {
     expect(labels).toContain('ナレッジ');
   });
 
+  it('常設の行き先がすべて載っている（柱の 4 つ ＋ ヘッダーからしか行けない通知・設定）', () => {
+    // 窓は「どこからでも 1 手で行ける」ための物。柱に無い通知・設定を落とすと、
+    // その 2 つだけキーボードで辿れなくなる。
+    const paths = COMMAND_ITEMS.map((i) => i.action.path);
+    expect(paths).toEqual(['/', '/assigned', '/kb', '/backlog', '/notifications', '/settings']);
+    // 古い /profile/me は設定へ統合した（画面としてはもう入口が無い）。
+    expect(paths).not.toContain('/profile/me');
+  });
+
+  it('「プロフィール」と打っても設定が引ける（旧名の記憶で探す人のため）', () => {
+    const { result } = renderHook(() => useCommandPalette());
+    act(() => {
+      result.current.open();
+      result.current.setQuery('プロフィール');
+    });
+    expect(result.current.filteredItems.map((i) => i.label)).toEqual(['設定']);
+  });
+
   it('キーワード（英語の別名）でも引ける', () => {
     const { result } = renderHook(() => useCommandPalette());
     act(() => {

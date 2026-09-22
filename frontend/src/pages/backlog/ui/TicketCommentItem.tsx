@@ -190,7 +190,7 @@ export default function TicketCommentItem({
                         setMenuOpen(false);
                         setConfirmingDelete(true);
                       }}
-                      className="block w-full px-3 py-1 text-left text-xs text-red-700 hover:bg-surface-2"
+                      className="block w-full px-3 py-1 text-left text-xs text-danger-ink hover:bg-surface-2"
                     >
                       削除
                     </button>

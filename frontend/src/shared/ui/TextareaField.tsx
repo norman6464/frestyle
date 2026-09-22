@@ -29,15 +29,15 @@ export default function TextareaField({ label, name, value, onChange, placeholde
         maxLength={maxLength}
         aria-invalid={!!error}
         aria-describedby={error ? `${name}-error` : undefined}
-        className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-1 transition-colors resize-none ${getFieldBorderClass(!!error)}`}
+        className={`min-h-24 w-full border rounded-lg px-3 py-3 text-base leading-relaxed focus:ring-2 transition-colors resize-y ${getFieldBorderClass(!!error)}`}
       />
       <FormFieldError name={name} error={error} />
       {maxLength && (
         <p className={`text-xs text-right mt-1 ${
           value.length >= maxLength
-            ? 'text-rose-700'
+            ? 'text-danger-ink'
             : value.length >= maxLength * 0.9
-              ? 'text-amber-700'
+              ? 'text-warning'
               : 'text-[var(--color-text-muted)]'
         }`}>
           {value.length} / {maxLength}

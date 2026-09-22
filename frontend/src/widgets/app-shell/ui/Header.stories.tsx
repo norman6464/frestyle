@@ -56,7 +56,7 @@ export const 既定: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.queryByRole('link', { name: 'ナレッジ' })).toBeNull();
-    await expect(canvas.getByRole('button', { name: '検索' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: '移動先を探す' })).toBeVisible();
     await expect(await canvas.findByText('川野 拓馬')).toBeVisible();
   },
 };
@@ -89,7 +89,7 @@ export const 柱を閉じているとき: Story = {
 export const 検索ボタンを押す: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '検索' }));
+    await userEvent.click(canvas.getByRole('button', { name: '移動先を探す' }));
     await expect(args.onOpenSearch).toHaveBeenCalledTimes(1);
   },
 };
@@ -130,7 +130,7 @@ export const 情報が取れないとき: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     // 帯は壊れない。名前だけが既定の文言になる。
-    await expect(canvas.getByRole('button', { name: '検索' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: '移動先を探す' })).toBeVisible();
     await expect(await canvas.findByText('ユーザー')).toBeVisible();
   },
 };
@@ -149,4 +149,3 @@ export const 狭い画面: Story = {
     await expect(await canvas.findByRole('button', { name: '川野 拓馬' })).toBeVisible();
   },
 };
-

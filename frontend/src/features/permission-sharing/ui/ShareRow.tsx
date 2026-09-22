@@ -19,18 +19,18 @@ export interface ShareRowProps {
 export default function ShareRow({ row, disabled, onChangeRole, onRemove }: ShareRowProps) {
   const name = displayName(row.name, row.principalId);
   return (
-    <li className="flex items-center gap-2 rounded px-1 py-1.5 hover:bg-surface-2">
+    <li className="flex flex-wrap items-center gap-2 rounded px-1 py-2 hover:bg-surface-2">
       <span
         aria-hidden="true"
         className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-surface-3 bg-surface-2 text-[0.6875rem] font-bold text-[var(--color-text-tertiary)]"
       >
         {initials(row)}
       </span>
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 flex-1 basis-24">
         {/* 名前が引けなかった相手は ID が出る。切り詰められるので全体を title で補う。 */}
         <span
           title={name}
-          className="block truncate text-sm font-medium text-[var(--color-text-primary)]"
+          className="block text-sm font-medium text-[var(--color-text-primary)] [overflow-wrap:anywhere]"
         >
           {name}
         </span>
@@ -56,7 +56,7 @@ export default function ShareRow({ row, disabled, onChangeRole, onRemove }: Shar
         onClick={onRemove}
         disabled={disabled}
         aria-label={`${name} を外す`}
-        className="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-45"
+        className="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-danger-soft hover:text-danger-ink disabled:opacity-45"
       >
         <XMarkIcon className="h-4 w-4" />
       </button>

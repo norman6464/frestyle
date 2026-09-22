@@ -60,7 +60,7 @@ describe('未知の URL のルーティング', () => {
     renderAt('/login');
 
     // ログイン画面の描画完了を待ってから、404 が出ていないことを確認する。
-    await screen.findByRole('button', { name: 'ログインする' });
+    await screen.findByRole('button', { name: 'ログイン画面へ進む' });
     expect(
       screen.queryByRole('heading', { name: 'ページが見つかりません' }),
     ).not.toBeInTheDocument();

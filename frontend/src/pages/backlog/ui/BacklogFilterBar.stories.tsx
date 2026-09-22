@@ -69,60 +69,117 @@ const meta = {
     statusId: null,
     typeId: null,
     labelId: null,
-    assignedToMe: false,
     q: '',
+    quick: null,
     onChangeStatusId: fn(),
     onChangeTypeId: fn(),
     onChangeLabelId: fn(),
-    onToggleAssignedToMe: fn(),
     onChangeQuery: fn(),
+    onClearQuick: fn(),
+    onClearFilters: fn(),
+    onCreate: fn(),
   },
 } satisfies Meta<typeof BacklogFilterBar>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const 既定: Story = {};
+/** 条件を何も使っていない日の形。操作列は検索・フィルター・課題をつくる の 3 つだけ。 */
+export const 既定: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: 'フィルター' })).toHaveAttribute('aria-expanded', 'false');
+    // 詳細の選択欄は押すまで出ない。
+    await expect(canvas.queryByLabelText('状態で絞り込む')).toBeNull();
+    await expect(canvas.getByRole('button', { name: '課題をつくる' })).toBeInTheDocument();
+  },
+};
+
+/** 「フィルター」を押すと 3 つの選択欄が現れる。押した本人が開いたと分かるよう aria-expanded を返す。 */
+export const フィルターを開く: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'フィルター' }));
+    await expect(canvas.getByRole('button', { name: 'フィルター' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByLabelText('状態で絞り込む')).toBeInTheDocument();
+    await expect(canvas.getByLabelText('種別で絞り込む')).toBeInTheDocument();
+    await expect(canvas.getByLabelText('ラベルで絞り込む')).toBeInTheDocument();
+    await expect(canvas.getByText('変更はすぐに反映されます')).toBeVisible();
+  },
+};
+
+/**
+ * 絞り込みはネイティブの `<select>` ではなく Base UI の選択欄。候補は別の器（ポータル）へ
+ * 描かれるので、探す場所が canvas ではなく document になる。選択欄は「フィルター」を
+ * 押してからしか出ないので、先に開く。
+ */
+async function choose(canvas: ReturnType<typeof within>, label: string, optionName: string) {
+  await userEvent.click(canvas.getByRole('button', { name: 'フィルター' }));
+  await userEvent.click(canvas.getByLabelText(label));
+  await userEvent.click(await within(document.body).findByRole('option', { name: optionName }));
+}
 
 export const 状態を選ぶ: Story = {
   play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    await userEvent.selectOptions(canvas.getByLabelText('状態で絞り込む'), 'st-2');
+    await choose(within(canvasElement), '状態で絞り込む', '開発');
     await expect(args.onChangeStatusId).toHaveBeenCalledWith('st-2');
   },
 };
 
 export const ラベルを選ぶ: Story = {
   play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    await userEvent.selectOptions(canvas.getByLabelText('ラベルで絞り込む'), 'l-1');
+    await choose(within(canvasElement), 'ラベルで絞り込む', '不具合');
     await expect(args.onChangeLabelId).toHaveBeenCalledWith('l-1');
   },
 };
 
 export const 種別を選ぶ: Story = {
   play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    await userEvent.selectOptions(canvas.getByLabelText('種別で絞り込む'), 'ty-1');
+    await choose(within(canvasElement), '種別で絞り込む', '開発タスク');
     await expect(args.onChangeTypeId).toHaveBeenCalledWith('ty-1');
   },
 };
 
-export const 担当自分を押す: Story = {
+/**
+ * 条件付きで開いたときは、選択欄が見えた状態で始まり、「フィルター」に適用数が付く。
+ * 効いている条件はチップになって、畳んでも消えない。
+ */
+export const 条件が付いている: Story = {
+  args: { statusId: 'st-2', typeId: 'ty-1', quick: 'overdue', q: '認証' },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '担当: 自分' }));
-    await expect(args.onToggleAssignedToMe).toHaveBeenCalledWith(true);
+    await expect(canvas.getByRole('button', { name: /フィルター/ })).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByLabelText('2 件の条件を適用中')).toBeInTheDocument();
+    // チップは 1 つずつ外せる。
+    await expect(canvas.getByRole('button', { name: '状態: 開発 の絞り込みを解除' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: '種別: 開発タスク の絞り込みを解除' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: '期限切れ の絞り込みを解除' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: '題名: 認証 の絞り込みを解除' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '状態: 開発 の絞り込みを解除' }));
+    await expect(args.onChangeStatusId).toHaveBeenCalledWith(null);
+    await userEvent.click(canvas.getByRole('button', { name: '期限切れ の絞り込みを解除' }));
+    await expect(args.onClearQuick).toHaveBeenCalledOnce();
+    // 畳んでもチップは残る。
+    await userEvent.click(canvas.getByRole('button', { name: /フィルター/ }));
+    await expect(canvas.getByRole('button', { name: '種別: 開発タスク の絞り込みを解除' })).toBeVisible();
   },
 };
 
-export const 担当自分は選択中の見た目: Story = {
-  args: { assignedToMe: true },
+export const すべて解除する: Story = {
+  args: { statusId: 'st-2', q: '認証' },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'すべて解除' }));
+    await expect(args.onClearFilters).toHaveBeenCalledOnce();
+    await expect(canvas.getByRole('searchbox')).toHaveValue('');
+  },
+};
+
+/** 課題をつくる を渡さなければ出ない（アーカイブの面・読むだけの人）。 */
+export const 作成できない面: Story = {
+  args: { onCreate: undefined },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByRole('button', { name: '担当: 自分' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await expect(within(canvasElement).queryByRole('button', { name: '課題をつくる' })).toBeNull();
   },
 };
 

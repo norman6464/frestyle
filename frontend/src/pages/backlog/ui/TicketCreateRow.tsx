@@ -1,14 +1,21 @@
 import { useState, type KeyboardEvent } from 'react';
+import { Button, FsIcon } from '@/shared/ui';
 
 export interface TicketCreateRowProps {
   onCreate: (title: string) => Promise<void>;
 }
 
-/** 一覧の末尾行。「題名を入力して Enter で作成」（見本どおり）。 */
+/**
+ * 一覧の末尾行。「題名を入力して Enter で作成」（設計ボード ST08）。
+ *
+ * 枠のある入力欄を常に置くと、一覧の最後に空のフォームが 1 行居座る。文字を打つまでは
+ * 「＋ 題名を入力して Enter で作成」という 1 行の誘い文句に見え、打ち始めると「追加」が現れる。
+ */
 export default function TicketCreateRow({ onCreate }: TicketCreateRowProps) {
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canSubmit = title.trim() !== '' && !saving;
 
   const submit = async () => {
     const trimmed = title.trim();
@@ -34,28 +41,30 @@ export default function TicketCreateRow({ onCreate }: TicketCreateRowProps) {
   };
 
   return (
-    <div className="flex items-center gap-2 border-b border-surface-3 px-3 py-2.5 text-sm">
-      <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center text-[var(--color-text-faint)]" aria-hidden="true">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
-          <path d="M5 12h14" />
-          <path d="M12 5v14" />
-        </svg>
-      </span>
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="題名を入力して Enter で作成"
-        aria-label="新しいチケットの題名"
-        disabled={saving}
-        className="min-w-0 flex-1 bg-transparent text-[var(--color-text-primary)] placeholder:text-[var(--color-text-faint)] focus:outline-none"
-      />
-      {error && (
-        <span role="alert" className="text-xs text-red-600">
-          {error}
-        </span>
-      )}
+    <div role="row" className="border-b border-surface-3">
+      <div role="cell" aria-colspan={6} className="flex flex-wrap items-center gap-2 px-3 py-1.5 text-sm sm:px-4">
+        <FsIcon name="plus" className="h-4 w-4 shrink-0 text-brand-600" />
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="題名を入力して Enter で作成"
+          aria-label="新しいチケットの題名"
+          disabled={saving}
+          className="min-h-11 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 text-base text-[var(--color-text-primary)] transition-colors duration-fast placeholder:text-[var(--color-text-muted)] hover:border-surface-3 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600 sm:text-sm"
+        />
+        {title.trim() !== '' && (
+          <Button variant="secondary" size="sm" disabled={!canSubmit} loading={saving} onClick={() => void submit()}>
+            追加
+          </Button>
+        )}
+        {error && (
+          <span role="alert" className="w-full text-sm text-danger-ink">
+            {error}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

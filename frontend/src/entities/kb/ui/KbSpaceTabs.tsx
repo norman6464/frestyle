@@ -21,12 +21,10 @@ export interface KbSpaceTabsProps {
  */
 export default function KbSpaceTabs({ space, active }: KbSpaceTabsProps) {
   return (
-    <header className="border-b border-surface-3 px-6 pt-4">
-      {/* h2 にしてあるのは、本文側の空表示（EmptyState）が h3 を固定で持つため
-          （見出しの段を飛ばさない。h1 は無い — このスペースの画面群に共通する外枠は
-          持たず、各画面がここから始まる）。 */}
-      <h2 className="mb-2 truncate text-lg font-semibold text-[var(--color-text-primary)]">{space.name}</h2>
-      <nav aria-label={`${space.name} の画面切替`} className="flex gap-1">
+    <header className="shrink-0 border-b border-surface-3 px-4 pt-5 sm:px-6">
+      <p className="mb-2 text-xs font-medium text-[var(--color-text-muted)]">スペース</p>
+      <h1 className="mb-4 text-2xl font-bold text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{space.name}</h1>
+      <nav aria-label={`${space.name} の画面切替`} className="grid grid-cols-2 gap-1 sm:flex sm:flex-wrap">
         {TABS.map((tab) => {
           const to = `/kb/spaces/${space.id}${tab.suffix}`;
           const isActive = tab.id === active;
@@ -35,7 +33,7 @@ export default function KbSpaceTabs({ space, active }: KbSpaceTabsProps) {
               key={tab.id}
               to={to}
               aria-current={isActive ? 'page' : undefined}
-              className={`rounded-t-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`flex min-h-11 items-center justify-center rounded-t-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
                 isActive
                   ? 'bg-[var(--color-nav-active)] text-[var(--color-text-primary)]'
                   : 'text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)]'

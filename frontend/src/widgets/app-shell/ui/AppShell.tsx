@@ -4,6 +4,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { usePanelMode } from '@/shared/lib/hooks/usePanelMode';
 import { SidebarSlotProvider } from '@/shared/ui';
 import GlobalSidebar, { GLOBAL_SIDEBAR_STORAGE_KEY } from './GlobalSidebar';
+import GlobalBottomNav from './GlobalBottomNav';
 
 import Header from './Header';
 import SkipLink from './SkipLink';
@@ -42,7 +43,7 @@ export default function AppShell() {
     // 柱は 1 本しかないので、画面ごとの区画（ナレッジの木・バックログのプロジェクト）は
     // この差し込み口を通して柱の中へ入る。口を用意するのは柱、中身を入れるのは画面。
     <SidebarSlotProvider>
-      <div className="h-screen flex flex-col bg-surface overflow-hidden">
+      <div className="h-dvh flex flex-col bg-surface overflow-hidden">
         <SkipLink targetId="main-content" />
 
         {/* ヘッダーは常時表示。本文とは縦に並べる（重ねない）ので、
@@ -66,11 +67,15 @@ export default function AppShell() {
           <main
             id="main-content"
             tabIndex={0}
-            className="min-w-0 flex-1 overflow-auto outline-none"
+            // 狭い画面では下部ナビの分だけ下に余白を取る（最後の行が隠れない）。広い画面は無し。
+            className="min-w-0 flex-1 overflow-auto pb-[calc(var(--app-bottom-nav-h)+env(safe-area-inset-bottom,0px))] outline-none md:pb-0"
           >
             <Outlet />
           </main>
         </div>
+
+        {/* 狭い画面の主な行き先。広い画面では柱が持つので出ない。 */}
+        <GlobalBottomNav />
 
         <ScrollToTop targetId="main-content" />
 

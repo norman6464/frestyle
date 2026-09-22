@@ -25,6 +25,21 @@ beforeEach(() => {
 });
 
 describe('KbRepository', () => {
+  it('fetchRecentPages は自分の最近見たページを取得し、null は空配列にする', async () => {
+    const controller = new AbortController();
+    mockGet.mockResolvedValueOnce({ data: [{ pageId: 'p1', title: '設計メモ' }] });
+
+    await expect(KbRepository.fetchRecentPages(controller.signal)).resolves.toEqual([
+      { pageId: 'p1', title: '設計メモ' },
+    ]);
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/me/recent-pages', {
+      signal: controller.signal,
+    });
+
+    mockGet.mockResolvedValueOnce({ data: null });
+    await expect(KbRepository.fetchRecentPages()).resolves.toEqual([]);
+  });
+
   it('fetchWorkspaces は GET /kb/workspaces で配列を返す', async () => {
     mockGet.mockResolvedValue({ data: [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-08-01T00:00:00Z' }] });
 

@@ -1,3 +1,5 @@
+import { FieldSelect, FsIcon } from '@/shared/ui';
+
 export interface BacklogReorderBarProps {
   /** 選択中チケットの表示キー（例 FRESTYLE-457）。未選択なら null。 */
   selectedKey: string | null;
@@ -21,20 +23,15 @@ export interface BacklogReorderBarProps {
   onRemoveFromSprint?: () => void;
 }
 
-const ICON_PROPS = {
-  width: 12,
-  height: 12,
-  viewBox: '0 0 24 24',
-  fill: 'none',
-  stroke: 'currentColor',
-  strokeWidth: 2.4,
-  strokeLinecap: 'round' as const,
-  'aria-hidden': true,
-};
+const REORDER_RULE =
+  '並び替えの決まり: 並び替えは同じ段の中だけ（スプリントとバックログは別の並びを持つ）。アーカイブでは出さない';
 
 /**
  * 一覧の下の帯。「選択中 X を 1つ上へ / 1つ下へ / 末尾へ」（設計 Ⅳ-F・見本どおり）。
  * ドラッグ&ドロップは段2（キーボードだけで完結し、依存を増やさないボタン案を採用）。
+ *
+ * 行を選んでいないときは何も描かない。押せない 3 つのボタンと案内文が常に居座るより、
+ * 選んだ瞬間に対象のキーと段の名前ごと現れる方が「何に効く操作か」が読める（設計ボード ST12）。
  */
 export default function BacklogReorderBar({
   selectedKey,
@@ -49,96 +46,77 @@ export default function BacklogReorderBar({
   onRemoveFromSprint,
 }: BacklogReorderBarProps) {
   const hasSelection = selectedKey !== null;
+  if (!hasSelection) return null;
   return (
-    <div className="flex items-center gap-2 border-t border-surface-3 bg-surface-1 px-3 py-2 text-xs">
-      <span className="text-[var(--color-text-muted)]">
-        {hasSelection ? (
-          <>
-            選択中 <b className="text-[var(--color-text-primary)]">{selectedKey}</b> を
-            {groupName && <>（{groupName} の中で）</>}
-          </>
-        ) : (
-          '行を選ぶと並び替えられます'
-        )}
+    <div className="flex max-h-48 shrink-0 flex-wrap items-center gap-2 overflow-y-auto border-t border-surface-3 bg-surface-1 px-3 py-2 text-xs [&_button]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600 [&_select]:min-h-11">
+      <span className="min-w-0 text-[var(--color-text-muted)] [overflow-wrap:anywhere]">
+        選択中 <b className="text-[var(--color-text-primary)]">{selectedKey}</b> を
+        {groupName && <>（{groupName} の中で）</>}
       </span>
       <button
         type="button"
         onClick={onMoveUp}
         disabled={!hasSelection || isFirst}
-        className="inline-flex items-center gap-1 rounded border border-surface-3 px-2 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        className="inline-flex items-center gap-1 rounded-md border border-surface-3 px-2.5 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
       >
-        <svg {...ICON_PROPS}>
-          <path d="m5 12 7-7 7 7" />
-          <path d="M12 19V5" />
-        </svg>
+        <FsIcon name="arrow-up" className="h-3.5 w-3.5" />
         1 つ上へ
       </button>
       <button
         type="button"
         onClick={onMoveDown}
         disabled={!hasSelection || isLast}
-        className="inline-flex items-center gap-1 rounded border border-surface-3 px-2 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        className="inline-flex items-center gap-1 rounded-md border border-surface-3 px-2.5 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
       >
-        <svg {...ICON_PROPS}>
-          <path d="M12 5v14" />
-          <path d="m19 12-7 7-7-7" />
-        </svg>
+        <FsIcon name="arrow-down" className="h-3.5 w-3.5" />
         1 つ下へ
       </button>
       <button
         type="button"
         onClick={onMoveLast}
         disabled={!hasSelection || isLast}
-        className="inline-flex items-center gap-1 rounded border border-surface-3 px-2 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        className="inline-flex items-center gap-1 rounded-md border border-surface-3 px-2.5 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
       >
-        <svg {...ICON_PROPS}>
-          <path d="m7 6 5 5 5-5" />
-          <path d="m7 13 5 5 5-5" />
-        </svg>
+        <FsIcon name="chevron-double-down" className="h-3.5 w-3.5" />
         末尾へ
       </button>
       {onMoveToSprint && sprints.length > 0 && (
-        <label className="flex items-center gap-1.5 text-[var(--color-text-muted)]">
-          スプリントへ
-          <select
-            aria-label="入れ先のスプリント"
-            value=""
-            disabled={!hasSelection}
-            onChange={(e) => {
-              if (e.target.value === '') return;
-              onMoveToSprint(e.target.value);
-              // 選び直せるよう毎回空へ戻す（同じスプリントへ続けて入れられるように）。
-              e.target.value = '';
-            }}
-            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-1 text-xs text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <option value="">選ぶ…</option>
-            {sprints.map((sprint) => (
-              <option key={sprint.id} value={sprint.id}>
-                {sprint.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        /* value は空のまま持たない。ここに「現在値」は無く、選んだ瞬間が操作なので、
+           毎回「選ぶ…」へ戻って同じスプリントへ続けて入れられる。 */
+        <FieldSelect
+          label="入れ先のスプリント"
+          prefix="スプリントへ"
+          value=""
+          disabled={!hasSelection}
+          onChange={(value) => {
+            if (value) onMoveToSprint(value);
+          }}
+          options={[
+            { value: '', label: '選ぶ…' },
+            ...sprints.map((sprint) => ({ value: sprint.id, label: sprint.name })),
+          ]}
+          className="rounded border-surface-3 bg-surface-1 px-2 text-xs font-normal"
+        />
       )}
       {onRemoveFromSprint && (
         <button
           type="button"
           onClick={onRemoveFromSprint}
           disabled={!hasSelection}
-          className="inline-flex items-center rounded border border-surface-3 px-2 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          className="inline-flex items-center rounded-md border border-surface-3 px-2.5 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
         >
           スプリントから出す
         </button>
       )}
-      {/* 仕様の但し書きは常設しない。毎回読むものではないので「?」へ畳み、
-          知りたい人だけがホバー／フォーカスで読めるようにする。 */}
+      {/* 仕様の但し書きは常設しない。毎回読むものではないので「?」へ畳む。
+          ただし中身を title だけに置くとホバーでしか読めない —— 読み上げとキーボードにも
+          決まりそのものが届くよう、短い見出しではなく本文を名前にしている。 */}
       <span
         className="ml-auto inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-surface-3 text-[10px] font-bold text-[var(--color-text-muted)]"
         tabIndex={0}
         role="note"
-        aria-label="並び替えの決まり"
-        title="並び替えは同じ段の中だけ（スプリントとバックログは別の並びを持つ）。アーカイブでは出さない"
+        aria-label={REORDER_RULE}
+        title={REORDER_RULE}
       >
         ?
       </span>

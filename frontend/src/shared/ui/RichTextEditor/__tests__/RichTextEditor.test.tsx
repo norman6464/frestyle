@@ -35,13 +35,13 @@ describe('SaveStatusIndicator', () => {
 
   it('各状態のラベルと色を表示する', () => {
     const { rerender } = render(<SaveStatusIndicator status="unsaved" />);
-    expect(screen.getByText('未保存')).toHaveClass('text-amber-700');
+    expect(screen.getByText('未保存')).toHaveClass('text-warning');
 
     rerender(<SaveStatusIndicator status="saving" />);
     expect(screen.getByText('保存中...')).toBeInTheDocument();
 
     rerender(<SaveStatusIndicator status="saved" />);
-    expect(screen.getByText('保存済み')).toHaveClass('text-emerald-700');
+    expect(screen.getByText('保存済み')).toHaveClass('text-success');
   });
 });
 

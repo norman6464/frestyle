@@ -9,8 +9,8 @@ export interface GlobalNavItem {
   id: string;
   label: string;
   to: string;
-  /** heroicons の名前ではなく、GlobalSidebar が持つ描画表に対する鍵。 */
-  icon: 'home' | 'assigned' | 'kb' | 'backlog' | 'bell' | 'settings';
+  /** 描画表（ui/navIcons.ts）に対する鍵。柱と下部ナビが同じ表を読む。 */
+  icon: 'home' | 'assigned' | 'kb' | 'backlog';
   matchExact?: boolean;
   /** 複数の URL 系統が同じ画面に属するときは配列で並べる。 */
   matchPrefix?: string | string[];
@@ -23,7 +23,12 @@ export interface GlobalNavItem {
   excludePrefix?: string | string[];
 }
 
-/** 上段。毎日使う行き先。 */
+/**
+ * 毎日使う行き先。広い画面では左の柱に縦に、狭い画面では下部ナビに横に並ぶ。
+ *
+ * 通知と設定は**ここに無い**。通知はヘッダーのベル、設定はユーザーメニューが唯一の常設入口で、
+ * 以前は柱の下段にも並んでいて同じ目的地の入口が 2 か所ずつあった。
+ */
 export const GLOBAL_NAV_PRIMARY: GlobalNavItem[] = [
   { id: 'home', label: 'ホーム', to: '/', icon: 'home', matchExact: true },
   // 自分の担当はワークスペース・プロジェクトを横断する面。バックログ（プロジェクト 1 つの
@@ -42,12 +47,6 @@ export const GLOBAL_NAV_PRIMARY: GlobalNavItem[] = [
   // バックログはチケットの一覧・詳細・設定。/backlog はプロジェクト未選択の入口
   // （直近に見たプロジェクトへ移す。ナレッジの入口解決と同じ形）。個票は /tickets/:id。
   { id: 'backlog', label: 'バックログ', to: '/backlog', icon: 'backlog', matchPrefix: ['/backlog', '/tickets'] },
-];
-
-/** 下段。区切りの下に置く。毎日開く面と同じ並びに混ぜない。 */
-export const GLOBAL_NAV_UTILITY: GlobalNavItem[] = [
-  { id: 'notifications', label: '通知', to: '/notifications', icon: 'bell', matchExact: true },
-  { id: 'settings', label: '設定', to: '/settings', icon: 'settings', matchExact: true },
 ];
 
 /**

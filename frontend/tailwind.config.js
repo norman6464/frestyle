@@ -45,6 +45,29 @@ export default {
         'surface-1': 'var(--color-surface-1)',
         'surface-2': 'var(--color-surface-2)',
         'surface-3': 'var(--color-surface-3)',
+        // 状態色。「結果」を表す色で、brand-*（押せる）とは役割が違うので混ぜない。
+        // 値は index.css の --fs-success / --fs-danger 側が正本。
+        // 使い分けルール:
+        //   danger                  → 面と枠（削除ボタンの地・入力の枠）。白抜き文字を載せる側
+        //   danger-ink              → 文字とアイコン。面の色より一段濃い
+        //   success / warning       → 文字・アイコン・枠線（白地でも淡色地でも 4.5:1 以上）
+        //   *-soft                  → その文字を載せる淡い地
+        //   action-soft             → 青の淡い地（選択・強調の面。文字色には使わない）
+        // danger だけ文字と面を分けているのは、面の色をそのまま淡赤の地に載せると 4.42:1 で
+        // 基準を割るため。success / warning は 1 色で両方満たすので分けていない。
+        // 色だけで意味を伝えないこと。必ず文言かアイコンを添える。
+        success: 'var(--fs-success)',
+        'success-soft': 'var(--fs-success-soft)',
+        danger: 'var(--fs-danger)',
+        'danger-ink': 'var(--fs-danger-ink)',
+        'danger-hover': 'var(--fs-danger-hover)',
+        'danger-active': 'var(--fs-danger-active)',
+        'danger-soft': 'var(--fs-danger-soft)',
+        'danger-border': 'var(--fs-danger-border)',
+        warning: 'var(--fs-warning)',
+        'warning-soft': 'var(--fs-warning-soft)',
+        'warning-border': 'var(--fs-warning-border)',
+        'action-soft': 'var(--fs-action-soft)',
         // inkwell: 押下波紋 + 標高シャドウの触感的コンポーネント群専用パレット。
         inkwell: {
           primary: '#1976d2',
@@ -78,10 +101,27 @@ export default {
         '2xl': '0.5rem',
       },
       fontFamily: {
-        // font-roboto を付けた要素だけに適用（アプリ全体の既定フォントは変えない）。
+        // 既定を Noto Sans JP に差し替える。Tailwind の preflight が html に
+        // fontFamily.sans を敷くので、ここを変えるとアプリ全体の地の書体が変わる。
+        // 実体（代替の並びも含む）は index.css の --fs-font-sans。
+        sans: ['var(--fs-font-sans)'],
+        mono: ['var(--fs-font-mono)'],
+        // font-roboto を付けた要素だけに適用（inkwell の開発用カタログが使う）。
         roboto: ['Roboto', 'Helvetica', 'Arial', 'sans-serif'],
       },
+      transitionDuration: {
+        // 動きの長さは 3 段だけ。画面ごとに 150 / 200 / 300 を選び直さない。
+        // fast=状態の切り替え / base=出現・移動 / slow=面の入退場。
+        // 退場は入場より短く（base で出して fast で消す）。
+        fast: 'var(--fs-duration-fast)',
+        base: 'var(--fs-duration-base)',
+        slow: 'var(--fs-duration-slow)',
+      },
       transitionTimingFunction: {
+        // 止まるときは減速、去るときは加速。往復するものは standard。
+        'fs-standard': 'var(--fs-ease-standard)',
+        'fs-decelerate': 'var(--fs-ease-decelerate)',
+        'fs-accelerate': 'var(--fs-ease-accelerate)',
         // 名前付きイージング。standard=往復 / decelerate=出現 / accelerate=退場 / sharp=即戻り。
         'inkwell-standard': 'cubic-bezier(0.4, 0, 0.2, 1)',
         'inkwell-decelerate': 'cubic-bezier(0, 0, 0.2, 1)',

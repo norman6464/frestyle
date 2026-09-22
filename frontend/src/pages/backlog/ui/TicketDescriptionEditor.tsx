@@ -82,7 +82,7 @@ export default function TicketDescriptionEditor({
       content: isRichDoc(value) ? value : emptyRichDoc(),
       editorProps: {
         attributes: {
-          class: 'prose prose-sm max-w-none text-[var(--color-text-primary)] focus:outline-none',
+          class: 'prose prose-sm max-w-none whitespace-pre-wrap text-[var(--color-text-primary)] focus:outline-none',
           role: 'textbox',
           'aria-multiline': 'true',
           'aria-label': 'チケットの本文',
@@ -161,7 +161,7 @@ export default function TicketDescriptionEditor({
           <button
             type="button"
             onClick={startEditing}
-            className="mt-2 rounded-lg border border-surface-3 px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
+            className="mt-3 min-h-11 rounded-lg border border-surface-3 px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
             本文を編集
           </button>
@@ -172,18 +172,18 @@ export default function TicketDescriptionEditor({
 
   return (
     <div>
-      <div className="overflow-hidden rounded-lg border border-brand-400">
+      <div className="overflow-hidden rounded-lg border border-brand-600">
         <TicketFormatBar editor={editor} disabled={saving} />
         <div className="p-3">
           <EditorContent editor={editor} />
         </div>
       </div>
       {error && (
-        <p role="alert" className="mt-1.5 text-xs leading-relaxed text-red-700">
+        <p role="alert" className="mt-1.5 text-sm leading-relaxed text-danger-ink">
           {error}
         </p>
       )}
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2 [&_button]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600">
         <button
           type="button"
           onClick={() => void save()}
@@ -293,7 +293,7 @@ function TicketFormatBar({ editor, disabled }: { editor: Editor; disabled: boole
     <div
       role="toolbar"
       aria-label="本文の書式"
-      className="flex flex-wrap items-center gap-0.5 border-b border-surface-3 bg-surface-1 px-1.5 py-1"
+      className="flex flex-wrap items-center gap-1 border-b border-surface-3 bg-surface-1 p-2 [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600"
     >
       {FORMAT_BUTTONS.map((button) => {
         const active = button.isActive(editor);

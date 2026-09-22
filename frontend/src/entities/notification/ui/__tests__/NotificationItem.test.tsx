@@ -41,6 +41,7 @@ describe('NotificationItem', () => {
     renderItem();
 
     expect(screen.getByText('コメントに返信がありました')).toBeInTheDocument();
+    expect(screen.getByText('未読')).toBeInTheDocument();
   });
 
   /*
@@ -73,6 +74,14 @@ describe('NotificationItem', () => {
       renderItem({ isRead: true });
 
       expect(screen.queryByRole('button', { name: '既読にする' })).not.toBeInTheDocument();
+      expect(screen.getByText('既読')).toBeInTheDocument();
+    });
+
+    it('更新中は既読ボタンを無効にする', () => {
+      const onMarkAsRead = vi.fn();
+      render(<NotificationItem notification={makeNotification()} onMarkAsRead={onMarkAsRead} disabled />);
+      fireEvent.click(screen.getByRole('button', { name: '既読にする' }));
+      expect(onMarkAsRead).not.toHaveBeenCalled();
     });
   });
 });

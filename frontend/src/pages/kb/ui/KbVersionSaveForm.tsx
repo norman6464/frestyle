@@ -45,10 +45,10 @@ export default function KbVersionSaveForm({ onSubmit, onCancel }: KbVersionSaveF
         aria-label="版のメモ"
         rows={2}
         disabled={submitting}
-        className="w-full resize-none rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-faint)] focus:outline-none focus:ring-1 focus:ring-brand-400 disabled:opacity-60"
+        className="w-full resize-none rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-faint)] focus:outline-none focus:ring-1 focus:ring-brand-600 disabled:opacity-60"
       />
       {error && (
-        <p role="alert" className="text-xs leading-relaxed text-red-600">
+        <p role="alert" className="text-sm leading-relaxed text-danger-ink">
           {error}
         </p>
       )}

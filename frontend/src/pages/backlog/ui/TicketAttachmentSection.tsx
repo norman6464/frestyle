@@ -74,10 +74,10 @@ export default function TicketAttachmentSection({
       onDrop={handleDrop}
       role="group"
       aria-label="添付ファイル"
-      className={`flex flex-col gap-1.5 rounded ${dragOver ? 'ring-2 ring-inset ring-brand-400' : ''}`}
+      className={`flex flex-col gap-1.5 rounded ${dragOver ? 'ring-2 ring-inset ring-brand-600' : ''}`}
     >
       {error && (
-        <p role="alert" className="text-xs text-red-700">
+        <p role="alert" className="text-sm text-danger-ink">
           {error}
         </p>
       )}

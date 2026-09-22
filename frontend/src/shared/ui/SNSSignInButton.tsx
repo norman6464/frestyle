@@ -25,7 +25,7 @@ export default function SNSSignInButton({ provider, onClick, disabled }: SNSSign
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="w-full border border-surface-3 rounded-lg py-2.5 px-4 flex items-center justify-center space-x-3 hover:bg-surface-2 transition-colors duration-150 mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="min-h-11 w-full border border-surface-3 rounded-lg py-2.5 px-4 flex items-center justify-center space-x-3 hover:bg-surface-2 transition-colors duration-fast mb-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <img src={providerIcons[provider]} alt={provider} className="w-5 h-5" />
       <span className="text-sm font-medium text-[var(--color-text-secondary)]">

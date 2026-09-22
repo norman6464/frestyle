@@ -31,8 +31,8 @@ export default function FormMessage({ message, onDismiss }: FormMessageProps) {
       role="alert"
       className={`mb-4 p-3 rounded-lg text-sm font-medium flex items-start gap-2 ${
         isError
-          ? 'bg-rose-50 text-rose-700 border border-rose-200'
-          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+          ? 'bg-danger-soft text-danger-ink border border-danger-border'
+          : 'bg-success-soft text-success border border-success-border'
       }`}
     >
       {isError ? (

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { AutoResizeTextarea, FsIcon, PageFrame } from '@/shared/ui';
 import {
   TicketKeyBadge,
   type Label,
@@ -9,7 +10,6 @@ import {
   type UpdateTicketInput,
 } from '@/entities/ticket';
 import type { KbGrantablePrincipal } from '@/entities/kb';
-import Loading from '@/shared/ui/Loading';
 import { SaveStatusIndicator, emptyRichDoc, isRichDoc } from '@/shared/ui/RichTextEditor';
 import TicketDescriptionEditor from './TicketDescriptionEditor';
 import { useTicketEditor } from '../model/useTicketEditor';
@@ -21,6 +21,7 @@ import TicketChildrenSection from './TicketChildrenSection';
 import TicketCommentSection from './TicketCommentSection';
 import TicketSection from './TicketSection';
 import { useTicketVocabulary } from '../model/useTicketVocabulary';
+import TicketStatusSelect from './TicketStatusSelect';
 
 export interface TicketFullViewProps {
   ticket: Ticket;
@@ -50,14 +51,11 @@ export interface TicketFullViewProps {
 /**
  * チケットを開いた全画面の票。
  *
- * 主列（題名・ラベル・本文）と副列（素性・変更履歴・操作）を**別々にスクロール**させる。
- * 長い議論を追いながら状態・担当・期限が視界から消えないのが、細いパネルではなく
- * 全画面にする実利。
+ * 本文と詳細情報を同じスクロール領域に置き、画面幅に合わせて並べる。
+ * 広い画面では右列に属性、狭い画面では本文の前に担当と期限の概要を出す。
  *
- * 狭い幅では 1 欄に畳み、**素性を本文より前**に出す（外出先で状態や期限だけ直したいときに、
- * 本文を全部スクロールし切らせない）。副列の中身は `display:contents` で外側の並びへ
- * 溶かし、狭い幅と広い幅で**同じ DOM を 1 度だけ**描く（2 通りを同時に描くと、
- * 同じ操作が 2 つ現れて読み上げでも見分けが付かなくなる）。
+ * 狭い幅では本文→詳細情報の順。状態変更は上部に置くので本文を読み終えなくても使える。
+ * 幅によらず DOM は1つだけで、読み上げと見た目の順序を揃える。
  */
 export default function TicketFullView({
   ticket,
@@ -91,21 +89,71 @@ export default function TicketFullView({
   const vocabulary = useTicketVocabulary(workspaceSlug, ticket.projectId, ticket.id, ticket.teamId);
   const editor = useTicketEditor(ticket, canEdit && !archived, onUpdate);
   const docValue = isRichDoc(editor.doc) ? editor.doc : emptyRichDoc();
+  // 見た目だけでなく、読み上げ・Tab の順も本文を先にする。
+  const mainContent = (
+        <div className="min-w-0 max-w-3xl">
+          <div className="w-full">
+            {canEdit && !archived ? (
+              <>
+              <h1 className="sr-only">{editor.title || 'チケット'}</h1>
+              <label className="mb-2 block text-xs text-[var(--color-text-muted)]" htmlFor="ticket-title">題名 · 入力後に自動保存</label>
+              <AutoResizeTextarea
+                id="ticket-title"
+                value={editor.title}
+                onChange={(e) => editor.changeTitle(e.target.value.replace(/[\r\n]+/g, ' '))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                  }
+                }}
+                onBlur={editor.commitTitle}
+                aria-label="題名"
+                className="mb-5 min-h-12 w-full rounded-md border border-transparent bg-transparent px-1 text-2xl font-bold text-[var(--color-text-primary)] hover:border-surface-3 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              />
+              </>
+            ) : (
+              <h1 className="mb-3 text-xl font-semibold text-[var(--color-text-primary)]">{ticket.title}</h1>
+            )}
+
+            <dl className="mb-6 grid grid-cols-2 gap-4 rounded-xl border border-surface-3 bg-surface-2 p-4 text-sm xl:hidden">
+              <div><dt className="text-xs text-[var(--color-text-muted)]">担当者</dt><dd className="mt-1 font-medium [overflow-wrap:anywhere]">{principals.find((p) => p.id === ticket.assigneePrincipalId)?.name || '未割り当て'}</dd></div>
+              <div><dt className="text-xs text-[var(--color-text-muted)]">期限</dt><dd className="mt-1 font-medium">{editor.dueDate || '未設定'}</dd></div>
+            </dl>
+            <TicketSection title="説明" headingLevel={2}>
+              <TicketDescriptionEditor value={docValue} editable={canEdit && !archived} onSave={editor.saveDoc} />
+            </TicketSection>
+
+            <TicketSection title="サブタスク" headingLevel={2} collapsible>
+              <TicketChildrenSection workspaceSlug={workspaceSlug} ticketId={ticket.id} projectKey={projectKey} statuses={statuses} />
+            </TicketSection>
+
+            <TicketSection title="コメント" headingLevel={2}>
+              <TicketCommentSection workspaceSlug={workspaceSlug} ticketId={ticket.id} />
+            </TicketSection>
+          </div>
+        </div>
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex flex-none flex-wrap items-center gap-2 border-b border-surface-3 px-4 py-3 md:px-6">
+        {/* 戻り先には今のチケットを載せる。一覧に戻ったとき、このチケットが選ばれた状態で
+            開き、詳細パネルも出る。素の /backlog/:projectId へ戻すと選択が消えて、
+            一覧の中からもう一度探すことになる。 */}
         <Link
-          to={`/backlog/${ticket.projectId}`}
-          className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:underline"
+          to={`/backlog/${ticket.projectId}?ticket=${encodeURIComponent(ticket.id)}`}
+          className="inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-sm text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
         >
-          ◂ バックログ
+          <FsIcon name="chevron-left" className="h-4 w-4" />
+          バックログ
         </Link>
         <TicketAncestorTrail ancestors={ancestors} projectKey={projectKey} />
         <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--color-text-secondary)]">
           {type?.name ?? ''}
         </span>
         <TicketKeyBadge projectKey={projectKey} number={ticket.number} />
+        <TicketStatusSelect statuses={statuses} statusId={ticket.statusId} canEdit={canEdit && !archived} busy={busy} onChange={onChangeStatus} />
         <div className="ml-auto">
           <SaveStatusIndicator status={editor.saveStatus} />
         </div>
@@ -117,12 +165,16 @@ export default function TicketFullView({
         </p>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-        {/* 副列。狭い幅では contents で外側の並びへ溶け、素性が本文の前・履歴が後ろに来る。 */}
-        <div className="contents lg:flex lg:w-[19rem] lg:flex-none lg:flex-col lg:overflow-y-auto lg:border-l lg:border-surface-3 lg:px-4 lg:py-5">
-          <div className="order-1 px-4 pt-4 lg:order-none lg:p-0">
-            <TicketSection title="素性">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <PageFrame>
+        <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_18rem] xl:gap-10">
+        {mainContent}
+        {/* 副列。狭い幅では本文に続き、広い幅では右側に並ぶ。 */}
+        <aside aria-label="チケットの詳細" className="min-w-0 rounded-xl border border-surface-3 bg-surface-1 p-4 sm:p-5 xl:sticky xl:top-6">
+          <div className="min-w-0">
+            <TicketSection title="詳細情報" headingLevel={2}>
               <TicketAttributePanel
+                columns={1}
                 ticket={ticket}
                 workspaceSlug={workspaceSlug}
                 projectKey={projectKey}
@@ -155,62 +207,35 @@ export default function TicketFullView({
               />
             </TicketSection>
 
-            <TicketSection title="子">
-              <TicketChildrenSection workspaceSlug={workspaceSlug} ticketId={ticket.id} projectKey={projectKey} statuses={statuses} />
-            </TicketSection>
           </div>
 
-          <div className="order-3 px-4 pb-4 lg:order-none lg:p-0">
-            <TicketSection title="添付">
+          <div className="min-w-0">
+            <TicketSection title="添付ファイル" headingLevel={2} collapsible>
               <TicketAttachmentSection workspaceSlug={workspaceSlug} ticketId={ticket.id} canEdit={canEdit && !archived} />
             </TicketSection>
           </div>
 
-          <div className="order-4 px-4 pb-6 lg:order-none lg:p-0">
-            <TicketSection title="変更履歴">
+          <div className="min-w-0">
+            <TicketSection title="変更履歴" headingLevel={2} collapsible defaultOpen={false}>
               <TicketChangeHistory history={history} loading={historyLoading} error={historyError} />
             </TicketSection>
 
             {canEdit && (
-              <TicketSection title="操作">
+              <TicketSection title="操作" headingLevel={2}>
                 <button
                   type="button"
                   onClick={() => (archived ? onRestore() : onArchive())}
                   disabled={busy}
-                  className="rounded border border-surface-3 px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:opacity-50"
+                  className="min-h-11 rounded-md border border-surface-3 px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
                 >
                   {archived ? '現役に戻す' : 'アーカイブ'}
                 </button>
               </TicketSection>
             )}
           </div>
+        </aside>
         </div>
-
-        {/* 主列。 */}
-        <div className="order-2 min-w-0 flex-1 px-4 py-4 lg:order-none lg:overflow-y-auto lg:px-6 lg:py-5" tabIndex={0}>
-          <div className="mx-auto w-full max-w-[46rem]">
-            {canEdit && !archived ? (
-              <input
-                type="text"
-                value={editor.title}
-                onChange={(e) => editor.changeTitle(e.target.value)}
-                onBlur={editor.commitTitle}
-                aria-label="題名"
-                className="mb-3 w-full bg-transparent text-xl font-semibold text-[var(--color-text-primary)] focus:outline-none"
-              />
-            ) : (
-              <h1 className="mb-3 text-xl font-semibold text-[var(--color-text-primary)]">{ticket.title}</h1>
-            )}
-
-            <TicketSection title="説明">
-              <TicketDescriptionEditor value={docValue} editable={canEdit && !archived} onSave={editor.saveDoc} />
-            </TicketSection>
-
-            <TicketSection title="コメント">
-              <TicketCommentSection workspaceSlug={workspaceSlug} ticketId={ticket.id} />
-            </TicketSection>
-          </div>
-        </div>
+        </PageFrame>
       </div>
     </div>
   );

@@ -7,11 +7,21 @@
 
 // --- プリミティブ ---
 export { default as FormatIcon } from './FormatIcon';
+export { default as FsIcon } from './icons/FsIcon';
+export type { FsIconProps } from './icons/FsIcon';
+export { fsIcon } from './icons/fsIconFactory';
+export { FS_ICON_NAMES } from './icons/fsIconParts';
+export type { FsIconName } from './icons/fsIconParts';
+export { default as FsIllustration } from './icons/FsIllustration';
+export type { FsIllustrationName } from './icons/FsIllustration';
 export type { FormatIconName, FormatIconProps } from './FormatIcon';
 export { default as Button } from './Button';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './Button';
 export { default as InputField } from './InputField';
+export { default as FieldSelect } from './FieldSelect';
+export type { FieldSelectOption, FieldSelectProps } from './FieldSelect';
 export { default as TextareaField } from './TextareaField';
+export { default as AutoResizeTextarea } from './AutoResizeTextarea';
 export { default as LinkText } from './LinkText';
 export { default as SNSSignInButton } from './SNSSignInButton';
 export { default as NameCreateForm } from './NameCreateForm';
@@ -27,6 +37,10 @@ export type { FormMessage as FormMessageData } from './FormMessage';
 export { SidebarSlotProvider, SidebarSlotTarget, SidebarSection } from './SidebarSlot';
 export { default as ConfirmModal } from './ConfirmModal';
 export { default as EmptyState } from './EmptyState';
+export { default as PageHeader } from './PageHeader';
+export { default as PageFrame } from './PageFrame';
+export { default as ContentSection } from './ContentSection';
+export { default as Disclosure } from './Disclosure';
 export { default as Toast } from './Toast';
 
 /*

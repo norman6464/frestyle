@@ -73,7 +73,7 @@ export default function SharePanel({
   return (
     <section
       aria-label="共有"
-      className="w-full max-w-md rounded-lg border border-surface-3 bg-surface-1 shadow-inkwell-8"
+      className="w-full max-w-md rounded-lg border border-surface-3 bg-surface-1 shadow-inkwell-8 [&_button]:min-h-11 [&_button]:min-w-11 [&_select]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600"
     >
       <header className="flex items-center gap-3 border-b border-surface-3 px-4 py-3">
         <h2 className="text-sm font-bold text-[var(--color-text-primary)]">共有</h2>
@@ -84,7 +84,7 @@ export default function SharePanel({
           type="button"
           onClick={onClose}
           aria-label="共有を閉じる"
-          className="-mr-1 shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-surface-2"
+          className="-mr-1 inline-flex shrink-0 items-center justify-center rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-surface-2"
         >
           <XMarkIcon className="h-4 w-4" />
         </button>
@@ -119,7 +119,7 @@ export default function SharePanel({
         )}
 
         {!loading && error && (
-          <p role="alert" className="py-2 text-xs leading-relaxed text-red-600">
+          <p role="alert" className="py-2 text-sm leading-relaxed text-danger-ink">
             {error}
           </p>
         )}
@@ -148,13 +148,13 @@ export default function SharePanel({
           <h3 className="text-[0.6875rem] font-bold tracking-wide text-[var(--color-text-muted)]">
             相手を足す
           </h3>
-          <div className="mt-2 flex gap-1.5">
+          <div className="mt-2 flex flex-wrap gap-2">
             <select
               aria-label="足す相手"
               value={pickedPrincipal}
               onChange={(e) => setPickedPrincipal(e.target.value)}
               disabled={saving || candidates.length === 0}
-              className="min-w-0 flex-1 rounded border border-surface-3 bg-surface-1 px-2 py-1.5 text-sm text-[var(--color-text-secondary)]"
+              className="min-w-0 flex-1 basis-full rounded border border-surface-3 bg-surface-1 px-2 py-1.5 text-base text-[var(--color-text-secondary)] sm:basis-32 sm:text-sm"
             >
               <option value="">相手を選ぶ…</option>
               {candidates.map((candidate) => (

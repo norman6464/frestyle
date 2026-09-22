@@ -30,6 +30,52 @@ describe('NotificationPage', () => {
 
     render(<NotificationPage />);
     expect(screen.getByText('通知を読み込み中...')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: '通知' })).toBeInTheDocument();
+  });
+
+  it('未読だけに切り替え、読み終わった通知もすべてから確認できる', () => {
+    mockedUseNotification.mockReturnValue({
+      notifications: [
+        { id: 1, type: 'ticket_mentioned', title: '確認のお願い', body: '未読の本文', isRead: false, createdAt: '2026-09-21T10:00:00Z' },
+        { id: 2, type: 'ticket_commented', title: '対応済みのお知らせ', body: '既読の本文', isRead: true, createdAt: '2026-09-20T10:00:00Z' },
+      ],
+      unreadCount: 1, loading: false, error: null,
+      markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
+    });
+    render(<NotificationPage />);
+    fireEvent.click(screen.getByRole('button', { name: '未読' }));
+    expect(screen.getByRole('button', { name: '未読' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('未読の本文')).toBeInTheDocument();
+    expect(screen.queryByText('既読の本文')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'すべて' }));
+    expect(screen.getByText('既読の本文')).toBeInTheDocument();
+  });
+
+  it('未読がないときは全件0件と区別し、すべての通知に戻れる', () => {
+    mockedUseNotification.mockReturnValue({
+      notifications: [{ id: 1, type: 'ticket_mentioned', title: '確認済み', body: '既読の本文', isRead: true, createdAt: '2026-09-21T10:00:00Z' }],
+      unreadCount: 0, loading: false, error: null,
+      markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
+    });
+    render(<NotificationPage />);
+    fireEvent.click(screen.getByRole('button', { name: '未読' }));
+    expect(screen.getByText('未読の通知はありません')).toBeInTheDocument();
+    expect(screen.queryByText('通知はありません')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'すべて' }));
+    expect(screen.getByText('既読の本文')).toBeInTheDocument();
+  });
+
+  it('更新中も取得済みの通知を残し、既読操作の連打を防ぐ', () => {
+    mockedUseNotification.mockReturnValue({
+      notifications: [{ id: 1, type: 'ticket_mentioned', title: '確認のお願い', body: '表示を残す本文', isRead: false, createdAt: '2026-09-21T10:00:00Z' }],
+      unreadCount: 1, loading: true, error: null,
+      markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
+    });
+    render(<NotificationPage />);
+    expect(screen.getByText('表示を残す本文')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'すべて既読にする' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '既読にする' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('通知を更新中...');
   });
 
   it('通知がない場合はEmptyStateが表示される', () => {

@@ -38,8 +38,14 @@ describe('AppShell', () => {
     for (const label of ['ホーム', '自分の担当', 'ナレッジ', 'バックログ']) {
       expect(within(rail).getByRole('link', { name: label })).toBeInTheDocument();
     }
-    // 同じ行き先が 2 か所に出ていない（以前はヘッダーにも横並びで置いていた）。
-    expect(screen.getAllByRole('link', { name: 'ナレッジ' })).toHaveLength(1);
+    // ヘッダーには行き先を置かない（以前は横並びで置いていた）。
+    expect(within(screen.getByRole('banner')).queryByRole('link', { name: 'ナレッジ' })).toBeNull();
+    // 行き先を持つ nav は柱と下部ナビの 2 つだけ。どちらが見えるかは幅で決まり（CSS）、
+    // jsdom はそれを見られないので、ここでは「他に持つ場所が無い」ことだけを見る。
+    const navsWithKb = screen
+      .getAllByRole('link', { name: 'ナレッジ' })
+      .map((a) => a.closest('nav')?.getAttribute('aria-label'));
+    expect(navsWithKb.sort()).toEqual(['アプリのナビゲーション', '主な行き先']);
   });
 
   // 柱は 1 本だけ。画面ごとの区画（ナレッジの木・バックログのプロジェクト）は
@@ -76,24 +82,24 @@ describe('AppShell', () => {
 
   it('Cmd+Kでコマンドパレットが開く', () => {
     renderAppShell();
-    expect(screen.queryByPlaceholderText('コマンドを検索...')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('移動先を探す...')).not.toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'k', metaKey: true });
-    expect(screen.getByPlaceholderText('コマンドを検索...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('移動先を探す...')).toBeInTheDocument();
   });
 
   it('Ctrl+Kでコマンドパレットが開く', () => {
     renderAppShell();
     fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
-    expect(screen.getByPlaceholderText('コマンドを検索...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('移動先を探す...')).toBeInTheDocument();
   });
 
   it('ヘッダーの検索ボタンを押してもコマンドパレットが開く', () => {
     renderAppShell();
-    expect(screen.queryByPlaceholderText('コマンドを検索...')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('移動先を探す...')).not.toBeInTheDocument();
     // デスクトップ用・モバイル用の 2 つが DOM 上にある（CSS の hidden で出し分けるため、
     // CSS を適用しない単体テストではどちらも「見える」扱いになる）。どちらを押しても開く。
-    const [searchButton] = screen.getAllByRole('button', { name: '検索' });
+    const [searchButton] = screen.getAllByRole('button', { name: '移動先を探す' });
     fireEvent.click(searchButton);
-    expect(screen.getByPlaceholderText('コマンドを検索...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('移動先を探す...')).toBeInTheDocument();
   });
 });

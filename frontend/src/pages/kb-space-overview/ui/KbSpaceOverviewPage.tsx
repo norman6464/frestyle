@@ -1,4 +1,5 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { ArrowRightIcon, BookOpenIcon, StarIcon } from '@heroicons/react/24/outline';
 import { KbSidebar } from '@/widgets/kb-sidebar';
 import { SidebarSection } from '@/shared/ui';
 import { useKbSpaceEntry, KbSpaceTabs } from '@/entities/kb';
@@ -13,8 +14,7 @@ const ROLE_LABEL: Record<string, string> = {
 /**
  * KbSpaceOverviewPage はスペースの「概要」画面（段14）。
  *
- * 凝った内容は作らない — 見本にこの画面の詳細までは無いため、自分の役割程度を示す
- * 最小限にとどめる（Storybook で目視して明らかにおかしい箇所だけ後で直す）。
+ * 役割の確認と、ナレッジを読むための入口をまとめる。未取得の件数などは表示しない。
  */
 export default function KbSpaceOverviewPage() {
   const { spaceId } = useParams<{ spaceId?: string }>();
@@ -36,7 +36,7 @@ export default function KbSpaceOverviewPage() {
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {error && (
-          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
+          <div role="alert" className="flex flex-1 items-center justify-center px-6 py-8 text-center text-sm text-[var(--color-text-muted)]">
             {error}
           </div>
         )}
@@ -44,18 +44,18 @@ export default function KbSpaceOverviewPage() {
         {!error && noSpaces && (
           <div className="flex flex-1 items-center justify-center px-6 text-center">
             <div>
-              <p className="mb-1 text-base font-semibold text-[var(--color-text-secondary)]">
+              <h1 className="mb-2 text-lg font-semibold text-[var(--color-text-secondary)]">
                 アクセスできるスペースがありません
-              </p>
+              </h1>
               <p className="text-sm text-[var(--color-text-muted)]">
-                左のサイドバーからワークスペースまたはスペースを作ると使えるようになります。
+                メニューの「ナレッジ」からワークスペースまたはスペースを作ると使えるようになります。
               </p>
             </div>
           </div>
         )}
 
         {!error && !noSpaces && (loading || !space || !workspaceSlug) && (
-          <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-muted)]">
+          <div role="status" className="flex flex-1 items-center justify-center py-8 text-sm text-[var(--color-text-muted)]">
             読み込み中…
           </div>
         )}
@@ -63,10 +63,27 @@ export default function KbSpaceOverviewPage() {
         {!error && !noSpaces && space && workspaceSlug && (
           <>
             <KbSpaceTabs space={space} active="overview" />
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-8">
-              <p className="text-sm text-[var(--color-text-tertiary)]">
-                このスペースでの自分の役割: {ROLE_LABEL[space.role] ?? space.role}
-              </p>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-6 sm:py-8">
+              <div className="mx-auto max-w-3xl">
+                <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">知っていることを、チームの力に。</h2>
+                <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-muted)]">ページを読んで背景をつかみ、必要な情報を見つけましょう。</p>
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  {[
+                    { suffix: 'pages', label: 'ナレッジを開く', description: 'ページを一覧から探して、作業の背景を確認。', icon: BookOpenIcon },
+                    { suffix: 'favorites', label: 'お気に入りを開く', description: 'ワークスペース内で保存したページに、すぐ戻る。', icon: StarIcon },
+                  ].map(({ suffix, label, description, icon: Icon }) => (
+                    <Link key={suffix} to={`/kb/spaces/${space.id}/${suffix}`} className="group rounded-xl border border-surface-3 bg-surface-1 p-5 hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">
+                      <Icon aria-hidden="true" className="mb-4 h-6 w-6 text-[var(--color-text-muted)]" />
+                      <span className="flex items-center justify-between gap-2 font-semibold text-[var(--color-text-primary)]">{label}<ArrowRightIcon aria-hidden="true" className="h-4 w-4 shrink-0" /></span>
+                      <span className="mt-2 block text-sm leading-relaxed text-[var(--color-text-muted)]">{description}</span>
+                    </Link>
+                  ))}
+                </div>
+                <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-surface-3 pt-4">
+                  <p className="text-sm text-[var(--color-text-tertiary)]">このスペースでの自分の役割: {ROLE_LABEL[space.role] ?? space.role}</p>
+                  <Link to={`/kb/spaces/${space.id}/members`} className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-brand-700 underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">メンバーを確認</Link>
+                </div>
+              </div>
             </div>
           </>
         )}

@@ -13,8 +13,8 @@ export interface KbSuggestionDiffViewProps {
 const MAX_RENDERED_LINES = 500;
 
 const LINE_STYLE: Record<SuggestionDiffLine['type'], string> = {
-  added: 'bg-green-500/15 text-green-800',
-  removed: 'bg-red-500/15 text-red-800 line-through',
+  added: 'bg-success-soft text-success',
+  removed: 'bg-danger-soft text-danger-ink line-through',
   unchanged: 'text-[var(--color-text-secondary)]',
   note: 'text-[var(--color-text-muted)] italic',
 };
@@ -53,7 +53,7 @@ export default function KbSuggestionDiffView({ lines }: KbSuggestionDiffViewProp
   }
   if (lines.length > MAX_RENDERED_LINES) {
     return (
-      <p role="alert" className="text-xs leading-relaxed text-amber-700">
+      <p role="alert" className="text-sm leading-relaxed text-warning">
         差分が大きすぎるため表示できません。採用する前に本文を直接確認してください。
       </p>
     );

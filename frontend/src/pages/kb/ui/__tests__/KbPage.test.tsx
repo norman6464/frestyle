@@ -380,7 +380,7 @@ describe('KbPage のアイコン・最終編集', () => {
     });
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'アイコンを追加' }));
+    fireEvent.click(await findPageOption('アイコンを追加'));
     const dialog = await screen.findByRole('dialog', { name: 'ページのアイコンを選ぶ' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'アイコンを 📘 にする' }));
 
@@ -391,7 +391,7 @@ describe('KbPage のアイコン・最終編集', () => {
       }),
     );
     // 保存が成功すると、頭部の行が絵文字のボタンに差し替わる。
-    expect(await screen.findByRole('button', { name: 'ページのアイコンを変更' })).toBeInTheDocument();
+    expect(await findPageOption('ページのアイコンを変更')).toBeInTheDocument();
     expect(document.querySelector('[data-icon="emoji"]')).toHaveTextContent('📘');
   });
 
@@ -403,12 +403,12 @@ describe('KbPage のアイコン・最終編集', () => {
     hoisted.clearPageIcon.mockResolvedValue({ ...resolved(true).page, icon: null });
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'ページのアイコンを変更' }));
+    fireEvent.click(await findPageOption('ページのアイコンを変更'));
     const dialog = await screen.findByRole('dialog', { name: 'ページのアイコンを選ぶ' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'アイコンを外す' }));
 
     await waitFor(() => expect(hoisted.clearPageIcon).toHaveBeenCalledWith('w-3f2a9c', 'p1'));
-    expect(await screen.findByRole('button', { name: 'アイコンを追加' })).toBeInTheDocument();
+    expect(await findPageOption('アイコンを追加')).toBeInTheDocument();
   });
 
   it('アイコンの変更に失敗したら知らせを出し、ピッカーは開いたまま', async () => {
@@ -416,7 +416,7 @@ describe('KbPage のアイコン・最終編集', () => {
     hoisted.setPageIcon.mockRejectedValue(new Error('invalid_icon'));
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'アイコンを追加' }));
+    fireEvent.click(await findPageOption('アイコンを追加'));
     const dialog = await screen.findByRole('dialog', { name: 'ページのアイコンを選ぶ' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'アイコンを 📘 にする' }));
 
@@ -447,8 +447,8 @@ describe('KbPage のアイコン・最終編集', () => {
 
     const img = await screen.findByRole('img', { name: 'ページのアイコン' });
     expect(img).toHaveTextContent('📘');
-    expect(screen.queryByRole('button', { name: 'アイコンを追加' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'ページのアイコンを変更' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'アイコンを追加', hidden: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ページのアイコンを変更', hidden: true })).not.toBeInTheDocument();
   });
 });
 
@@ -530,7 +530,7 @@ describe('KbPage のカバー画像', () => {
     });
     renderPage();
 
-    const addButton = await screen.findByRole('button', { name: 'カバー画像を追加' });
+    const addButton = await findPageOption('カバー画像を追加');
     const file = new File(['x'], 'cover.png', { type: 'image/png' });
     fireEvent.change(coverFileInput(addButton), { target: { files: [file] } });
 
@@ -540,8 +540,8 @@ describe('KbPage のカバー画像', () => {
     await waitFor(() =>
       expect(hoisted.setPageCover).toHaveBeenCalledWith('w-3f2a9c', 'p1', 'kb/w-3f2a9c/p1/1.bin'),
     );
-    expect(await screen.findByRole('button', { name: 'カバー画像を変更' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'カバー画像を外す' })).toBeInTheDocument();
+    expect(await findPageOption('カバー画像を変更')).toBeInTheDocument();
+    expect(await findPageOption('カバー画像を外す')).toBeInTheDocument();
   });
 
   it('カバー画像を外す', async () => {
@@ -552,12 +552,12 @@ describe('KbPage のカバー画像', () => {
     hoisted.clearPageCover.mockResolvedValue({ page: resolved(true).page, cover: null });
     renderPage();
 
-    const removeButton = await screen.findByRole('button', { name: 'カバー画像を外す' });
+    const removeButton = await findPageOption('カバー画像を外す');
     fireEvent.click(removeButton);
 
     await waitFor(() => expect(hoisted.clearPageCover).toHaveBeenCalledWith('w-3f2a9c', 'p1'));
-    expect(await screen.findByRole('button', { name: 'カバー画像を追加' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'カバー画像を外す' })).not.toBeInTheDocument();
+    expect(await findPageOption('カバー画像を追加')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'カバー画像を外す', hidden: true })).not.toBeInTheDocument();
   });
 
   it('アップロードに失敗したら知らせを出す', async () => {
@@ -565,7 +565,7 @@ describe('KbPage のカバー画像', () => {
     hoisted.uploadPageImage.mockRejectedValue(new Error('boom'));
     renderPage();
 
-    const addButton = await screen.findByRole('button', { name: 'カバー画像を追加' });
+    const addButton = await findPageOption('カバー画像を追加');
     const file = new File(['x'], 'cover.png', { type: 'image/png' });
     fireEvent.change(coverFileInput(addButton), { target: { files: [file] } });
 
@@ -588,7 +588,7 @@ describe('KbPage のカバー画像', () => {
     );
     const view = renderPage();
 
-    const addButton = await screen.findByRole('button', { name: 'カバー画像を追加' });
+    const addButton = await findPageOption('カバー画像を追加');
     const file = new File(['x'], 'cover.png', { type: 'image/png' });
     fireEvent.change(coverFileInput(addButton), { target: { files: [file] } });
     await waitFor(() => expect(hoisted.uploadPageImage).toHaveBeenCalledWith('w-3f2a9c', 'p1', file));
@@ -600,7 +600,7 @@ describe('KbPage のカバー画像', () => {
         <KbPage />
       </MemoryRouter>,
     );
-    await screen.findByRole('button', { name: 'カバー画像を追加' });
+    await findPageOption('カバー画像を追加');
 
     // p1 向けのアップロードがいま完了しても、p2 の cover API へは送らない。
     await act(async () => {
@@ -650,8 +650,8 @@ describe('KbPage のカバー画像', () => {
     renderPage();
 
     await screen.findByRole('heading', { name: '親ページ' });
-    expect(screen.queryByRole('button', { name: 'カバー画像を追加' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'カバー画像を変更' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'カバー画像を追加', hidden: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'カバー画像を変更', hidden: true })).not.toBeInTheDocument();
   });
 });
 
@@ -661,7 +661,7 @@ describe('KbPage の共有', () => {
     hoisted.resolvePage.mockResolvedValue(resolved(true, false));
     renderPage();
 
-    await screen.findByText('親ページ');
+    await screen.findByRole('heading', { level: 1, name: '親ページ' });
     expect(screen.queryByRole('button', { name: '共有' })).not.toBeInTheDocument();
   });
 
@@ -699,7 +699,7 @@ describe('KbPage のテンプレート', () => {
     renderPage();
 
     await screen.findByRole('heading', { name: '親ページ' });
-    expect(screen.queryByRole('button', { name: 'テンプレートとして保存' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'テンプレートとして保存', hidden: true })).not.toBeInTheDocument();
   });
 
   it('ページは編集できてもワークスペース全体のCanEditが無ければ「テンプレートとして保存」ボタンを出さない', async () => {
@@ -710,7 +710,7 @@ describe('KbPage のテンプレート', () => {
     renderPage();
 
     await screen.findByTestId('editor');
-    expect(screen.queryByRole('button', { name: 'テンプレートとして保存' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'テンプレートとして保存', hidden: true })).not.toBeInTheDocument();
   });
 
   it('保存フォームを送信すると createPageTemplate が呼ばれ、成功したらフォームが閉じる', async () => {
@@ -722,7 +722,7 @@ describe('KbPage のテンプレート', () => {
     });
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'テンプレートとして保存' }));
+    fireEvent.click(await findPageOption('テンプレートとして保存'));
     const nameInput = await screen.findByLabelText('テンプレート名');
     fireEvent.change(nameInput, { target: { value: '議事録' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
@@ -748,7 +748,7 @@ describe('KbPage のテンプレート', () => {
     );
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'テンプレートとして保存' }));
+    fireEvent.click(await findPageOption('テンプレートとして保存'));
     const nameInput = await screen.findByLabelText('テンプレート名');
     fireEvent.change(nameInput, { target: { value: '議事録' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
@@ -972,7 +972,7 @@ describe('KbPage の履歴', () => {
     await screen.findByTestId('editor');
     expect(hoisted.editorProps.current?.editable).toBe(true);
 
-    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
+    fireEvent.click(await findPageOption('履歴'));
     await waitFor(() => expect(hoisted.listPageVersions).toHaveBeenCalledWith('w-3f2a9c', 'p1'));
 
     const row = (await screen.findAllByRole('button', { name: /初版/ }))[0];
@@ -991,7 +991,7 @@ describe('KbPage の履歴', () => {
     renderPage();
     await screen.findByTestId('editor');
 
-    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
+    fireEvent.click(await findPageOption('履歴'));
     fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
 
@@ -1016,7 +1016,7 @@ describe('KbPage の履歴', () => {
     renderPage();
     await screen.findByTestId('editor');
 
-    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
+    fireEvent.click(await findPageOption('履歴'));
     fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
 
@@ -1079,7 +1079,7 @@ describe('KbPage の履歴', () => {
 
     // 版を選んで「この版に戻す」を確定する。まだ PUT の応答が無いので、
     // 復元 API はまだ呼ばれないはず。
-    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
+    fireEvent.click(await findPageOption('履歴'));
     fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
     fireEvent.click(await screen.findByRole('button', { name: 'この版に戻す' }));
@@ -1120,7 +1120,7 @@ describe('KbPage の履歴', () => {
     renderPage();
     await screen.findByTestId('editor');
 
-    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
+    fireEvent.click(await findPageOption('履歴'));
     fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
 
@@ -1140,7 +1140,7 @@ describe('KbPage の履歴', () => {
     renderPage();
     await screen.findByTestId('editor');
 
-    const historyToggle = await screen.findByRole('button', { name: '履歴' });
+    const historyToggle = await findPageOption('履歴');
     fireEvent.click(historyToggle);
     fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
@@ -1161,7 +1161,7 @@ describe('KbPage の履歴', () => {
     hoisted.getPageVersion.mockResolvedValue(versionDetail(1, '初版'));
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
+    fireEvent.click(await findPageOption('履歴'));
     await waitFor(() => expect(hoisted.listPageVersions).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: '版を残す' })).not.toBeInTheDocument();
 
@@ -1495,3 +1495,9 @@ describe('KbPage の入口解決（素の /kb）', () => {
     expect(hoisted.navigate).not.toHaveBeenCalled();
   });
 });
+
+async function findPageOption(name: string) {
+  const toggle = await screen.findByRole('button', { name: 'ページの設定とその他の操作' });
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
+  return screen.findByRole('button', { name });
+}

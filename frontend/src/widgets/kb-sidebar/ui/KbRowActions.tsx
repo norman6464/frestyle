@@ -166,7 +166,7 @@ export default function KbRowActions({
                       // 戻せない操作なので、実行の前に必ず確かめる（アーカイブとの違い）。
                       setConfirmingDelete(true);
                     }}
-                    className="w-full px-3 py-1.5 text-left text-sm text-red-600 hover:bg-surface-2"
+                    className="w-full px-3 py-1.5 text-left text-sm text-danger-ink hover:bg-surface-2"
                   >
                     削除
                   </button>

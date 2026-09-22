@@ -15,7 +15,7 @@ export interface BlankableFieldProps {
 }
 
 /**
- * 「押すまで文字、押したら入力欄」の項目（見本の Jira と同じ振る舞い）。
+ * 値を読んでいる状態から、その場で編集へ切り替える項目。
  *
  * 入力欄を最初から出すと、まだ何も入っていない項目まで枠だらけになり、
  * 「読む項目」と「これから入れる項目」の区別が付かなくなる。日付や数値のように
@@ -28,15 +28,21 @@ export default function BlankableField({ value, placeholder, editable, render }:
   if (editing && editable) return <>{render(true, () => setEditing(false))}</>;
 
   if (!editable) {
-    return filled ? <span>{value}</span> : <span className="text-[var(--color-text-muted)]">{placeholder}</span>;
+    return filled ? <span>{value}</span> : <span className="text-[var(--color-text-muted)]">未設定</span>;
   }
 
   return (
+    /*
+     * 未設定は「値」ではなく「入れられる場所」。点線の下線を足して、入っている値と
+     * 見分けが付くようにする（色を薄くするだけだと、薄い値なのか空なのか読めない）。
+     */
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className={`-mx-1 rounded px-1 py-0.5 text-left hover:bg-surface-2 ${
-        filled ? '' : 'text-[var(--color-text-muted)]'
+      className={`-mx-1 rounded px-1 py-0.5 text-left transition-colors duration-fast hover:bg-surface-2 ${
+        filled
+          ? 'text-[var(--color-text-primary)]'
+          : 'text-[var(--color-text-muted)] underline decoration-dotted underline-offset-4'
       }`}
     >
       {filled ? value : placeholder}

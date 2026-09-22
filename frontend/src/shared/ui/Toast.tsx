@@ -23,8 +23,8 @@ const ICON_MAP = {
 // 塗りスタイル: 濃い面 + 白文字・白アイコンで視認性を上げる。成功は黄緑。
 const COLOR_MAP = {
   // 白文字に対し lime-600 は 3.08:1 で未達。700 で 4.7:1。
-  success: 'bg-lime-700 text-white',
-  error: 'bg-rose-600 text-white',
+  success: 'bg-success text-white',
+  error: 'bg-danger text-white',
   info: 'bg-taupe-700 text-white',
 };
 

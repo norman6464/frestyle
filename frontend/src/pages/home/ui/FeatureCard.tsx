@@ -15,7 +15,7 @@ interface FeatureCardProps {
 
 const iconBg: Record<CardColor, string> = {
   brand:   'bg-brand-100 text-brand-600',
-  emerald: 'bg-emerald-100 text-emerald-700',
+  emerald: 'bg-success-soft text-success',
   taupe:   'bg-taupe-100 text-taupe-600',
   blue:    'bg-blue-100 text-blue-600',
 };
@@ -25,10 +25,10 @@ export default function FeatureCard({ to, icon: Icon, title, description, color,
   return (
     <Link
       to={to}
-      className="group relative flex h-full flex-col p-5 rounded-xl border border-[var(--color-surface-3)] bg-[var(--color-surface-1)] shadow-sm hover:border-brand-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150"
+      className="group relative flex h-full flex-col p-5 rounded-xl border border-[var(--color-surface-3)] bg-[var(--color-surface-1)] shadow-sm hover:border-brand-500 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-fast"
     >
       {badge && (
-        <span className="absolute top-4 right-4 text-[10px] font-semibold px-2 pt-px pb-[3px] rounded-full bg-emerald-100 text-emerald-700">
+        <span className="absolute top-4 right-4 text-[10px] font-semibold px-2 pt-px pb-[3px] rounded-full bg-success-soft text-success">
           {badge}
         </span>
       )}

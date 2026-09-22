@@ -15,7 +15,7 @@ const meta = {
   decorators: [
     (Story) => (
       // 影は地色があってはじめて見える。白の上に白では確かめられない。
-      <div className="bg-stone-100 p-8">
+      <div className="bg-surface-2 p-8">
         <Story />
       </div>
     ),

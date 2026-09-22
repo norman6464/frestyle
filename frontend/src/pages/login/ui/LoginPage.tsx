@@ -46,11 +46,11 @@ export default function LoginPage() {
       : [];
 
   return (
-    <AuthLayout title="ログイン" header={<PublicHeader />}>
+    <AuthLayout title="ログイン" description="チームの作業とナレッジの続きへ。" header={<PublicHeader />}>
       {flashMessage && (
         <p
           role="status"
-          className="mb-4 flex items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-center font-medium text-emerald-700"
+          className="mb-4 flex items-center justify-center gap-1 rounded-lg border border-success-border bg-success-soft p-3 text-center font-medium text-success"
         >
           <CheckCircleIcon className="h-4 w-4" aria-hidden="true" />
           {flashMessage}
@@ -60,7 +60,7 @@ export default function LoginPage() {
       {errorMessage && (
         <p
           role="alert"
-          className="mb-4 flex items-center justify-center gap-1 rounded-lg border border-rose-200 bg-rose-50 p-3 text-center font-medium text-rose-700"
+          className="mb-4 flex items-center justify-center gap-1 rounded-lg border border-danger-border bg-danger-soft p-3 text-center font-medium text-danger-ink"
         >
           <ExclamationCircleIcon className="h-4 w-4" aria-hidden="true" />
           {errorMessage}
@@ -76,6 +76,7 @@ export default function LoginPage() {
               label="メールアドレス"
               name="email"
               type="email"
+              autoComplete="email"
               value={email}
               onChange={toChangeHandler(setEmail)}
             />
@@ -83,6 +84,7 @@ export default function LoginPage() {
               label="パスワード"
               name="password"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={toChangeHandler(setPassword)}
             />
@@ -116,7 +118,7 @@ export default function LoginPage() {
             loading={dexLogin.loading}
             onClick={() => dexLogin.start()}
           >
-            {dexLogin.loading ? 'ログイン画面へ移動しています...' : 'ログインする'}
+            {dexLogin.loading ? 'ログイン画面へ移動しています...' : 'ログイン画面へ進む'}
           </Button>
 
           <div className="relative my-5">

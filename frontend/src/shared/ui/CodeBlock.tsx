@@ -76,7 +76,7 @@ export default function CodeBlock({ children }: { children: ReactNode }) {
         >
           {copied ? (
             <>
-              <ClipboardDocumentCheckIcon className="w-3.5 h-3.5 text-green-700" />
+              <ClipboardDocumentCheckIcon className="w-3.5 h-3.5 text-success" />
               <span>コピー済み</span>
             </>
           ) : (

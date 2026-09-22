@@ -25,7 +25,7 @@ export default function KbVersionListItem({ version, selected, onSelect }: KbVer
         aria-current={selected ? 'true' : undefined}
         className={`w-full rounded-lg border p-3 text-left transition-colors ${
           selected
-            ? 'border-brand-400 bg-brand-500/10'
+            ? 'border-brand-600 bg-brand-500/10'
             : 'border-surface-3 bg-surface-1 hover:bg-surface-2'
         }`}
       >

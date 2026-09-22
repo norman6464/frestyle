@@ -1,3 +1,4 @@
+import { FieldSelect } from '@/shared/ui';
 import { useId, useState, type FormEvent } from 'react';
 import type { TicketHierarchyLevel, TicketType, TicketTypeInput } from '@/entities/ticket';
 import { getApiError } from '@/shared/lib/classifyApiError';
@@ -60,7 +61,8 @@ export default function TicketTypeAdmin({ types, onCreate, onSetDefault, onArchi
 
   return (
     <div>
-      <table className="w-full text-left text-sm">
+      <div role="region" aria-label="種別の一覧（横にスクロールできます）" tabIndex={0} className="overflow-x-auto rounded-lg border border-surface-3 p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">
+      <table className="w-full min-w-[32rem] text-left text-sm">
         <thead>
           <tr className="border-b border-surface-3 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             <th className="py-1.5 font-semibold">名前</th>
@@ -102,7 +104,7 @@ export default function TicketTypeAdmin({ types, onCreate, onSetDefault, onArchi
                 <button
                   type="button"
                   onClick={() => void handleArchive(type)}
-                  className="text-xs font-medium text-[var(--color-text-muted)] hover:text-red-600 hover:underline"
+                  className="text-xs font-medium text-[var(--color-text-muted)] hover:text-danger-ink hover:underline"
                 >
                   アーカイブ
                 </button>
@@ -111,15 +113,17 @@ export default function TicketTypeAdmin({ types, onCreate, onSetDefault, onArchi
           ))}
         </tbody>
       </table>
+      </div>
+      <p className="mt-2 text-xs text-[var(--color-text-muted)] sm:hidden">一覧は横にスクロールして確認できます。</p>
 
       {Object.values(rowMessage).find((m) => m) && (
-        <div role="alert" className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div role="alert" className="mt-2 rounded border border-danger-border bg-danger-soft px-3 py-2 text-sm text-danger-ink">
           {Object.values(rowMessage).find((m) => m)}
         </div>
       )}
 
-      <form onSubmit={handleCreate} className="mt-3 flex items-end gap-2">
-        <div>
+      <form onSubmit={handleCreate} className="mt-5 flex flex-wrap items-end gap-3 [&_input]:min-h-11 [&_select]:min-h-11 [&_button]:min-h-11">
+        <div className="min-w-0 basis-full sm:flex-1 sm:basis-48">
           <label htmlFor={nameId} className="mb-0.5 block text-xs text-[var(--color-text-muted)]">
             種別の名前
           </label>
@@ -128,30 +132,33 @@ export default function TicketTypeAdmin({ types, onCreate, onSetDefault, onArchi
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="rounded border border-surface-3 bg-surface-1 px-2 py-1 text-sm"
+            className="w-full rounded-md border border-surface-3 bg-surface-1 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-brand-600 sm:text-sm"
           />
         </div>
         <div>
-          <label htmlFor={levelId} className="mb-0.5 block text-xs text-[var(--color-text-muted)]">
+          {/* FieldSelect の起点はボタンなので、label の htmlFor では結び付かない。
+              見える項目名は残し、読み上げ用の名前は FieldSelect 側の label で持つ。 */}
+          <span id={levelId} className="mb-0.5 block text-xs text-[var(--color-text-muted)]">
             階層
-          </label>
-          <select
-            id={levelId}
-            value={hierarchyLevel}
-            onChange={(e) => setHierarchyLevel(Number(e.target.value) as TicketHierarchyLevel)}
-            className="rounded border border-surface-3 bg-surface-1 px-2 py-1 text-sm"
-          >
-            <option value={1}>束ね（1）</option>
-            <option value={0}>標準（0）</option>
-            <option value={-1}>小作業（-1）</option>
-          </select>
+          </span>
+          <FieldSelect
+            label="階層"
+            value={String(hierarchyLevel)}
+            onChange={(value) => setHierarchyLevel(Number(value) as TicketHierarchyLevel)}
+            options={[
+              { value: '1', label: '束ね（1）' },
+              { value: '0', label: '標準（0）' },
+              { value: '-1', label: '小作業（-1）' },
+            ]}
+            className="rounded-md border-surface-3 bg-surface-1 px-2 text-sm font-normal"
+          />
         </div>
         <input
           type="color"
           value={color}
           onChange={(e) => setColor(e.target.value)}
           aria-label="色"
-          className="h-[30px] w-9 rounded border border-surface-3 bg-surface-1"
+          className="h-11 w-11 rounded-md border border-surface-3 bg-surface-1"
         />
         <button
           type="submit"
@@ -162,7 +169,7 @@ export default function TicketTypeAdmin({ types, onCreate, onSetDefault, onArchi
         </button>
       </form>
       {formError && (
-        <p role="status" className="mt-1 text-xs text-red-600">
+        <p role="status" className="mt-1 text-sm text-danger-ink">
           {formError}
         </p>
       )}

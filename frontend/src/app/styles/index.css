@@ -12,6 +12,20 @@
 @import 'highlight.js/styles/atom-one-light.css';
 
 /*
+ * 本文書体。可変フォント 1 本で 100〜900 をまかなうため、太さごとのファイルは持たない。
+ *
+ * ⚠️ Google Fonts の CDN は使えない。index.html の CSP が `font-src 'self' data:` なので、
+ *    fonts.gstatic.com からの取得は無言で遮断され、既定書体のまま描画される。
+ *    npm から取り込んで Vite に同一オリジンで配信させる方法だけが通る。
+ *
+ * このパッケージは unicode-range で 124 枚に分割されている。ブラウザは実際に描画した
+ * 文字を含む帯だけを取得するので、5.6MB すべてが配信されるわけではない。日本語の画面で
+ * 実際に落ちてくるのは かな帯 79KB + 使った漢字の帯 16KB 前後 × 数枚。
+ * font-display: swap はパッケージ側が各 @font-face に付けている（不可視テキストを避ける）。
+ */
+@import '@fontsource-variable/noto-sans-jp';
+
+/*
  * Atom One Light の配色を、読みやすさ（コントラスト比）が足りるものへ差し替える。
  *
  * 元テーマは白より少し明るい地（#fafafa）を前提にした配色で、このアプリのコードの囲み
@@ -244,12 +258,97 @@
  *   - アクセント色は使用箇所を絞り、視覚ノイズを排除する
  */
 :root {
+  /* FreStyle DS: primitive → semantic → component。色は既存のブランド値を維持する。 */
+  --fs-white: #ffffff;
+  --fs-stone-100: #f5f5f4;
+  --fs-stone-200: #e7e5e4;
+  --fs-ink-900: #191919;
+  --fs-ink-600: #66655f;
+  --fs-blue-600: #2563eb;
+
+  /*
+   * 状態色。ブランド色（青）とは別系統に置く。青は「押せる」、こちらは「起きた結果」を表す。
+   *
+   * success / danger は設計ボード design/exports/frestyle-studio/og5Tk.png の
+   * SUCCESS #4D7C0F / SUCCESS SOFT #ECFCCB / ERROR #DC2626 と同値。
+   * warning はボードに無い。画面側が既に使っていた琥珀をそのまま名前にしただけで、
+   * 新しい色相は足していない（danger の淡色・枠色も同じ扱い）。
+   *
+   * 白地でのコントラスト比: success 4.99 / danger 4.83 / warning 5.02。
+   * success は success-soft の上でも 4.59 で、いずれも小さな文字の基準 4.5 を満たす。
+   *
+   * ⚠️ 色だけで意味を伝えないこと。エラー・期限超過・未保存には必ず文言かアイコンを添える。
+   */
+  --fs-lime-700: #4d7c0f;
+  --fs-lime-200: #d9f99d;
+  --fs-lime-100: #ecfccb;
+  --fs-red-600: #dc2626;
+  --fs-red-700: #b91c1c;
+  --fs-red-800: #991b1b;
+  --fs-red-200: #fecaca;
+  --fs-red-50: #fef2f2;
+  --fs-amber-700: #b45309;
+  --fs-amber-200: #fde68a;
+  --fs-amber-50: #fffbeb;
+  --fs-blue-50: #eff6ff;
+
+  --fs-page: var(--fs-white);
+  --fs-raised: var(--fs-white);
+  --fs-soft: var(--fs-stone-100);
+  --fs-border: var(--fs-stone-200);
+  --fs-text-strong: var(--fs-ink-900);
+  --fs-text-muted: var(--fs-ink-600);
+  --fs-action: var(--fs-blue-600);
+  --fs-action-soft: var(--fs-blue-50);
+  --fs-success: var(--fs-lime-700);
+  --fs-success-soft: var(--fs-lime-100);
+  --fs-success-border: var(--fs-lime-200);
+  --fs-danger: var(--fs-red-600);
+  /* 文字用。面の色 (#dc2626) をそのまま淡赤の地に載せると 4.42:1 で基準 4.5 を割るため、
+     文字だけ一段濃くする。白地 5.94 / danger-soft の上 5.92 で、どちらでも足りる。 */
+  --fs-danger-ink: var(--fs-red-700);
+  --fs-danger-hover: var(--fs-red-700);
+  --fs-danger-active: var(--fs-red-800);
+  --fs-danger-soft: var(--fs-red-50);
+  --fs-danger-border: var(--fs-red-200);
+  --fs-warning: var(--fs-amber-700);
+  --fs-warning-soft: var(--fs-amber-50);
+  --fs-warning-border: var(--fs-amber-200);
+
+  /*
+   * 書体。設計ボードの指定は「Noto Sans JP / 本文は 14–18px」。
+   * 取得が終わるまでの代替は OS 標準の日本語ゴシックで、字幅が近いものを先に置く。
+   * 代替が無いまま sans-serif に落ちると、字送りが変わって本文の折り返し位置がずれる。
+   */
+  --fs-font-sans: 'Noto Sans JP Variable', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN',
+    'Yu Gothic UI', 'Yu Gothic', Meiryo, system-ui, sans-serif;
+  --fs-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /*
+   * 動きの長さと緩急。画面ごとに 150 / 200 / 300 を選び直さない。
+   * 退場は入場より短くする（入場 180 に対し退場 120）。止まるときは減速、去るときは加速。
+   * 実際に動きを止める指定は下の prefers-reduced-motion で一括して行う。
+   */
+  --fs-duration-fast: 120ms;
+  --fs-duration-base: 180ms;
+  --fs-duration-slow: 260ms;
+  --fs-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --fs-ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --fs-ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+
+  --fs-dialog-surface: var(--fs-raised);
+  --fs-dialog-border: var(--fs-border);
+  --fs-menu-surface: var(--fs-raised);
+  --fs-menu-border: var(--fs-border);
+  --fs-control-surface: var(--fs-raised);
+  --fs-control-border: var(--fs-border);
+
   /* body は白。カードは border + 影で浮かせる。
      （淡ブルー #B7D3EE を試したが全面には強すぎたため白へ戻した） */
-  --color-surface: #FFFFFF;
-  --color-surface-1: #FFFFFF;
-  --color-surface-2: #F5F5F4;
-  --color-surface-3: #E7E5E4;
+  --color-surface: var(--fs-page);
+  --color-surface-1: var(--fs-raised);
+  --color-surface-2: var(--fs-soft);
+  --color-surface-3: var(--fs-border);
   /* 教材コース閲覧 (/courses/:id) の読み物背景。tiptap 表示への切替に合わせ、ナレッジと同じ白へ
      統一した。変数はコース閲覧ページ専用。 */
   --color-reading-surface: #FFFFFF;
@@ -266,7 +365,9 @@
   --color-nav-selected-rule: #2563eb;
   /* ヘッダーの高さ。SecondaryPanel 側のオフセット（ホバー検知ゾーン・浮きパネル）もこれを基準にする。 */
   --app-header-h: 56px;
-  --color-text-primary: #191919;
+  /* 狭い画面の下部ナビの高さ（safe-area は含まない）。本文の下余白と「上に戻る」の位置がこれを読む。 */
+  --app-bottom-nav-h: 56px;
+  --color-text-primary: var(--fs-text-strong);
   --color-text-secondary: #37352F;
   /* 読みやすさ（コントラスト比）は**白地だけで決めない**。小さな文字には 4.5:1 が要る。
      muted は #767671 で白地 4.6:1 を満たしていたが、surface-2(#F5F5F4) の上で 4.18:1、
@@ -276,7 +377,7 @@
      muted: 白 5.85 / surface-2 5.36 / surface-3 4.66
      tertiary: 白 9.01 / surface-2 8.26 / surface-3 7.18 */
   --color-text-tertiary: #4A4945;
-  --color-text-muted: #66655F;
+  --color-text-muted: var(--fs-text-muted);
   --color-text-faint: #D3D3D0;
   --color-text-subtle: #E8E8E6;
   --color-border-hover: #D3D3D0;
@@ -286,6 +387,27 @@
   --scrollbar-thumb-hover: #A4A4A0;
 
   color-scheme: light;
+}
+
+/*
+ * 動きを減らす設定への一括対応。
+ *
+ * これまでは motion-reduce:animate-none を付けた部品（Loading・InkwellSkeleton）と、
+ * 付け忘れた部品（共有パネル・コメント・提案・版・テンプレートの読み込み表示）が混在していた。
+ * 部品ごとに付けて回ると必ず漏れるので、ここで全部まとめて止める。
+ *
+ * 止めても意味が消えないことは確認済み。読み込み表示は role="status" と「読み込み中」の
+ * 名前を持ち、輪郭自体は描画されたまま残る。動きは状態の飾りであって、状態そのものではない。
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /*
@@ -361,7 +483,7 @@
  * 固定表示は通常の flex 子として幅を占有するため、幅や position を動かすと本文の再
  * レイアウトも同時に動いてジャンプして見える。opacity + transform(translateX) だけを
  * 動かせばレイアウトを乱さずに「滑り込んで馴染む」見え方になる。一時表示のオーバーレイ
- * 自体の出現（SecondaryPanel.tsx の transition-all duration-200 ease-out）と歩調を揃える。
+ * 自体の出現（SecondaryPanel.tsx の transition-all duration-base ease-out）と歩調を揃える。
  */
 @keyframes panel-pin-in {
   from {
@@ -397,14 +519,24 @@
     height: 100%;
   }
 
-  /* キーボードナビゲーション時のフォーカスリング。マウスクリック時は非表示。 */
+  /*
+   * キーボードナビゲーション時のフォーカスリング。マウスクリック時は非表示。
+   *
+   * brand-400 (#60a5fa) は白地で 2.33:1 しかなく、枠線・輪郭に要る 3:1 (WCAG 2.2 SC 1.4.11) に
+   * 届いていなかった。リングが見えないのは「見えるフォーカス」を満たさないので brand-600 へ上げる
+   * (白地 5.15:1)。主要操作と同じ青なので、設計ボードの「主要操作は既存のブランドブルー」とも揃う。
+   */
   *:focus-visible {
-    outline: 2px solid theme('colors.brand.400');
+    outline: 2px solid theme('colors.brand.600');
     outline-offset: 2px;
   }
   body {
     @apply bg-surface text-[var(--color-text-primary)];
     overflow: hidden;
+    font-family: var(--fs-font-sans);
+    /* 日本語は字面が大きく、欧文と同じ行間だと詰まって見える。
+       text-* を付けた要素は Tailwind 側の行間が勝つので、ここが効くのは指定の無い文字だけ。 */
+    line-height: 1.7;
   }
 
   select,
@@ -425,6 +557,12 @@
 }
 
 @layer components {
+  /* マウス中心の一覧とタッチ操作で密度を分ける。色・フォントは既存トークンを維持。 */
+  .ui-control { min-height: 40px; }
+  .ui-control-compact { min-height: 32px; }
+  @media (pointer: coarse) {
+    .ui-control, .ui-control-compact { min-height: 44px; }
+  }
   /* 白文字に対して brand-500 は 3.7:1 で基準（4.5:1）に届かない。600 から始める（5.2:1）。 */
   /*
    * ヘッダーは常時表示（本文の上に重ねない）なので、半透明・ぼかしは使わない。
@@ -437,7 +575,7 @@
 
   /* 純白の body に埋もれないよう、輪郭が見える境界色 + 影で「押せる」感を出す。 */
   .btn-secondary {
-    @apply border border-[var(--color-border-hover)] bg-surface-1 text-[var(--color-text-tertiary)] font-medium py-2.5 rounded-lg shadow-sm hover:bg-surface-2 hover:shadow active:bg-surface-3 transition-all duration-150;
+    @apply border border-[var(--color-border-hover)] bg-surface-1 text-[var(--color-text-tertiary)] font-medium py-2.5 rounded-lg shadow-sm hover:bg-surface-2 hover:shadow active:bg-surface-3 transition-all duration-fast;
   }
 
   /* カードは白い body から浮いて見えるよう、安静時から影を持たせ境界を明確にする。 */
@@ -446,6 +584,6 @@
   }
 
   .input-primary {
-    @apply w-full border border-surface-3 rounded-lg px-4 py-2.5 bg-surface-2 text-[var(--color-text-primary)] focus:border-brand-400 focus:ring-1 focus:ring-brand-400 focus:outline-none transition-colors duration-150 placeholder:text-[var(--color-text-faint)];
+    @apply w-full border border-surface-3 rounded-lg px-4 py-2.5 bg-surface-2 text-[var(--color-text-primary)] focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none transition-colors duration-fast placeholder:text-[var(--color-text-faint)];
   }
 }

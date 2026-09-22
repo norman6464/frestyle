@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { NotificationRepository } from '@/entities/notification';
 import type { Notification } from '@/entities/notification';
 import { classifyApiError } from '@/shared/lib/classifyApiError';
@@ -8,6 +8,7 @@ export function useNotification() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const marking = useRef(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -35,24 +36,32 @@ export function useNotification() {
 
   const markAsRead = useCallback(
     async (notificationId: number) => {
+      if (marking.current) return;
+      marking.current = true;
+      setLoading(true);
       try {
         await NotificationRepository.markAsRead(notificationId);
       } catch {
         // 既読化に失敗しても再取得で実際の状態に合わせる（楽観更新はしない）。
       } finally {
         await fetchData();
+        marking.current = false;
       }
     },
     [fetchData],
   );
 
   const markAllAsRead = useCallback(async () => {
+    if (marking.current) return;
+    marking.current = true;
+    setLoading(true);
     try {
       await NotificationRepository.markAllAsRead();
     } catch {
       // 同上。
     } finally {
       await fetchData();
+      marking.current = false;
     }
   }, [fetchData]);
 

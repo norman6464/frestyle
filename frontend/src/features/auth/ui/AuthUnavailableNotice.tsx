@@ -12,7 +12,7 @@ export default function AuthUnavailableNotice({ missing }: { missing: readonly s
     <p
       role="status"
       data-missing={missing.join(',')}
-      className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-center text-sm font-medium text-amber-800"
+      className="mb-4 rounded-lg border border-warning-border bg-warning-soft p-3 text-center text-sm font-medium text-warning"
     >
       現在ログインを受け付けていません。認証の設定が完了していないためです。
     </p>

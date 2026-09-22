@@ -4,10 +4,7 @@ import { withApi, withRouter, withToast } from '../../../../.storybook/decorator
 import SettingsPage from './SettingsPage';
 
 /**
- * 設定の画面。左（狭い画面では上）で区分を選び、右に中身が出る。
- *
- * 区分を増やすときはこの画面の一覧に 1 つ足す。画面ごとに URL を分けていないのは、
- * 設定は行き来しながら見るもので、戻る操作で 1 つずつ遡らせたくないため。
+ * 設定は現在プロフィールのみ。単一項目のサブメニューを置かず、そのまま編集できる。
  */
 const meta = {
   title: 'pages/settings/SettingsPage',

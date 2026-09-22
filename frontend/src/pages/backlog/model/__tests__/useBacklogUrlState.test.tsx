@@ -18,6 +18,11 @@ function renderAt(initial: string) {
 }
 
 describe('useBacklogUrlState', () => {
+  it('絞り込みの解除は選択中のチケットと無関係なクエリを残す', () => {
+    const { result } = renderAt('/backlog/s-1?ticket=t-9&statusId=st-1&typeId=ty-1&labelId=l-1&unassigned=1&overdue=1&q=x&from=home');
+    act(() => result.current.state.clearFilters());
+    expect(result.current.search).toBe('?ticket=t-9&from=home');
+  });
   it('何も付いていない URL は既定（未選択・絞り込み無し）', () => {
     const { result } = renderAt('/backlog/s-1');
     expect(result.current.state).toMatchObject({ selectedId: null, statusId: null, assignedToMe: false });
@@ -95,5 +100,30 @@ describe('useBacklogUrlState', () => {
     const { result } = renderAt('/backlog/s-1?statusId=st-1&assignedToMe=1&q=x');
     act(() => result.current.state.reset());
     expect(result.current.search).toBe('');
+  });
+
+  it('保存した絞り込みのタブは 1 回の更新で切り替わり、互いに排他', () => {
+    const { result } = renderAt('/backlog/s-1?assignedToMe=1&statusId=st-1');
+    expect(result.current.state.quickFilter).toBe('assignedToMe');
+
+    act(() => result.current.state.setQuickFilter('overdue'));
+    expect(result.current.state.quickFilter).toBe('overdue');
+    expect(result.current.search).toContain('overdue=1');
+    expect(result.current.search).not.toContain('assignedToMe');
+    // 詳細条件（状態）はタブとは別の軸なので残る。
+    expect(result.current.search).toContain('statusId=st-1');
+
+    act(() => result.current.state.setQuickFilter('unassigned'));
+    expect(result.current.search).toContain('unassigned=1');
+    expect(result.current.search).not.toContain('overdue');
+
+    act(() => result.current.state.setQuickFilter(null));
+    expect(result.current.state.quickFilter).toBeNull();
+    expect(result.current.search).toBe('?statusId=st-1');
+  });
+
+  it('URL に複数立っていても読みは 1 つに決める（assignedToMe → overdue → unassigned の順）', () => {
+    const { result } = renderAt('/backlog/s-1?overdue=1&unassigned=1');
+    expect(result.current.state.quickFilter).toBe('overdue');
   });
 });

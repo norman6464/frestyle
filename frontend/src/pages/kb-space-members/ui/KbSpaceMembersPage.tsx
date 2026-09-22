@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { ExclamationCircleIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { KbSidebar } from '@/widgets/kb-sidebar';
-import { SidebarSection } from '@/shared/ui';
+import { Loading, SidebarSection } from '@/shared/ui';
 import { useKbSpaceEntry, KbSpaceTabs } from '@/entities/kb';
 import Avatar from '@/shared/ui/Avatar';
 import EmptyState from '@/shared/ui/EmptyState';
@@ -42,7 +42,7 @@ export default function KbSpaceMembersPage() {
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {error && (
-          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
+          <div role="alert" className="flex flex-1 items-center justify-center px-6 py-8 text-center text-sm text-[var(--color-text-muted)]">
             {error}
           </div>
         )}
@@ -50,18 +50,18 @@ export default function KbSpaceMembersPage() {
         {!error && noSpaces && (
           <div className="flex flex-1 items-center justify-center px-6 text-center">
             <div>
-              <p className="mb-1 text-base font-semibold text-[var(--color-text-secondary)]">
+              <h1 className="mb-2 text-lg font-semibold text-[var(--color-text-secondary)]">
                 アクセスできるスペースがありません
-              </p>
+              </h1>
               <p className="text-sm text-[var(--color-text-muted)]">
-                左のサイドバーからワークスペースまたはスペースを作ると使えるようになります。
+                メニューの「ナレッジ」からワークスペースまたはスペースを作ると使えるようになります。
               </p>
             </div>
           </div>
         )}
 
         {!error && !noSpaces && (loading || !space || !workspaceSlug) && (
-          <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-muted)]">
+          <div role="status" className="flex flex-1 items-center justify-center py-8 text-sm text-[var(--color-text-muted)]">
             読み込み中…
           </div>
         )}
@@ -82,9 +82,12 @@ export default function KbSpaceMembersPage() {
 function MembersList({ workspaceSlug, spaceId }: { workspaceSlug: string; spaceId: string }) {
   const { members, loading, error, retry } = useKbSpaceMembers(workspaceSlug, spaceId);
 
+  if (loading) return <Loading className="min-h-56" message="メンバーを読み込んでいます" />;
+
   if (error) {
     return (
       <EmptyState
+        headingLevel={2}
         icon={ExclamationCircleIcon}
         title="メンバーを読み込めませんでした"
         description="通信が切れたか、一時的な不調です。"
@@ -94,20 +97,22 @@ function MembersList({ workspaceSlug, spaceId }: { workspaceSlug: string; spaceI
   }
 
   if (!loading && members.length === 0) {
-    return <EmptyState icon={UsersIcon} title="このスペースにはまだメンバーがいません" />;
+    return <EmptyState headingLevel={2} icon={UsersIcon} title="このスペースにはまだメンバーがいません" />;
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-6 py-4">
+    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+      <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">スペースのメンバー</h2>
+      <p className="mb-5 mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">このスペースにアクセスできる人と、それぞれの役割を確認できます。</p>
       <ul>
         {members.map((member) => (
-          <li key={member.userId} className="flex items-center gap-2.5 border-b border-surface-2 py-2.5 last:border-b-0">
+          <li key={member.userId} className="flex flex-wrap items-center gap-3 border-b border-surface-2 py-4 last:border-b-0">
             <Avatar name={member.name || '?'} src={member.avatarUrl || undefined} size="sm" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-[var(--color-text-primary)]">
+            <div className="min-w-0 flex-1 basis-32">
+              <div className="text-sm font-medium text-[var(--color-text-primary)] [overflow-wrap:anywhere]">
                 {member.name || '（名前未設定）'}
               </div>
-              <div className="truncate text-xs text-[var(--color-text-muted)]">
+              <div className="mt-1 text-xs leading-relaxed text-[var(--color-text-muted)]">
                 {VIA_LABEL[member.via] ?? member.via}
               </div>
             </div>

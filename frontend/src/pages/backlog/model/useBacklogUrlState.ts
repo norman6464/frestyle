@@ -1,6 +1,9 @@
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+/** 一覧の上に並ぶ「保存した絞り込み」のタブ。互いに排他で、どれか 1 つか無しか。 */
+export type BacklogQuickFilter = 'assignedToMe' | 'overdue' | 'unassigned';
+
 export interface BacklogUrlPatch {
   selectedId?: string | null;
   statusId?: string | null;
@@ -119,6 +122,33 @@ export function useBacklogUrlState() {
   const setOverdue = useCallback((value: boolean) => update({ overdue: value }), [update]);
   const setQuery = useCallback((value: string) => update({ q: value }), [update]);
 
+  /**
+   * 「保存した絞り込み」のタブ。3 つは互いに排他なので 1 回の更新で切り替える
+   * （setAssignedToMe → setOverdue と 2 回呼ぶと、履歴の置換が 2 回走って中間状態が描かれる）。
+   * URL に複数立っていた場合の読みは assignedToMe → overdue → unassigned の順で最初の 1 つ。
+   */
+  const quickFilter: BacklogQuickFilter | null = assignedToMe
+    ? 'assignedToMe'
+    : overdue
+      ? 'overdue'
+      : unassigned
+        ? 'unassigned'
+        : null;
+  const setQuickFilter = useCallback(
+    (kind: BacklogQuickFilter | null) =>
+      update({
+        assignedToMe: kind === 'assignedToMe',
+        overdue: kind === 'overdue',
+        unassigned: kind === 'unassigned',
+      }),
+    [update],
+  );
+
+  const clearFilters = useCallback(() => update({
+    statusId: null, typeId: null, labelId: null, assigneePrincipalId: null,
+    unassigned: false, assignedToMe: false, overdue: false, q: '',
+  }), [update]);
+
   /** プロジェクトを移ったときに前のプロジェクトの文脈を持ち越さない。 */
   const reset = useCallback(
     () =>
@@ -155,6 +185,9 @@ export function useBacklogUrlState() {
     setAssignedToMe,
     setOverdue,
     setQuery,
+    quickFilter,
+    setQuickFilter,
+    clearFilters,
     reset,
   };
 }

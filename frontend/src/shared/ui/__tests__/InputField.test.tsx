@@ -15,6 +15,20 @@ describe('InputField', () => {
     expect(screen.getByLabelText('メール')).toBeInTheDocument();
   });
 
+  it('外部から更新された値を表示し、入力補助と説明を関連付ける', () => {
+    const { rerender } = render(<InputField label="メール" name="email" value="" onChange={mockOnChange} autoComplete="email" hint="連絡先のメールアドレス" />);
+    rerender(<InputField label="メール" name="email" value="member@example.com" onChange={mockOnChange} autoComplete="email" hint="連絡先のメールアドレス" />);
+    expect(screen.getByLabelText('メール')).toHaveValue('member@example.com');
+    expect(screen.getByLabelText('メール')).toHaveAttribute('autocomplete', 'email');
+    expect(screen.getByLabelText('メール')).toHaveAccessibleDescription('連絡先のメールアドレス');
+  });
+
+  it('クリア後は入力欄にフォーカスを戻す', () => {
+    render(<InputField label="氏名" name="name" value="名前" onChange={mockOnChange} />);
+    fireEvent.click(screen.getByRole('button', { name: '入力をクリア' }));
+    expect(screen.getByLabelText('氏名')).toHaveFocus();
+  });
+
   it('入力値が変更されるとonChangeが呼ばれる', () => {
     render(<InputField label="メール" name="email" value="" onChange={mockOnChange} />);
 
@@ -75,7 +89,7 @@ describe('InputField', () => {
   it('エラー時にボーダーが赤色になる', () => {
     render(<InputField label="メール" name="email" value="" onChange={mockOnChange} error="エラー" />);
     const input = screen.getByLabelText('メール');
-    expect(input.className).toContain('border-rose-500');
+    expect(input.className).toContain('border-danger');
   });
 
   it('エラーがない場合はaria-invalidがfalseになる', () => {
@@ -92,7 +106,7 @@ describe('InputField', () => {
     render(<InputField label="メール" name="email" value="" onChange={mockOnChange} />);
     const input = screen.getByLabelText('メール');
     expect(input.className).toContain('border-surface-3');
-    expect(input.className).not.toContain('border-rose-500');
+    expect(input.className).not.toContain('border-danger');
   });
 
   it('disabled時にinputが無効化される', () => {

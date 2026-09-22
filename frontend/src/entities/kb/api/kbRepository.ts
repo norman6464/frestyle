@@ -21,6 +21,7 @@ import type {
   KbPageTree,
   KbPageVersion,
   KbPageVersionDetail,
+  KbRecentPage,
   KbResolvedCover,
   KbResolvedPage,
   KbSearchResult,
@@ -97,6 +98,12 @@ function normalizeVersionDetail(raw: KbPageVersionDetailWire): KbPageVersionDeta
 }
 
 const KbRepository = {
+  /** 最近開いたページのメタデータ。ページ本文の resolve は閲覧記録を更新するため使わない。 */
+  async fetchRecentPages(signal?: AbortSignal): Promise<KbRecentPage[]> {
+    const res = await apiClient.get<KbRecentPage[]>(KB_API.recentPages, { signal });
+    return toArray<KbRecentPage>(res.data);
+  },
+
   /** 自分が所属しているワークスペースの一覧。所属が無ければ空配列。 */
   async fetchWorkspaces(): Promise<KbWorkspace[]> {
     const res = await apiClient.get<KbWorkspace[]>(KB_API.workspaces);

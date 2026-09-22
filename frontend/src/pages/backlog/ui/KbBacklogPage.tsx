@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowTopRightOnSquareIcon, XMarkIcon } from '@heroicons/react/24/outline';
-import { BacklogSidebar } from '@/widgets/backlog-sidebar';
+import { useNavigate, useParams } from 'react-router-dom';
+import { BacklogSidebar, useBacklogFilterCounts } from '@/widgets/backlog-sidebar';
 import { SecondaryPanel } from '@/widgets/secondary-panel';
-import { SidebarSection } from '@/shared/ui';
+import { EmptyState, FsIcon, FsIllustration, Loading, SidebarSection } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
-import { TicketRepository } from '@/entities/ticket';
+import { TicketRepository, formatTicketKey } from '@/entities/ticket';
 import type { SprintState } from '@/entities/sprint';
 import { useTicketList } from '../model/useTicketList';
 import { useTicketMasters } from '../model/useTicketMasters';
@@ -15,6 +14,7 @@ import { usePrincipalNames } from '../model/usePrincipalNames';
 import { useBacklogProject } from '../model/useBacklogProject';
 import { useBacklogUrlState } from '../model/useBacklogUrlState';
 import BacklogFilterBar from './BacklogFilterBar';
+import BacklogQuickFilters from './BacklogQuickFilters';
 import BacklogList, { BACKLOG_GROUP_ID, type BacklogGroupModel } from './BacklogList';
 import BacklogTabs from './BacklogTabs';
 import SprintBoard from './SprintBoard';
@@ -24,6 +24,28 @@ import { useSprintTickets } from '../model/useSprintTickets';
 import TicketDetailPanel from './TicketDetailPanel';
 import TicketStatusAdmin from './TicketStatusAdmin';
 import TicketTypeAdmin from './TicketTypeAdmin';
+
+/**
+ * 面ごとの見出し。小さな見出しは設計ボード ST08 の文言（バックログ）と、面の名前（ほか）。
+ * 一文は「この面で何をするか」を一言で。
+ */
+const HEADING: Record<BacklogView, { eyebrow: string; title: string; lede: (projectName: string) => string }> = {
+  backlog: {
+    eyebrow: 'Make room for the next thing',
+    title: 'バックログ',
+    lede: (name) => `${name} の次の一歩。いま動かす課題を選びましょう。`,
+  },
+  archive: {
+    eyebrow: 'Archive',
+    title: 'アーカイブ',
+    lede: () => 'アーカイブしたチケット。必要なときに現役へ戻せます。',
+  },
+  settings: {
+    eyebrow: 'Settings',
+    title: '設定',
+    lede: () => '状態・種別・スプリントの決まりごと。バックログの動き方をここで整えます。',
+  },
+};
 
 export interface KbBacklogPageProps {
   /** どの面か。経路が決める（/backlog/:projectId・/settings・/archive）。 */
@@ -53,12 +75,14 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     assignedToMe,
     overdue,
     q,
+    quickFilter,
     selectTicket,
     setStatusId,
     setTypeId,
     setLabelId,
-    setAssignedToMe,
+    setQuickFilter,
     setQuery,
+    clearFilters,
     reset,
   } = useBacklogUrlState();
   const [detailMobileOpen, setDetailMobileOpen] = useState(false);
@@ -102,7 +126,9 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     void sprints.reload();
     void reloadSprintTickets();
   };
-  const { principals, nameOf, initialsOf } = usePrincipalNames(workspaceSlug ?? undefined);
+  const { principals, nameOf } = usePrincipalNames(workspaceSlug ?? undefined);
+  // 「保存した絞り込み」の件数と全件数。柱ではなく一覧の真上に出す（設計ボード ST08）。
+  const counts = useBacklogFilterCounts(workspaceSlug ?? undefined, project?.id);
 
   /**
    * 一覧を段に割る。1 件のチケットはどこか 1 つの段にしか出さない —— 見本と同じく、
@@ -174,6 +200,12 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     setDetailMobileOpen(true);
   };
 
+  const handleCreateBlank = () =>
+    void withToastOnFailure(
+      () => list.createTicket({ title: '無題のチケット' }).then((t) => handleSelect(t.id)),
+      'チケットを作成できませんでした。',
+    );
+
   /** 段の見出しから作る。名前は連番の既定を置くだけにして、変更は「状態と種別」側へ寄せない。 */
   const handleCreateSprint = async () => {
     const name = window.prompt('スプリントの名前', `スプリント ${sprints.sprints.length + 1}`);
@@ -221,9 +253,9 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
         <BacklogSidebar workspaceSlug={workspaceSlug ?? undefined} project={project} />
       </SidebarSection>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <main className="mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col overflow-hidden">
         {projectError ? (
-          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
+          <div role="alert" className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
             {projectError}
           </div>
         ) : noProjects ? (
@@ -238,44 +270,55 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
             </div>
           </div>
         ) : projectLoading || !project ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-muted)]">
+          <div role="status" className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-muted)]">
             読み込み中…
           </div>
         ) : (
           <>
-            {/* プロジェクトの見出し。その下に面のタブ列を置く（見本と同じ並び）。 */}
-            <div className="border-b border-surface-3">
-              <div className="flex items-center gap-2 px-4 pb-1.5 pt-3">
-                <h1 className="truncate text-lg font-semibold text-[var(--color-text-primary)]">{project.name}</h1>
-                <span className="shrink-0 text-xs text-[var(--color-text-muted)]">
-                  プロジェクト・{project.key.toUpperCase()}
-                </span>
-                {view === 'backlog' && enabled && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void withToastOnFailure(
-                        () => list.createTicket({ title: '無題のチケット' }).then((t) => handleSelect(t.id)),
-                        'チケットを作成できませんでした。',
-                      )
-                    }
-                    className="ml-auto shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+            {/*
+              見出しの塊（設計ボード ST08）。プロジェクトの行 → 小さな見出し → 大きな面の名前 → 一文 →
+              保存した絞り込み。面のタブはプロジェクトの行の右端。柱に同じ行き先を置かない。
+            */}
+            <div className="shrink-0 border-b border-surface-3 px-4 pb-3 pt-4 sm:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                <div className="flex min-w-0 items-center gap-2 text-sm">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-taupe-600 text-[11px] font-bold text-white"
                   >
-                    チケットを作成
-                  </button>
-                )}
-                {view === 'backlog' && !enabled && !masters.loading && (
-                  <button
-                    type="button"
-                    onClick={() => void handleEnable()}
-                    disabled={enabling}
-                    className="ml-auto shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-                  >
-                    {enabling ? '有効化中…' : 'チケットを有効化'}
-                  </button>
-                )}
+                    {project.key.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || project.key.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span className="min-w-0 truncate font-semibold text-[var(--color-text-primary)]">{project.name}</span>
+                  <span aria-hidden="true" className="text-[var(--color-text-faint)]">/</span>
+                  <span className="shrink-0 text-[var(--color-text-muted)]">プロジェクト {project.key.toUpperCase()}</span>
+                </div>
+                <BacklogTabs projectId={project.id} current={view} />
               </div>
-              <BacklogTabs projectId={project.id} current={view} />
+
+              <p className="mt-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-brand-700" aria-hidden="true">
+                {HEADING[view].eyebrow}
+              </p>
+              <h1 className="mt-1 text-3xl font-bold leading-tight tracking-tight text-[var(--color-text-primary)] sm:text-4xl">
+                {HEADING[view].title}
+              </h1>
+              <p className="mt-2 max-w-[44em] text-sm text-[var(--color-text-muted)]">{HEADING[view].lede(project.name)}</p>
+
+              {view === 'backlog' && !enabled && !masters.loading && !masters.error && (
+                <button
+                  type="button"
+                  onClick={() => void handleEnable()}
+                  disabled={enabling}
+                  className="mt-4 min-h-11 shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
+                >
+                  {enabling ? '有効化中…' : 'チケットを有効化'}
+                </button>
+              )}
+
+              {view === 'backlog' && enabled && (
+                <div className="mt-3">
+                  <BacklogQuickFilters counts={counts} value={quickFilter} onChange={setQuickFilter} />
+                </div>
+              )}
             </div>
 
             {view !== 'settings' && enabled && (
@@ -286,18 +329,22 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                 statusId={statusId}
                 typeId={typeId}
                 labelId={labelId}
-                assignedToMe={assignedToMe}
                 q={q}
+                quick={quickFilter}
                 onChangeStatusId={setStatusId}
                 onChangeTypeId={setTypeId}
                 onChangeLabelId={setLabelId}
-                onToggleAssignedToMe={setAssignedToMe}
                 onChangeQuery={setQuery}
+                onClearQuick={() => setQuickFilter(null)}
+                onClearFilters={clearFilters}
+                onCreate={view === 'backlog' ? handleCreateBlank : undefined}
               />
             )}
 
             <div className="min-h-0 flex-1">
-              {view !== 'settings' &&
+              {masters.loading && <Loading className="min-h-56" message="チケットの設定を読み込んでいます" />}
+              {!masters.loading && masters.error && <EmptyState headingLevel={2} illustration={<FsIllustration name="load-error" />} title="チケットの設定を読み込めませんでした" description={masters.error} action={{ label: '再読み込み', onClick: masters.refresh }} />}
+              {view !== 'settings' && !masters.loading && !masters.error &&
                 (!enabled && !masters.loading ? (
                   <div className="flex h-full items-center justify-center px-6 text-center">
                     <div>
@@ -310,7 +357,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                     </div>
                   </div>
                 ) : (
-                  <>
+                  <div className="flex h-full min-h-0 flex-col">
                     {sprintError && (
                       // 一覧そのものは読めているので画面は塞がない。ただし
                       // 「スプリントの中身が空なのか、読めなかったのか」は必ず区別させる。
@@ -329,6 +376,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       </p>
                     )}
                     <BacklogList
+                      filtered={Boolean(statusId || typeId || labelId || assignedToMe || unassigned || overdue || q)}
+                      totalCount={counts?.total ?? null}
                       groups={groups}
                       statuses={masters.statuses}
                       types={masters.types}
@@ -340,7 +389,6 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       selectedId={selectedId}
                       busyId={list.busyId}
                       nameOf={nameOf}
-                      initialsOf={initialsOf}
                       onSelect={handleSelect}
                       onCreate={(title) => list.createTicket({ title }).then((t) => handleSelect(t.id))}
                       onChangeStatus={(ticketId, nextStatusId) => {
@@ -372,7 +420,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                             type="button"
                             disabled={sprints.busyId === group.id}
                             onClick={() => void handleChangeSprintState(group.id, group.sprintState)}
-                            className="rounded border border-surface-3 px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-1 disabled:opacity-50"
+                            className="rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] transition-colors duration-fast hover:bg-surface-2 disabled:opacity-50"
                           >
                             {group.sprintState === 'active' ? 'スプリントを完了' : 'スプリントを開始'}
                           </button>
@@ -380,7 +428,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                           <button
                             type="button"
                             onClick={() => void handleCreateSprint()}
-                            className="rounded border border-surface-3 px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-1"
+                            className="rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] transition-colors duration-fast hover:bg-surface-2"
                           >
                             スプリントを作成
                           </button>
@@ -388,15 +436,17 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       }
                       onRetry={list.refresh}
                     />
-                  </>
+                  </div>
                 ))}
 
               {/* 見出しは h1（プロジェクト名）→ h2（節）の順に落とす。節の名前を付けないと
                   管理の面が 3 つ続けて並ぶだけになり、中の EmptyState の h3 まで段が飛ぶ。 */}
-              {view === 'settings' && (
-                <div className="h-full space-y-8 overflow-y-auto p-4">
+              {view === 'settings' && !masters.loading && !masters.error && (
+                <div className="h-full overflow-y-auto px-4 py-6 sm:px-6">
+                <div className="mx-auto max-w-4xl space-y-10 [&_button]:min-h-11 [&_input]:min-h-11 [&_select]:min-h-11">
                   <section>
-                    <h2 className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]">状態</h2>
+                    <h2 className="mb-2 text-lg font-semibold text-[var(--color-text-primary)]">状態</h2>
+                    <p className="mb-4 text-sm leading-relaxed text-[var(--color-text-muted)]">作業がどこまで進んだかを表す流れです。新しいチケットの開始状態もここで選べます。</p>
                     <TicketStatusAdmin
                       statuses={masters.statuses}
                       onCreate={masters.createStatus}
@@ -405,7 +455,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                     />
                   </section>
                   <section>
-                    <h2 className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]">種別</h2>
+                    <h2 className="mb-2 text-lg font-semibold text-[var(--color-text-primary)]">種別</h2>
+                    <p className="mb-4 text-sm leading-relaxed text-[var(--color-text-muted)]">チームの仕事に合わせて分類と雛形を整えます。</p>
                     <TicketTypeAdmin
                       types={masters.types}
                       onCreate={masters.createType}
@@ -414,7 +465,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                     />
                   </section>
                   <section>
-                    <h2 className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]">スプリント</h2>
+                    <h2 className="mb-2 text-lg font-semibold text-[var(--color-text-primary)]">スプリント</h2>
+                    <p className="mb-4 text-sm leading-relaxed text-[var(--color-text-muted)]">取り組む期間を管理します。作業の割り当てはバックログで行えます。</p>
                     {/* 改名・期間・削除はここ。バックログの面では「作る・開始する・完了する・
                         中身を入れ替える」だけを段の見出しで受ける。 */}
                     <SprintBoard
@@ -427,6 +479,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                     />
                   </section>
                 </div>
+                </div>
               )}
             </div>
           </>
@@ -435,7 +488,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
 
       {view !== 'settings' && selectedTicket && (
         <SecondaryPanel
-          title="チケット"
+          title={`選択中 ${formatTicketKey(project?.key ?? '', selectedTicket.number)}`}
           side="right"
           resizable
           resizeStorageKey="frestyle.panel.ticket-detail.width"
@@ -443,25 +496,17 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
           mobileOpen={detailMobileOpen}
           onMobileClose={() => setDetailMobileOpen(false)}
           headerActions={
-            <div className="flex shrink-0 items-center gap-1.5">
-              <Link
-                to={`/tickets/${selectedTicket.id}`}
-                aria-label="全画面で開く"
-                title="全画面で開く"
-                className="rounded-md border border-surface-3 p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
-              >
-                <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" aria-hidden="true" />
-              </Link>
-              <button
-                type="button"
-                onClick={() => selectTicket(null)}
-                aria-label="詳細を閉じる"
-                title="詳細を閉じる"
-                className="rounded-md border border-surface-3 p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
-              >
-                <XMarkIcon className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            </div>
+            /* 全画面へは本文の身元（キー・種別）のリンクから開く。ここに同じ行き先の矢印を置くと
+               入口が 2 つになるので持たない。ここに残すのは選択を解く操作だけ。 */
+            <button
+              type="button"
+              onClick={() => selectTicket(null)}
+              aria-label="選択解除"
+              title="選択解除"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-surface-3 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+            >
+              <FsIcon name="x" className="h-3.5 w-3.5" />
+            </button>
           }
         >
           <TicketDetailPanel

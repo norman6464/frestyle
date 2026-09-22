@@ -36,23 +36,25 @@ export default function ProfilePage() {
 
   return (
     // 縦長コンテンツの最終要素が viewport 下端で見切れないよう pb-24 で余白確保
-    <div className="px-6 pt-6 pb-24 max-w-2xl mx-auto space-y-6">
+    <div className="space-y-6">
       <FormMessage message={message} />
 
       {/* セクション1: 基本情報 */}
-      <div className="bg-surface-1 rounded-lg border border-surface-3 p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="relative">
+      <div className="rounded-2xl border border-surface-3 bg-surface-1 p-4 sm:p-6">
+        <div className="mb-6 flex flex-wrap items-center gap-4 border-b border-surface-3 pb-6">
+          <div className="flex flex-wrap items-center gap-4">
             <Avatar name={form.displayName || 'U'} src={form.avatarUrl || undefined} size="xl" />
-            <button
+            <Button
+              variant="secondary"
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="absolute bottom-0 right-0 bg-brand-500 text-white rounded-full p-1 hover:bg-brand-600 transition-colors disabled:opacity-50"
+              disabled={uploading || submitting}
+              className="min-h-11"
               aria-label="プロフィール画像を変更"
             >
-              <CameraIcon className="w-4 h-4" />
-            </button>
+              <CameraIcon aria-hidden="true" className="w-4 h-4" />
+              画像を変更
+            </Button>
             <input
               ref={fileInputRef}
               type="file"
@@ -64,8 +66,8 @@ export default function ProfilePage() {
           </div>
           <div>
             <h2 className="text-lg font-bold text-[var(--color-text-primary)]">プロフィールを編集</h2>
-            <p className="text-sm text-[var(--color-text-muted)]">
-              {uploading ? '画像をアップロード中...' : 'あなたの情報を更新してください'}
+            <p role="status" className="mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">
+              {uploading ? '画像をアップロード中...' : '画像や入力内容は「基本情報を保存」で反映されます。'}
             </p>
           </div>
         </div>
@@ -80,6 +82,7 @@ export default function ProfilePage() {
           <InputField
             label="氏名"
             name="displayName"
+            autoComplete="name"
             value={form.displayName}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('displayName', e.target.value)}
           />
@@ -95,12 +98,13 @@ export default function ProfilePage() {
           <InputField
             label="ステータス"
             name="status"
+            hint="今の状況を、チームに短く伝えられます。"
             value={form.status}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateField('status', e.target.value)}
             placeholder="例: 学習中、チャット可能、取り込み中..."
             maxLength={100}
           />
-          <Button variant="primary" fullWidth type="submit" disabled={submitting}>
+          <Button variant="primary" className="min-h-11 w-full sm:ml-auto sm:w-auto" type="submit" disabled={submitting || uploading}>
             {submitting ? '更新中...' : '基本情報を保存'}
           </Button>
         </form>

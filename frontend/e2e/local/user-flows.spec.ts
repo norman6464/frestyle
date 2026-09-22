@@ -21,7 +21,7 @@ test.describe('ログイン画面', () => {
 
     await expect(page).toHaveURL(/\/login/);
     // 発行者のログイン画面へ送るボタンと、IdP 直行の 2 経路。
-    await expect(page.getByRole('button', { name: 'ログインする' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ログイン画面へ進む' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Google/ })).toBeVisible();
   });
 
@@ -39,7 +39,7 @@ test.describe('ログイン画面', () => {
 
     await page.goto('/login');
 
-    await expect(page.getByRole('button', { name: 'ログインする' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ログイン画面へ進む' })).toBeVisible();
     await expect(page.getByLabel('メールアドレス')).toHaveCount(0);
     await expect(page.getByLabel('パスワード', { exact: true })).toHaveCount(0);
   });

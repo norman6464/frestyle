@@ -53,7 +53,7 @@ describe('LoginPage（Dex モード・既定）', () => {
     expect(screen.getByRole('heading', { name: 'ログイン' })).toBeInTheDocument();
     // 「在ること」だけでなく「押せること」まで見る。設定が揃っているのに
     // 押せない状態も、押せるのに何も起きない状態も、ここで落ちる。
-    expect(screen.getByRole('button', { name: 'ログインする' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'ログイン画面へ進む' })).toBeEnabled();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 

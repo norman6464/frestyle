@@ -19,7 +19,7 @@ export default function TicketTypeGlyph({ type, className = '' }: TicketTypeGlyp
       title={name || undefined}
       aria-label={name ? `種別: ${name}` : undefined}
       role={name ? 'img' : undefined}
-      className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] text-[9px] font-bold leading-none text-white ${className}`}
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] font-bold leading-none text-white ${className}`}
       style={{ backgroundColor: type?.color ?? 'var(--color-text-faint)' }}
     >
       {name.slice(0, 1)}

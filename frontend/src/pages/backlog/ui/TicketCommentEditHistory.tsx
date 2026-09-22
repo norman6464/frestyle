@@ -14,7 +14,7 @@ export default function TicketCommentEditHistory({ state, resolveMentionName }: 
 
   if (state.error) {
     return (
-      <p role="alert" className="text-xs text-red-700">
+      <p role="alert" className="text-sm text-danger-ink">
         {state.error}
       </p>
     );

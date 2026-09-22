@@ -41,7 +41,7 @@ describe('AuthLayout', () => {
 
   it('カードに角丸が適用される', () => {
     const { container } = render(<AuthLayout><div>テスト</div></AuthLayout>);
-    const card = container.querySelector('.rounded-xl');
+    const card = container.querySelector('.rounded-2xl');
     expect(card).toBeTruthy();
   });
 

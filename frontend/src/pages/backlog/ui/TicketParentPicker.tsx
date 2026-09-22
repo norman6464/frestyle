@@ -56,7 +56,7 @@ export default function TicketParentPicker({
 
       {loading && <Loading size="small" />}
       {!loading && error && (
-        <p role="alert" className="px-1 py-1 text-xs text-red-700">
+        <p role="alert" className="px-1 py-1 text-sm text-danger-ink">
           {error}
         </p>
       )}

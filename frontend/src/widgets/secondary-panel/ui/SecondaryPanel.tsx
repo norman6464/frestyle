@@ -6,6 +6,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { usePanelMode } from '@/shared/lib/hooks/usePanelMode';
 import { useResizablePanel } from '@/shared/lib/hooks/useResizablePanel';
+import { useMobileDrawerFocus } from '@/shared/lib/hooks/useMobileDrawerFocus';
 
 // リサイズの既定幅・下限・上限（画面幅に対する割合）。固定表示・通常表示どちらでも共通。
 const RESIZE_DEFAULT_WIDTH = 288; // w-72 相当
@@ -133,8 +134,8 @@ function ResizeHandle({
       <div
         className={`mx-auto h-full w-0.5 transition-colors ${
           isResizing
-            ? 'bg-brand-400'
-            : 'bg-transparent group-hover/resize:bg-brand-300 group-focus-visible/resize:bg-brand-400'
+            ? 'bg-brand-600'
+            : 'bg-transparent group-hover/resize:bg-brand-500 group-focus-visible/resize:bg-brand-600'
         }`}
       />
     </div>
@@ -248,7 +249,7 @@ function PeekablePanel({
         onMouseEnter={panel.openPeek}
         onMouseLeave={panel.closePeek}
         style={{ top: 'calc(var(--app-header-h) + 8px)' }}
-        className={`hidden md:flex fixed left-0 bottom-2 z-40 w-72 flex-col overflow-hidden rounded-r-xl border border-surface-3 bg-[var(--color-nav)] shadow-xl transition-all duration-200 ease-out ${
+        className={`hidden md:flex fixed left-0 bottom-2 z-40 w-72 flex-col overflow-hidden rounded-r-xl border border-surface-3 bg-[var(--color-nav)] shadow-xl transition-all duration-base ease-out ${
           panel.isPeeking ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 pointer-events-none'
         }`}
       >
@@ -293,6 +294,7 @@ export default function SecondaryPanel({
   resizeStorageKey,
   defaultWidth = RESIZE_DEFAULT_WIDTH,
 }: SecondaryPanelProps) {
+  const mobileRef = useMobileDrawerFocus(Boolean(mobileOpen), onMobileClose);
   // モバイル固定パネルの位置・境界線・開閉時のスライド方向。左は既定（従来どおり）、
   // 右は開いた面（コメント等）が右から出てくるようにする。
   const mobileSide =
@@ -322,11 +324,16 @@ export default function SecondaryPanel({
 
       {/* モバイルパネル */}
       <div
-        className={`fixed inset-y-0 ${mobileSide.edge} z-50 w-72 bg-[var(--color-nav)] ${mobileSide.border} border-surface-3 flex flex-col transform transition-transform duration-200 md:hidden ${
-          mobileOpen ? 'translate-x-0' : mobileSide.closed
+        ref={mobileRef}
+        role="dialog"
+        aria-modal={mobileOpen || undefined}
+        aria-label={title}
+        tabIndex={-1}
+        className={`fixed inset-y-0 ${mobileSide.edge} z-50 w-[min(100vw,24rem)] bg-[var(--color-nav)] ${mobileSide.border} border-surface-3 flex flex-col transform transition-transform duration-base motion-reduce:transition-none md:hidden ${
+          mobileOpen ? 'visible translate-x-0' : `invisible ${mobileSide.closed}`
         }`}
       >
-        <div className="px-4 py-3 border-b border-surface-3 flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-surface-3 flex flex-wrap items-center justify-between gap-2 [&_button]:min-h-11 [&_button]:min-w-11 [&_a]:min-h-11 [&_a]:min-w-11">
           <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">
             {title}
             {badge && <span className="ml-2 text-xs font-normal text-[var(--color-text-muted)]">{badge}</span>}
@@ -335,7 +342,7 @@ export default function SecondaryPanel({
             {headerActions}
             <button
               onClick={onMobileClose}
-              className="p-1 hover:bg-surface-2 rounded transition-colors"
+              className="inline-flex items-center justify-center rounded-md hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
               aria-label="パネルを閉じる"
             >
               <XMarkIcon className="w-4 h-4 text-[var(--color-text-muted)]" />
