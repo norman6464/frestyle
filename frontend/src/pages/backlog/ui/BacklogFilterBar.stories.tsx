@@ -126,6 +126,17 @@ export const 担当自分は選択中の見た目: Story = {
   },
 };
 
+export const 絞り込みを解除する: Story = {
+  args: { statusId: 'st-2', q: '認証', extraFilters: ['期限切れ'], onClearFilters: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('期限切れ')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '絞り込みを解除' }));
+    await expect(args.onClearFilters).toHaveBeenCalledOnce();
+    await expect(canvas.getByRole('searchbox')).toHaveValue('');
+  },
+};
+
 export const 題名検索は入力が止まってから通知する: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);

@@ -154,11 +154,12 @@ export const 状態変更が失敗しても表示は元のまま: Story = {
   args: { onChangeStatus: fn(async () => Promise.reject(new Error('409'))) },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    const select = canvas.getByLabelText('状態') as HTMLSelectElement;
-    await userEvent.selectOptions(select, 'st-1');
+    const select = canvas.getByRole('combobox', { name: '状態' });
+    if (select.getAttribute('aria-expanded') !== 'true') await userEvent.click(select);
+    await userEvent.click(await within(canvasElement.ownerDocument.body).findByRole('option', { name: 'To Do' }));
     await waitFor(() => expect(args.onChangeStatus).toHaveBeenCalledWith('st-1'));
     // ticket prop 自体は変わっていないので、表示は選択中チケットの statusId のまま。
-    await expect(select).toHaveValue('st-2');
+    await expect(select).toHaveTextContent('開発');
   },
 };
 

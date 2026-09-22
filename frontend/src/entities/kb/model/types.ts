@@ -271,6 +271,17 @@ export interface KbFavoritePage {
   createdAt: string;
 }
 
+/** 本人が最近開いた、現在も閲覧できるページ。本文は含まない。 */
+export interface KbRecentPage {
+  pageId: string;
+  workspaceSlug: string;
+  title: string;
+  icon?: KbIcon | null;
+  spaceId: string;
+  spaceName: string;
+  viewedAt: string;
+}
+
 /**
  * ページ自身に張られた既定の役割 1 件。
  *

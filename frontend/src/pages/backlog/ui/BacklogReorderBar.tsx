@@ -49,9 +49,10 @@ export default function BacklogReorderBar({
   onRemoveFromSprint,
 }: BacklogReorderBarProps) {
   const hasSelection = selectedKey !== null;
+  if (!hasSelection) return <p className="border-t border-surface-3 px-4 py-3 text-xs text-[var(--color-text-muted)]">行を選ぶと並び替えられます</p>;
   return (
-    <div className="flex items-center gap-2 border-t border-surface-3 bg-surface-1 px-3 py-2 text-xs">
-      <span className="text-[var(--color-text-muted)]">
+    <div className="flex max-h-48 shrink-0 flex-wrap items-center gap-2 overflow-y-auto border-t border-surface-3 bg-surface-1 px-3 py-2 text-xs [&_button]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600 [&_select]:min-h-11">
+      <span className="min-w-0 text-[var(--color-text-muted)] [overflow-wrap:anywhere]">
         {hasSelection ? (
           <>
             選択中 <b className="text-[var(--color-text-primary)]">{selectedKey}</b> を

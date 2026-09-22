@@ -158,7 +158,7 @@ export const アーカイブ: Story = {
 };
 
 export const 絞り込みで0件: Story = {
-  args: { groups: backlogOnly([]) },
+  args: { groups: backlogOnly([]), filtered: true },
 };
 
 /**

@@ -14,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { usePanelMode } from '@/shared/lib/hooks/usePanelMode';
 import { useSidebarSlotFilled } from '@/shared/lib/hooks/useSidebarSlot';
+import { useMobileDrawerFocus } from '@/shared/lib/hooks/useMobileDrawerFocus';
 import { SidebarSlotTarget } from '@/shared/ui';
 import { KbRepository, useWorkspaceList, type KbSpace } from '@/entities/kb';
 import { GLOBAL_NAV_PRIMARY, GLOBAL_NAV_UTILITY, navActive, type GlobalNavItem } from '../model/globalNav';
@@ -67,6 +68,7 @@ export default function GlobalSidebar({
   showSpaces = true,
 }: GlobalSidebarProps) {
   const location = useLocation();
+  const drawerRef = useMobileDrawerFocus(mobileOpen, onMobileClose);
   const panel = usePanelMode(storageKey);
   const filled = useSidebarSlotFilled();
   const { workspaces } = useWorkspaceList();
@@ -131,18 +133,20 @@ export default function GlobalSidebar({
       )}
 
       <div
+        ref={drawerRef}
+        tabIndex={-1}
         onMouseEnter={collapsed ? panel.openPeek : undefined}
         onMouseLeave={collapsed ? panel.closePeek : undefined}
         className={[
-          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-surface-3 bg-[var(--color-nav)] transition-all duration-200 ease-out',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          'fixed inset-y-0 left-0 z-50 flex w-72 max-w-full flex-col border-r border-surface-3 bg-[var(--color-nav)] transition-all duration-200 ease-out motion-reduce:transition-none',
+          mobileOpen ? 'visible translate-x-0' : 'invisible -translate-x-full',
           collapsed
             ? `md:bottom-2 md:left-0 md:top-[calc(var(--app-header-h)+8px)] md:z-40 md:w-64 md:rounded-r-xl md:border md:shadow-xl ${
                 panel.isPeeking
-                  ? 'md:translate-x-0 md:opacity-100'
-                  : 'md:pointer-events-none md:-translate-x-full md:opacity-0'
+                  ? 'md:visible md:translate-x-0 md:opacity-100'
+                  : 'md:invisible md:pointer-events-none md:-translate-x-full md:opacity-0'
               }`
-            : 'md:static md:z-auto md:w-64 md:shrink-0 md:translate-x-0 md:opacity-100',
+            : 'md:visible md:static md:z-auto md:w-64 md:shrink-0 md:translate-x-0 md:opacity-100',
         ].join(' ')}
       >
         {/* 閉じるボタンは狭い画面の引き出しにだけ置く。広い画面の開け閉めはヘッダーの
@@ -152,7 +156,7 @@ export default function GlobalSidebar({
             type="button"
             onClick={onMobileClose}
             aria-label="メニューを閉じる"
-            className="rounded-md p-1 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)]"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-md text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-nav-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
             <XMarkIcon className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -221,7 +225,7 @@ export default function GlobalSidebar({
 
 /** 柱の 1 行。選ばれている行は塗る（画面ごとの区画と同じ作法）。 */
 function rowClass(active: boolean): string {
-  return `flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
+  return `flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
     active
       ? 'bg-[var(--color-nav-selected)] font-medium text-[var(--color-nav-selected-text)]'
       : 'text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)]'

@@ -39,7 +39,7 @@ export default function SignupPage() {
       : [];
 
   return (
-    <AuthLayout title="アカウントを作成" header={<PublicHeader />}>
+    <AuthLayout title="アカウントを作成" description="作業とナレッジをまとめる場所を始めましょう。" header={<PublicHeader />}>
       {mode !== 'unconfigured' && (
         <p className="mb-6 text-center text-sm text-[var(--color-text-muted)]">
           メールアドレスだけで、すぐに使い始められます。
@@ -67,6 +67,7 @@ export default function SignupPage() {
               label="メールアドレス"
               name="email"
               type="email"
+              autoComplete="email"
               value={email}
               onChange={toChangeHandler(setEmail)}
             />
@@ -74,6 +75,7 @@ export default function SignupPage() {
               label="パスワード"
               name="password"
               type="password"
+              autoComplete="new-password"
               value={password}
               onChange={toChangeHandler(setPassword)}
             />

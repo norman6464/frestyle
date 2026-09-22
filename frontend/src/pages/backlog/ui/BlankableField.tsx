@@ -15,7 +15,7 @@ export interface BlankableFieldProps {
 }
 
 /**
- * 「押すまで文字、押したら入力欄」の項目（見本の Jira と同じ振る舞い）。
+ * 値を読んでいる状態から、その場で編集へ切り替える項目。
  *
  * 入力欄を最初から出すと、まだ何も入っていない項目まで枠だらけになり、
  * 「読む項目」と「これから入れる項目」の区別が付かなくなる。日付や数値のように
@@ -28,7 +28,7 @@ export default function BlankableField({ value, placeholder, editable, render }:
   if (editing && editable) return <>{render(true, () => setEditing(false))}</>;
 
   if (!editable) {
-    return filled ? <span>{value}</span> : <span className="text-[var(--color-text-muted)]">{placeholder}</span>;
+    return filled ? <span>{value}</span> : <span className="text-[var(--color-text-muted)]">未設定</span>;
   }
 
   return (

@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { formatTicketKey, type Label, type Ticket, type TicketPriority, type TicketStatus } from '@/entities/ticket';
+import { Collapsible } from '@base-ui/react/collapsible';
+import { ChevronDownIcon } from '@heroicons/react/20/solid';
+import { formatTicketKey, type Label, type Ticket, type TicketPriority } from '@/entities/ticket';
 import type { ProjectVersion } from '@/entities/project-version';
 import type { Team } from '@/entities/team';
 import type { Sprint } from '@/entities/sprint';
@@ -13,6 +15,8 @@ import BlankableField from './BlankableField';
 const PRIORITY_LABEL: Record<TicketPriority, string> = { 1: '高', 2: '中', 3: '低' };
 
 export interface TicketAttributePanelProps {
+  /** 全画面では作業に直結する項目を先に見せ、計画項目は必要時に開く。 */
+  progressive?: boolean;
   ticket: Ticket;
   workspaceSlug: string;
   projectKey: string;
@@ -58,6 +62,7 @@ export interface TicketAttributePanelProps {
  * 全置換に載るため下書きを経由する（値は呼び出し側の下書きから渡ってくる）。
  */
 export default function TicketAttributePanel({
+  progressive = false,
   ticket,
   workspaceSlug,
   projectKey,
@@ -105,10 +110,177 @@ export default function TicketAttributePanel({
     setParentPickerOpen(false);
   };
 
+  const fieldListClass = "grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)] items-center gap-x-3 gap-y-2 text-sm [&_dd]:min-w-0 [&_dd]:[overflow-wrap:anywhere] [&_select]:min-h-9 [&_select]:max-w-full [&_input]:min-h-9 [&_input]:max-w-full [&_button]:min-h-9 [&_button]:min-w-11 [@media(pointer:coarse)]:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_select]:min-h-11 [@media(pointer:coarse)]:[&_input]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600";
+
   return (
-    // 状態はここに置かない（題名の下の TicketStatusSelect が持つ）。ここは「見て確かめる
-    // 項目」だけを縦に並べる面。
-    <dl className="grid grid-cols-[104px_1fr] gap-x-3 gap-y-3 text-sm">
+    <div className="space-y-4">
+    {/* 状態は題名の下の TicketStatusSelect に置き、属性はここでまとめる。 */}
+    <dl className={fieldListClass}>
+      <dt className="text-[var(--color-text-muted)]">担当者</dt>
+      <dd>
+        {canEdit ? (
+          <select
+            value={ticket.assigneePrincipalId ?? ''}
+            disabled={busy}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value) onAssign(value);
+              else onUnassign();
+            }}
+            aria-label="担当"
+            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
+          >
+            <option value="">未割り当て</option>
+            {assigneeUsers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name || p.id}
+              </option>
+            ))}
+          </select>
+        ) : (
+          assigneeUsers.find((p) => p.id === ticket.assigneePrincipalId)?.name || '未割り当て'
+        )}
+      </dd>
+
+      <dt className="text-[var(--color-text-muted)]">優先度</dt>
+      <dd>
+        {canEdit && !archived ? (
+          <select
+            value={priority}
+            onChange={(e) => onChangePriority(Number(e.target.value) as TicketPriority)}
+            aria-label="優先度"
+            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
+          >
+            <option value={1}>高</option>
+            <option value={2}>中</option>
+            <option value={3}>低</option>
+          </select>
+        ) : (
+          <span className={ticket.priority === 1 ? 'font-bold text-brand-700' : undefined}>
+            {PRIORITY_LABEL[ticket.priority]}
+          </span>
+        )}
+      </dd>
+
+      <dt className="text-[var(--color-text-muted)]">期限</dt>
+      <dd>
+        <BlankableField
+          value={dueDate}
+          placeholder="期限を設定"
+          editable={canEdit && !archived}
+          render={(autoFocus, done) => (
+            <input
+              type="date"
+              value={dueDate ?? ''}
+              autoFocus={autoFocus}
+              onBlur={done}
+              onChange={(e) => onChangeDueDate(e.target.value || null)}
+              aria-label="期限"
+              className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
+            />
+          )}
+        />
+      </dd>
+
+    </dl>
+    <Collapsible.Root defaultOpen={!progressive}>
+      {progressive && (
+        <Collapsible.Trigger className="group flex min-h-11 w-full items-center justify-between rounded-md border-t border-surface-3 px-1 pt-3 text-left text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">
+          計画と整理
+          <ChevronDownIcon aria-hidden="true" className="h-4 w-4 transition-transform group-data-[open]:rotate-180" />
+        </Collapsible.Trigger>
+      )}
+      <Collapsible.Panel className={progressive ? 'pt-3' : undefined}>
+      <dl className={fieldListClass}>
+
+      <dt className="text-[var(--color-text-muted)]">ラベル</dt>
+      <dd>
+        <TicketLabelBar
+          attached={ticket.labels}
+          allLabels={allLabels}
+          canEdit={canEdit && !archived}
+          onToggle={onToggleLabel}
+          onCreate={onCreateLabel}
+        />
+      </dd>
+
+      <dt className="text-[var(--color-text-muted)]">見積り</dt>
+      <dd>
+        <BlankableField
+          value={storyPoints === null ? null : String(storyPoints)}
+          placeholder="見積りを設定"
+          editable={canEdit && !archived}
+          render={(autoFocus, done) => (
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              // 空欄は「未見積り」。0 を打てば「0 ポイント」で、別の意味になる。
+              value={storyPoints ?? ''}
+              autoFocus={autoFocus}
+              onBlur={done}
+              onChange={(e) => onChangeStoryPoints(e.target.value === '' ? null : Number(e.target.value))}
+              aria-label="見積り"
+              className="w-20 rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
+            />
+          )}
+        />
+      </dd>
+
+      <dt className="text-[var(--color-text-muted)]">スプリント</dt>
+      <dd>
+        {/* 入れる・外すはバックログの並べ替えバーが持つ（どのスプリントへ送るかは
+            一覧の文脈で決める操作）。ここは今どこに入っているかを読むだけ。 */}
+        {sprint ? (
+          <span>{sprint.name}</span>
+        ) : (
+          <span className="text-[var(--color-text-muted)]">未設定</span>
+        )}
+      </dd>
+
+      <dt className="text-[var(--color-text-muted)]">開始日</dt>
+      <dd>
+        <BlankableField
+          value={startDate}
+          placeholder="開始日を設定"
+          editable={canEdit && !archived}
+          render={(autoFocus, done) => (
+            <input
+              type="date"
+              value={startDate ?? ''}
+              autoFocus={autoFocus}
+              onBlur={done}
+              onChange={(e) => onChangeStartDate(e.target.value || null)}
+              aria-label="開始日"
+              className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
+            />
+          )}
+        />
+      </dd>
+
+      <dt className="text-[var(--color-text-muted)]">チーム</dt>
+      <dd>
+        {canEdit && !archived && teams.length > 0 ? (
+          <select
+            value={teamId ?? ''}
+            aria-label="Team"
+            onChange={(e) => onChangeTeam(e.target.value)}
+            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
+          >
+            <option value="">未設定</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          teams.find((t) => t.id === teamId)?.name ?? (
+            <span className="text-[var(--color-text-muted)]">未設定</span>
+          )
+        )}
+      </dd>
+
       <dt className="text-[var(--color-text-muted)]">修正バージョン</dt>
       <dd>
         {/* 1 件とは限らない（同じ修正を複数の系統へ入れることがある）ので、
@@ -154,63 +326,6 @@ export default function TicketAttributePanel({
         )}
       </dd>
 
-      <dt className="text-[var(--color-text-muted)]">担当者</dt>
-      <dd>
-        {canEdit ? (
-          <select
-            value={ticket.assigneePrincipalId ?? ''}
-            disabled={busy}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value) onAssign(value);
-              else onUnassign();
-            }}
-            aria-label="担当"
-            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
-          >
-            <option value="">未割り当て</option>
-            {assigneeUsers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name || p.id}
-              </option>
-            ))}
-          </select>
-        ) : (
-          assigneeUsers.find((p) => p.id === ticket.assigneePrincipalId)?.name || '未割り当て'
-        )}
-      </dd>
-
-      <dt className="text-[var(--color-text-muted)]">ラベル</dt>
-      <dd>
-        <TicketLabelBar
-          attached={ticket.labels}
-          allLabels={allLabels}
-          canEdit={canEdit && !archived}
-          onToggle={onToggleLabel}
-          onCreate={onCreateLabel}
-        />
-      </dd>
-
-      <dt className="text-[var(--color-text-muted)]">優先度</dt>
-      <dd>
-        {canEdit && !archived ? (
-          <select
-            value={priority}
-            onChange={(e) => onChangePriority(Number(e.target.value) as TicketPriority)}
-            aria-label="優先度"
-            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
-          >
-            <option value={1}>高</option>
-            <option value={2}>中</option>
-            <option value={3}>低</option>
-          </select>
-        ) : (
-          <span className={ticket.priority === 1 ? 'font-bold text-brand-700' : undefined}>
-            {PRIORITY_LABEL[ticket.priority]}
-          </span>
-        )}
-      </dd>
-
       <dt className="text-[var(--color-text-muted)]">親</dt>
       <dd>
         {canEdit && !archived ? (
@@ -242,103 +357,6 @@ export default function TicketAttributePanel({
           <span className="text-[var(--color-text-muted)]">なし</span>
         )}
       </dd>
-      <dt className="text-[var(--color-text-muted)]">期限</dt>
-      <dd>
-        <BlankableField
-          value={dueDate}
-          placeholder="期限を追加してください"
-          editable={canEdit && !archived}
-          render={(autoFocus, done) => (
-            <input
-              type="date"
-              value={dueDate ?? ''}
-              autoFocus={autoFocus}
-              onBlur={done}
-              onChange={(e) => onChangeDueDate(e.target.value || null)}
-              aria-label="期限"
-              className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
-            />
-          )}
-        />
-      </dd>
-
-      <dt className="text-[var(--color-text-muted)]">Team</dt>
-      <dd>
-        {canEdit && !archived && teams.length > 0 ? (
-          <select
-            value={teamId ?? ''}
-            aria-label="Team"
-            onChange={(e) => onChangeTeam(e.target.value)}
-            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
-          >
-            <option value="">チームを追加</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          teams.find((t) => t.id === teamId)?.name ?? (
-            <span className="text-[var(--color-text-muted)]">チームを追加</span>
-          )
-        )}
-      </dd>
-
-      <dt className="text-[var(--color-text-muted)]">開始日</dt>
-      <dd>
-        <BlankableField
-          value={startDate}
-          placeholder="日付を追加してください"
-          editable={canEdit && !archived}
-          render={(autoFocus, done) => (
-            <input
-              type="date"
-              value={startDate ?? ''}
-              autoFocus={autoFocus}
-              onBlur={done}
-              onChange={(e) => onChangeStartDate(e.target.value || null)}
-              aria-label="開始日"
-              className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
-            />
-          )}
-        />
-      </dd>
-
-      <dt className="text-[var(--color-text-muted)]">Story point estimate</dt>
-      <dd>
-        <BlankableField
-          value={storyPoints === null ? null : String(storyPoints)}
-          placeholder="ストーリー ポイントを追加してください"
-          editable={canEdit && !archived}
-          render={(autoFocus, done) => (
-            <input
-              type="number"
-              min={0}
-              max={1000}
-              // 空欄は「未見積り」。0 を打てば「0 ポイント」で、別の意味になる。
-              value={storyPoints ?? ''}
-              autoFocus={autoFocus}
-              onBlur={done}
-              onChange={(e) => onChangeStoryPoints(e.target.value === '' ? null : Number(e.target.value))}
-              aria-label="見積り"
-              className="w-20 rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
-            />
-          )}
-        />
-      </dd>
-
-      <dt className="text-[var(--color-text-muted)]">Sprint</dt>
-      <dd>
-        {/* 入れる・外すはバックログの並べ替えバーが持つ（どのスプリントへ送るかは
-            一覧の文脈で決める操作）。ここは今どこに入っているかを読むだけ。 */}
-        {sprint ? (
-          <span>{sprint.name}</span>
-        ) : (
-          <span className="text-[var(--color-text-muted)]">スプリントを追加してください</span>
-        )}
-      </dd>
-
       <dt className="text-[var(--color-text-muted)]">報告者</dt>
       <dd>
         {/* 作った人は後から変えられない（tickets.created_by_user_id は書き換えない）ので読むだけ。
@@ -349,6 +367,9 @@ export default function TicketAttributePanel({
           <span className="text-[var(--color-text-muted)]">不明なユーザー</span>
         )}
       </dd>
-    </dl>
+      </dl>
+      </Collapsible.Panel>
+    </Collapsible.Root>
+    </div>
   );
 }

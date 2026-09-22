@@ -32,12 +32,12 @@ describe('CommandPalette', () => {
 
   it('isOpen=falseのとき何も表示しない', () => {
     renderPalette({ isOpen: false });
-    expect(screen.queryByPlaceholderText('コマンドを検索...')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('移動先を探す...')).not.toBeInTheDocument();
   });
 
   it('isOpen=trueのとき検索入力が表示される', () => {
     renderPalette();
-    expect(screen.getByPlaceholderText('コマンドを検索...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('移動先を探す...')).toBeInTheDocument();
   });
 
   it('全コマンドがデフォルトで表示される', () => {
@@ -53,7 +53,7 @@ describe('CommandPalette', () => {
 
   it('検索入力で絞り込みができる', () => {
     renderPalette();
-    fireEvent.change(screen.getByPlaceholderText('コマンドを検索...'), {
+    fireEvent.change(screen.getByPlaceholderText('移動先を探す...'), {
       target: { value: 'ナレッジ' },
     });
     expect(screen.getByText('ナレッジ')).toBeInTheDocument();
@@ -69,7 +69,7 @@ describe('CommandPalette', () => {
 
   it('キーワード（英語の別名）でもナレッジに絞り込める', () => {
     renderPalette();
-    fireEvent.change(screen.getByPlaceholderText('コマンドを検索...'), {
+    fireEvent.change(screen.getByPlaceholderText('移動先を探す...'), {
       target: { value: 'wiki' },
     });
     expect(screen.getByText('ナレッジ')).toBeInTheDocument();
@@ -84,7 +84,7 @@ describe('CommandPalette', () => {
 
   it('Escapeキーでパレットが閉じる', () => {
     renderPalette();
-    fireEvent.keyDown(screen.getByPlaceholderText('コマンドを検索...'), {
+    fireEvent.keyDown(screen.getByPlaceholderText('移動先を探す...'), {
       key: 'Escape',
     });
     expect(defaultProps.onClose).toHaveBeenCalled();
@@ -92,7 +92,7 @@ describe('CommandPalette', () => {
 
   it('ArrowDownで選択が移動する', () => {
     renderPalette();
-    const input = screen.getByPlaceholderText('コマンドを検索...');
+    const input = screen.getByPlaceholderText('移動先を探す...');
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     // 2番目のアイテムが選択状態になっているか確認
     const items = screen.getAllByRole('option');
@@ -101,7 +101,7 @@ describe('CommandPalette', () => {
 
   it('ArrowUpで選択が戻る', () => {
     renderPalette();
-    const input = screen.getByPlaceholderText('コマンドを検索...');
+    const input = screen.getByPlaceholderText('移動先を探す...');
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'ArrowUp' });
@@ -111,7 +111,7 @@ describe('CommandPalette', () => {
 
   it('Enterで選択中のコマンドが実行される', () => {
     renderPalette();
-    const input = screen.getByPlaceholderText('コマンドを検索...');
+    const input = screen.getByPlaceholderText('移動先を探す...');
     // 最初のアイテム（ホーム）が選択されている状態でEnter
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(mockNavigate).toHaveBeenCalledWith('/');
@@ -120,7 +120,7 @@ describe('CommandPalette', () => {
 
   it('検索結果が空のとき「該当するコマンドがありません」と表示', () => {
     renderPalette();
-    fireEvent.change(screen.getByPlaceholderText('コマンドを検索...'), {
+    fireEvent.change(screen.getByPlaceholderText('移動先を探す...'), {
       target: { value: 'xxxxxxxxx' },
     });
     expect(screen.getByText('該当するコマンドがありません')).toBeInTheDocument();

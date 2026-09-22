@@ -35,6 +35,7 @@ export type {
   KbMySpace,
   KbSpaceMember,
   KbFavoritePage,
+  KbRecentPage,
   KbPageGrant,
   KbGrantablePrincipal,
   KbWorkspaceMember,

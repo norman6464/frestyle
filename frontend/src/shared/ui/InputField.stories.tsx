@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import InputField from './InputField';
 
@@ -13,6 +14,10 @@ const meta = {
   component: InputField,
   parameters: { layout: 'centered' },
   args: { onChange: fn() },
+  render: function ControlledField(args) {
+    const [value, setValue] = useState(args.value);
+    return <InputField {...args} value={value} onChange={(event) => { setValue(event.target.value); args.onChange(event); }} />;
+  },
   decorators: [
     (Story) => (
       <div className="w-80">

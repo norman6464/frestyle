@@ -46,7 +46,7 @@ export default function LoginPage() {
       : [];
 
   return (
-    <AuthLayout title="ログイン" header={<PublicHeader />}>
+    <AuthLayout title="ログイン" description="チームの作業とナレッジの続きへ。" header={<PublicHeader />}>
       {flashMessage && (
         <p
           role="status"
@@ -76,6 +76,7 @@ export default function LoginPage() {
               label="メールアドレス"
               name="email"
               type="email"
+              autoComplete="email"
               value={email}
               onChange={toChangeHandler(setEmail)}
             />
@@ -83,6 +84,7 @@ export default function LoginPage() {
               label="パスワード"
               name="password"
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={toChangeHandler(setPassword)}
             />
@@ -116,7 +118,7 @@ export default function LoginPage() {
             loading={dexLogin.loading}
             onClick={() => dexLogin.start()}
           >
-            {dexLogin.loading ? 'ログイン画面へ移動しています...' : 'ログインする'}
+            {dexLogin.loading ? 'ログイン画面へ移動しています...' : 'ログイン画面へ進む'}
           </Button>
 
           <div className="relative my-5">

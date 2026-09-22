@@ -42,7 +42,7 @@ export default function AppShell() {
     // 柱は 1 本しかないので、画面ごとの区画（ナレッジの木・バックログのプロジェクト）は
     // この差し込み口を通して柱の中へ入る。口を用意するのは柱、中身を入れるのは画面。
     <SidebarSlotProvider>
-      <div className="h-screen flex flex-col bg-surface overflow-hidden">
+      <div className="h-dvh flex flex-col bg-surface overflow-hidden">
         <SkipLink targetId="main-content" />
 
         {/* ヘッダーは常時表示。本文とは縦に並べる（重ねない）ので、

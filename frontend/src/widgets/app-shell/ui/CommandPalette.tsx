@@ -94,7 +94,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
           <input
             ref={inputRef}
             type="text"
-            placeholder="コマンドを検索..."
+            placeholder="移動先を探す..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}

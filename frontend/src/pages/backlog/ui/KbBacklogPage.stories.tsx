@@ -87,6 +87,29 @@ export const ふつう: Story = {
   },
 };
 
+export const 狭い画面: Story = {
+  decorators: [withApi(baseApi())],
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+};
+
+export const アーカイブが空: Story = {
+  decorators: [withApi(baseApi({ '/workspaces/acme/projects/p-1/tickets': { tickets: [] } }))],
+  args: { view: 'archive' },
+  play: async ({ canvasElement }) => {
+    await expect(await within(canvasElement).findByRole('heading', { name: 'アーカイブされたチケットはありません' })).toBeVisible();
+  },
+};
+
+export const 設定の取得失敗を未有効化と取り違えない: Story = {
+  decorators: [withApi(baseApi({ '/workspaces/acme/projects/p-1/ticket-statuses': () => { throw new Error('offline'); } }))],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByRole('heading', { name: 'チケットの設定を読み込めませんでした' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: '再読み込み' })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'チケットを有効化' })).toBeNull();
+  },
+};
+
 export const 未有効化: Story = {
   decorators: [
     withApi(

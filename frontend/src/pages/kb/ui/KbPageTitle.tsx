@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { AutoResizeTextarea } from '@/shared/ui';
 
 export interface KbPageTitleProps {
   title: string;
@@ -27,7 +28,7 @@ export default function KbPageTitle({ title, canEdit, onRename, onEnter }: KbPag
 
   if (!canEdit) {
     return (
-      <h1 className="mb-1 text-3xl font-bold text-[var(--color-text-primary)] md:text-4xl">
+      <h1 className="mb-3 text-3xl font-bold leading-tight text-[var(--color-text-primary)] [overflow-wrap:anywhere] md:text-4xl">
         {title}
       </h1>
     );
@@ -57,12 +58,13 @@ export default function KbPageTitle({ title, canEdit, onRename, onEnter }: KbPag
   };
 
   return (
-    <input
-      type="text"
+    <>
+    <h1 className="sr-only">{draft ?? title}</h1>
+    <AutoResizeTextarea
       value={draft ?? title}
       aria-label="ページの題名"
       disabled={saving}
-      onChange={(event) => setDraft(event.target.value)}
+      onChange={(event) => setDraft(event.target.value.replace(/[\r\n]+/g, ' '))}
       onBlur={() => void commit()}
       onKeyDown={(event) => {
         // 日本語入力の変換確定 Enter は本文の確定ではない。isComposing を見ないと、
@@ -81,7 +83,8 @@ export default function KbPageTitle({ title, canEdit, onRename, onEnter }: KbPag
           event.currentTarget.blur();
         }
       }}
-      className="mb-1 w-full border-none bg-transparent p-0 text-3xl font-bold text-[var(--color-text-primary)] outline-none focus:ring-0 md:text-4xl"
+      className="mb-3 min-h-14 w-full rounded-md border border-transparent bg-transparent px-1 text-3xl font-bold text-[var(--color-text-primary)] outline-none hover:border-surface-3 focus:ring-2 focus:ring-brand-600 md:text-4xl"
     />
+    </>
   );
 }

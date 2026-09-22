@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { ExclamationCircleIcon, LockClosedIcon, UsersIcon } from '@heroicons/react/24/outline';
 import type { KbAdminWorkspaceMember, KbGrantRole } from '@/entities/kb';
-import { ConfirmModal } from '@/shared/ui';
+import { ConfirmModal, Loading, PageHeader } from '@/shared/ui';
 import EmptyState from '@/shared/ui/EmptyState';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useToast } from '@/shared/lib/hooks/useToast';
@@ -54,6 +54,7 @@ export default function KbMembersPage() {
   if (error === 'forbidden') {
     return (
       <EmptyState
+        headingLevel={1}
         icon={LockClosedIcon}
         title="この画面は admin だけが開けます"
         description="メンバーの役割変更・停止・削除は、このワークスペースの admin だけが行えます。"
@@ -64,6 +65,7 @@ export default function KbMembersPage() {
   if (error === 'unknown') {
     return (
       <EmptyState
+        headingLevel={1}
         icon={ExclamationCircleIcon}
         title="メンバー一覧を読み込めませんでした"
         description="通信が切れたか、一時的な不調です。"
@@ -73,21 +75,16 @@ export default function KbMembersPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
-      <div className="mb-5">
-        <h1 className="text-xl font-bold text-[var(--color-text-primary)]">メンバー管理</h1>
-        <p className="mt-1 text-sm text-[var(--color-text-tertiary)]">
-          役割の変更・停止 / 復帰・削除ができます
-        </p>
-      </div>
+    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:pt-12">
+      <PageHeader title="メンバー管理" description="ワークスペースの役割と参加状態を管理します。役割の変更はすぐに反映されます。" />
 
-      {!loading && members.length === 0 ? (
+      {loading ? <Loading className="min-h-56" message="メンバーを読み込んでいます" /> : members.length === 0 ? (
         <EmptyState icon={UsersIcon} title="メンバーがいません" />
       ) : (
-        <div className="overflow-hidden overflow-x-auto rounded-xl border border-surface-3 bg-surface-1">
-          <table className="w-full min-w-[560px] border-collapse">
-            <thead>
-              <tr className="border-b border-surface-3">
+        <div className="overflow-hidden rounded-xl border border-surface-3 bg-surface-1">
+          <table role="table" aria-label="ワークスペースのメンバー" className="w-full border-collapse">
+            <thead role="rowgroup" className="sr-only md:not-sr-only">
+              <tr role="row" className="border-b border-surface-3">
                 <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
                   メンバー
                 </th>
@@ -102,7 +99,7 @@ export default function KbMembersPage() {
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody role="rowgroup">
               {members.map((member) => (
                 <KbMemberRow
                   key={member.principalId}

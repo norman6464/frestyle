@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowTopRightOnSquareIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ArrowTopRightOnSquareIcon, ExclamationCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { BacklogSidebar } from '@/widgets/backlog-sidebar';
 import { SecondaryPanel } from '@/widgets/secondary-panel';
-import { SidebarSection } from '@/shared/ui';
+import { EmptyState, Loading, SidebarSection } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { TicketRepository } from '@/entities/ticket';
@@ -59,6 +59,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     setLabelId,
     setAssignedToMe,
     setQuery,
+    clearFilters,
     reset,
   } = useBacklogUrlState();
   const [detailMobileOpen, setDetailMobileOpen] = useState(false);
@@ -221,9 +222,9 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
         <BacklogSidebar workspaceSlug={workspaceSlug ?? undefined} project={project} />
       </SidebarSection>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <main className="mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col overflow-hidden">
         {projectError ? (
-          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
+          <div role="alert" className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
             {projectError}
           </div>
         ) : noProjects ? (
@@ -238,18 +239,20 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
             </div>
           </div>
         ) : projectLoading || !project ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-muted)]">
+          <div role="status" className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-muted)]">
             読み込み中…
           </div>
         ) : (
           <>
             {/* プロジェクトの見出し。その下に面のタブ列を置く（見本と同じ並び）。 */}
-            <div className="border-b border-surface-3">
-              <div className="flex items-center gap-2 px-4 pb-1.5 pt-3">
-                <h1 className="truncate text-lg font-semibold text-[var(--color-text-primary)]">{project.name}</h1>
-                <span className="shrink-0 text-xs text-[var(--color-text-muted)]">
+            <div className="shrink-0 border-b border-surface-3">
+              <div className="flex flex-wrap items-center gap-3 px-4 pb-4 pt-5">
+                <div className="min-w-0 flex-1 basis-48">
+                <h1 className="text-2xl font-bold text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{project.name}</h1>
+                <span className="mt-2 block text-xs text-[var(--color-text-muted)]">
                   プロジェクト・{project.key.toUpperCase()}
                 </span>
+                </div>
                 {view === 'backlog' && enabled && (
                   <button
                     type="button"
@@ -259,17 +262,17 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                         'チケットを作成できませんでした。',
                       )
                     }
-                    className="ml-auto shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+                    className="min-h-11 shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
                   >
                     チケットを作成
                   </button>
                 )}
-                {view === 'backlog' && !enabled && !masters.loading && (
+                {view === 'backlog' && !enabled && !masters.loading && !masters.error && (
                   <button
                     type="button"
                     onClick={() => void handleEnable()}
                     disabled={enabling}
-                    className="ml-auto shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                    className="min-h-11 shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
                   >
                     {enabling ? '有効化中…' : 'チケットを有効化'}
                   </button>
@@ -288,6 +291,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                 labelId={labelId}
                 assignedToMe={assignedToMe}
                 q={q}
+                extraFilters={[...(unassigned ? ['未割り当て'] : []), ...(overdue ? ['期限切れ'] : [])]}
+                onClearFilters={clearFilters}
                 onChangeStatusId={setStatusId}
                 onChangeTypeId={setTypeId}
                 onChangeLabelId={setLabelId}
@@ -297,7 +302,9 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
             )}
 
             <div className="min-h-0 flex-1">
-              {view !== 'settings' &&
+              {masters.loading && <Loading className="min-h-56" message="チケットの設定を読み込んでいます" />}
+              {!masters.loading && masters.error && <EmptyState headingLevel={2} icon={ExclamationCircleIcon} title="チケットの設定を読み込めませんでした" description={masters.error} action={{ label: '再読み込み', onClick: masters.refresh }} />}
+              {view !== 'settings' && !masters.loading && !masters.error &&
                 (!enabled && !masters.loading ? (
                   <div className="flex h-full items-center justify-center px-6 text-center">
                     <div>
@@ -310,7 +317,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                     </div>
                   </div>
                 ) : (
-                  <>
+                  <div className="flex h-full min-h-0 flex-col">
                     {sprintError && (
                       // 一覧そのものは読めているので画面は塞がない。ただし
                       // 「スプリントの中身が空なのか、読めなかったのか」は必ず区別させる。
@@ -329,6 +336,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       </p>
                     )}
                     <BacklogList
+                      filtered={Boolean(statusId || typeId || labelId || assignedToMe || unassigned || overdue || q)}
                       groups={groups}
                       statuses={masters.statuses}
                       types={masters.types}
@@ -388,15 +396,17 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       }
                       onRetry={list.refresh}
                     />
-                  </>
+                  </div>
                 ))}
 
               {/* 見出しは h1（プロジェクト名）→ h2（節）の順に落とす。節の名前を付けないと
                   管理の面が 3 つ続けて並ぶだけになり、中の EmptyState の h3 まで段が飛ぶ。 */}
-              {view === 'settings' && (
-                <div className="h-full space-y-8 overflow-y-auto p-4">
+              {view === 'settings' && !masters.loading && !masters.error && (
+                <div className="h-full overflow-y-auto px-4 py-6 sm:px-6">
+                <div className="mx-auto max-w-4xl space-y-10 [&_button]:min-h-11 [&_input]:min-h-11 [&_select]:min-h-11">
                   <section>
-                    <h2 className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]">状態</h2>
+                    <h2 className="mb-2 text-lg font-semibold text-[var(--color-text-primary)]">状態</h2>
+                    <p className="mb-4 text-sm leading-relaxed text-[var(--color-text-muted)]">作業がどこまで進んだかを表す流れです。新しいチケットの開始状態もここで選べます。</p>
                     <TicketStatusAdmin
                       statuses={masters.statuses}
                       onCreate={masters.createStatus}
@@ -405,7 +415,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                     />
                   </section>
                   <section>
-                    <h2 className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]">種別</h2>
+                    <h2 className="mb-2 text-lg font-semibold text-[var(--color-text-primary)]">種別</h2>
+                    <p className="mb-4 text-sm leading-relaxed text-[var(--color-text-muted)]">チームの仕事に合わせて分類と雛形を整えます。</p>
                     <TicketTypeAdmin
                       types={masters.types}
                       onCreate={masters.createType}
@@ -414,7 +425,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                     />
                   </section>
                   <section>
-                    <h2 className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]">スプリント</h2>
+                    <h2 className="mb-2 text-lg font-semibold text-[var(--color-text-primary)]">スプリント</h2>
+                    <p className="mb-4 text-sm leading-relaxed text-[var(--color-text-muted)]">取り組む期間を管理します。作業の割り当てはバックログで行えます。</p>
                     {/* 改名・期間・削除はここ。バックログの面では「作る・開始する・完了する・
                         中身を入れ替える」だけを段の見出しで受ける。 */}
                     <SprintBoard
@@ -426,6 +438,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       onError={(message) => showToast('error', message)}
                     />
                   </section>
+                </div>
                 </div>
               )}
             </div>
@@ -448,7 +461,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                 to={`/tickets/${selectedTicket.id}`}
                 aria-label="全画面で開く"
                 title="全画面で開く"
-                className="rounded-md border border-surface-3 p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-surface-3 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
               >
                 <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
@@ -457,7 +470,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                 onClick={() => selectTicket(null)}
                 aria-label="詳細を閉じる"
                 title="詳細を閉じる"
-                className="rounded-md border border-surface-3 p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-surface-3 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
               >
                 <XMarkIcon className="h-3.5 w-3.5" aria-hidden="true" />
               </button>

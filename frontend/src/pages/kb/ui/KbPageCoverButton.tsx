@@ -81,7 +81,7 @@ export default function KbPageCoverButton({ cover, canEdit, onChange }: KbPageCo
   };
 
   return (
-    <div className="mb-1 flex flex-wrap items-center gap-2">
+    <div className="mb-1 flex flex-wrap items-center gap-2 [&_button]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600">
       <input
         ref={inputRef}
         type="file"

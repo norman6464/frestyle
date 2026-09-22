@@ -29,7 +29,7 @@ export default function TextareaField({ label, name, value, onChange, placeholde
         maxLength={maxLength}
         aria-invalid={!!error}
         aria-describedby={error ? `${name}-error` : undefined}
-        className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-1 transition-colors resize-none ${getFieldBorderClass(!!error)}`}
+        className={`min-h-24 w-full border rounded-lg px-3 py-3 text-base leading-relaxed focus:ring-2 transition-colors resize-y ${getFieldBorderClass(!!error)}`}
       />
       <FormFieldError name={name} error={error} />
       {maxLength && (

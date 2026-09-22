@@ -85,7 +85,7 @@ describe('Header', () => {
   it('検索ボタンを押すと onOpenSearch を呼ぶ', () => {
     const onOpenSearch = vi.fn();
     renderHeader({ onOpenSearch });
-    const [searchButton] = screen.getAllByRole('button', { name: '検索' });
+    const [searchButton] = screen.getAllByRole('button', { name: '移動先を探す' });
     fireEvent.click(searchButton);
     expect(onOpenSearch).toHaveBeenCalledTimes(1);
   });
@@ -157,7 +157,7 @@ describe('Header', () => {
     renderHeader();
     const userButton = await screen.findByText('テスト太郎');
     fireEvent.click(userButton);
-    expect(screen.getByRole('button', { name: '設定' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'ログアウト' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '設定' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'ログアウト' })).toBeInTheDocument();
   });
 });

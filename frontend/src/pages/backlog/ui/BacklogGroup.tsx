@@ -24,22 +24,22 @@ export interface BacklogGroupProps {
 export default function BacklogGroup({ name, count, note, open, onToggle, action, children }: BacklogGroupProps) {
   return (
     <section className="border-b border-surface-3 last:border-b-0">
-      <div className="flex items-center gap-2 bg-surface-2 px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-surface-2 px-3 py-2">
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          className="flex min-w-0 items-center gap-1.5 text-left"
+          className="flex min-h-11 min-w-0 flex-wrap items-center gap-2 rounded-md text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
         >
           <ChevronDownIcon
             className={`h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform ${open ? '' : '-rotate-90'}`}
             aria-hidden="true"
           />
-          <span className="truncate text-sm font-semibold text-[var(--color-text-primary)]">{name}</span>
+          <span className="text-sm font-semibold text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{name}</span>
           {note && <span className="shrink-0 text-xs text-[var(--color-text-muted)]">{note}</span>}
           <span className="shrink-0 text-xs text-[var(--color-text-muted)]">（{count} 件の作業項目）</span>
         </button>
-        {action && <div className="ml-auto shrink-0">{action}</div>}
+        {action && <div className="ml-auto shrink-0 [&_button]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600">{action}</div>}
       </div>
       {open && children}
     </section>

@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import type { Notification } from '../model/types';
 import { formatDateTime } from '@/shared/lib/formatters';
+import { Button } from '@/shared/ui';
 
 /**
  * 通知種別のバッジ文言。キーは backend が実際に入れる値と一致させること。
@@ -26,42 +27,46 @@ const TYPE_LABELS: Record<string, string> = {
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead: (id: number) => void;
+  disabled?: boolean;
 }
 
-export default memo(function NotificationItem({ notification, onMarkAsRead }: NotificationItemProps) {
+export default memo(function NotificationItem({ notification, onMarkAsRead, disabled = false }: NotificationItemProps) {
   return (
     <div
-      className={`p-4 rounded-lg border transition-colors ${
+      className={`rounded-2xl border p-4 sm:p-5 ${
         notification.isRead
           ? 'bg-surface-1 border-surface-3'
           : 'bg-surface-2 border-taupe-200'
       }`}
     >
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-medium text-taupe-600 bg-surface-2 px-2 py-0.5 rounded">
+          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-relaxed text-[var(--color-text-secondary)] [overflow-wrap:anywhere]">
+            <span className="inline-flex items-center gap-1.5 font-semibold">
+              {!notification.isRead && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-taupe-500" />}
+              {notification.isRead ? '既読' : '未読'}
+            </span>
+            <span>
               {TYPE_LABELS[notification.type] ?? notification.type}
             </span>
-            {!notification.isRead && (
-              <span className="w-2 h-2 rounded-full bg-taupe-500 flex-shrink-0" />
-            )}
           </div>
-          <p className="text-sm font-medium text-[var(--color-text-primary)] mb-0.5">{notification.title}</p>
-          <p className="text-xs text-[var(--color-text-muted)]">{notification.body}</p>
+          <p className="mb-1 text-base font-semibold leading-relaxed text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{notification.title}</p>
+          <p className="text-sm leading-relaxed text-[var(--color-text-muted)] [overflow-wrap:anywhere]">{notification.body}</p>
           {/* 時刻は情報なので faint（飾り用の淡さ）ではなく muted を使う。faint は白地で 1.5:1 しかない。 */}
-          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
+          <time dateTime={notification.createdAt} className="mt-3 block text-xs text-[var(--color-text-muted)]">
             {formatDateTime(notification.createdAt)}
-          </p>
+          </time>
         </div>
         {!notification.isRead && (
-          <button
+          <Button
+            variant="ghost"
             onClick={() => onMarkAsRead(notification.id)}
-            aria-label="既読にする"
-            className="ml-2 p-1 text-[var(--color-text-faint)] hover:text-taupe-500 transition-colors"
+            disabled={disabled}
+            className="min-h-11 shrink-0 self-start"
           >
-            <CheckIcon className="w-4 h-4" />
-          </button>
+            <CheckIcon aria-hidden="true" className="h-4 w-4" />
+            既読にする
+          </Button>
         )}
       </div>
     </div>

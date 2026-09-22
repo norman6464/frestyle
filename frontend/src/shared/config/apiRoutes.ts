@@ -87,6 +87,8 @@ export const EMBEDS = {
  * middleware を backend 側の group が通しているので、slug を含まないパスは一覧と作成だけ。
  */
 export const KB_API = {
+  /** GET — /api/v2/kb/me/recent-pages。本人が閲覧できる最近のページ（最大10件）。 */
+  recentPages: `${API_V2}/kb/me/recent-pages`,
   /** GET(所属一覧) / POST(作成) — /api/v2/kb/workspaces */
   workspaces: `${API_V2}/kb/workspaces`,
   /** DELETE(削除) — /api/v2/kb/workspaces/:slug。配下ごと消える。会社のものは消せない */

@@ -27,8 +27,8 @@ export default function InkwellShowcasePage() {
   const [progress, setProgress] = useState(50);
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] font-roboto text-inkwell-text-primary">
-      <div className="mx-auto max-w-4xl px-6 py-10 space-y-10">
+    <div className="h-full overflow-y-auto bg-[#f5f5f5] font-roboto text-inkwell-text-primary">
+      <div className="mx-auto min-h-full max-w-4xl space-y-10 px-4 py-8 sm:px-6 sm:py-10">
         <header>
           <h1 className="text-3xl font-medium">inkwell UI カタログ</h1>
           <p className="mt-1 text-inkwell-text-secondary">押下波紋・標高シャドウ・浮き上がるラベルを Tailwind だけで実装した触感的プリミティブ。</p>
@@ -109,7 +109,7 @@ export default function InkwellShowcasePage() {
 
         <Section title="Progress — 円形 / 線形（確定・不確定）">
           <div className="flex w-full flex-col gap-5">
-            <div className="flex items-center gap-6 text-inkwell-primary">
+            <div className="flex flex-wrap items-center gap-6 text-inkwell-primary">
               <InkwellCircularProgress />
               <InkwellCircularProgress value={progress} aria-label="読み込みの進み具合" />
               <InkwellCircularProgress value={progress} size={28} thickness={3} aria-label="読み込みの進み具合（小）" />

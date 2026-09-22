@@ -15,7 +15,7 @@ import Loading from '@/shared/ui/Loading';
 import EmptyState from '@/shared/ui/EmptyState';
 import ConfirmModal from '@/shared/ui/ConfirmModal';
 import Button from '@/shared/ui/Button';
-import { SidebarSection } from '@/shared/ui';
+import { Disclosure, SidebarSection } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import {
@@ -552,16 +552,17 @@ export default function KbPage() {
       </SidebarSection>
 
       <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain">
-        <div className="mx-auto w-full max-w-[900px] px-6 py-10">
+        <div className="mx-auto w-full max-w-[900px] px-4 py-6 sm:px-6 sm:py-10">
           {/* pageId 無し(素の /kb)は resolveEntryPageId が続きを決めている間だけ通る道で、
               ほとんどの場合は決まり次第 /kb/{id} へ移ってしまう。ここに残るのは、
               1 枚もページが見つからなかった(ワークスペースが空)ときだけ。 */}
           {!pageId && entryResolving && <Loading className="py-16" />}
           {!pageId && !entryResolving && (
             <EmptyState
+              headingLevel={1}
               icon={DocumentTextIcon}
               title="まだページがありません"
-              description="左のツリーからページを作成してください。"
+              description="メニューの「ナレッジ」からページを作成してください。"
             />
           )}
 
@@ -573,9 +574,11 @@ export default function KbPage() {
           */}
           {pageId && !loading && error && (
             <EmptyState
+              headingLevel={1}
               icon={DocumentTextIcon}
               title="ページを開けません"
               description={error}
+              action={{ label: 'スペース一覧へ戻る', onClick: () => navigate('/kb/spaces') }}
             />
           )}
 
@@ -637,7 +640,7 @@ export default function KbPage() {
                     <span aria-hidden="true">/</span>
                     <Link
                       to={`/kb/${ancestor.id}`}
-                      className="max-w-40 truncate hover:text-[var(--color-text-primary)] hover:underline"
+                      className="inline-flex min-h-11 max-w-40 items-center rounded px-1 hover:text-[var(--color-text-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
                     >
                       {ancestor.title}
                     </Link>
@@ -651,7 +654,7 @@ export default function KbPage() {
                   </span>
                 </span>
               </nav>
-              <div className="mb-2 flex items-center justify-end gap-2">
+              <div role="group" aria-label="ページの操作" className="mb-3 flex flex-wrap items-center gap-2 border-b border-surface-3 pb-3 [&_button]:min-h-9 [&_button]:min-w-9 [@media(pointer:coarse)]:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_button]:min-w-11">
                 {/* コメントは canComment に関わらず誰でも開ける（読むだけの人にも見せる）。 */}
                 <button
                   type="button"
@@ -662,27 +665,15 @@ export default function KbPage() {
                       ? `コメント (未解決 ${unresolvedCommentCount} 件)`
                       : 'コメント'
                   }
-                  className="relative rounded border border-surface-3 p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
+                  className="relative inline-flex items-center gap-2 rounded-md border border-surface-3 px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
                 >
-                  <ChatBubbleLeftRightIcon className="h-4 w-4" />
+                  <ChatBubbleLeftRightIcon aria-hidden="true" className="h-4 w-4" />
+                  コメント
                   {unresolvedCommentCount > 0 && (
                     <span className="absolute -right-1 -top-1 h-4 min-w-[16px] rounded-full bg-red-600 px-1 text-center text-[10px] leading-4 text-white">
                       {unresolvedCommentCount > 99 ? '99+' : unresolvedCommentCount}
                     </span>
                   )}
-                </button>
-                {/*
-                  履歴は閲覧できれば誰でも開ける(canView。canEdit に関わらず)。
-                  バッジ・件数表示は持たせない(画面設計の約束 — 版の有無を煽らない)。
-                */}
-                <button
-                  type="button"
-                  onClick={() => setHistoryOpen((open) => !open)}
-                  aria-expanded={historyOpen}
-                  aria-label="履歴"
-                  className="rounded border border-surface-3 p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
-                >
-                  <ClockIcon className="h-4 w-4" />
                 </button>
                 {/*
                   提案は canView だけで開ける(履歴と同じ考え方 — backend の一覧 API も
@@ -693,9 +684,10 @@ export default function KbPage() {
                   onClick={() => setSuggestionsOpen((open) => !open)}
                   aria-expanded={suggestionsOpen}
                   aria-label="提案"
-                  className="rounded border border-surface-3 p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
+                  className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
                 >
-                  <LightBulbIcon className="h-4 w-4" />
+                  <LightBulbIcon aria-hidden="true" className="h-4 w-4" />
+                  提案
                 </button>
                 {/*
                   「変更を提案する」は commenter（閲覧+コメントはできるが編集はできない役割）
@@ -706,27 +698,11 @@ export default function KbPage() {
                   <KbSuggestEditButton active={suggestionDraft.open} onToggle={handleToggleSuggestDraft} />
                 )}
                 {/*
-                  「テンプレートとして保存」は canEdit（このページを編集できる）と
-                  workspaceCanEdit（ワークスペース全体への書き込み資格。雛形の作成が実際に
-                  要求する権限）の両方が揃ったときだけ出す。ページ/スペース限定の編集権限
-                  しか持たない人は canEdit だけ true になり得るので、そちらだけで判定すると
-                  「押せるが403になる」ボタンを出してしまう（共有ボタンの canManage と同じ
-                  考え方 — 権限が無い相手に押せるボタンを出しても、返るのは 403 だけで
-                  「権限が無い」ことすら伝わらない）。
-                */}
-                {data.canEdit && data.workspaceCanEdit && (
-                  <KbSaveAsTemplateButton
-                    workspaceSlug={data.workspaceSlug}
-                    pageId={data.page.id}
-                    spaceId={data.page.spaceId}
-                  />
-                )}
-                {/*
                   共有は canManage のときだけ出す。権限が無い相手に押せるボタンを出しても、
                   返るのは 404 だけで「権限が無い」ことすら伝わらない。
                 */}
                 {data.canManage && (
-                  <div className="relative">
+                  <div className="relative ml-auto">
                     <Button
                       type="button"
                       variant="primary"
@@ -737,7 +713,7 @@ export default function KbPage() {
                       共有
                     </Button>
                     {shareOpen && (
-                      <div className="absolute right-0 top-full z-20 mt-1">
+                      <div className="absolute right-0 top-full z-20 mt-2 w-[min(28rem,calc(100vw-2rem))]">
                         <SharePanel
                           targetTitle={data.page.title}
                           inheritedNote="上の段（ワークスペース・スペース・親ページ）から届いている人はここには出ません。"
@@ -756,19 +732,45 @@ export default function KbPage() {
                   </div>
                 )}
               </div>
-              {/* カバー画像の追加・変更・外す操作。読むだけの人には何も出さない（部品側の約束）。 */}
-              <KbPageCoverButton cover={data.cover} canEdit={data.canEdit} onChange={handleChangeCover} />
-              {/*
-                アイコン → 題名の順（上に乗るものから読む並び）。
-                group はアイコン追加ボタンのホバー表示に使う（KbPageIconButton 側の約束）。
-                ページごとに作り直す（別ページへ移った瞬間、打ちかけの下書きを持ち越さない）。
-              */}
-              <div className="group" key={data.page.id}>
-                <KbPageIconButton
-                  icon={data.page.icon}
-                  canEdit={data.canEdit}
-                  onChange={handleChangeIcon}
-                />
+              <Disclosure key={`options-${data.page.id}`} label="ページの設定とその他の操作" className="mb-5">
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-surface-3 bg-surface-2 p-3">
+                {/*
+                  履歴は閲覧できれば誰でも開ける(canView。canEdit に関わらず)。
+                  バッジ・件数表示は持たせない(画面設計の約束 — 版の有無を煽らない)。
+                */}
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen((open) => !open)}
+                  aria-expanded={historyOpen}
+                  aria-label="履歴"
+                  className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                >
+                  <ClockIcon aria-hidden="true" className="h-4 w-4" />
+                  履歴
+                </button>
+                {/*
+                  「テンプレートとして保存」は canEdit（このページを編集できる）と
+                  workspaceCanEdit（ワークスペース全体への書き込み資格。雛形の作成が実際に
+                  要求する権限）の両方が揃ったときだけ出す。ページ/スペース限定の編集権限
+                  しか持たない人は canEdit だけ true になり得るので、そちらだけで判定すると
+                  「押せるが403になる」ボタンを出してしまう（共有ボタンの canManage と同じ
+                  考え方 — 権限が無い相手に押せるボタンを出しても、返るのは 403 だけで
+                  「権限が無い」ことすら伝わらない）。
+                */}
+                {data.canEdit && data.workspaceCanEdit && (
+                  <KbSaveAsTemplateButton
+                    workspaceSlug={data.workspaceSlug}
+                    pageId={data.page.id}
+                    spaceId={data.page.spaceId}
+                  />
+                )}
+
+                  <KbPageCoverButton cover={data.cover} canEdit={data.canEdit} onChange={handleChangeCover} />
+                  <KbPageIconButton icon={data.page.icon} canEdit={data.canEdit} onChange={handleChangeIcon} />
+                </div>
+              </Disclosure>
+              <div key={data.page.id}>
+                {data.page.icon && <KbPageIconButton icon={data.page.icon} canEdit={false} onChange={handleChangeIcon} />}
                 <KbPageTitle
                   title={data.page.title}
                   canEdit={data.canEdit}

@@ -1,4 +1,5 @@
 import type { TicketStatus } from '@/entities/ticket';
+import { FieldSelect } from '@/shared/ui';
 
 export interface TicketStatusSelectProps {
   statuses: TicketStatus[];
@@ -27,18 +28,13 @@ export default function TicketStatusSelect({ statuses, statusId, canEdit, busy, 
   }
 
   return (
-    <select
+    <FieldSelect
+      label="状態"
       value={statusId}
+      options={statuses.map((status) => ({ value: status.id, label: status.name }))}
+      onChange={onChange}
       disabled={busy}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label="状態"
-      className="rounded-md border border-surface-3 bg-surface-2 px-2.5 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] focus:border-brand-400 focus:outline-none disabled:opacity-50"
-    >
-      {statuses.map((s) => (
-        <option key={s.id} value={s.id}>
-          {s.name}
-        </option>
-      ))}
-    </select>
+      className="max-w-full bg-surface-2 font-semibold"
+    />
   );
 }

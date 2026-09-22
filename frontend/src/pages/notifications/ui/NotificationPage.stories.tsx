@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, waitFor, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { withApi, withRouter, withToast } from '../../../../.storybook/decorators';
 import NotificationPage from './NotificationPage';
 
@@ -17,7 +17,7 @@ const meta = {
     withRouter,
     withToast,
     (Story) => (
-      <div className="bg-surface p-6">
+      <div className="min-h-screen bg-surface">
         <Story />
       </div>
     ),
@@ -27,11 +27,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// 種別は実在の値ではなく、素性の分かる仮の値。backend にはまだ通知を作る処理が無く、
-// 日本語の名前を当てる対応表も空なので、バッジには種別の文字がそのまま出る。
+// 通知 entity で対応しているコメント通知を使う。
 const notification = (id: number, title: string, body: string, isRead: boolean) => ({
   id,
-  type: 'sample_type',
+  type: 'ticket_commented',
   title,
   body,
   isRead,
@@ -51,7 +50,7 @@ export const 既定: Story = {
           '「設計メモ」のコメントに返信が付きました。',
           false,
         ),
-        notification(2, 'ページが共有されました', '「設計メモ」が閲覧できるようになりました。', false),
+        notification(2, 'チケットにコメントが届きました', '「画面遷移の確認」に確認事項が追加されました。', false),
         notification(3, 'コメントに返信がありました', '「議事録」のコメントに返信が付きました。', true),
       ],
     }),
@@ -59,8 +58,12 @@ export const 既定: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(async () => {
-      await expect(canvas.getByText('ページが共有されました')).toBeVisible();
+      await expect(canvas.getByText('チケットにコメントが届きました')).toBeVisible();
     });
+    await userEvent.click(canvas.getByRole('button', { name: '未読' }));
+    await expect(canvas.queryByText('「議事録」のコメントに返信が付きました。')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'すべて' }));
+    await expect(canvas.getByText('「議事録」のコメントに返信が付きました。')).toBeVisible();
   },
 };
 
@@ -72,4 +75,19 @@ export const 空: Story = {
 /** 取れなかったとき。 */
 export const 取得に失敗: Story = {
   decorators: [withApi({})],
+};
+
+export const 狭い画面: Story = {
+  ...既定,
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+};
+
+export const 未読なし: Story = {
+  decorators: [withApi({ '/notifications/unread-count': 0, '/notifications': [notification(1, '確認済みのお知らせ', '通知はあとから見返せます。', true)] })],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText('確認済みのお知らせ');
+    await userEvent.click(canvas.getByRole('button', { name: '未読' }));
+    await expect(canvas.getByText('未読の通知はありません')).toBeVisible();
+  },
 };

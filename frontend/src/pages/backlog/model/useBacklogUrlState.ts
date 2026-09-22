@@ -119,6 +119,11 @@ export function useBacklogUrlState() {
   const setOverdue = useCallback((value: boolean) => update({ overdue: value }), [update]);
   const setQuery = useCallback((value: string) => update({ q: value }), [update]);
 
+  const clearFilters = useCallback(() => update({
+    statusId: null, typeId: null, labelId: null, assigneePrincipalId: null,
+    unassigned: false, assignedToMe: false, overdue: false, q: '',
+  }), [update]);
+
   /** プロジェクトを移ったときに前のプロジェクトの文脈を持ち越さない。 */
   const reset = useCallback(
     () =>
@@ -155,6 +160,7 @@ export function useBacklogUrlState() {
     setAssignedToMe,
     setOverdue,
     setQuery,
+    clearFilters,
     reset,
   };
 }

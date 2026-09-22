@@ -117,7 +117,7 @@ export const 畳んだとき: Story = {
   ],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const home = canvas.getByRole('link', { name: 'ホーム' });
+    const home = canvas.getByText('ホーム').closest('a')!;
     // 画面の外へ退いている（本文の幅を取らない・押しても反応しない）。
     await expect(home.getBoundingClientRect().right).toBeLessThanOrEqual(0);
     // 左端の細い帯に触れると浮いて出る。帯は読み上げには出さない（見た目だけの仕掛け）。
@@ -151,7 +151,9 @@ export const ラベルが折り返さない: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     for (const label of ['ホーム', '自分の担当', 'ナレッジ', 'バックログ']) {
-      await expect(canvas.getByRole('link', { name: label }).clientHeight).toBeLessThan(40);
+      const link = canvas.getByRole('link', { name: label });
+      await expect(link.clientHeight).toBe(44);
+      await expect(link.querySelector('span')!.clientHeight).toBeLessThan(24);
     }
   },
 };

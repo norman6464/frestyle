@@ -27,13 +27,12 @@ export const 選択中あり: Story = {
   },
 };
 
-export const 未選択_すべてdisabled: Story = {
+export const 未選択_操作は選択後に表示: Story = {
   args: { selectedKey: null },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('button', { name: /1 つ上へ/ })).toBeDisabled();
-    await expect(canvas.getByRole('button', { name: /1 つ下へ/ })).toBeDisabled();
-    await expect(canvas.getByRole('button', { name: /末尾へ/ })).toBeDisabled();
+    await expect(canvas.getByText('行を選ぶと並び替えられます')).toBeVisible();
+    await expect(canvas.queryByRole('button')).toBeNull();
   },
 };
 

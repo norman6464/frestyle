@@ -11,6 +11,8 @@ export interface BacklogFilterBarProps {
   labelId: string | null;
   assignedToMe: boolean;
   q: string;
+  extraFilters?: string[];
+  onClearFilters?: () => void;
   onChangeStatusId: (value: string | null) => void;
   onChangeTypeId: (value: string | null) => void;
   onChangeLabelId: (value: string | null) => void;
@@ -38,6 +40,8 @@ export default function BacklogFilterBar({
   labelId,
   assignedToMe,
   q,
+  extraFilters = [],
+  onClearFilters,
   onChangeStatusId,
   onChangeTypeId,
   onChangeLabelId,
@@ -61,8 +65,8 @@ export default function BacklogFilterBar({
   }, [queryInput]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-surface-3 px-4 py-2">
-      <div className="relative">
+    <div role="group" aria-label="チケットの絞り込み" className="flex flex-wrap items-center gap-2 border-b border-surface-3 px-4 py-3">
+      <div className="relative w-full sm:w-60">
         <MagnifyingGlassIcon
           className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-faint)]"
           aria-hidden="true"
@@ -73,7 +77,7 @@ export default function BacklogFilterBar({
           onChange={(e) => setQueryInput(e.target.value)}
           placeholder="題名で絞り込む"
           aria-label="題名で絞り込む"
-          className="w-48 rounded-md border border-surface-3 bg-surface-1 py-1 pl-7 pr-2 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-faint)] focus:border-brand-500 focus:outline-none"
+          className="min-h-11 w-full rounded-md border border-surface-3 bg-surface-1 py-2 pl-7 pr-2 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600 sm:text-sm"
         />
       </div>
 
@@ -81,7 +85,7 @@ export default function BacklogFilterBar({
         value={statusId ?? ''}
         onChange={(e) => onChangeStatusId(e.target.value || null)}
         aria-label="状態で絞り込む"
-        className="rounded-md border border-surface-3 bg-surface-1 px-2 py-1 text-xs text-[var(--color-text-primary)] focus:border-brand-500 focus:outline-none"
+        className="min-h-11 min-w-0 max-w-full flex-1 basis-[calc(50%-0.5rem)] rounded-md border border-surface-3 bg-surface-1 px-2 py-2 text-base text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-600 sm:flex-none sm:basis-auto sm:text-sm"
       >
         <option value="">状態: すべて</option>
         {statuses.map((status) => (
@@ -95,7 +99,7 @@ export default function BacklogFilterBar({
         value={typeId ?? ''}
         onChange={(e) => onChangeTypeId(e.target.value || null)}
         aria-label="種別で絞り込む"
-        className="rounded-md border border-surface-3 bg-surface-1 px-2 py-1 text-xs text-[var(--color-text-primary)] focus:border-brand-500 focus:outline-none"
+        className="min-h-11 min-w-0 max-w-full flex-1 basis-[calc(50%-0.5rem)] rounded-md border border-surface-3 bg-surface-1 px-2 py-2 text-base text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-600 sm:flex-none sm:basis-auto sm:text-sm"
       >
         <option value="">種別: すべて</option>
         {types.map((type) => (
@@ -109,7 +113,7 @@ export default function BacklogFilterBar({
         value={labelId ?? ''}
         onChange={(e) => onChangeLabelId(e.target.value || null)}
         aria-label="ラベルで絞り込む"
-        className="rounded-md border border-surface-3 bg-surface-1 px-2 py-1 text-xs text-[var(--color-text-primary)] focus:border-brand-500 focus:outline-none"
+        className="min-h-11 min-w-0 max-w-full flex-1 basis-[calc(50%-0.5rem)] rounded-md border border-surface-3 bg-surface-1 px-2 py-2 text-base text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-600 sm:flex-none sm:basis-auto sm:text-sm"
       >
         <option value="">ラベル: すべて</option>
         {labels.map((label) => (
@@ -123,7 +127,7 @@ export default function BacklogFilterBar({
         type="button"
         aria-pressed={assignedToMe}
         onClick={() => onToggleAssignedToMe(!assignedToMe)}
-        className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+        className={`min-h-11 flex-1 basis-[calc(50%-0.5rem)] rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 sm:flex-none sm:basis-auto ${
           assignedToMe
             ? 'bg-brand-600 text-white'
             : 'bg-surface-2 text-[var(--color-text-muted)] hover:bg-surface-3'
@@ -131,6 +135,10 @@ export default function BacklogFilterBar({
       >
         担当: 自分
       </button>
+      {extraFilters.map((label) => <span key={label} className="rounded-md bg-surface-2 px-3 py-2 text-sm text-[var(--color-text-secondary)]">{label}</span>)}
+      {onClearFilters && (statusId || typeId || labelId || assignedToMe || queryInput || extraFilters.length > 0) && (
+        <button type="button" onClick={() => { setQueryInput(''); onClearFilters(); }} className="min-h-11 rounded-md px-3 text-sm text-[var(--color-text-muted)] underline underline-offset-4 hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">絞り込みを解除</button>
+      )}
     </div>
   );
 }

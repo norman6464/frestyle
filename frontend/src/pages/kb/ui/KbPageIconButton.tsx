@@ -20,10 +20,7 @@ export interface KbPageIconButtonProps {
  * 4 状態:
  *   読むだけ + 未設定  → 何も出さない（無いものを匂わせる要素を置かない）
  *   読むだけ + 設定済み → 絵文字を役割 img で出すだけ（押せない）
- *   書ける + 未設定    → 「アイコンを追加」。md 以上は触れているかフォーカスが
- *                        当たっているときだけ現れる（DOM には常に居る — 外すと
- *                        Tab の順序が触れるたびに変わる。KbRowActions と同じ理由）。
- *                        md 未満は常に見える（ホバーが無い環境のため）。
+ *   書ける + 未設定    → 「アイコンを追加」。入力手段によらず見つけられるよう常に表示。
  *   書ける + 設定済み   → 絵文字そのものが aria-expanded なボタン
  *
  * ピッカーの開閉と外側クリック・Escape での消し方は KbRowActions と同じ形。
@@ -83,9 +80,7 @@ export default function KbPageIconButton({ icon, canEdit, onChange }: KbPageIcon
           onClick={() => setOpen((prev) => !prev)}
           aria-label="アイコンを追加"
           aria-expanded={open}
-          className={`flex items-center gap-1 rounded px-1.5 py-1 text-sm text-[var(--color-text-muted)] hover:bg-surface-2 md:transition-opacity ${
-            open ? 'md:opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100'
-          }`}
+          className="flex min-h-11 items-center gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
         >
           <FaceSmileIcon className="h-4 w-4" aria-hidden="true" />
           アイコンを追加
@@ -102,7 +97,7 @@ export default function KbPageIconButton({ icon, canEdit, onChange }: KbPageIcon
         onClick={() => setOpen((prev) => !prev)}
         aria-label="ページのアイコンを変更"
         aria-expanded={open}
-        className="rounded text-4xl leading-none hover:bg-surface-2"
+        className="min-h-12 min-w-12 rounded text-4xl leading-none hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
       >
         <span data-icon="emoji" aria-hidden="true">
           {icon.value}

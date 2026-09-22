@@ -67,14 +67,14 @@ export default function Header({
     <>
       {loggingOut && <Loading fullscreen message="ログアウト中..." />}
       {/* 常時表示・不透明。本文とは縦に並ぶだけで重ねないので、半透明やぼかしは不要。 */}
-      <header className="app-header-surface flex-shrink-0 h-14 flex items-center gap-2 px-3">
+      <header className="app-header-surface flex-shrink-0 h-14 flex items-center gap-1 px-2 [&_button]:min-h-11 [&_button]:min-w-11 [&_a]:min-h-11 [&_a]:min-w-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600 [&_a]:focus-visible:outline [&_a]:focus-visible:outline-2 [&_a]:focus-visible:outline-brand-600">
         {/* 狭い画面: 三本線で柱を引き出しとして開く（行き先はすべて柱の中にある）。 */}
         {onOpenMobileSidebar && (
           <button
             type="button"
             onClick={onOpenMobileSidebar}
             aria-label="メニュー"
-            className="md:hidden p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
+            className="inline-flex items-center justify-center md:hidden p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
           >
             <Bars3Icon className="w-5 h-5" />
           </button>
@@ -88,7 +88,7 @@ export default function Header({
             title={globalSidebarOpen ? 'サイドバーを閉じる' : 'サイドバーを開く'}
             aria-label={globalSidebarOpen ? 'サイドバーを閉じる' : 'サイドバーを開く'}
             aria-expanded={globalSidebarOpen}
-            className="hidden md:inline-flex p-1.5 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
+            className="hidden md:inline-flex items-center justify-center p-1.5 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
           >
             {globalSidebarOpen ? <ViewColumnsIcon className="w-5 h-5" /> : <Bars3Icon className="w-5 h-5" />}
           </button>
@@ -112,7 +112,7 @@ export default function Header({
             className="flex w-full max-w-80 min-w-0 items-center gap-2 px-3 py-1.5 rounded-md border border-surface-3 bg-surface-2 text-sm text-[var(--color-text-tertiary)] hover:bg-surface-3 transition-colors"
           >
             <MagnifyingGlassIcon className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">検索</span>
+            <span className="truncate">移動先を探す</span>
             <span className="ml-auto text-xs text-[var(--color-text-muted)]" aria-hidden="true">⌘K</span>
           </button>
         </div>
@@ -123,8 +123,8 @@ export default function Header({
           <button
             type="button"
             onClick={onOpenSearch}
-            aria-label="検索"
-            className="md:hidden p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
+            aria-label="移動先を探す"
+            className="inline-flex items-center justify-center md:hidden p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
           >
             <MagnifyingGlassIcon className="w-5 h-5" />
           </button>
@@ -132,7 +132,7 @@ export default function Header({
           <Link
             to="/notifications"
             aria-label={unread > 0 ? `通知 (未読 ${unread} 件)` : '通知'}
-            className="relative p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
+            className="relative inline-flex items-center justify-center p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
           >
             <BellIcon className="w-5 h-5" />
             {unread > 0 && (

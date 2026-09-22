@@ -4,12 +4,13 @@ import { useDocumentMeta } from '@/shared/lib/hooks/useDocumentMeta';
 interface AuthLayoutProps {
   children: ReactNode;
   title?: string;
+  description?: string;
   footer?: ReactNode;
   /** ページ上部に固定するヘッダー(公開ページの導線など)。省略時は従来どおり中央寄せのみ。 */
   header?: ReactNode;
 }
 
-export default function AuthLayout({ children, title, footer, header }: AuthLayoutProps) {
+export default function AuthLayout({ children, title, description, footer, header }: AuthLayoutProps) {
   // 認証フロー画面(ログイン/パスワード再設定)は検索結果に出す価値がないため noindex。
   useDocumentMeta({ robots: 'noindex, nofollow' });
 
@@ -20,31 +21,24 @@ export default function AuthLayout({ children, title, footer, header }: AuthLayo
       <div className="min-h-full flex flex-col">
         {header}
 
-        <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
-        <div className="mb-6 flex flex-col items-center">
-          <img
-            src="/favicon.svg"
-            alt=""
-            aria-hidden="true"
-            className="w-12 h-12 mb-3"
-          />
-          {title && (
-            <h1 className="text-2xl font-bold text-[var(--color-text-primary)] tracking-tight">
-              {title}
-            </h1>
-          )}
-        </div>
-
-        <div className="w-full max-w-sm bg-surface-1 rounded-xl border border-surface-3 p-6">
-          {children}
-        </div>
+        <main className="flex flex-1 flex-col items-center justify-center px-4 py-8 sm:py-12">
+          <div className="w-full max-w-md rounded-2xl border border-surface-3 bg-surface-1 p-5 sm:p-8">
+            <div className="mb-7">
+              <img src="/favicon.svg" alt="" aria-hidden="true" className="mb-5 h-10 w-10" />
+              {title && (
+                <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">{title}</h1>
+              )}
+              {description && <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-muted)]">{description}</p>}
+            </div>
+            {children}
+          </div>
 
           {footer && (
-            <div className="w-full max-w-sm bg-surface-1 rounded-xl border border-surface-3 p-4 text-center mt-4">
+            <div className="mt-5 w-full max-w-md text-center text-sm">
               {footer}
             </div>
           )}
-        </div>
+        </main>
       </div>
     </div>
   );

@@ -76,24 +76,24 @@ describe('AppShell', () => {
 
   it('Cmd+Kでコマンドパレットが開く', () => {
     renderAppShell();
-    expect(screen.queryByPlaceholderText('コマンドを検索...')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('移動先を探す...')).not.toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'k', metaKey: true });
-    expect(screen.getByPlaceholderText('コマンドを検索...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('移動先を探す...')).toBeInTheDocument();
   });
 
   it('Ctrl+Kでコマンドパレットが開く', () => {
     renderAppShell();
     fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
-    expect(screen.getByPlaceholderText('コマンドを検索...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('移動先を探す...')).toBeInTheDocument();
   });
 
   it('ヘッダーの検索ボタンを押してもコマンドパレットが開く', () => {
     renderAppShell();
-    expect(screen.queryByPlaceholderText('コマンドを検索...')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('移動先を探す...')).not.toBeInTheDocument();
     // デスクトップ用・モバイル用の 2 つが DOM 上にある（CSS の hidden で出し分けるため、
     // CSS を適用しない単体テストではどちらも「見える」扱いになる）。どちらを押しても開く。
-    const [searchButton] = screen.getAllByRole('button', { name: '検索' });
+    const [searchButton] = screen.getAllByRole('button', { name: '移動先を探す' });
     fireEvent.click(searchButton);
-    expect(screen.getByPlaceholderText('コマンドを検索...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('移動先を探す...')).toBeInTheDocument();
   });
 });

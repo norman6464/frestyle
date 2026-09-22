@@ -1,4 +1,6 @@
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ExclamationCircleIcon } from '@heroicons/react/24/outline';
+import { EmptyState } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import Loading from '@/shared/ui/Loading';
@@ -20,6 +22,7 @@ import TicketFullView from './TicketFullView';
 export default function KbTicketPage() {
   const { ticketId } = useParams<{ ticketId: string }>();
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const page = useTicketPage(ticketId);
   const masters = useTicketMasters(page.workspaceSlug ?? undefined, page.ticket?.projectId);
@@ -38,14 +41,12 @@ export default function KbTicketPage() {
 
   if (page.error) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
-        {page.error}
-      </div>
+      <EmptyState headingLevel={1} icon={ExclamationCircleIcon} title="チケットを開けません" description={page.error} action={{ label: 'バックログへ戻る', onClick: () => navigate('/backlog') }} />
     );
   }
 
   if (page.loading || !page.ticket || !page.permission) {
-    return <Loading />;
+    return <Loading className="min-h-56" message="チケットを読み込んでいます" />;
   }
 
   return (

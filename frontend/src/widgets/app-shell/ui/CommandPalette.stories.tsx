@@ -40,7 +40,7 @@ type Story = StoryObj<typeof meta>;
 export const 開いたところ: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByPlaceholderText('コマンドを検索...')).toBeVisible();
+    await expect(canvas.getByPlaceholderText('移動先を探す...')).toBeVisible();
     await expect(canvas.getByText('ナレッジ')).toBeVisible();
   },
 };
@@ -49,7 +49,7 @@ export const 開いたところ: Story = {
 export const 閉じている: Story = {
   args: { isOpen: false },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).queryByPlaceholderText('コマンドを検索...')).toBeNull();
+    await expect(within(canvasElement).queryByPlaceholderText('移動先を探す...')).toBeNull();
   },
 };
 
@@ -57,7 +57,7 @@ export const 閉じている: Story = {
 export const 絞り込む: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByPlaceholderText('コマンドを検索...'), 'ナレッジ');
+    await userEvent.type(canvas.getByPlaceholderText('移動先を探す...'), 'ナレッジ');
     await expect(canvas.getByText('ナレッジ')).toBeVisible();
     await expect(canvas.queryByText('ホーム')).toBeNull();
   },
@@ -67,7 +67,7 @@ export const 絞り込む: Story = {
 export const 英語でも引ける: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByPlaceholderText('コマンドを検索...'), 'wiki');
+    await userEvent.type(canvas.getByPlaceholderText('移動先を探す...'), 'wiki');
     await expect(canvas.getByText('ナレッジ')).toBeVisible();
   },
 };
@@ -76,7 +76,7 @@ export const 英語でも引ける: Story = {
 export const 該当なし: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByPlaceholderText('コマンドを検索...'), 'zzzzzzz');
+    await userEvent.type(canvas.getByPlaceholderText('移動先を探す...'), 'zzzzzzz');
     await expect(canvas.getByText('該当するコマンドがありません')).toBeVisible();
   },
 };
@@ -85,7 +85,7 @@ export const 該当なし: Story = {
 export const キーボードで選ぶ: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const input = canvas.getByPlaceholderText('コマンドを検索...');
+    const input = canvas.getByPlaceholderText('移動先を探す...');
     await userEvent.type(input, '{ArrowDown}');
     const options = canvas.getAllByRole('option');
     await expect(options[1]).toHaveAttribute('aria-selected', 'true');
@@ -95,7 +95,7 @@ export const キーボードで選ぶ: Story = {
 /** Escape で閉じる。 */
 export const Escapeで閉じる: Story = {
   play: async ({ args, canvasElement }) => {
-    const input = within(canvasElement).getByPlaceholderText('コマンドを検索...');
+    const input = within(canvasElement).getByPlaceholderText('移動先を探す...');
     await userEvent.type(input, '{Escape}');
     await expect(args.onClose).toHaveBeenCalled();
   },

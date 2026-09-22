@@ -244,12 +244,35 @@
  *   - アクセント色は使用箇所を絞り、視覚ノイズを排除する
  */
 :root {
+  /* FreStyle DS: primitive → semantic → component。色は既存のブランド値を維持する。 */
+  --fs-white: #ffffff;
+  --fs-stone-100: #f5f5f4;
+  --fs-stone-200: #e7e5e4;
+  --fs-ink-900: #191919;
+  --fs-ink-600: #66655f;
+  --fs-blue-600: #2563eb;
+
+  --fs-page: var(--fs-white);
+  --fs-raised: var(--fs-white);
+  --fs-soft: var(--fs-stone-100);
+  --fs-border: var(--fs-stone-200);
+  --fs-text-strong: var(--fs-ink-900);
+  --fs-text-muted: var(--fs-ink-600);
+  --fs-action: var(--fs-blue-600);
+
+  --fs-dialog-surface: var(--fs-raised);
+  --fs-dialog-border: var(--fs-border);
+  --fs-menu-surface: var(--fs-raised);
+  --fs-menu-border: var(--fs-border);
+  --fs-control-surface: var(--fs-raised);
+  --fs-control-border: var(--fs-border);
+
   /* body は白。カードは border + 影で浮かせる。
      （淡ブルー #B7D3EE を試したが全面には強すぎたため白へ戻した） */
-  --color-surface: #FFFFFF;
-  --color-surface-1: #FFFFFF;
-  --color-surface-2: #F5F5F4;
-  --color-surface-3: #E7E5E4;
+  --color-surface: var(--fs-page);
+  --color-surface-1: var(--fs-raised);
+  --color-surface-2: var(--fs-soft);
+  --color-surface-3: var(--fs-border);
   /* 教材コース閲覧 (/courses/:id) の読み物背景。tiptap 表示への切替に合わせ、ナレッジと同じ白へ
      統一した。変数はコース閲覧ページ専用。 */
   --color-reading-surface: #FFFFFF;
@@ -266,7 +289,7 @@
   --color-nav-selected-rule: #2563eb;
   /* ヘッダーの高さ。SecondaryPanel 側のオフセット（ホバー検知ゾーン・浮きパネル）もこれを基準にする。 */
   --app-header-h: 56px;
-  --color-text-primary: #191919;
+  --color-text-primary: var(--fs-text-strong);
   --color-text-secondary: #37352F;
   /* 読みやすさ（コントラスト比）は**白地だけで決めない**。小さな文字には 4.5:1 が要る。
      muted は #767671 で白地 4.6:1 を満たしていたが、surface-2(#F5F5F4) の上で 4.18:1、
@@ -276,7 +299,7 @@
      muted: 白 5.85 / surface-2 5.36 / surface-3 4.66
      tertiary: 白 9.01 / surface-2 8.26 / surface-3 7.18 */
   --color-text-tertiary: #4A4945;
-  --color-text-muted: #66655F;
+  --color-text-muted: var(--fs-text-muted);
   --color-text-faint: #D3D3D0;
   --color-text-subtle: #E8E8E6;
   --color-border-hover: #D3D3D0;
@@ -425,6 +448,12 @@
 }
 
 @layer components {
+  /* マウス中心の一覧とタッチ操作で密度を分ける。色・フォントは既存トークンを維持。 */
+  .ui-control { min-height: 40px; }
+  .ui-control-compact { min-height: 32px; }
+  @media (pointer: coarse) {
+    .ui-control, .ui-control-compact { min-height: 44px; }
+  }
   /* 白文字に対して brand-500 は 3.7:1 で基準（4.5:1）に届かない。600 から始める（5.2:1）。 */
   /*
    * ヘッダーは常時表示（本文の上に重ねない）なので、半透明・ぼかしは使わない。

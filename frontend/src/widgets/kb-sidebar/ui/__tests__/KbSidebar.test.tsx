@@ -1032,7 +1032,7 @@ describe('題名で検索（モーダル）', () => {
       </MemoryRouter>,
     );
     await screen.findByText('設計メモ');
-    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ナレッジ内を検索' }));
     return screen.getByRole('combobox', { name: 'ページを題名・本文で検索' });
   }
 

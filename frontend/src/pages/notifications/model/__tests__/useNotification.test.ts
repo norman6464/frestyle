@@ -108,6 +108,27 @@ describe('useNotification', () => {
     expect(mockMarkAllAsRead).toHaveBeenCalled();
   });
 
+  it('既読の更新中は一覧を保持し、個別・一括操作の重複送信を防ぐ', async () => {
+    let finish!: () => void;
+    mockMarkAsRead.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const { result } = renderHook(() => useNotification());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.markAsRead(1); });
+    expect(result.current.loading).toBe(true);
+    expect(result.current.notifications).toHaveLength(2);
+    await act(async () => {
+      await result.current.markAsRead(1);
+      await result.current.markAllAsRead();
+    });
+    expect(mockMarkAsRead).toHaveBeenCalledTimes(1);
+    expect(mockMarkAllAsRead).not.toHaveBeenCalled();
+
+    await act(async () => { finish(); await pending; });
+    expect(result.current.loading).toBe(false);
+  });
+
   // 取得できなかったことを空配列で表すと「通知は 0 件」と区別がつかず、
   // 障害中に「通知はありません」という嘘を見せてしまう。
   describe('取得に失敗したとき', () => {

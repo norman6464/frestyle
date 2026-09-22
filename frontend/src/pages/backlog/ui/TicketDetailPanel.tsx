@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AutoResizeTextarea } from '@/shared/ui';
 import {
   TicketKeyBadge,
   type Label,
@@ -86,10 +87,10 @@ export default function TicketDetailPanel({
     // 付けると「スクロール範囲ゼロの空の容器」になり、overscroll-contain と相まって
     // ホイール操作を飲み込んで器までスクロールが届かなくなる（実測で確認）。
     // flex-1 / min-h-0 も親が flex コンテナではないため効かない。素の中身として置く。
-    <div className="px-3 py-3" tabIndex={0}>
+    <div className="px-4 py-5" tabIndex={0}>
       {/* 先頭行（パンくず）。親とキーで「どのチケットか」を示す（設計 13）。
           器の見出しは「チケット」のままなので、身元はここが唯一の出どころになる。 */}
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)]">
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-muted)]">
         {parentTicket ? (
           <>
             <span className="truncate">{parentTicket.title}</span>
@@ -108,16 +109,21 @@ export default function TicketDetailPanel({
       </div>
 
       {canEdit && !archived ? (
-        <input
-          type="text"
+        <AutoResizeTextarea
           value={editor.title}
-          onChange={(e) => editor.changeTitle(e.target.value)}
+          onChange={(e) => editor.changeTitle(e.target.value.replace(/[\r\n]+/g, ' '))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
           onBlur={editor.commitTitle}
           aria-label="題名"
-          className="mb-3 w-full bg-transparent text-lg font-bold leading-snug text-[var(--color-text-primary)] focus:outline-none"
+          className="mb-4 min-h-12 w-full rounded-md border border-transparent bg-transparent px-1 text-lg font-bold leading-snug text-[var(--color-text-primary)] hover:border-surface-3 focus:outline-none focus:ring-2 focus:ring-brand-600"
         />
       ) : (
-        <h6 className="mb-3 text-lg font-bold leading-snug text-[var(--color-text-primary)]">{ticket.title}</h6>
+        <h2 className="mb-4 text-lg font-bold leading-snug text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{ticket.title}</h2>
       )}
 
       {/* 状態の変更と、チケットそのものへの操作。題名のすぐ下に置く（設計 12 の並び）。 */}
@@ -135,7 +141,7 @@ export default function TicketDetailPanel({
             type="button"
             onClick={() => void (archived ? onRestore() : onArchive())}
             disabled={busy}
-            className="rounded-md border border-surface-3 px-2.5 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 disabled:opacity-50"
+            className="min-h-11 rounded-md border border-surface-3 px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
           >
             {archived ? '現役に戻す' : 'アーカイブ'}
           </button>

@@ -163,7 +163,7 @@ export const 優先度と状態の見え方: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('▲')).toBeInTheDocument();
     await expect(canvas.getByText('優先度: 高')).toBeInTheDocument();
-    await expect(canvas.getByText('5')).toBeInTheDocument();
+    await expect(canvas.getByText('見積り 5')).toBeInTheDocument();
     // 状態は選べる（押せるのに変わらない見た目にはしない）。
     const status = canvas.getByLabelText(`${baseTicket.title} の状態`);
     await expect(status).toHaveValue('st-2');
@@ -191,6 +191,6 @@ export const 種別は先頭の印: Story = {
 export const 見積りは未設定と0を区別する: Story = {
   args: { ticket: { ...baseTicket, storyPoints: 0 } },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByText('0')).toBeInTheDocument();
+    await expect(within(canvasElement).getByText('見積り 0')).toBeInTheDocument();
   },
 };

@@ -3,6 +3,7 @@ import { ExclamationCircleIcon, InboxIcon } from '@heroicons/react/24/outline';
 import type { Ticket, TicketStatus, TicketType } from '@/entities/ticket';
 import type { SprintState } from '@/entities/sprint';
 import EmptyState from '@/shared/ui/EmptyState';
+import Loading from '@/shared/ui/Loading';
 import BacklogRow from './BacklogRow';
 import BacklogGroup from './BacklogGroup';
 import BacklogReorderBar from './BacklogReorderBar';
@@ -30,6 +31,7 @@ export interface BacklogListProps {
   loading: boolean;
   error: string | null;
   archived: boolean;
+  filtered?: boolean;
   canEdit: boolean;
   selectedId: string | null;
   busyId: string | null;
@@ -60,6 +62,7 @@ export default function BacklogList({
   loading,
   error,
   archived,
+  filtered = false,
   canEdit,
   selectedId,
   busyId,
@@ -90,13 +93,18 @@ export default function BacklogList({
   }
 
   const total = groups.reduce((sum, g) => sum + g.tickets.length, 0);
+  if (loading && total === 0) return <Loading className="min-h-56" message="チケットを読み込んでいます" />;
   if (!loading && total === 0) {
     return (
+      <div className="mx-auto max-w-xl overflow-y-auto px-4 pb-6">
       <EmptyState
+        headingLevel={2}
         icon={InboxIcon}
-        title="まだチケットがありません"
-        description="題名だけで作れます。種別と状態は雛形の初期値が入ります。並び替えは 2 件目から出ます。"
+        title={filtered ? '条件に合うチケットはありません' : archived ? 'アーカイブされたチケットはありません' : 'まだチケットがありません'}
+        description={filtered ? '上の絞り込み条件を変更するか、解除して確認してください。' : archived ? 'アーカイブしたチケットはここに保管されます。必要なときに戻せます。' : 'まずは、取り組みたい作業を1つ書いてみましょう。詳しい内容はあとから追加できます。'}
       />
+      {!archived && !filtered && canEdit && <TicketCreateRow onCreate={onCreate} />}
+      </div>
     );
   }
 

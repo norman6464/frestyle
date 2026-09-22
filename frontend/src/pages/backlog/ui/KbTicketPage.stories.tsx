@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, waitFor, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import KbTicketPage from './KbTicketPage';
 import { routerWithParam, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
 
@@ -117,6 +117,7 @@ export const ふつう: Story = {
       await expect(canvas.getByText('FRESTYLE-102')).toBeInTheDocument();
     });
     await expect(canvas.getByLabelText('題名')).toHaveValue(ticket().title as string);
+    await userEvent.click(canvas.getByRole('button', { name: '計画と整理' }));
     await expect(canvas.getByText('不具合')).toBeInTheDocument();
   },
 };
@@ -227,6 +228,7 @@ export const 変更履歴あり: Story = {
     await waitFor(async () => {
       await expect(canvas.getByText('FRESTYLE-102')).toBeInTheDocument();
     });
+    await userEvent.click(canvas.getByRole('button', { name: '変更履歴' }));
     const item = await canvas.findByRole('listitem');
     await expect(item).toHaveTextContent('状態を');
   },

@@ -18,6 +18,11 @@ function renderAt(initial: string) {
 }
 
 describe('useBacklogUrlState', () => {
+  it('絞り込みの解除は選択中のチケットと無関係なクエリを残す', () => {
+    const { result } = renderAt('/backlog/s-1?ticket=t-9&statusId=st-1&typeId=ty-1&labelId=l-1&unassigned=1&overdue=1&q=x&from=home');
+    act(() => result.current.state.clearFilters());
+    expect(result.current.search).toBe('?ticket=t-9&from=home');
+  });
   it('何も付いていない URL は既定（未選択・絞り込み無し）', () => {
     const { result } = renderAt('/backlog/s-1');
     expect(result.current.state).toMatchObject({ selectedId: null, statusId: null, assignedToMe: false });

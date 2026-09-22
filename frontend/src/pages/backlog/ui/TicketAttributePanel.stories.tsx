@@ -146,7 +146,7 @@ export const 編集できる: Story = {
 export const 空の項目は押すまで文字: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const blank = canvas.getByRole('button', { name: '日付を追加してください' });
+    const blank = canvas.getByRole('button', { name: '開始日を設定' });
     await expect(canvas.queryByLabelText('開始日')).toBeNull();
     await userEvent.click(blank);
     await expect(canvas.getByLabelText('開始日')).toBeInTheDocument();

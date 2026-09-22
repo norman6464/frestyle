@@ -90,13 +90,31 @@ export const 既定: Story = {
   },
 };
 
+export const モバイルのメニューをキーボードで操作: Story = {
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getByRole('button', { name: 'メニュー' });
+    await userEvent.click(trigger);
+    const close = await canvas.findByRole('button', { name: 'メニューを閉じる' });
+    await waitFor(() => expect(close).toHaveFocus());
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    await expect(canvas.getByRole('link', { name: '設定' })).toHaveFocus();
+    await userEvent.keyboard('{Tab}');
+    await expect(close).toHaveFocus();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await waitFor(() => expect(canvas.queryByRole('navigation', { name: 'アプリのナビゲーション' })).toBeNull());
+  },
+};
+
 /** ⌘K で「行き先を探す窓」が開く。 */
 export const コマンドパレットを開く: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.keyboard('{Meta>}k{/Meta}');
     await waitFor(async () => {
-      await expect(canvas.getByPlaceholderText('コマンドを検索...')).toBeVisible();
+      await expect(canvas.getByPlaceholderText('移動先を探す...')).toBeVisible();
     });
   },
 };

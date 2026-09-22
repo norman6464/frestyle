@@ -30,7 +30,7 @@ export interface BacklogRowProps {
  * 優先度は色だけで表さない。**形も変える。**
  *
  * 上向き＝急ぐ / 横棒＝ふつう / 下向き＝後回し、と向きで分かるようにして、色はその補強に回す。
- * 見本と同じく行には印だけを置き、「高」「中」「低」の文字は出さない（読み上げには残す）。
+ * 文字も併記して、色や記号を知らなくても読めるようにする。
  */
 const PRIORITY_VIEW: Record<number, { label: string; mark: string; className: string }> = {
   1: { label: '高', mark: '▲', className: 'text-red-600' },
@@ -44,7 +44,7 @@ function formatPoints(points: number | null): string {
 }
 
 /**
- * バックログ一覧の行 1 件。見本と同じ **1 行**組み。
+ * バックログ一覧の行1件。題名・識別子・補足情報と、変更操作を分ける。
  *
  * 種別 → キー → 題名 …… 優先度 → 見積り → 状態 → 担当、の順。行全体を `<button>` には
  * しない —— 中に状態の選択が入るため（押せるものを押せるもので包むと、どちらが反応したのか
@@ -71,7 +71,7 @@ export default function BacklogRow({
   return (
     <div
       aria-busy={busy || undefined}
-      className={`flex w-full items-center gap-2 border-b border-surface-3 pr-3 text-sm transition-colors last:border-b-0 ${
+      className={`grid w-full grid-cols-[minmax(0,1fr)_7rem] items-center gap-x-4 gap-y-2 sm:grid-cols-[minmax(0,1fr)_7rem_6rem] border-b border-surface-3 px-3 py-2 text-sm transition-colors last:border-b-0 ${
         selected ? 'bg-surface-3' : 'hover:bg-surface-2'
       }`}
     >
@@ -79,12 +79,14 @@ export default function BacklogRow({
         type="button"
         onClick={onOpen}
         aria-current={selected}
-        className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-3 text-left outline-none focus-visible:bg-surface-2"
+        className="row-span-2 min-w-0 rounded-md py-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 sm:row-span-1"
       >
+        <span className="mb-1 flex items-center gap-2 text-xs">
         <TicketTypeGlyph type={type} />
         <TicketKeyBadge projectKey={projectKey} number={ticket.number} className="shrink-0 tabular-nums" />
+        </span>
         <span
-          className={`min-w-0 truncate ${done ? 'text-[var(--color-text-muted)] line-through' : 'text-[var(--color-text-primary)]'}`}
+          className={`block min-w-0 font-medium leading-relaxed [overflow-wrap:anywhere] ${done ? 'text-[var(--color-text-muted)] line-through' : 'text-[var(--color-text-primary)]'}`}
         >
           {indented && (
             <span className="mr-1 text-[var(--color-text-muted)]" aria-hidden="true">
@@ -93,31 +95,31 @@ export default function BacklogRow({
           )}
           {ticket.title}
         </span>
-      </button>
-
+        <span className="mt-1.5 flex flex-wrap items-center gap-3">
       <span className={`shrink-0 text-xs leading-none ${priority.className}`}>
         <span aria-hidden="true">{priority.mark}</span>
-        <span className="sr-only">{`優先度: ${priority.label}`}</span>
+        <span className="ml-1">{`優先度: ${priority.label}`}</span>
       </span>
 
       <span
-        className={`w-6 shrink-0 text-right text-xs tabular-nums ${
-          ticket.storyPoints === null ? 'text-[var(--color-text-faint)]' : 'text-[var(--color-text-secondary)]'
+        className={`shrink-0 text-xs tabular-nums ${
+          ticket.storyPoints === null ? 'text-[var(--color-text-muted)]' : 'text-[var(--color-text-secondary)]'
         }`}
         title="見積り"
       >
-        {formatPoints(ticket.storyPoints)}
+        見積り {formatPoints(ticket.storyPoints)}
       </span>
 
-      {/* 状態はここで変えられる（見本と同じ）。押せることが分かるよう、素の `select` の
-          ドロップダウン印をそのまま残し、枠の色だけ状態マスタの色に合わせる。 */}
+        </span>
+      </button>
+
+      {/* 状態はその場で変更できる。中立な枠とネイティブの矢印で入力欄を示す。 */}
       <select
         value={ticket.statusId}
         disabled={!canEdit || busy}
         aria-label={`${ticket.title} の状態`}
         onChange={(e) => onChangeStatus(e.target.value)}
-        className="w-28 shrink-0 rounded border bg-transparent px-1.5 py-0.5 text-xs font-medium disabled:cursor-default disabled:opacity-70"
-        style={{ borderColor: status?.color ?? 'var(--color-surface-3)', color: status?.color ?? undefined }}
+        className="ui-control-compact col-start-2 w-full min-w-0 rounded-md border border-surface-3 bg-surface-1 px-2 py-1 text-sm font-medium text-[var(--color-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:cursor-default disabled:opacity-70"
       >
         {statuses.map((s) => (
           <option key={s.id} value={s.id}>
@@ -126,10 +128,12 @@ export default function BacklogRow({
         ))}
       </select>
 
+      <span className="col-start-2 flex min-w-0 items-center gap-1.5 sm:col-start-3">
       {ticket.assigneePrincipalId ? (
         <span
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-taupe-500 text-[10px] font-bold text-white"
           title={assigneeName || undefined}
+          aria-label={`担当: ${assigneeName || '名前未設定'}`}
         >
           {assigneeInitials}
         </span>
@@ -141,6 +145,8 @@ export default function BacklogRow({
           –
         </span>
       )}
+      <span className="min-w-0 truncate text-xs text-[var(--color-text-muted)]" title={assigneeName || undefined}>{ticket.assigneePrincipalId ? assigneeName || '名前未設定' : '未割当'}</span>
+      </span>
     </div>
   );
 }

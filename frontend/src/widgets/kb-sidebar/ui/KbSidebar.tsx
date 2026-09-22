@@ -264,7 +264,7 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
               className="mb-2 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-surface-2"
             >
               <MagnifyingGlassIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span>検索</span>
+              <span>ナレッジ内を検索</span>
             </button>
           )}
 

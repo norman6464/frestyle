@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { ChevronDownIcon } from '@heroicons/react/24/outline';
 
 export interface TicketSectionProps {
@@ -21,6 +21,7 @@ export interface TicketSectionProps {
    */
   mountWhenClosed?: boolean;
   children: ReactNode;
+  headingLevel?: 2 | 3;
 }
 
 /**
@@ -37,8 +38,11 @@ export default function TicketSection({
   defaultOpen = true,
   mountWhenClosed = false,
   children,
+  headingLevel = 3,
 }: TicketSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const contentId = useId();
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
 
   const heading = (
     <span className="text-sm font-bold text-[var(--color-text-primary)]">
@@ -49,13 +53,15 @@ export default function TicketSection({
 
   return (
     <div className="mb-5">
-      <div className="mb-2 flex items-center gap-1.5">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Heading className="min-w-0">
         {collapsible ? (
           <button
             type="button"
             onClick={() => setOpen((prev) => !prev)}
             aria-expanded={open}
-            className="flex items-center gap-1.5 rounded-md text-left transition-colors hover:text-[var(--color-text-primary)]"
+            aria-controls={contentId}
+            className="flex min-h-11 items-center gap-2 rounded-md px-1 text-left transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
             <ChevronDownIcon
               aria-hidden="true"
@@ -66,9 +72,10 @@ export default function TicketSection({
         ) : (
           heading
         )}
+        </Heading>
         {action && <div className="ml-auto">{action}</div>}
       </div>
-      {open ? children : mountWhenClosed && <div hidden>{children}</div>}
+      <div id={contentId} hidden={!open}>{(open || mountWhenClosed) && children}</div>
     </div>
   );
 }

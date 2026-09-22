@@ -41,6 +41,7 @@ export default function PasswordResetPage() {
               label="メールアドレス"
               name="email"
               type="email"
+              autoComplete="email"
               value={email}
               onChange={toChangeHandler(setEmail)}
             />

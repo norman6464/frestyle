@@ -168,7 +168,7 @@ export const アイコンを付ける: Story = {
   decorators: [routerWithParam('/kb/:pageId', '/kb/p-1'), withApi(api())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const addButton = await canvas.findByRole('button', { name: 'アイコンを追加' });
+    const addButton = await findPageOption(canvas, 'アイコンを追加');
     await userEvent.click(addButton);
 
     const dialog = await canvas.findByRole('dialog', { name: 'ページのアイコンを選ぶ' });
@@ -193,7 +193,7 @@ export const アイコンを外す: Story = {
   ],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const iconButton = await canvas.findByRole('button', { name: 'ページのアイコンを変更' });
+    const iconButton = await findPageOption(canvas, 'ページのアイコンを変更');
     await userEvent.click(iconButton);
 
     const dialog = await canvas.findByRole('dialog', { name: 'ページのアイコンを選ぶ' });
@@ -219,7 +219,7 @@ export const アイコンの変更に失敗: Story = {
   ],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: 'アイコンを追加' }));
+    await userEvent.click(await findPageOption(canvas, 'アイコンを追加'));
     const dialog = await canvas.findByRole('dialog', { name: 'ページのアイコンを選ぶ' });
     await userEvent.click(within(dialog).getByRole('button', { name: 'アイコンを 📘 にする' }));
 
@@ -387,3 +387,9 @@ export const 幅とパンくずと共有ボタン: Story = {
     await expect(within(nav).queryByRole('button', { name: '共有' })).toBeNull();
   },
 };
+
+async function findPageOption(canvas: ReturnType<typeof within>, name: string) {
+  const toggle = await canvas.findByRole('button', { name: 'ページの設定とその他の操作' });
+  if (toggle.getAttribute('aria-expanded') === 'false') await userEvent.click(toggle);
+  return canvas.findByRole('button', { name });
+}
