@@ -172,16 +172,21 @@ export default function GlobalSidebar({
           // 即座に消す —— 閉じる操作のたびに毎回スライドを待たされるのがもたついて見えたため。
           // 同じ transition-all を両方向にかけると「開く」「閉じる」で片方だけを消せないので、
           // 見える状態・隠れる状態それぞれの class に分けて持たせている。
+          //
+          // 動かす対象は transform と opacity だけに絞る（transition-all は使わない）。
+          // 畳んでいる/いないの切り替えでは border・box-shadow・position まで同時に変わり、
+          // transition-all だとそれらまで補間されて、影や角丸が意図せずアニメーションして
+          // しまう（CodeRabbit の指摘どおり）。
           mobileOpen
             ? 'visible translate-x-0 transition-transform duration-base ease-out motion-reduce:transition-none'
             : 'invisible -translate-x-full transition-none',
           collapsed
             ? `md:bottom-2 md:left-0 md:top-[calc(var(--app-header-h)+8px)] md:z-40 md:w-64 md:rounded-r-xl md:border md:shadow-xl ${
                 panel.isPeeking
-                  ? 'md:visible md:translate-x-0 md:opacity-100 md:transition-all md:duration-base md:ease-out motion-reduce:md:transition-none'
+                  ? 'md:visible md:translate-x-0 md:opacity-100 md:transition-[transform,opacity] md:duration-base md:ease-out motion-reduce:md:transition-none'
                   : 'md:invisible md:pointer-events-none md:-translate-x-full md:opacity-0 md:transition-none'
               }`
-            : 'md:visible md:static md:z-auto md:w-64 md:shrink-0 md:translate-x-0 md:opacity-100 md:transition-all md:duration-base md:ease-out motion-reduce:md:transition-none',
+            : 'md:visible md:static md:z-auto md:w-64 md:shrink-0 md:translate-x-0 md:opacity-100 md:transition-[transform,opacity] md:duration-base md:ease-out motion-reduce:md:transition-none',
         ].join(' ')}
       >
         {/* 閉じるボタンは狭い画面の引き出しにだけ置く。広い画面の開け閉めはヘッダーの
