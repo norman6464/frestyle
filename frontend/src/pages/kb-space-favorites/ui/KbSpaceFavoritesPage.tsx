@@ -1,7 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { DocumentIcon, ExclamationCircleIcon, StarIcon } from '@heroicons/react/24/outline';
 import { KbSidebar } from '@/widgets/kb-sidebar';
-import { Loading, SidebarSection } from '@/shared/ui';
+import { Loading, SidebarSection, FsIcon, fsIcon } from '@/shared/ui';
 import { useKbSpaceEntry, KbSpaceTabs } from '@/entities/kb';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useKbFavorites } from '../model/useKbFavorites';
@@ -74,7 +73,7 @@ function FavoritesList({ workspaceSlug, onOpen }: { workspaceSlug: string; onOpe
     return (
       <EmptyState
         headingLevel={2}
-        icon={ExclamationCircleIcon}
+        icon={fsIcon('alert-circle')}
         title="お気に入りを読み込めませんでした"
         description="通信が切れたか、一時的な不調です。"
         action={{ label: '再読み込み', onClick: retry }}
@@ -86,7 +85,7 @@ function FavoritesList({ workspaceSlug, onOpen }: { workspaceSlug: string; onOpe
     return (
       <EmptyState
         headingLevel={2}
-        icon={StarIcon}
+        icon={fsIcon('star')}
         title="お気に入りがありません"
         description="ページの操作から追加できます。"
       />
@@ -110,7 +109,7 @@ function FavoritesList({ workspaceSlug, onOpen }: { workspaceSlug: string; onOpe
                 {favorite.icon.value}
               </span>
             ) : (
-              <DocumentIcon className="h-5 w-5 shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
+              <FsIcon name="document" className="h-5 w-5 shrink-0 text-[var(--color-text-muted)]" />
             )}
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-[var(--color-text-primary)] [overflow-wrap:anywhere]">

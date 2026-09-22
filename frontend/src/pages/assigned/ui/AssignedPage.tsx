@@ -1,6 +1,5 @@
-import { ArrowRightIcon, ClipboardDocumentListIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
-import { Button, EmptyState, Loading } from '@/shared/ui';
+import { Button, EmptyState, Loading, FsIcon, fsIcon } from '@/shared/ui';
 import { useAssignedTickets } from '../model/useAssignedTickets';
 import { dueState, localToday } from '../lib/dueDate';
 import AssignedTicketRow from './AssignedTicketRow';
@@ -33,7 +32,7 @@ export default function AssignedPage() {
           </p>
         </div>
         <Link to="/backlog" className="inline-flex min-h-11 shrink-0 items-center gap-2 self-start rounded-lg text-sm font-medium text-brand-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
-          バックログを開く <ArrowRightIcon aria-hidden="true" className="h-4 w-4" />
+          バックログを開く <FsIcon name="arrow-right" className="h-4 w-4" />
         </Link>
       </header>
 
@@ -41,7 +40,7 @@ export default function AssignedPage() {
 
       {!loading && error && (
         <div role="alert" className="flex flex-wrap items-center gap-4 rounded-2xl border border-surface-3 bg-surface-1 p-5">
-          <ExclamationTriangleIcon aria-hidden="true" className="h-6 w-6 shrink-0 text-[var(--color-text-secondary)]" />
+          <FsIcon name="alert-triangle" className="h-6 w-6 shrink-0 text-[var(--color-text-secondary)]" />
           <div className="min-w-0 flex-1 basis-48">
             <p className="text-sm font-semibold text-[var(--color-text-primary)]">{error}</p>
             <p className="mt-1 text-sm text-[var(--color-text-muted)]">通信状況を確認して、もう一度読み込んでください。</p>
@@ -69,7 +68,7 @@ export default function AssignedPage() {
         <section aria-label="担当チケット" className="rounded-2xl border border-surface-3 bg-surface-1 py-16">
           <h2 className="sr-only">担当チケット</h2>
           <EmptyState
-            icon={ClipboardDocumentListIcon}
+            icon={fsIcon('clipboard-list')}
             title="担当しているチケットはありません"
             description="バックログでチケットを自分に割り当てると、ここに集まります。"
           />

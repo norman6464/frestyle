@@ -1,6 +1,6 @@
-import { XMarkIcon } from '@heroicons/react/24/outline';
 import type { ShareRole, ShareRow as ShareRowData } from '../model/types';
 import { ROLES, displayName } from '../model/labels';
+import { FsIcon } from '@/shared/ui';
 
 export interface ShareRowProps {
   row: ShareRowData;
@@ -58,7 +58,7 @@ export default function ShareRow({ row, disabled, onChangeRole, onRemove }: Shar
         aria-label={`${name} を外す`}
         className="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-danger-soft hover:text-danger-ink disabled:opacity-45"
       >
-        <XMarkIcon className="h-4 w-4" />
+        <FsIcon name="x" className="h-4 w-4" />
       </button>
     </li>
   );

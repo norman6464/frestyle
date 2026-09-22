@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react';
-import { PhotoIcon } from '@heroicons/react/24/outline';
 import type { KbResolvedCover } from '@/entities/kb';
+import { FsIcon } from '@/shared/ui';
 import {
   ACCEPTED_IMAGE_ACCEPT_ATTR,
   MAX_IMAGE_UPLOAD_BYTES,
@@ -98,7 +98,7 @@ export default function KbPageCoverButton({ cover, canEdit, onChange }: KbPageCo
         aria-label={cover ? 'カバー画像を変更' : 'カバー画像を追加'}
         className="flex items-center gap-1 rounded px-1.5 py-1 text-sm text-[var(--color-text-muted)] hover:bg-surface-2 disabled:opacity-50"
       >
-        <PhotoIcon className="h-4 w-4" aria-hidden="true" />
+        <FsIcon name="image" className="h-4 w-4" />
         {cover ? 'カバー画像を変更' : 'カバー画像を追加'}
       </button>
       {cover && (

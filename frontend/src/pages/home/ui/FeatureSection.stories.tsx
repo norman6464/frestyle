@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ChartBarIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import { expect, within } from 'storybook/test';
 import { withRouter } from '../../../../.storybook/decorators';
 import FeatureCard from './FeatureCard';
 import FeatureSection from './FeatureSection';
+import { fsIcon } from '@/shared/ui';
 
 /**
  * ホームのカードを「学習」「ツール」のような塊にまとめる見出しつきの区画。
@@ -36,14 +36,14 @@ export const 既定: Story = {
       <>
         <FeatureCard
           to="/kb"
-          icon={DocumentTextIcon}
+          icon={fsIcon('document-text')}
           title="ナレッジ"
           description="学習メモを書き留め、いつでも振り返れます。"
           color="taupe"
         />
         <FeatureCard
           to="/backlog"
-          icon={ChartBarIcon}
+          icon={fsIcon('chart')}
           title="バックログ"
           description="チームのチケットを一覧で追えます。"
           color="emerald"
@@ -63,7 +63,7 @@ export const 一枚だけ: Story = {
     children: (
       <FeatureCard
         to="/kb"
-        icon={DocumentTextIcon}
+        icon={fsIcon('document-text')}
         title="ナレッジ"
         description="学習メモを書き留め、いつでも振り返れます。"
         color="taupe"

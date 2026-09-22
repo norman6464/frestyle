@@ -1,8 +1,8 @@
-import { LockClosedIcon } from '@heroicons/react/24/outline';
 import type { KbEditorRef, KbLabel } from '@/entities/kb';
 import Avatar from '@/shared/ui/Avatar';
 import LabelChip from '@/shared/ui/LabelChip';
 import { formatHourMinute, formatMonthDay } from '@/shared/lib/formatters';
+import { FsIcon } from '@/shared/ui';
 
 export type KbPageVisibility = 'public' | 'space' | 'private';
 
@@ -37,7 +37,7 @@ function KbVisibilityBadge({ visibility }: { visibility: KbPageVisibility }) {
   if (visibility === 'private') {
     return (
       <span className="inline-flex items-center gap-1 rounded bg-taupe-600 px-1.5 py-0.5 text-[11px] font-semibold leading-relaxed text-white">
-        <LockClosedIcon className="h-2.5 w-2.5" aria-hidden="true" />
+        <FsIcon name="lock" className="h-2.5 w-2.5" />
         {VISIBILITY_LABEL.private}
       </span>
     );

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { DocumentTextIcon, MagnifyingGlassIcon, BellIcon } from '@heroicons/react/24/outline';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import EmptyState from './EmptyState';
+import { fsIcon } from './icons/fsIconFactory';
 
 /**
  * 中身がまだ何も無いところに出す案内。
@@ -27,13 +27,13 @@ type Story = StoryObj<typeof meta>;
 
 /** 見出しだけ。 */
 export const 見出しだけ: Story = {
-  args: { icon: DocumentTextIcon, title: 'まだページがありません' },
+  args: { icon: fsIcon('document-text'), title: 'まだページがありません' },
 };
 
 /** 説明を添える。 */
 export const 説明つき: Story = {
   args: {
-    icon: DocumentTextIcon,
+    icon: fsIcon('document-text'),
     title: 'まだページがありません',
     description: '左の ＋ から最初のページを作れます。',
   },
@@ -42,7 +42,7 @@ export const 説明つき: Story = {
 /** 次の一歩を置く。行き止まりにしない形。 */
 export const 次の一歩つき: Story = {
   args: {
-    icon: DocumentTextIcon,
+    icon: fsIcon('document-text'),
     title: 'まだページがありません',
     description: '最初のページを作って書きはじめましょう。',
     action: { label: 'ページを作る', onClick: fn() },
@@ -56,7 +56,7 @@ export const 次の一歩つき: Story = {
 /** 検索して見つからなかったとき。 */
 export const 検索結果なし: Story = {
   args: {
-    icon: MagnifyingGlassIcon,
+    icon: fsIcon('search'),
     title: '見つかりませんでした',
     description: '別の言葉で探してみてください。',
   },
@@ -64,5 +64,5 @@ export const 検索結果なし: Story = {
 
 /** 通知が無いとき。 */
 export const 通知なし: Story = {
-  args: { icon: BellIcon, title: '新しい知らせはありません' },
+  args: { icon: fsIcon('bell'), title: '新しい知らせはありません' },
 };

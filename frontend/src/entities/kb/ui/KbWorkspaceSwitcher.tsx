@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  CheckIcon,
-  ChevronUpDownIcon,
-  PlusIcon,
-  TrashIcon,
-  UsersIcon,
-} from '@heroicons/react/24/outline';
-import { ConfirmModal, NameCreateForm } from '@/shared/ui';
+import { ConfirmModal, NameCreateForm, FsIcon } from '@/shared/ui';
 import type { KbWorkspace } from '../model/types';
 
 export interface KbWorkspaceSwitcherProps {
@@ -95,7 +88,7 @@ export default function KbWorkspaceSwitcher({
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--color-text-primary)]">
           {active?.name ?? 'ワークスペースを選択'}
         </span>
-        <ChevronUpDownIcon className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
+        <FsIcon name="chevron-up-down" className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
       </button>
 
       {open && (
@@ -124,7 +117,7 @@ export default function KbWorkspaceSwitcher({
               >
                 <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
                 {workspace.slug === activeSlug && (
-                  <CheckIcon className="h-4 w-4 shrink-0 text-brand-500" aria-hidden="true" />
+                  <FsIcon name="check" className="h-4 w-4 shrink-0 text-brand-500" />
                 )}
               </button>
               {onManageMembers && workspace.canManage && (
@@ -137,7 +130,7 @@ export default function KbWorkspaceSwitcher({
                   aria-label={`${workspace.name} のメンバーを管理`}
                   className="mr-1 shrink-0 rounded p-1 text-[var(--color-text-tertiary)] opacity-0 transition-opacity hover:bg-surface-3 hover:text-[var(--color-text-primary)] focus-visible:opacity-100 group-hover:opacity-100"
                 >
-                  <UsersIcon className="h-4 w-4" aria-hidden="true" />
+                  <FsIcon name="users" className="h-4 w-4" />
                 </button>
               )}
               {onDelete && workspace.canManage && (
@@ -147,7 +140,7 @@ export default function KbWorkspaceSwitcher({
                   aria-label={`${workspace.name} を削除`}
                   className="mr-1 shrink-0 rounded p-1 text-[var(--color-text-tertiary)] opacity-0 transition-opacity hover:bg-surface-3 hover:text-danger-ink focus-visible:opacity-100 group-hover:opacity-100"
                 >
-                  <TrashIcon className="h-4 w-4" aria-hidden="true" />
+                  <FsIcon name="trash" className="h-4 w-4" />
                 </button>
               )}
             </li>
@@ -174,7 +167,7 @@ export default function KbWorkspaceSwitcher({
                 onClick={() => setAdding(true)}
                 className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-sm text-[var(--color-text-muted)] hover:bg-surface-2"
               >
-                <PlusIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <FsIcon name="plus" className="h-4 w-4 shrink-0" />
                 <span>ワークスペースを追加</span>
               </button>
             )}

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import { PaperClipIcon } from '@heroicons/react/24/outline';
 import Loading from '@/shared/ui/Loading';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
@@ -7,6 +6,7 @@ import { useTicketAttachments } from '../model/useTicketAttachments';
 import { ACCEPTED_ATTACHMENT_ACCEPT_ATTR } from '../config/attachmentUpload';
 import TicketAttachmentRow from './TicketAttachmentRow';
 import TicketPendingAttachmentRow from './TicketPendingAttachmentRow';
+import { FsIcon } from '@/shared/ui';
 
 export interface TicketAttachmentSectionProps {
   workspaceSlug: string;
@@ -129,7 +129,7 @@ export default function TicketAttachmentSection({
             onClick={() => inputRef.current?.click()}
             className="flex items-center justify-center gap-1 rounded border border-dashed border-surface-3 px-2 py-1.5 text-xs text-[var(--color-text-secondary)] hover:bg-surface-2"
           >
-            <PaperClipIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            <FsIcon name="paperclip" className="h-3.5 w-3.5" />
             ファイルを添付
           </button>
         </>

@@ -4,9 +4,9 @@ import Button from '@/shared/ui/Button';
 import InputField from '@/shared/ui/InputField';
 import LinkText from '@/shared/ui/LinkText';
 import { AuthUnavailableNotice } from '@/features/auth';
-import { CheckCircleIcon } from '@heroicons/react/24/outline';
 import { toChangeHandler } from '@/shared/lib/formHandlers';
 import { usePasswordResetPage } from '../model/usePasswordResetPage';
+import { FsIcon } from '@/shared/ui';
 
 /**
  * パスワード再設定画面。GCIP（Firebase）だけの機能。
@@ -57,7 +57,7 @@ export default function PasswordResetPage() {
           role="status"
           className="mb-4 flex items-center justify-center gap-1 rounded-lg border border-success-border bg-success-soft p-3 text-center font-medium text-success"
         >
-          <CheckCircleIcon className="h-4 w-4" aria-hidden="true" />
+          <FsIcon name="check-circle" className="h-4 w-4" />
           該当するアカウントが存在する場合、パスワード再設定のご案内をお送りしました。
         </p>
       )}

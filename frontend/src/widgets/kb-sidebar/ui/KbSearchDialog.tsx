@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { KbRepository, type KbSearchResult, type KbSpace } from '@/entities/kb';
 import { buildSearchView } from '../model/searchView';
 import KbSearchResultRow from './KbSearchResultRow';
+import { FsIcon } from '@/shared/ui';
 
 export interface KbSearchDialogProps {
   workspaceSlug: string;
@@ -135,10 +135,7 @@ export default function KbSearchDialog({ workspaceSlug, spaces, onClose }: KbSea
         className="relative flex max-h-[60vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-surface-3 bg-surface-1 shadow-2xl"
       >
         <div className="flex items-center gap-3 border-b border-surface-3 px-4 py-3">
-          <MagnifyingGlassIcon
-            className="h-5 w-5 shrink-0 text-[var(--color-text-muted)]"
-            aria-hidden="true"
-          />
+          <FsIcon name="search" className="h-5 w-5 shrink-0 text-[var(--color-text-muted)]" />
           <input
             ref={inputRef}
             type="search"

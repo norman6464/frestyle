@@ -52,6 +52,17 @@ describe('FsIcon', () => {
     expect(container.querySelector('svg')).toHaveAttribute('data-icon', 'inbox');
     expect(container.querySelector('svg')).toHaveClass('h-8');
   });
+
+  it('fsIcon は title 等の props を FsIcon へ転送する', () => {
+    const Bound = fsIcon('alert-circle');
+    render(<Bound title="失敗" />);
+    expect(screen.getByRole('img', { name: '失敗' })).toHaveAttribute('data-icon', 'alert-circle');
+  });
+
+  it('fsIcon は同じ名前に同じ部品を返す（描画のたびに svg を作り直させない）', () => {
+    expect(fsIcon('bell')).toBe(fsIcon('bell'));
+    expect(fsIcon('bell')).not.toBe(fsIcon('inbox'));
+  });
 });
 
 describe('FsIllustration', () => {

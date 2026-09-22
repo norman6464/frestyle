@@ -1,7 +1,6 @@
-import { ArrowRightIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
 import { formatTicketKey } from '@/entities/ticket';
-import { Button, ContentSection } from '@/shared/ui';
+import { Button, ContentSection, FsIcon } from '@/shared/ui';
 import { useHomeWork } from '../model/useHomeWork';
 import { prioritizeWork, workToday } from '../model/prioritizeWork';
 
@@ -17,7 +16,7 @@ export default function HomeWorkSection() {
   ];
   return (
     <ContentSection title="取り組むチケット" description="期限超過・今日が期限のものを先に、その次に進行中の作業を表示。"
-      action={<Link to="/assigned" className="ui-control-compact inline-flex items-center gap-2 rounded-md text-sm font-medium text-brand-700 hover:underline">担当課題を見る <ArrowRightIcon aria-hidden="true" className="h-4 w-4" /></Link>}>
+      action={<Link to="/assigned" className="ui-control-compact inline-flex items-center gap-2 rounded-md text-sm font-medium text-brand-700 hover:underline">担当課題を見る <FsIcon name="arrow-right" className="h-4 w-4" /></Link>}>
       {work.status === 'loading' && <p role="status" className="p-5 text-sm text-[var(--color-text-muted)]">担当チケットを読み込んでいます</p>}
       {(work.status === 'error' || work.status === 'partial') && (
         <div className="flex flex-wrap items-center gap-3 border-b border-surface-3 bg-surface-2 p-4">
@@ -43,7 +42,7 @@ export default function HomeWorkSection() {
                   {ticket.dueDate && <span className={ticket.dueDate < today ? 'font-medium text-danger-ink' : 'text-[var(--color-text-muted)]'}>{ticket.dueDate < today ? '期限超過' : ticket.dueDate === today ? '今日が期限' : '期限'} <time dateTime={ticket.dueDate}>{ticket.dueDate.replaceAll('-', '/')}</time></span>}
                 </span>
               </span>
-              <ChevronRightIcon aria-hidden="true" className="mt-6 h-4 w-4 text-[var(--color-text-muted)]" />
+              <FsIcon name="chevron-right" className="mt-6 h-4 w-4 text-[var(--color-text-muted)]" />
             </Link>
           </li>)}
         </ul>}

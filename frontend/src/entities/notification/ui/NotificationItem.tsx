@@ -1,8 +1,7 @@
 import { memo } from 'react';
-import { CheckIcon } from '@heroicons/react/24/outline';
 import type { Notification } from '../model/types';
 import { formatDateTime } from '@/shared/lib/formatters';
-import { Button } from '@/shared/ui';
+import { Button, FsIcon } from '@/shared/ui';
 
 /**
  * 通知種別のバッジ文言。キーは backend が実際に入れる値と一致させること。
@@ -64,7 +63,7 @@ export default memo(function NotificationItem({ notification, onMarkAsRead, disa
             disabled={disabled}
             className="min-h-11 shrink-0 self-start"
           >
-            <CheckIcon aria-hidden="true" className="h-4 w-4" />
+            <FsIcon name="check" className="h-4 w-4" />
             既読にする
           </Button>
         )}

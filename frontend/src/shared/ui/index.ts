@@ -10,6 +10,7 @@ export { default as FormatIcon } from './FormatIcon';
 export { default as FsIcon } from './icons/FsIcon';
 export type { FsIconProps } from './icons/FsIcon';
 export { fsIcon } from './icons/fsIconFactory';
+export type { FsIconBoundProps } from './icons/fsIconFactory';
 export { FS_ICON_NAMES } from './icons/fsIconParts';
 export type { FsIconName } from './icons/fsIconParts';
 export { default as FsIllustration } from './icons/FsIllustration';

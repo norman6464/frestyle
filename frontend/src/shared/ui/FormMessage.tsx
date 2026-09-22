@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { CheckCircleIcon, ExclamationCircleIcon, XMarkIcon } from '@heroicons/react/24/solid';
+import FsIcon from './icons/FsIcon';
 
 /**
  * フォームの通知メッセージ。
@@ -36,9 +36,9 @@ export default function FormMessage({ message, onDismiss }: FormMessageProps) {
       }`}
     >
       {isError ? (
-        <ExclamationCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+        <FsIcon name="alert-circle" className="w-5 h-5 flex-shrink-0 mt-0.5" />
       ) : (
-        <CheckCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+        <FsIcon name="check-circle" className="w-5 h-5 flex-shrink-0 mt-0.5" />
       )}
       <span className="flex-1">{message.text}</span>
       {onDismiss && (
@@ -48,7 +48,7 @@ export default function FormMessage({ message, onDismiss }: FormMessageProps) {
           aria-label="閉じる"
           className="flex-shrink-0 mt-0.5 hover:opacity-70 transition-opacity"
         >
-          <XMarkIcon className="w-4 h-4" />
+          <FsIcon name="x" className="w-4 h-4" />
         </button>
       )}
     </div>

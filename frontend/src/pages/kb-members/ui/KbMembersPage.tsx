@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ExclamationCircleIcon, LockClosedIcon, UsersIcon } from '@heroicons/react/24/outline';
 import type { KbAdminWorkspaceMember, KbGrantRole } from '@/entities/kb';
-import { ConfirmModal, Loading, PageHeader } from '@/shared/ui';
+import { ConfirmModal, Loading, PageHeader, fsIcon } from '@/shared/ui';
 import EmptyState from '@/shared/ui/EmptyState';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useToast } from '@/shared/lib/hooks/useToast';
@@ -55,7 +54,7 @@ export default function KbMembersPage() {
     return (
       <EmptyState
         headingLevel={1}
-        icon={LockClosedIcon}
+        icon={fsIcon('lock')}
         title="この画面は admin だけが開けます"
         description="メンバーの役割変更・停止・削除は、このワークスペースの admin だけが行えます。"
       />
@@ -66,7 +65,7 @@ export default function KbMembersPage() {
     return (
       <EmptyState
         headingLevel={1}
-        icon={ExclamationCircleIcon}
+        icon={fsIcon('alert-circle')}
         title="メンバー一覧を読み込めませんでした"
         description="通信が切れたか、一時的な不調です。"
         action={{ label: '再読み込み', onClick: retry }}
@@ -79,7 +78,7 @@ export default function KbMembersPage() {
       <PageHeader title="メンバー管理" description="ワークスペースの役割と参加状態を管理します。役割の変更はすぐに反映されます。" />
 
       {loading ? <Loading className="min-h-56" message="メンバーを読み込んでいます" /> : members.length === 0 ? (
-        <EmptyState icon={UsersIcon} title="メンバーがいません" />
+        <EmptyState icon={fsIcon('users')} title="メンバーがいません" />
       ) : (
         <div className="overflow-hidden rounded-xl border border-surface-3 bg-surface-1">
           <table role="table" aria-label="ワークスペースのメンバー" className="w-full border-collapse">

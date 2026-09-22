@@ -1,10 +1,6 @@
 import { useEffect } from 'react';
-import {
-  CheckCircleIcon,
-  ExclamationCircleIcon,
-  InformationCircleIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
+import FsIcon from './icons/FsIcon';
+import { fsIcon } from './icons/fsIconFactory';
 
 export type ToastType = 'success' | 'error' | 'info';
 
@@ -15,9 +11,9 @@ interface ToastProps {
 }
 
 const ICON_MAP = {
-  success: CheckCircleIcon,
-  error: ExclamationCircleIcon,
-  info: InformationCircleIcon,
+  success: fsIcon('check-circle'),
+  error: fsIcon('alert-circle'),
+  info: fsIcon('info'),
 };
 
 // 塗りスタイル: 濃い面 + 白文字・白アイコンで視認性を上げる。成功は黄緑。
@@ -55,7 +51,7 @@ export default function Toast({ type, message, onClose }: ToastProps) {
         aria-label="閉じる"
         className="-mr-1 -mt-0.5 p-1 rounded hover:bg-white/20 transition-colors"
       >
-        <XMarkIcon className="w-4 h-4" />
+        <FsIcon name="x" className="w-4 h-4" />
       </button>
     </div>
   );

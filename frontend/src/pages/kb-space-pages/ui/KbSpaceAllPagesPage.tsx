@@ -1,7 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { DocumentIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { KbSidebar, KbPageGlyph } from '@/widgets/kb-sidebar';
-import { Loading, SidebarSection } from '@/shared/ui';
+import { Loading, SidebarSection, fsIcon } from '@/shared/ui';
 import { useKbSpaceEntry, KbSpaceTabs } from '@/entities/kb';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useKbSpaceAllPages } from '../model/useKbSpaceAllPages';
@@ -79,7 +78,7 @@ function AllPagesList({
     return (
       <EmptyState
         headingLevel={2}
-        icon={ExclamationCircleIcon}
+        icon={fsIcon('alert-circle')}
         title="ページを読み込めませんでした"
         description="通信が切れたか、一時的な不調です。"
         action={{ label: '再読み込み', onClick: retry }}
@@ -91,7 +90,7 @@ function AllPagesList({
     return (
       <EmptyState
         headingLevel={2}
-        icon={DocumentIcon}
+        icon={fsIcon('document')}
         title={hasHiddenChildren ? '表示できるページがありません' : 'ページがありません'}
         description={hasHiddenChildren ? '表示できる範囲のページはありません。必要な場合は管理者にアクセスを確認してください。' : 'ナレッジのメニューからページを作成すると、ここに表示されます。'}
       />

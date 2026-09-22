@@ -1,5 +1,5 @@
-import { PencilSquareIcon } from '@heroicons/react/24/outline';
 import Button from '@/shared/ui/Button';
+import { FsIcon } from '@/shared/ui';
 
 export interface KbSuggestDraftBannerProps {
   /** createSuggestion が飛んでいる間 true（両ボタンとも押せなくする）。 */
@@ -31,7 +31,7 @@ export default function KbSuggestDraftBanner({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
-          <PencilSquareIcon className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+          <FsIcon name="pencil" className="h-4 w-4 shrink-0 text-warning" />
           <span>編集した内容は提案として保存されます</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">

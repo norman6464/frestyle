@@ -1,17 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import {
-  BookOpenIcon,
-  ChevronUpDownIcon,
-  EllipsisHorizontalIcon,
-  FolderIcon,
-  PlusIcon,
-  Squares2X2Icon,
-  StarIcon,
-  UsersIcon,
-} from '@heroicons/react/24/outline';
 import { useToast } from '@/shared/lib/hooks/useToast';
-import { NameCreateForm } from '@/shared/ui';
+import { NameCreateForm, FsIcon } from '@/shared/ui';
 import { KbRepository, type KbMySpace, type KbPage, type KbSpace } from '@/entities/kb';
 import KbInlineRename from './KbInlineRename';
 import { useKbPageTemplates } from '../model/useKbPageTemplates';
@@ -131,7 +121,7 @@ export default function KbSpaceFace({
                 {VISIBILITY_LABEL[space.visibility]}・{space.key.toUpperCase()}
               </span>
             </span>
-            <ChevronUpDownIcon className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
+            <FsIcon name="chevron-up-down" className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
           </button>
         )}
         {!archivedMode && !renaming && (
@@ -143,7 +133,7 @@ export default function KbSpaceFace({
               title="ページを追加"
               className="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-surface-3"
             >
-              <PlusIcon className="h-4 w-4" aria-hidden="true" />
+              <FsIcon name="plus" className="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -152,7 +142,7 @@ export default function KbSpaceFace({
               aria-label={`${space.name} の操作`}
               className="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-surface-3"
             >
-              <EllipsisHorizontalIcon className="h-4 w-4" aria-hidden="true" />
+              <FsIcon name="more" className="h-4 w-4" />
             </button>
             {menuOpen && (
               <ul className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-surface-3 bg-surface-1 py-1 shadow-lg">
@@ -198,19 +188,19 @@ export default function KbSpaceFace({
       {!archivedMode && (
         <nav aria-label={`${space.name} の画面`} className="mt-2 flex flex-col gap-0.5">
           <NavLink to={`/kb/spaces/${space.id}`} end className={({ isActive }) => navItemClass(isActive)}>
-            <Squares2X2Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <FsIcon name="grid" className="h-4 w-4 shrink-0" />
             <span className="truncate">概要</span>
           </NavLink>
           <NavLink to={`/kb/spaces/${space.id}/pages`} className={({ isActive }) => navItemClass(isActive)}>
-            <BookOpenIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <FsIcon name="book" className="h-4 w-4 shrink-0" />
             <span className="truncate">ナレッジ</span>
           </NavLink>
           <NavLink to={`/kb/spaces/${space.id}/favorites`} className={({ isActive }) => navItemClass(isActive)}>
-            <StarIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <FsIcon name="star" className="h-4 w-4 shrink-0" />
             <span className="truncate">お気に入り</span>
           </NavLink>
           <NavLink to={`/kb/spaces/${space.id}/members`} className={({ isActive }) => navItemClass(isActive)}>
-            <UsersIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <FsIcon name="users" className="h-4 w-4 shrink-0" />
             <span className="truncate">メンバー</span>
           </NavLink>
         </nav>
@@ -293,7 +283,7 @@ function KbSpaceSwitcherMenu({
               : 'text-[var(--color-text-secondary)]'
           }`}
         >
-          <FolderIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <FsIcon name="folder" className="h-4 w-4 shrink-0" />
           <span className="truncate">{s.name}</span>
         </Link>
       ))}

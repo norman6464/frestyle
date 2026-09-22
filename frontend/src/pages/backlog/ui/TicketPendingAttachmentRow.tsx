@@ -1,6 +1,6 @@
-import { ArrowPathIcon, DocumentIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import type { PendingAttachment } from '../model/useTicketAttachments';
 import { formatFileSize } from '../lib/formatFileSize';
+import { FsIcon } from '@/shared/ui';
 
 export interface TicketPendingAttachmentRowProps {
   pending: PendingAttachment;
@@ -19,7 +19,7 @@ export default function TicketPendingAttachmentRow({ pending, onRetry, onDismiss
   return (
     <li className="rounded border border-surface-3 px-2 py-1.5 text-xs">
       <div className="flex items-center gap-2">
-        <DocumentIcon className="h-4 w-4 flex-none text-[var(--color-text-muted)]" aria-hidden="true" />
+        <FsIcon name="document" className="h-4 w-4 flex-none text-[var(--color-text-muted)]" />
         <span className="min-w-0 flex-1 truncate text-[var(--color-text-primary)]" title={pending.file.name}>
           {pending.file.name}
         </span>
@@ -43,7 +43,7 @@ export default function TicketPendingAttachmentRow({ pending, onRetry, onDismiss
             aria-label={`${pending.file.name} のアップロードをやり直す`}
             className="flex-none rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-2"
           >
-            <ArrowPathIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            <FsIcon name="refresh" className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
@@ -51,7 +51,7 @@ export default function TicketPendingAttachmentRow({ pending, onRetry, onDismiss
             aria-label={`${pending.file.name} を取り消す`}
             className="flex-none rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-2"
           >
-            <XMarkIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            <FsIcon name="x" className="h-3.5 w-3.5" />
           </button>
         </div>
       )}

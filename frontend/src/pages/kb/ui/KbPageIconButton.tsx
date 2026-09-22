@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { FaceSmileIcon } from '@heroicons/react/24/outline';
 import type { KbIcon } from '@/entities/kb';
 import KbPageIconPicker from './KbPageIconPicker';
+import { FsIcon } from '@/shared/ui';
 
 export interface KbPageIconButtonProps {
   /** 未設定は null（明示的に外した）と undefined（旧応答）のどちらもあり得る。 */
@@ -82,7 +82,7 @@ export default function KbPageIconButton({ icon, canEdit, onChange }: KbPageIcon
           aria-expanded={open}
           className="flex min-h-11 items-center gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
         >
-          <FaceSmileIcon className="h-4 w-4" aria-hidden="true" />
+          <FsIcon name="smile" className="h-4 w-4" />
           アイコンを追加
         </button>
         {picker}

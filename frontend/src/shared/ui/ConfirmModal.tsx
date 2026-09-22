@@ -1,6 +1,6 @@
 import { useRef, type SyntheticEvent } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
-import { TrashIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
+import FsIcon from './icons/FsIcon';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -48,7 +48,7 @@ export default function ConfirmModal({
         >
           <div className="mb-4 flex justify-center" aria-hidden="true">
             <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${isDanger ? 'bg-danger-soft' : 'bg-brand-50'}`}>
-              {isDanger ? <TrashIcon className="h-6 w-6 text-danger-ink" /> : <QuestionMarkCircleIcon className="h-6 w-6 text-brand-700" />}
+              {isDanger ? <FsIcon name="trash" className="h-6 w-6 text-danger-ink" /> : <FsIcon name="help-circle" className="h-6 w-6 text-brand-700" />}
             </div>
           </div>
           <Dialog.Title className="mb-2 text-center text-xl font-semibold text-[var(--fs-text-strong)]">

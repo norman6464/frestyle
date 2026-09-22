@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRightIcon } from '@heroicons/react/24/outline';
+import { FsIcon } from '@/shared/ui';
 
 type CardColor = 'brand' | 'emerald' | 'taupe' | 'blue';
 
@@ -47,7 +47,7 @@ export default function FeatureCard({ to, icon: Icon, title, description, color,
       </p>
       <div className="mt-4 flex items-center gap-1 text-xs text-[var(--color-text-muted)] group-hover:text-brand-700 transition-colors">
         <span>開く</span>
-        <ArrowRightIcon className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+        <FsIcon name="arrow-right" className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
       </div>
     </Link>
   );

@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { ChatBubbleLeftRightIcon, DocumentTextIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import { expect, within } from 'storybook/test';
 import { withRouter } from '../../../../.storybook/decorators';
 import FeatureCard from './FeatureCard';
+import { fsIcon } from '@/shared/ui';
 
 /**
  * ホームに並ぶ、機能への入口カード 1 枚。
@@ -30,7 +30,7 @@ type Story = StoryObj<typeof meta>;
 export const 既定: Story = {
   args: {
     to: '/kb',
-    icon: DocumentTextIcon,
+    icon: fsIcon('document-text'),
     title: 'ナレッジ',
     description: '学習メモを書き留め、いつでも振り返れます。',
     color: 'taupe',
@@ -47,7 +47,7 @@ export const 既定: Story = {
 export const 札つき: Story = {
   args: {
     to: '/kb',
-    icon: DocumentTextIcon,
+    icon: fsIcon('document-text'),
     title: 'ナレッジ',
     description: '学習メモを書き留め、いつでも振り返れます。',
     color: 'taupe',
@@ -59,7 +59,7 @@ export const 札つき: Story = {
 export const 色ぜんぶ: Story = {
   args: {
     to: '/kb',
-    icon: DocumentTextIcon,
+    icon: fsIcon('document-text'),
     title: 'ナレッジ',
     description: '学習メモを書き留め、いつでも振り返れます。',
     color: 'taupe',
@@ -67,8 +67,8 @@ export const 色ぜんぶ: Story = {
   render: (args) => (
     <div className="grid max-w-2xl grid-cols-2 gap-3">
       <FeatureCard {...args} color="brand" title="ブランド" />
-      <FeatureCard {...args} color="emerald" title="エメラルド" icon={ChartBarIcon} />
-      <FeatureCard {...args} color="taupe" title="トープ" icon={ChatBubbleLeftRightIcon} />
+      <FeatureCard {...args} color="emerald" title="エメラルド" icon={fsIcon('chart')} />
+      <FeatureCard {...args} color="taupe" title="トープ" icon={fsIcon('chat')} />
       <FeatureCard {...args} color="blue" title="ブルー" />
     </div>
   ),
@@ -78,7 +78,7 @@ export const 色ぜんぶ: Story = {
 export const 説明が長い: Story = {
   args: {
     to: '/kb',
-    icon: DocumentTextIcon,
+    icon: fsIcon('document-text'),
     title: 'ナレッジ',
     description:
       'スペースの中にページを作り、木構造で整理します。検索・お気に入り・共有リンクで、必要な情報にすぐ戻れます。',

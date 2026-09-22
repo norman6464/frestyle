@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { ChevronDownIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import { formatTicketKey, type Ticket } from '@/entities/ticket';
 import type { Sprint, SprintInput } from '@/entities/sprint';
+import { FsIcon } from '@/shared/ui';
 
 export interface SprintCardProps {
   sprint: Sprint;
@@ -61,7 +61,7 @@ export default function SprintCard({
           aria-label={open ? `${sprint.name} を畳む` : `${sprint.name} を開く`}
           className="rounded p-0.5 text-[var(--color-text-secondary)] hover:bg-surface-3"
         >
-          <ChevronDownIcon className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden="true" />
+          <FsIcon name="chevron-down" className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
         </button>
 
         <span className="text-sm font-bold text-[var(--color-text-primary)]">{sprint.name}</span>
@@ -74,7 +74,7 @@ export default function SprintCard({
             onClick={() => setEditing((prev) => !prev)}
             className="flex items-center gap-1 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
           >
-            <PencilSquareIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            <FsIcon name="pencil" className="h-3.5 w-3.5" />
             {formatPeriod(sprint) || '日付を追加'}
           </button>
         )}

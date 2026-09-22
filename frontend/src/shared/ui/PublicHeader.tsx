@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { UserPlusIcon, ArrowRightEndOnRectangleIcon } from '@heroicons/react/24/outline';
+import FsIcon from './icons/FsIcon';
 
 /**
  * 公開ページ(ログイン / サインアップ)共通のヘッダー。
@@ -27,7 +27,7 @@ export default function PublicHeader() {
               to="/login"
               className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
             >
-              <ArrowRightEndOnRectangleIcon className="h-4 w-4" aria-hidden="true" />
+              <FsIcon name="login" className="h-4 w-4" />
               ログイン
             </Link>
           ) : (
@@ -35,7 +35,7 @@ export default function PublicHeader() {
               to="/signup"
               className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
             >
-              <UserPlusIcon className="h-4 w-4" aria-hidden="true" />
+              <FsIcon name="user-plus" className="h-4 w-4" />
               アカウントを作成
             </Link>
           )}

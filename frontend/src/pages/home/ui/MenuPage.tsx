@@ -1,11 +1,5 @@
-import {
-  ArrowRightIcon,
-  BellIcon,
-  BookOpenIcon,
-  DocumentTextIcon,
-} from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
-import { Button, PageFrame, PageHeader } from '@/shared/ui';
+import { Button, PageFrame, PageHeader, FsIcon } from '@/shared/ui';
 import HomeWorkSection from './HomeWorkSection';
 import { useRecentPages } from '../model/useRecentPages';
 
@@ -25,7 +19,7 @@ export default function MenuPage() {
   return (
     <PageFrame>
       <PageHeader title="ホーム" description="担当の作業と、最近開いたナレッジから再開できます。"
-        action={<Link to="/backlog" className="ui-control-compact inline-flex items-center gap-2 rounded-md text-sm font-medium text-brand-700 hover:underline">バックログを開く <ArrowRightIcon aria-hidden="true" className="h-4 w-4" /></Link>} />
+        action={<Link to="/backlog" className="ui-control-compact inline-flex items-center gap-2 rounded-md text-sm font-medium text-brand-700 hover:underline">バックログを開く <FsIcon name="arrow-right" className="h-4 w-4" /></Link>} />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(18rem,1fr)] xl:items-start">
         <HomeWorkSection />
         <section aria-labelledby="recent-pages-heading" className="min-w-0 rounded-xl border border-[var(--color-surface-3)] bg-[var(--color-surface-1)]">
@@ -48,7 +42,7 @@ export default function MenuPage() {
               <p className="text-sm text-[var(--color-text-primary)]">表示できる履歴はありません</p>
               <p className="text-sm text-[var(--color-text-muted)]">ナレッジからページを探せます。</p>
               <Link to="/kb" className="inline-flex min-h-11 items-center gap-2 font-medium text-brand-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
-                ページを探す <ArrowRightIcon aria-hidden="true" className="h-4 w-4" />
+                ページを探す <FsIcon name="arrow-right" className="h-4 w-4" />
               </Link>
             </div>
           )}
@@ -61,7 +55,7 @@ export default function MenuPage() {
                     className="group flex min-h-16 items-center gap-4 px-5 py-4 hover:bg-[var(--color-surface-2)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600 sm:px-5"
                   >
                     <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-brand-700">
-                      <DocumentTextIcon className="h-5 w-5" />
+                      <FsIcon name="document-text" className="h-5 w-5" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block break-words text-sm font-medium text-[var(--color-text-primary)] group-hover:text-brand-700">{page.title}</span>
@@ -70,7 +64,7 @@ export default function MenuPage() {
                         {viewedAtLabel(page.viewedAt)} に閲覧
                       </time>
                     </span>
-                    <ArrowRightIcon aria-hidden="true" className="h-5 w-5 shrink-0 text-[var(--color-text-muted)]" />
+                    <FsIcon name="arrow-right" className="h-5 w-5 shrink-0 text-[var(--color-text-muted)]" />
                   </Link>
                 </li>
               ))}
@@ -83,10 +77,10 @@ export default function MenuPage() {
 
       <nav aria-label="その他の移動先" className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-[var(--color-surface-3)] pt-5 text-sm">
         <Link to="/kb" className="inline-flex min-h-11 items-center gap-2 text-[var(--color-text-secondary)] hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
-          <BookOpenIcon aria-hidden="true" className="h-5 w-5" />ナレッジを開く
+          <FsIcon name="book" className="h-5 w-5" />ナレッジを開く
         </Link>
         <Link to="/notifications" className="inline-flex min-h-11 items-center gap-2 text-[var(--color-text-secondary)] hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
-          <BellIcon aria-hidden="true" className="h-5 w-5" />通知を確認
+          <FsIcon name="bell" className="h-5 w-5" />通知を確認
         </Link>
       </nav>
     </PageFrame>
