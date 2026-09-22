@@ -12,6 +12,7 @@ export type {
 export { default as TicketKeyBadge } from './ui/TicketKeyBadge';
 export type { TicketKeyBadgeProps } from './ui/TicketKeyBadge';
 export { default as TicketStatusPill } from './ui/TicketStatusPill';
+export { STATUS_ICON } from './lib/statusIcon';
 export type { TicketStatusPillProps } from './ui/TicketStatusPill';
 export { default as TicketTypeGlyph } from './ui/TicketTypeGlyph';
 export type { TicketTypeGlyphProps } from './ui/TicketTypeGlyph';

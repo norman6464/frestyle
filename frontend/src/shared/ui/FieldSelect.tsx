@@ -1,5 +1,5 @@
 import { Select } from '@base-ui/react/select';
-import { CheckIcon, ChevronDownIcon } from '@heroicons/react/20/solid';
+import { FsIcon } from '@/shared/ui';
 
 export interface FieldSelectOption {
   value: string;
@@ -41,7 +41,7 @@ export default function FieldSelect({ label, value, options, onChange, disabled,
           </span>
         )}
         <Select.Value className="min-w-0 flex-1 truncate text-left" />
-        <Select.Icon><ChevronDownIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" /></Select.Icon>
+        <Select.Icon><FsIcon name="chevron-down" className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" /></Select.Icon>
       </Select.Trigger>
       <Select.Portal>
         <Select.Positioner sideOffset={4} alignItemWithTrigger={false} className="z-50">
@@ -57,7 +57,7 @@ export default function FieldSelect({ label, value, options, onChange, disabled,
                   className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-[var(--fs-text-strong)] outline-none data-[highlighted]:bg-surface-2"
                 >
                   <Select.ItemIndicator className="w-4 shrink-0 text-brand-700">
-                    <CheckIcon aria-hidden="true" className="h-4 w-4" />
+                    <FsIcon name="check" className="h-4 w-4" />
                   </Select.ItemIndicator>
                   <Select.ItemText>{option.label}</Select.ItemText>
                 </Select.Item>

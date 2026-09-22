@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowTopRightOnSquareIcon, ExclamationCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { BacklogSidebar, useBacklogFilterCounts } from '@/widgets/backlog-sidebar';
 import { SecondaryPanel } from '@/widgets/secondary-panel';
-import { EmptyState, Loading, SidebarSection } from '@/shared/ui';
+import { EmptyState, FsIcon, FsIllustration, Loading, SidebarSection } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { TicketRepository, formatTicketKey } from '@/entities/ticket';
@@ -344,7 +343,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
 
             <div className="min-h-0 flex-1">
               {masters.loading && <Loading className="min-h-56" message="チケットの設定を読み込んでいます" />}
-              {!masters.loading && masters.error && <EmptyState headingLevel={2} icon={ExclamationCircleIcon} title="チケットの設定を読み込めませんでした" description={masters.error} action={{ label: '再読み込み', onClick: masters.refresh }} />}
+              {!masters.loading && masters.error && <EmptyState headingLevel={2} illustration={<FsIllustration name="load-error" />} title="チケットの設定を読み込めませんでした" description={masters.error} action={{ label: '再読み込み', onClick: masters.refresh }} />}
               {view !== 'settings' && !masters.loading && !masters.error &&
                 (!enabled && !masters.loading ? (
                   <div className="flex h-full items-center justify-center px-6 text-center">
@@ -504,7 +503,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                 title="全画面で開く"
                 className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-surface-3 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
               >
-                <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                <FsIcon name="arrow-up-right" className="h-3.5 w-3.5" />
               </Link>
               <button
                 type="button"
@@ -513,7 +512,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                 title="選択解除"
                 className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-surface-3 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
               >
-                <XMarkIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                <FsIcon name="x" className="h-3.5 w-3.5" />
               </button>
             </div>
           }

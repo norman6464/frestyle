@@ -1,6 +1,5 @@
 import { useState, type KeyboardEvent } from 'react';
-import { PlusIcon } from '@heroicons/react/20/solid';
-import { Button } from '@/shared/ui';
+import { Button, FsIcon } from '@/shared/ui';
 
 export interface TicketCreateRowProps {
   onCreate: (title: string) => Promise<void>;
@@ -44,7 +43,7 @@ export default function TicketCreateRow({ onCreate }: TicketCreateRowProps) {
   return (
     <div role="row" className="border-b border-surface-3">
       <div role="cell" aria-colspan={6} className="flex flex-wrap items-center gap-2 px-3 py-1.5 text-sm sm:px-4">
-        <PlusIcon className="h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" />
+        <FsIcon name="plus" className="h-4 w-4 shrink-0 text-brand-600" />
         <input
           type="text"
           value={title}

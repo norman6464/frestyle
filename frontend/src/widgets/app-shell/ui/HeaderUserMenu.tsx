@@ -1,10 +1,6 @@
 import { useNavigate } from 'react-router-dom';
+import { FsIcon } from '@/shared/ui';
 import { Menu } from '@base-ui/react/menu';
-import {
-  Cog6ToothIcon,
-  ArrowLeftOnRectangleIcon,
-  ChevronDownIcon,
-} from '@heroicons/react/24/outline';
 import Avatar from '@/shared/ui/Avatar';
 
 interface HeaderUserMenuProps {
@@ -39,7 +35,7 @@ export default function HeaderUserMenu({
         <span className="hidden max-w-[10rem] truncate text-sm font-medium text-[var(--color-text-primary)] sm:block">
           {displayName || 'ユーザー'}
         </span>
-        <ChevronDownIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
+        <FsIcon name="chevron-down" className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner sideOffset={8} align="end" className="z-50">
@@ -57,7 +53,7 @@ export default function HeaderUserMenu({
               onClick={() => { onNavigate?.(); navigate('/settings'); }}
               className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-[var(--color-text-primary)] outline-none data-[highlighted]:bg-surface-2"
             >
-              <Cog6ToothIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <FsIcon name="settings" className="h-4 w-4 shrink-0" />
               設定
             </Menu.Item>
             <Menu.Separator className="my-1 h-px bg-[var(--fs-menu-border)]" />
@@ -65,7 +61,7 @@ export default function HeaderUserMenu({
               onClick={onLogout}
               className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-danger-ink outline-none data-[highlighted]:bg-danger-soft"
             >
-              <ArrowLeftOnRectangleIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <FsIcon name="logout" className="h-4 w-4 shrink-0" />
               ログアウト
             </Menu.Item>
           </Menu.Popup>

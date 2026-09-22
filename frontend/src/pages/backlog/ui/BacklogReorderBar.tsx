@@ -1,5 +1,4 @@
-import { ArrowDownIcon, ArrowUpIcon, ChevronDoubleDownIcon } from '@heroicons/react/20/solid';
-import { FieldSelect } from '@/shared/ui';
+import { FieldSelect, FsIcon } from '@/shared/ui';
 
 export interface BacklogReorderBarProps {
   /** 選択中チケットの表示キー（例 FRESTYLE-457）。未選択なら null。 */
@@ -60,7 +59,7 @@ export default function BacklogReorderBar({
         disabled={!hasSelection || isFirst}
         className="inline-flex items-center gap-1 rounded-md border border-surface-3 px-2.5 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
       >
-        <ArrowUpIcon className="h-3.5 w-3.5" aria-hidden="true" />
+        <FsIcon name="arrow-up" className="h-3.5 w-3.5" />
         1 つ上へ
       </button>
       <button
@@ -69,7 +68,7 @@ export default function BacklogReorderBar({
         disabled={!hasSelection || isLast}
         className="inline-flex items-center gap-1 rounded-md border border-surface-3 px-2.5 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
       >
-        <ArrowDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
+        <FsIcon name="arrow-down" className="h-3.5 w-3.5" />
         1 つ下へ
       </button>
       <button
@@ -78,7 +77,7 @@ export default function BacklogReorderBar({
         disabled={!hasSelection || isLast}
         className="inline-flex items-center gap-1 rounded-md border border-surface-3 px-2.5 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
       >
-        <ChevronDoubleDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
+        <FsIcon name="chevron-double-down" className="h-3.5 w-3.5" />
         末尾へ
       </button>
       {onMoveToSprint && sprints.length > 0 && (

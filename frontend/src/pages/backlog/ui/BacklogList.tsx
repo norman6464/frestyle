@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { ExclamationCircleIcon, InboxIcon } from '@heroicons/react/24/outline';
 import type { Ticket, TicketStatus, TicketType } from '@/entities/ticket';
 import type { SprintState } from '@/entities/sprint';
 import EmptyState from '@/shared/ui/EmptyState';
 import Loading from '@/shared/ui/Loading';
+import FsIllustration from '@/shared/ui/icons/FsIllustration';
 import { localTodayISO } from '../lib/dueDate';
 import BacklogRow, { BACKLOG_COLS_MD } from './BacklogRow';
 import BacklogGroup from './BacklogGroup';
@@ -97,7 +97,7 @@ export default function BacklogList({
   if (error) {
     return (
       <EmptyState
-        icon={ExclamationCircleIcon}
+        illustration={<FsIllustration name="load-error" />}
         title="チケットを読み込めませんでした"
         description={error}
         action={{ label: '再読み込み', onClick: onRetry }}
@@ -112,7 +112,7 @@ export default function BacklogList({
       <div className="mx-auto max-w-xl overflow-y-auto px-4 pb-6">
         <EmptyState
           headingLevel={2}
-          icon={InboxIcon}
+          illustration={<FsIllustration name={filtered ? 'no-results' : archived ? 'empty-archive' : 'empty-backlog'} />}
           title={filtered ? '条件に合うチケットはありません' : archived ? 'アーカイブされたチケットはありません' : 'まだチケットがありません'}
           description={filtered ? '上の絞り込み条件を変更するか、解除して確認してください。' : archived ? 'アーカイブしたチケットはここに保管されます。必要なときに戻せます。' : 'まずは、取り組みたい作業を1つ書いてみましょう。詳しい内容はあとから追加できます。'}
         />

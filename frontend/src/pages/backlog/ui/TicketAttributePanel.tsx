@@ -1,12 +1,11 @@
 import { useState, type ReactNode } from 'react';
 import { Collapsible } from '@base-ui/react/collapsible';
-import { ChevronDownIcon } from '@heroicons/react/20/solid';
 import { formatTicketKey, type Label, type Ticket, type TicketPriority } from '@/entities/ticket';
 import type { ProjectVersion } from '@/entities/project-version';
 import type { Team } from '@/entities/team';
 import type { Sprint } from '@/entities/sprint';
 import type { KbGrantablePrincipal } from '@/entities/kb';
-import { FieldSelect } from '@/shared/ui';
+import { FieldSelect, FsIcon } from '@/shared/ui';
 import { useTicketParentCandidates } from '../model/useTicketParentCandidates';
 import { useWorkspaceMembers } from '../model/useWorkspaceMembers';
 import TicketParentPicker from './TicketParentPicker';
@@ -238,8 +237,7 @@ export default function TicketAttributePanel({
               <span className="mt-0.5 block text-xs text-[var(--color-text-muted)] [overflow-wrap:anywhere]">{summary.join('・')}</span>
             )}
           </span>
-          <ChevronDownIcon
-            aria-hidden="true"
+          <FsIcon name="chevron-down"
             className="mt-1 h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform duration-fast group-data-[open]:rotate-180"
           />
         </Collapsible.Trigger>

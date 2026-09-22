@@ -185,7 +185,8 @@ export const 優先度と状態の見え方: Story = {
   args: { ticket: { ...baseTicket, priority: 1 } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getAllByText('▲').length).toBeGreaterThan(0);
+    // 優先度は形で読む（高＝上へ 2 つ）。色や文字が無くても向きで分かる。
+    await expect(canvasElement.querySelectorAll('[data-icon="priority-high"]').length).toBeGreaterThan(0);
     await expect(canvas.getAllByText('高').length).toBeGreaterThan(0);
     // 状態は選べる（押せるのに変わらない見た目にはしない）。
     const status = canvas.getByLabelText(`${baseTicket.title} の状態`);

@@ -7,6 +7,13 @@
 
 // --- プリミティブ ---
 export { default as FormatIcon } from './FormatIcon';
+export { default as FsIcon } from './icons/FsIcon';
+export type { FsIconProps } from './icons/FsIcon';
+export { fsIcon } from './icons/fsIconFactory';
+export { FS_ICON_NAMES } from './icons/fsIconParts';
+export type { FsIconName } from './icons/fsIconParts';
+export { default as FsIllustration } from './icons/FsIllustration';
+export type { FsIllustrationName } from './icons/FsIllustration';
 export type { FormatIconName, FormatIconProps } from './FormatIcon';
 export { default as Button } from './Button';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './Button';

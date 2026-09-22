@@ -1,7 +1,6 @@
 import { useEffect, useId, useState } from 'react';
-import { AdjustmentsHorizontalIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import type { Label, TicketStatus, TicketType } from '@/entities/ticket';
-import { Button, FieldSelect } from '@/shared/ui';
+import { Button, FieldSelect, FsIcon } from '@/shared/ui';
 import type { BacklogQuickFilter } from '../model/useBacklogUrlState';
 
 export interface BacklogFilterBarProps {
@@ -102,9 +101,8 @@ export default function BacklogFilterBar({
     <div role="group" aria-label="チケットの絞り込み" className="border-b border-surface-3 px-4 pb-3 pt-3 sm:px-6">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[12rem] flex-1">
-          <MagnifyingGlassIcon
+          <FsIcon name="search"
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]"
-            aria-hidden="true"
           />
           <input
             type="search"
@@ -127,7 +125,7 @@ export default function BacklogFilterBar({
               : 'border-surface-3 bg-surface-1 text-[var(--color-text-secondary)] hover:bg-surface-2'
           }`}
         >
-          <AdjustmentsHorizontalIcon className="h-4 w-4" aria-hidden="true" />
+          <FsIcon name="filter" className="h-4 w-4" />
           フィルター
           {detailCount > 0 && (
             <span className="tabular-nums" aria-label={`${detailCount} 件の条件を適用中`}>
@@ -198,7 +196,7 @@ export default function BacklogFilterBar({
               className="inline-flex min-h-9 items-center gap-1 whitespace-nowrap rounded-md bg-action-soft px-2.5 text-xs font-medium text-brand-800 transition-colors duration-fast hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
             >
               <span className="max-w-[16rem] truncate">{chip.label}</span>
-              <XMarkIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <FsIcon name="x" className="h-3.5 w-3.5 shrink-0" />
             </button>
           ))}
           <button

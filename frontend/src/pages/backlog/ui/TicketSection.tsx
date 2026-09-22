@@ -1,5 +1,5 @@
 import { useId, useState, type ReactNode } from 'react';
-import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import { FsIcon } from '@/shared/ui';
 
 export interface TicketSectionProps {
   title: string;
@@ -63,8 +63,7 @@ export default function TicketSection({
             aria-controls={contentId}
             className="flex min-h-11 items-center gap-2 rounded-md px-1 text-left transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
-            <ChevronDownIcon
-              aria-hidden="true"
+            <FsIcon name="chevron-down"
               className={`h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform ${open ? '' : '-rotate-90'}`}
             />
             {heading}

@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react';
+import { FsIcon } from '@/shared/ui';
 import { Link } from 'react-router-dom';
 
-import {
-  BellIcon,
-  Bars3Icon,
-  MagnifyingGlassIcon,
-  ViewColumnsIcon,
-} from '@heroicons/react/24/outline';
 import Loading from '@/shared/ui/Loading';
 import HeaderUserMenu from './HeaderUserMenu';
 import { useSidebar } from '../model/useSidebar';
@@ -76,7 +71,7 @@ export default function Header({
             aria-label="メニュー"
             className="inline-flex items-center justify-center md:hidden p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
           >
-            <Bars3Icon className="w-5 h-5" />
+            <FsIcon name="menu" className="w-5 h-5" />
           </button>
         )}
 
@@ -90,7 +85,7 @@ export default function Header({
             aria-expanded={globalSidebarOpen}
             className="hidden md:inline-flex items-center justify-center p-1.5 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
           >
-            {globalSidebarOpen ? <ViewColumnsIcon className="w-5 h-5" /> : <Bars3Icon className="w-5 h-5" />}
+            {globalSidebarOpen ? <FsIcon name="panel" className="w-5 h-5" /> : <FsIcon name="menu" className="w-5 h-5" />}
           </button>
         )}
 
@@ -111,7 +106,7 @@ export default function Header({
             onClick={onOpenSearch}
             className="flex w-full max-w-80 min-w-0 items-center gap-2 px-3 py-1.5 rounded-md border border-surface-3 bg-surface-2 text-sm text-[var(--color-text-tertiary)] hover:bg-surface-3 transition-colors"
           >
-            <MagnifyingGlassIcon className="w-4 h-4 flex-shrink-0" />
+            <FsIcon name="search" className="w-4 h-4 flex-shrink-0" />
             <span className="truncate">移動先を探す</span>
             <span className="ml-auto text-xs text-[var(--color-text-muted)]" aria-hidden="true">⌘K</span>
           </button>
@@ -126,7 +121,7 @@ export default function Header({
             aria-label="移動先を探す"
             className="inline-flex items-center justify-center md:hidden p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
           >
-            <MagnifyingGlassIcon className="w-5 h-5" />
+            <FsIcon name="search" className="w-5 h-5" />
           </button>
           {/* 通知ベル（未読バッジ付き） */}
           <Link
@@ -134,7 +129,7 @@ export default function Header({
             aria-label={unread > 0 ? `通知 (未読 ${unread} 件)` : '通知'}
             className="relative inline-flex items-center justify-center p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
           >
-            <BellIcon className="w-5 h-5" />
+            <FsIcon name="bell" className="w-5 h-5" />
             {unread > 0 && (
               <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-[10px] leading-4 text-center">
                 {unread > 99 ? '99+' : unread}

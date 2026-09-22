@@ -1,6 +1,6 @@
 import { Select } from '@base-ui/react/select';
-import { CheckIcon, ChevronDownIcon } from '@heroicons/react/20/solid';
-import { TicketStatusPill, type TicketStatus } from '@/entities/ticket';
+import { STATUS_ICON, TicketStatusPill, type TicketStatus } from '@/entities/ticket';
+import { FsIcon } from '@/shared/ui';
 
 export interface TicketStatusSelectProps {
   statuses: TicketStatus[];
@@ -63,14 +63,14 @@ export default function TicketStatusSelect({
         aria-label={label}
         className={`${height} inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-surface-3 bg-surface-1 px-2 text-xs font-semibold text-[var(--color-text-primary)] transition-colors duration-fast hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:cursor-default disabled:opacity-60 ${className}`}
       >
-        <span
-          aria-hidden="true"
-          className="h-2 w-2 flex-none rounded-full"
-          style={{ backgroundColor: current?.color ?? 'var(--color-text-faint)' }}
+        <FsIcon
+          name={current ? STATUS_ICON[current.category] : 'status-todo'}
+          className="h-3.5 w-3.5 flex-none"
+          style={{ color: current?.color ?? 'var(--color-text-faint)' }}
         />
         <Select.Value className="min-w-0 flex-1 truncate text-left" />
         <Select.Icon>
-          <ChevronDownIcon aria-hidden="true" className="h-3.5 w-3.5 flex-none text-[var(--color-text-muted)]" />
+          <FsIcon name="chevron-down" className="h-3.5 w-3.5 flex-none text-[var(--color-text-muted)]" />
         </Select.Icon>
       </Select.Trigger>
       <Select.Portal>
@@ -84,13 +84,9 @@ export default function TicketStatusSelect({
                   className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-[var(--fs-text-strong)] outline-none data-[highlighted]:bg-surface-2"
                 >
                   <Select.ItemIndicator className="w-4 shrink-0 text-brand-700">
-                    <CheckIcon aria-hidden="true" className="h-4 w-4" />
+                    <FsIcon name="check" className="h-4 w-4" />
                   </Select.ItemIndicator>
-                  <span
-                    aria-hidden="true"
-                    className="h-2 w-2 flex-none rounded-full"
-                    style={{ backgroundColor: status.color }}
-                  />
+                  <FsIcon name={STATUS_ICON[status.category]} className="h-3.5 w-3.5 flex-none" style={{ color: status.color }} />
                   <Select.ItemText>{status.name}</Select.ItemText>
                 </Select.Item>
               ))}

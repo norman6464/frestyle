@@ -5,6 +5,7 @@ import {
   type TicketStatus,
   type TicketType,
 } from '@/entities/ticket';
+import { FsIcon, type FsIconName } from '@/shared/ui';
 import { formatDueDateShort, isOverdue } from '../lib/dueDate';
 import TicketStatusSelect from './TicketStatusSelect';
 
@@ -44,10 +45,10 @@ export interface BacklogRowProps {
  * 上向き＝急ぐ / 横棒＝ふつう / 下向き＝後回し、と向きで分かるようにして、色はその補強に回す。
  * 「高」だけ主色で強める（設計ボードの通り。危険色ではなく、目を止めるための色）。
  */
-const PRIORITY_VIEW: Record<number, { label: string; mark: string; className: string }> = {
-  1: { label: '高', mark: '▲', className: 'font-semibold text-brand-800' },
-  2: { label: '中', mark: '−', className: 'text-[var(--color-text-secondary)]' },
-  3: { label: '低', mark: '▼', className: 'text-[var(--color-text-muted)]' },
+const PRIORITY_VIEW: Record<number, { label: string; icon: FsIconName; className: string }> = {
+  1: { label: '高', icon: 'priority-high', className: 'font-semibold text-brand-800' },
+  2: { label: '中', icon: 'priority-medium', className: 'text-[var(--color-text-secondary)]' },
+  3: { label: '低', icon: 'priority-low', className: 'text-[var(--color-text-muted)]' },
 };
 
 /**
@@ -140,16 +141,18 @@ export default function BacklogRow({
       <div role="cell" className={`hidden min-w-0 truncate md:block md:col-start-3 md:row-start-1 md:py-3 ${ticket.assigneePrincipalId ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)]'}`} title={assigneeName || undefined}>
         {assignee}
       </div>
-      <div role="cell" className={`hidden whitespace-nowrap md:block md:col-start-4 md:row-start-1 md:py-3 ${priority.className}`}>
-        <span aria-hidden="true">{priority.mark}</span> <span>{priority.label}</span>
+      <div role="cell" className={`hidden items-center gap-1 whitespace-nowrap md:flex md:col-start-4 md:row-start-1 md:py-3 ${priority.className}`}>
+        <FsIcon name={priority.icon} className="h-4 w-4 flex-none" />
+        <span>{priority.label}</span>
       </div>
       <div role="cell" className={`hidden whitespace-nowrap tabular-nums md:block md:col-start-5 md:row-start-1 md:py-3 ${overdue ? 'font-semibold text-danger-ink' : due ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)]'}`}>
         {due ?? '—'}
         {overdue && <span className="sr-only">（期限超過）</span>}
       </div>
       <div role="cell" className="col-span-2 flex flex-wrap items-center gap-x-1 text-xs text-[var(--color-text-muted)] md:hidden">
-        <span className={priority.className}>
-          <span aria-hidden="true">{priority.mark}</span> 優先度 {priority.label}
+        <span className={`inline-flex items-center gap-1 ${priority.className}`}>
+          <FsIcon name={priority.icon} className="h-3.5 w-3.5 flex-none" />
+          優先度 {priority.label}
         </span>
         <span aria-hidden="true">・</span>
         <span className={overdue ? 'font-semibold text-danger-ink' : undefined}>

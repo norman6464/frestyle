@@ -1,21 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import {
-  ArchiveBoxIcon,
-  BellIcon,
-  BookOpenIcon,
-  ChevronDownIcon,
-  Cog6ToothIcon,
-  HomeIcon,
-  InboxStackIcon,
-  RectangleStackIcon,
-  UserCircleIcon,
-  XMarkIcon,
-} from '@heroicons/react/24/outline';
 import { usePanelMode } from '@/shared/lib/hooks/usePanelMode';
 import { useSidebarSlotFilled } from '@/shared/lib/hooks/useSidebarSlot';
 import { useMobileDrawerFocus } from '@/shared/lib/hooks/useMobileDrawerFocus';
-import { SidebarSlotTarget } from '@/shared/ui';
+import { SidebarSlotTarget, FsIcon, fsIcon } from '@/shared/ui';
 import { KbRepository, useWorkspaceList, type KbSpace } from '@/entities/kb';
 import { GLOBAL_NAV_PRIMARY, GLOBAL_NAV_UTILITY, navActive, type GlobalNavItem } from '../model/globalNav';
 
@@ -23,12 +11,12 @@ import { GLOBAL_NAV_PRIMARY, GLOBAL_NAV_UTILITY, navActive, type GlobalNavItem }
 export const GLOBAL_SIDEBAR_STORAGE_KEY = 'frestyle.panel.global';
 
 const ICONS = {
-  home: HomeIcon,
-  assigned: UserCircleIcon,
-  kb: BookOpenIcon,
-  backlog: RectangleStackIcon,
-  bell: BellIcon,
-  settings: Cog6ToothIcon,
+  home: fsIcon('home'),
+  assigned: fsIcon('assigned'),
+  kb: fsIcon('knowledge'),
+  backlog: fsIcon('backlog'),
+  bell: fsIcon('bell'),
+  settings: fsIcon('settings'),
 } as const;
 
 export interface GlobalSidebarProps {
@@ -158,7 +146,7 @@ export default function GlobalSidebar({
             aria-label="メニューを閉じる"
             className="inline-flex h-11 w-11 items-center justify-center rounded-md text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-nav-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
-            <XMarkIcon className="h-4 w-4" aria-hidden="true" />
+            <FsIcon name="x" className="h-4 w-4" />
           </button>
         </div>
 
@@ -181,9 +169,8 @@ export default function GlobalSidebar({
                   aria-expanded={spacesOpen}
                   className="flex min-w-0 items-center gap-1 text-xs font-semibold text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text-primary)]"
                 >
-                  <ChevronDownIcon
+                  <FsIcon name="chevron-down"
                     className={`h-3.5 w-3.5 shrink-0 transition-transform ${spacesOpen ? '' : '-rotate-90'}`}
-                    aria-hidden="true"
                   />
                   <span className="truncate">スペース</span>
                 </button>
@@ -197,7 +184,7 @@ export default function GlobalSidebar({
                       onClick={onMobileClose}
                       className={rowClass(location.pathname === `/kb/spaces/${space.id}`)}
                     >
-                      <InboxStackIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <FsIcon name="inbox" className="h-4 w-4 shrink-0" />
                       <span className="truncate">{space.name}</span>
                     </Link>
                   ))}
@@ -206,7 +193,7 @@ export default function GlobalSidebar({
                     onClick={onMobileClose}
                     className={rowClass(location.pathname === '/kb/spaces')}
                   >
-                    <ArchiveBoxIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <FsIcon name="archive" className="h-4 w-4 shrink-0" />
                     <span className="truncate">その他のスペース</span>
                   </Link>
                 </>

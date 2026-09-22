@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ChevronDownIcon } from '@heroicons/react/20/solid';
+import { FsIcon } from '@/shared/ui';
 
 export interface BacklogGroupProps {
   name: string;
@@ -33,9 +33,8 @@ export default function BacklogGroup({ name, count, note, open, onToggle, action
             aria-expanded={open}
             className="flex min-h-11 min-w-0 flex-wrap items-center gap-2 rounded-md text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
-            <ChevronDownIcon
+            <FsIcon name="chevron-down"
               className={`h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform duration-fast ${open ? '' : '-rotate-90'}`}
-              aria-hidden="true"
             />
             <span className="text-sm font-semibold text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{name}</span>
             {note && <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-muted)]">{note}</span>}
