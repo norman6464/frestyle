@@ -117,8 +117,10 @@ export const ふつう: Story = {
       await expect(canvas.getByText('FRESTYLE-102')).toBeInTheDocument();
     });
     await expect(canvas.getByLabelText('題名')).toHaveValue(ticket().title as string);
-    await userEvent.click(canvas.getByRole('button', { name: '計画と整理' }));
+    // ラベルは基本の 4 項目にあり、畳まれた「その他」を開かなくても見える。
     await expect(canvas.getByText('不具合')).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: /その他 7 項目/ }));
+    await expect(canvas.getByText('報告者')).toBeVisible();
   },
 };
 

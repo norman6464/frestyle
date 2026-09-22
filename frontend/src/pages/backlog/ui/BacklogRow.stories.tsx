@@ -80,17 +80,18 @@ const meta = {
     status: devStatus,
     statuses: allStatuses,
     assigneeName: '',
-    assigneeInitials: '',
     selected: false,
     busy: false,
     canEdit: true,
     indented: false,
+    // 期限超過の判定に使う「今日」。story は日付に依存しないよう固定する。
+    today: '2026-09-22',
     onOpen: fn(),
     onChangeStatus: fn(),
   },
   decorators: [
     (Story) => (
-      <div className="w-[560px] border border-surface-3">
+      <div role="table" className="w-[860px] border border-surface-3">
         <Story />
       </div>
     ),
@@ -100,22 +101,23 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** 担当は名前で出す（表の列なので、頭文字の丸より名前の方が横に並べて読める）。 */
 export const 担当あり: Story = {
   args: {
     ticket: { ...baseTicket, assigneePrincipalId: 'p-nor' },
     assigneeName: 'norman6464',
-    assigneeInitials: 'NO',
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('FRESTYLE-457')).toBeInTheDocument();
-    await expect(canvas.getByText('NO')).toBeInTheDocument();
+    // 広い画面の列と、狭い画面の補足行の両方に名前がある（表示されるのは片方）。
+    await expect(canvas.getAllByText('norman6464').length).toBeGreaterThan(0);
   },
 };
 
 export const 未割り当て: Story = {
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByLabelText('未割り当て')).toBeInTheDocument();
+    await expect(within(canvasElement).getAllByText('未割当').length).toBeGreaterThan(0);
   },
 };
 
@@ -124,21 +126,43 @@ export const 子チケット_字下げ: Story = {
 };
 
 /**
- * 期限とラベルは行に出さない（見本と同じ）。持っていても行は変わらず、詳細パネルで読む。
- * 1 行に収めるために落とした列で、値そのものを捨てたわけではない。
+ * 期限は列に出す（設計ボード ST08）。ラベルは行に出さない —— 持っていても行は変わらず、
+ * 詳細パネルで読む。1 行に収めるために落とした列で、値そのものを捨てたわけではない。
  */
-export const 期限とラベルは行に出さない: Story = {
+export const 期限は列に出しラベルは出さない: Story = {
   args: {
     ticket: {
       ...baseTicket,
-      dueDate: '2020-01-01',
+      dueDate: '2026-10-04',
       labels: [{ id: 'l-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' }],
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.queryByText('01/01')).toBeNull();
+    await expect(canvas.getAllByText('10/4').length).toBeGreaterThan(0);
     await expect(canvas.queryByText('不具合')).toBeNull();
+  },
+};
+
+/** 期限を過ぎていて未完了なら、日付を赤く太くし、読み上げには「期限超過」を添える。 */
+export const 期限超過: Story = {
+  args: { ticket: { ...baseTicket, dueDate: '2026-09-21' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const [due] = canvas.getAllByText('9/21');
+    await expect(due).toHaveClass('text-danger-ink');
+    await expect(canvas.getAllByText('（期限超過）').length).toBeGreaterThan(0);
+  },
+};
+
+/** 完了しているものは、期限が過ぎていても超過とは言わない。 */
+export const 完了なら期限超過にしない: Story = {
+  args: { ticket: { ...baseTicket, dueDate: '2026-09-21' }, status: doneStatus },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const [due] = canvas.getAllByText('9/21');
+    await expect(due).not.toHaveClass('text-danger-ink');
+    await expect(canvas.queryByText('（期限超過）')).toBeNull();
   },
 };
 
@@ -154,16 +178,15 @@ export const 操作中: Story = {
 };
 
 /**
- * 優先度は印だけを出す（▲ 高 / − 中 / ▼ 低）。文字は読み上げにだけ残す —— 見本も行には
- * 印しか置かない。状態は行の中で変えられる（見本と同じ）。
+ * 優先度は印と文字で出す（▲ 高 / − 中 / ▼ 低）。列の見出しが「優先度」なので、升の中では
+ * 項目名を繰り返さない。状態は行の中で変えられる（設計ボードと同じ）。
  */
 export const 優先度と状態の見え方: Story = {
-  args: { ticket: { ...baseTicket, priority: 1, storyPoints: 5 } },
+  args: { ticket: { ...baseTicket, priority: 1 } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('▲')).toBeInTheDocument();
-    await expect(canvas.getByText('優先度: 高')).toBeInTheDocument();
-    await expect(canvas.getByText('見積り 5')).toBeInTheDocument();
+    await expect(canvas.getAllByText('▲').length).toBeGreaterThan(0);
+    await expect(canvas.getAllByText('高').length).toBeGreaterThan(0);
     // 状態は選べる（押せるのに変わらない見た目にはしない）。
     const status = canvas.getByLabelText(`${baseTicket.title} の状態`);
     await expect(status).toHaveAccessibleName(`${baseTicket.title} の状態`);
@@ -187,13 +210,5 @@ export const 状態を変えても行は開かない: Story = {
 export const 種別は先頭の印: Story = {
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByLabelText('種別: 開発タスク')).toBeInTheDocument();
-  },
-};
-
-/** 見積りは未設定（—）と 0 を区別する。0 は「やることが無い」で、未設定とは別物。 */
-export const 見積りは未設定と0を区別する: Story = {
-  args: { ticket: { ...baseTicket, storyPoints: 0 } },
-  play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByText('見積り 0')).toBeInTheDocument();
   },
 };

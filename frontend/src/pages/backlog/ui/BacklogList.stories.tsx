@@ -108,7 +108,6 @@ const meta = {
     selectedId: null,
     busyId: null,
     nameOf: () => '',
-    initialsOf: () => '',
     onSelect: fn(),
     onCreate: fn(async () => {}),
     onChangeStatus: fn(),
@@ -117,7 +116,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="h-[520px] w-[640px] bg-surface-1">
+      <div className="h-[520px] w-full max-w-[900px] bg-surface-1">
         <Story />
       </div>
     ),
@@ -187,8 +186,10 @@ export const スプリントの段: Story = {
     await expect(canvas.getByText('スプリント 1')).toBeInTheDocument();
     await expect(canvas.getByText('バックログ')).toBeInTheDocument();
     // 件数は段ごと。合計ではない。
-    await expect(canvas.getByText('（1 件の作業項目）')).toBeInTheDocument();
-    await expect(canvas.getByText('（2 件の作業項目）')).toBeInTheDocument();
+    await expect(canvas.getByText('1 件')).toBeInTheDocument();
+    await expect(canvas.getByText('2 件')).toBeInTheDocument();
+    // 表の見出し行が 1 つだけある（段ごとには繰り返さない）。
+    await expect(canvas.getAllByRole('columnheader')).toHaveLength(6);
   },
 };
 
@@ -201,7 +202,15 @@ export const 段を畳む: Story = {
     await waitFor(async () => {
       await expect(canvas.queryByText('FRESTYLE-457')).toBeNull();
     });
-    await expect(canvas.getByText('（2 件の作業項目）')).toBeInTheDocument();
+    await expect(canvas.getByText('2 件')).toBeInTheDocument();
+  },
+};
+
+/** 一覧の下に件数。絞り込み中で全件数が分かるときは「・全 N 件」を添える。 */
+export const 絞り込み中は全件数も出す: Story = {
+  args: { filtered: true, totalCount: 12 },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('2 件の課題を表示・全 12 件')).toBeInTheDocument();
   },
 };
 

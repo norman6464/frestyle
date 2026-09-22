@@ -1,3 +1,4 @@
+import { ArrowDownIcon, ArrowUpIcon, ChevronDoubleDownIcon } from '@heroicons/react/20/solid';
 import { FieldSelect } from '@/shared/ui';
 
 export interface BacklogReorderBarProps {
@@ -26,20 +27,12 @@ export interface BacklogReorderBarProps {
 const REORDER_RULE =
   '並び替えの決まり: 並び替えは同じ段の中だけ（スプリントとバックログは別の並びを持つ）。アーカイブでは出さない';
 
-const ICON_PROPS = {
-  width: 12,
-  height: 12,
-  viewBox: '0 0 24 24',
-  fill: 'none',
-  stroke: 'currentColor',
-  strokeWidth: 2.4,
-  strokeLinecap: 'round' as const,
-  'aria-hidden': true,
-};
-
 /**
  * 一覧の下の帯。「選択中 X を 1つ上へ / 1つ下へ / 末尾へ」（設計 Ⅳ-F・見本どおり）。
  * ドラッグ&ドロップは段2（キーボードだけで完結し、依存を増やさないボタン案を採用）。
+ *
+ * 行を選んでいないときは何も描かない。押せない 3 つのボタンと案内文が常に居座るより、
+ * 選んだ瞬間に対象のキーと段の名前ごと現れる方が「何に効く操作か」が読める（設計ボード ST12）。
  */
 export default function BacklogReorderBar({
   selectedKey,
@@ -54,53 +47,38 @@ export default function BacklogReorderBar({
   onRemoveFromSprint,
 }: BacklogReorderBarProps) {
   const hasSelection = selectedKey !== null;
-  if (!hasSelection) return <p className="border-t border-surface-3 px-4 py-3 text-xs text-[var(--color-text-muted)]">行を選ぶと並び替えられます</p>;
+  if (!hasSelection) return null;
   return (
     <div className="flex max-h-48 shrink-0 flex-wrap items-center gap-2 overflow-y-auto border-t border-surface-3 bg-surface-1 px-3 py-2 text-xs [&_button]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600 [&_select]:min-h-11">
       <span className="min-w-0 text-[var(--color-text-muted)] [overflow-wrap:anywhere]">
-        {hasSelection ? (
-          <>
-            選択中 <b className="text-[var(--color-text-primary)]">{selectedKey}</b> を
-            {groupName && <>（{groupName} の中で）</>}
-          </>
-        ) : (
-          '行を選ぶと並び替えられます'
-        )}
+        選択中 <b className="text-[var(--color-text-primary)]">{selectedKey}</b> を
+        {groupName && <>（{groupName} の中で）</>}
       </span>
       <button
         type="button"
         onClick={onMoveUp}
         disabled={!hasSelection || isFirst}
-        className="inline-flex items-center gap-1 rounded border border-surface-3 px-2 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        className="inline-flex items-center gap-1 rounded-md border border-surface-3 px-2.5 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
       >
-        <svg {...ICON_PROPS}>
-          <path d="m5 12 7-7 7 7" />
-          <path d="M12 19V5" />
-        </svg>
+        <ArrowUpIcon className="h-3.5 w-3.5" aria-hidden="true" />
         1 つ上へ
       </button>
       <button
         type="button"
         onClick={onMoveDown}
         disabled={!hasSelection || isLast}
-        className="inline-flex items-center gap-1 rounded border border-surface-3 px-2 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        className="inline-flex items-center gap-1 rounded-md border border-surface-3 px-2.5 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
       >
-        <svg {...ICON_PROPS}>
-          <path d="M12 5v14" />
-          <path d="m19 12-7 7-7-7" />
-        </svg>
+        <ArrowDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
         1 つ下へ
       </button>
       <button
         type="button"
         onClick={onMoveLast}
         disabled={!hasSelection || isLast}
-        className="inline-flex items-center gap-1 rounded border border-surface-3 px-2 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        className="inline-flex items-center gap-1 rounded-md border border-surface-3 px-2.5 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
       >
-        <svg {...ICON_PROPS}>
-          <path d="m7 6 5 5 5-5" />
-          <path d="m7 13 5 5 5-5" />
-        </svg>
+        <ChevronDoubleDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
         末尾へ
       </button>
       {onMoveToSprint && sprints.length > 0 && (
@@ -126,7 +104,7 @@ export default function BacklogReorderBar({
           type="button"
           onClick={onRemoveFromSprint}
           disabled={!hasSelection}
-          className="inline-flex items-center rounded border border-surface-3 px-2 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          className="inline-flex items-center rounded-md border border-surface-3 px-2.5 py-1 font-medium text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
         >
           スプリントから出す
         </button>

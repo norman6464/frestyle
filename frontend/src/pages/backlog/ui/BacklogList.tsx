@@ -4,7 +4,8 @@ import type { Ticket, TicketStatus, TicketType } from '@/entities/ticket';
 import type { SprintState } from '@/entities/sprint';
 import EmptyState from '@/shared/ui/EmptyState';
 import Loading from '@/shared/ui/Loading';
-import BacklogRow from './BacklogRow';
+import { localTodayISO } from '../lib/dueDate';
+import BacklogRow, { BACKLOG_COLS_MD } from './BacklogRow';
 import BacklogGroup from './BacklogGroup';
 import BacklogReorderBar from './BacklogReorderBar';
 import TicketCreateRow from './TicketCreateRow';
@@ -32,11 +33,12 @@ export interface BacklogListProps {
   error: string | null;
   archived: boolean;
   filtered?: boolean;
+  /** 絞り込み前の全件数。「N 件を表示・全 M 件」に使う。取れていなければ null。 */
+  totalCount?: number | null;
   canEdit: boolean;
   selectedId: string | null;
   busyId: string | null;
   nameOf: (principalId: string | null) => string;
-  initialsOf: (principalId: string | null) => string;
   onSelect: (ticketId: string) => void;
   onCreate: (title: string) => Promise<void>;
   onChangeStatus: (ticketId: string, statusId: string) => void;
@@ -53,7 +55,16 @@ export interface BacklogListProps {
   onRetry: () => void;
 }
 
-/** バックログの本文（スプリントの段 → バックログの段 → 並び替えの帯）。見本 2a。 */
+const COLUMNS = ['課題', 'やること', '担当', '優先度', '期限', '状態'] as const;
+
+/**
+ * バックログの本文。見出し行を持つ表に、スプリントの段 → バックログの段を積み、
+ * 下に並び替えの帯（選択中だけ）と件数を置く（設計ボード ST08）。
+ *
+ * 表は CSS グリッドで組む。`<table>` にしないのは、狭い画面で列を捨ててカードに
+ * 組み替えるため（表の要素は列の構造を捨てられない）。役割（table / row / cell）は
+ * 付けておき、読み上げでは表として辿れるようにする。
+ */
 export default function BacklogList({
   groups,
   statuses,
@@ -63,11 +74,11 @@ export default function BacklogList({
   error,
   archived,
   filtered = false,
+  totalCount = null,
   canEdit,
   selectedId,
   busyId,
   nameOf,
-  initialsOf,
   onSelect,
   onCreate,
   onChangeStatus,
@@ -80,6 +91,8 @@ export default function BacklogList({
 }: BacklogListProps) {
   // 畳んだ段だけを覚える。既定は開いた状態なので、スプリントが増えても勝手に隠れない。
   const [closed, setClosed] = useState<Record<string, boolean>>({});
+  // 期限超過の判定に使う「今日」。行ごとに Date を作らず、描画 1 回につき 1 回だけ求める。
+  const today = localTodayISO();
 
   if (error) {
     return (
@@ -97,13 +110,17 @@ export default function BacklogList({
   if (!loading && total === 0) {
     return (
       <div className="mx-auto max-w-xl overflow-y-auto px-4 pb-6">
-      <EmptyState
-        headingLevel={2}
-        icon={InboxIcon}
-        title={filtered ? '条件に合うチケットはありません' : archived ? 'アーカイブされたチケットはありません' : 'まだチケットがありません'}
-        description={filtered ? '上の絞り込み条件を変更するか、解除して確認してください。' : archived ? 'アーカイブしたチケットはここに保管されます。必要なときに戻せます。' : 'まずは、取り組みたい作業を1つ書いてみましょう。詳しい内容はあとから追加できます。'}
-      />
-      {!archived && !filtered && canEdit && <TicketCreateRow onCreate={onCreate} />}
+        <EmptyState
+          headingLevel={2}
+          icon={InboxIcon}
+          title={filtered ? '条件に合うチケットはありません' : archived ? 'アーカイブされたチケットはありません' : 'まだチケットがありません'}
+          description={filtered ? '上の絞り込み条件を変更するか、解除して確認してください。' : archived ? 'アーカイブしたチケットはここに保管されます。必要なときに戻せます。' : 'まずは、取り組みたい作業を1つ書いてみましょう。詳しい内容はあとから追加できます。'}
+        />
+        {!archived && !filtered && canEdit && (
+          <div role="table" aria-label="チケット" className="rounded-lg border border-surface-3">
+            <TicketCreateRow onCreate={onCreate} />
+          </div>
+        )}
       </div>
     );
   }
@@ -145,48 +162,70 @@ export default function BacklogList({
     void onMove(selected.id, {});
   };
 
+  const showTotal = filtered && totalCount !== null && totalCount !== total;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {groups.map((group) => (
-          <BacklogGroup
-            key={group.id}
-            name={group.name}
-            count={group.tickets.length}
-            note={group.note}
-            open={!closed[group.id]}
-            onToggle={() => setClosed((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
-            action={renderGroupAction?.(group)}
+        <div role="table" aria-label="チケット" aria-rowcount={total}>
+          {/* 見出し行。狭い画面は列を捨ててカードにするので出さない（各カードが項目名を持つ）。 */}
+          <div
+            role="row"
+            className={`sticky top-0 z-10 hidden border-b border-surface-3 bg-surface-2 px-3 text-xs text-[var(--color-text-muted)] md:grid sm:px-4 ${BACKLOG_COLS_MD}`}
           >
-            {group.tickets.length === 0 ? (
-              <p className="px-3 py-4 text-center text-xs text-[var(--color-text-muted)]">
-                {group.kind === 'sprint'
-                  ? 'このスプリントにはまだ何も入っていません。下の一覧から選んで「スプリントへ」で入れます。'
-                  : 'すべてスプリントに入っています。'}
-              </p>
-            ) : (
-              group.tickets.map((ticket) => (
-                <BacklogRow
-                  key={ticket.id}
-                  ticket={ticket}
-                  projectKey={projectKey}
-                  type={typeOf(ticket.typeId)}
-                  status={statusOf(ticket.statusId)}
-                  statuses={statuses}
-                  assigneeName={nameOf(ticket.assigneePrincipalId)}
-                  assigneeInitials={initialsOf(ticket.assigneePrincipalId)}
-                  selected={ticket.id === selectedId}
-                  busy={ticket.id === busyId}
-                  canEdit={canEdit && !archived}
-                  indented={ticket.parentId !== null}
-                  onOpen={() => onSelect(ticket.id)}
-                  onChangeStatus={(statusId) => onChangeStatus(ticket.id, statusId)}
-                />
-              ))
-            )}
-            {group.kind === 'backlog' && canEdit && !archived && <TicketCreateRow onCreate={onCreate} />}
-          </BacklogGroup>
-        ))}
+            {COLUMNS.map((label) => (
+              <div key={label} role="columnheader" className="whitespace-nowrap py-2.5">
+                {label}
+              </div>
+            ))}
+          </div>
+
+          {groups.map((group) => (
+            <BacklogGroup
+              key={group.id}
+              name={group.name}
+              count={group.tickets.length}
+              note={group.note}
+              open={!closed[group.id]}
+              onToggle={() => setClosed((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
+              action={renderGroupAction?.(group)}
+            >
+              {group.tickets.length === 0 ? (
+                <div role="row" className="border-b border-surface-3">
+                  <div role="cell" aria-colspan={6} className="px-3 py-4 text-center text-xs text-[var(--color-text-muted)]">
+                    {group.kind === 'sprint'
+                      ? 'このスプリントにはまだ何も入っていません。下の一覧から選んで「スプリントへ」で入れます。'
+                      : 'すべてスプリントに入っています。'}
+                  </div>
+                </div>
+              ) : (
+                group.tickets.map((ticket) => (
+                  <BacklogRow
+                    key={ticket.id}
+                    ticket={ticket}
+                    projectKey={projectKey}
+                    type={typeOf(ticket.typeId)}
+                    status={statusOf(ticket.statusId)}
+                    statuses={statuses}
+                    assigneeName={nameOf(ticket.assigneePrincipalId)}
+                    selected={ticket.id === selectedId}
+                    busy={ticket.id === busyId}
+                    canEdit={canEdit && !archived}
+                    indented={ticket.parentId !== null}
+                    today={today}
+                    onOpen={() => onSelect(ticket.id)}
+                    onChangeStatus={(statusId) => onChangeStatus(ticket.id, statusId)}
+                  />
+                ))
+              )}
+              {group.kind === 'backlog' && canEdit && !archived && <TicketCreateRow onCreate={onCreate} />}
+            </BacklogGroup>
+          ))}
+        </div>
+
+        <p className="px-3 py-3 text-xs tabular-nums text-[var(--color-text-muted)] sm:px-4">
+          {total} 件の課題を表示{showTotal && <>・全 {totalCount} 件</>}
+        </p>
       </div>
 
       {canEdit && !archived && (

@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronUpDownIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { ProjectRepository, type Project } from '@/entities/project';
-import BacklogSavedFilters from './BacklogSavedFilters';
-import { useBacklogFilterCounts } from '../model/useBacklogFilterCounts';
 
 export interface BacklogSidebarProps {
   workspaceSlug: string | undefined;
@@ -24,17 +22,17 @@ function projectInitials(key: string): string {
 }
 
 /**
- * BacklogSidebar はバックログの柱。プロジェクトの切替と、どう絞るかだけを持つ。
+ * BacklogSidebar はバックログの柱。プロジェクトの切替だけを持つ。
  *
- * 面の切替（バックログ / 状態と種別 / アーカイブ）とスプリントは**持たない** —— 見本の
- * Jira はそれを本文のタブ列と本文の段に置いており、行き先が柱と本文の 2 か所にあると
- * どちらが正か分からなくなるため。ナレッジの KbSidebar とは別物で、ページの木も
- * スペースの切替も持たない（バックログは projects にしか属さない）。
+ * 面の切替（バックログ / アーカイブ / 設定）・スプリント・保存した絞り込みは**持たない**。
+ * 設計ボード ST08 はそれらを本文側（見出しの右のタブ、一覧の上の絞り込みタブ、本文の段）に
+ * 置いており、行き先が柱と本文の 2 か所にあるとどちらが正か分からなくなるため。
+ * ナレッジの KbSidebar とは別物で、ページの木もスペースの切替も持たない
+ * （バックログは projects にしか属さない）。
  */
 export default function BacklogSidebar({ workspaceSlug, project, onOpenSearch }: BacklogSidebarProps) {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
-  const counts = useBacklogFilterCounts(workspaceSlug, project?.id);
 
   // 切替を開いたときだけ一覧を取る（閉じている間は要らない問い合わせを出さない）。
   useEffect(() => {
@@ -117,7 +115,6 @@ export default function BacklogSidebar({ workspaceSlug, project, onOpenSearch }:
         </button>
       )}
 
-      <BacklogSavedFilters projectId={project.id} counts={counts} />
     </div>
   );
 }

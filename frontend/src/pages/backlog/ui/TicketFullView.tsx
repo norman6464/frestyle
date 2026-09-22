@@ -170,7 +170,7 @@ export default function TicketFullView({
           <div className="min-w-0">
             <TicketSection title="詳細情報" headingLevel={2}>
               <TicketAttributePanel
-                progressive
+                columns={1}
                 ticket={ticket}
                 workspaceSlug={workspaceSlug}
                 projectKey={projectKey}

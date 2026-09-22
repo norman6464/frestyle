@@ -1,3 +1,4 @@
+import { ChevronDownIcon } from '@heroicons/react/20/solid';
 import type { TicketStatusCategory } from '../model/types';
 
 export interface TicketStatusPillProps {
@@ -35,21 +36,7 @@ export default function TicketStatusPill({
         style={{ backgroundColor: color }}
       />
       <span className="min-w-0 truncate">{name}</span>
-      {showChevron && (
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinecap="round"
-          aria-hidden="true"
-          className="flex-none text-[var(--color-text-muted)]"
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      )}
+      {showChevron && <ChevronDownIcon className="h-3 w-3 flex-none text-[var(--color-text-muted)]" aria-hidden="true" />}
     </span>
   );
 }

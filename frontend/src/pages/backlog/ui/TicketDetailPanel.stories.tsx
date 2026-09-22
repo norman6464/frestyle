@@ -3,7 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import TicketDetailPanel from './TicketDetailPanel';
 import type { Ticket, TicketStatus, TicketType } from '@/entities/ticket';
 import type { KbGrantablePrincipal } from '@/entities/kb';
-import { withApi, withToast } from '../../../../.storybook/decorators';
+import { withApi, withRouter, withToast } from '../../../../.storybook/decorators';
 
 const ticket: Ticket = {
   id: 't-1',
@@ -113,8 +113,10 @@ const meta = {
   },
   decorators: [
     withToast,
+    // 身元（キー・種別）は全画面へのリンクなので router が要る。
+    withRouter,
     (Story) => (
-      <div className="h-[640px] w-[360px] border-l border-surface-3 bg-surface-1">
+      <div className="h-[640px] w-[420px] border-l border-surface-3 bg-surface-1">
         <Story />
       </div>
     ),
@@ -180,14 +182,37 @@ export const ラベルつき: Story = {
   },
 };
 
-// パネルの見出し（「チケット」）と閉じるボタンは器（SecondaryPanel）が描く。
+// パネルの見出し（「選択中 KEY」）と閉じるボタンは器（SecondaryPanel）が描く。
 // ここで同じものを出すと二重になる。
 //
 // 「詳細」は節の見出しとして中にある（属性の一覧）ので、無いことを確かめる対象ではない。
 export const 見出しを自分では描かない: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.queryByText('チケット')).toBeNull();
-    await expect(canvas.queryByRole('button', { name: '詳細を閉じる' })).toBeNull();
+    await expect(canvas.queryByText(/^選択中/)).toBeNull();
+    await expect(canvas.queryByRole('button', { name: '選択解除' })).toBeNull();
+  },
+};
+
+/** 身元の行は全画面への入口。キーと種別を 1 行に置く（設計ボード ST11）。 */
+export const 身元から全画面へ: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: /FRESTYLE-457/ });
+    await expect(link).toHaveAttribute('href', '/tickets/t-1');
+    await expect(link).toHaveTextContent('開発タスク');
+  },
+};
+
+/** 基本の 4 項目は最初から見え、その他 7 項目は畳まれている。 */
+export const 基本とその他に分かれる: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('担当者')).toBeVisible();
+    await expect(canvas.getByText('優先度')).toBeVisible();
+    await expect(canvas.getByText('期限')).toBeVisible();
+    await expect(canvas.getByText('ラベル')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /その他 7 項目/ })).toHaveAttribute('aria-expanded', 'false');
+    await expect(canvas.getByText('報告者')).not.toBeVisible();
   },
 };

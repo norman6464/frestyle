@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AutoResizeTextarea } from '@/shared/ui';
 import {
-  TicketKeyBadge,
+  formatTicketKey,
   type Label,
   type Ticket,
   type TicketStatus,
@@ -45,10 +46,13 @@ export interface TicketDetailPanelProps {
 }
 
 /**
- * チケット詳細パネル。一覧を捌きながら 1 件を確かめ、軽く直すための面。
+ * チケット詳細パネル。一覧を捌きながら 1 件を確かめ、軽く直すための面（設計ボード ST11）。
  *
- * 見出しと閉じるボタンは器（SecondaryPanel）が描く。ここで同じ見出しをもう 1 行出すと
- * 二重になるので持たない。保存状態は「本文」の節の見出しに添える。
+ * 上から順に、身元（キーと種別）→ 題名 → 状態と所属 → 説明 → 基本の 4 項目 → その他 7 項目 →
+ * 添付・サブタスク → コメント。読む順と、直す頻度の順を揃えてある。
+ *
+ * 見出し（「選択中 KEY」）と閉じるボタンは器（SecondaryPanel）が描く。ここで同じ見出しを
+ * もう 1 行出すと二重になるので持たない。
  */
 export default function TicketDetailPanel({
   ticket,
@@ -72,43 +76,38 @@ export default function TicketDetailPanel({
   onChangeParent,
 }: TicketDetailPanelProps) {
   const archived = ticket.archivedAt !== null;
+  const editable = canEdit && !archived;
 
   const type = types.find((t) => t.id === ticket.typeId);
   // 版・チーム（プロジェクトの語彙）と、このチケットに付いている分・所属スプリント。
   const vocabulary = useTicketVocabulary(workspaceSlug, ticket.projectId, ticket.id, ticket.teamId);
-  const editor = useTicketEditor(ticket, canEdit && !archived, (input) => onUpdate(ticket.id, input));
+  const editor = useTicketEditor(ticket, editable, (input) => onUpdate(ticket.id, input));
   // 添付とサブタスクの件数。数えるのは各節の中（自前の取得を持つ）なので、報告を受けて見出しへ回す。
   const [attachmentCount, setAttachmentCount] = useState<number | null>(null);
   const [childCount, setChildCount] = useState<number | null>(null);
   const docValue = isRichDoc(editor.doc) ? editor.doc : emptyRichDoc();
+  const key = formatTicketKey(projectKey, ticket.number);
 
   return (
     // スクロールは器（SecondaryPanel の中身ラッパー）が持つ。ここに overflow-y-auto を
     // 付けると「スクロール範囲ゼロの空の容器」になり、overscroll-contain と相まって
     // ホイール操作を飲み込んで器までスクロールが届かなくなる（実測で確認）。
-    // flex-1 / min-h-0 も親が flex コンテナではないため効かない。素の中身として置く。
-    <div className="px-4 py-5" tabIndex={0}>
-      {/* 先頭行（パンくず）。親とキーで「どのチケットか」を示す（設計 13）。
-          器の見出しは「チケット」のままなので、身元はここが唯一の出どころになる。 */}
-      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-muted)]">
-        {parentTicket ? (
+    <div className="px-4 py-5 sm:px-5" tabIndex={0}>
+      {/* 身元。キーと種別を 1 行に。押すと全画面で開く（同じ物を大きく見る操作なので、身元そのものを入口にする）。 */}
+      <Link
+        to={`/tickets/${ticket.id}`}
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-md font-mono text-xs font-semibold tracking-wide text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+      >
+        <span>{key}</span>
+        {type && (
           <>
-            <span className="truncate">{parentTicket.title}</span>
-            <span className="text-[var(--color-text-faint)]">/</span>
-          </>
-        ) : (
-          <>
-            <span>親なし</span>
-            <span className="text-[var(--color-text-faint)]">/</span>
+            <span aria-hidden="true" className="text-[var(--color-text-faint)]">・</span>
+            <span className="font-sans font-medium">{type.name}</span>
           </>
         )}
-        <TicketKeyBadge projectKey={projectKey} number={ticket.number} />
-        <span className="rounded bg-surface-2 px-1.5 py-0.5 font-semibold text-[var(--color-text-secondary)]">
-          {type?.name ?? ''}
-        </span>
-      </div>
+      </Link>
 
-      {canEdit && !archived ? (
+      {editable ? (
         <AutoResizeTextarea
           value={editor.title}
           onChange={(e) => editor.changeTitle(e.target.value.replace(/[\r\n]+/g, ' '))}
@@ -120,76 +119,34 @@ export default function TicketDetailPanel({
           }}
           onBlur={editor.commitTitle}
           aria-label="題名"
-          className="mb-4 min-h-12 w-full rounded-md border border-transparent bg-transparent px-1 text-lg font-bold leading-snug text-[var(--color-text-primary)] hover:border-surface-3 focus:outline-none focus:ring-2 focus:ring-brand-600"
+          className="-mx-1 mt-1 mb-3 min-h-12 w-[calc(100%+0.5rem)] rounded-md border border-transparent bg-transparent px-1 text-xl font-bold leading-snug text-[var(--color-text-primary)] hover:border-surface-3 focus:outline-none focus:ring-2 focus:ring-brand-600"
         />
       ) : (
-        <h2 className="mb-4 text-lg font-bold leading-snug text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{ticket.title}</h2>
+        <h2 className="mt-1 mb-3 text-xl font-bold leading-snug text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{ticket.title}</h2>
       )}
 
-      {/* 状態の変更と、チケットそのものへの操作。題名のすぐ下に置く（設計 12 の並び）。 */}
+      {/* 状態と所属。状態はいちばん押す物なので題名の直下に置く。所属（スプリントかバックログか）は読むだけ。 */}
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        <TicketWatchButton workspaceSlug={workspaceSlug} ticketId={ticket.id} />
         <TicketStatusSelect
           statuses={statuses}
           statusId={ticket.statusId}
-          canEdit={canEdit && !archived}
+          canEdit={editable}
           busy={busy}
           onChange={(statusId) => void onChangeStatus(statusId)}
         />
-        {canEdit && (
-          <button
-            type="button"
-            onClick={() => void (archived ? onRestore() : onArchive())}
-            disabled={busy}
-            className="min-h-11 rounded-md border border-surface-3 px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
-          >
-            {archived ? '現役に戻す' : 'アーカイブ'}
-          </button>
-        )}
+        <span className="text-sm text-[var(--color-text-muted)]">{vocabulary.sprint?.name ?? 'バックログ'}</span>
+        <div className="ml-auto">
+          <TicketWatchButton workspaceSlug={workspaceSlug} ticketId={ticket.id} />
+        </div>
       </div>
 
-      <TicketSection title="説明" collapsible>
-        <TicketDescriptionEditor value={docValue} editable={canEdit && !archived} onSave={editor.saveDoc} />
+      <TicketSection title="説明">
+        <TicketDescriptionEditor value={docValue} editable={editable} onSave={editor.saveDoc} />
       </TicketSection>
 
-      {/* 添付とサブタスクは「無いことの方が多い」節。中身は載せたまま畳んでおき、件数だけ
-          見出しに出す。開かずとも 0 と分かるので、空の説明文で縦を食わずに済む。
-          件数が入ったら開いた状態で始める（有るものを隠さない）。 */}
-      <TicketSection
-        title="添付ファイル"
-        collapsible
-        mountWhenClosed
-        count={attachmentCount ?? undefined}
-        defaultOpen={false}
-        key={`attachments-${ticket.id}`}
-      >
-        <TicketAttachmentSection
-          workspaceSlug={workspaceSlug}
-          ticketId={ticket.id}
-          canEdit={canEdit && !archived}
-          onCountChange={setAttachmentCount}
-        />
-      </TicketSection>
-
-      <TicketSection
-        title="サブタスク"
-        collapsible
-        mountWhenClosed
-        count={childCount ?? undefined}
-        defaultOpen={false}
-        key={`children-${ticket.id}`}
-      >
-        <TicketChildrenSection
-          workspaceSlug={workspaceSlug}
-          ticketId={ticket.id}
-          projectKey={projectKey}
-          statuses={statuses}
-          onCountChange={setChildCount}
-        />
-      </TicketSection>
-
-      <TicketSection title="詳細" collapsible>
+      <div className="mb-5 border-t border-surface-3 pt-4">
         <TicketAttributePanel
+          columns={2}
           ticket={ticket}
           workspaceSlug={workspaceSlug}
           projectKey={projectKey}
@@ -220,18 +177,69 @@ export default function TicketDetailPanel({
           onChangeDueDate={editor.changeDueDate}
           onChangeParent={(parentId) => void onChangeParent(parentId)}
         />
-      </TicketSection>
+      </div>
 
-      {/* 作成・更新はどの項目より後ろ。読む順の最後に来るのが自然（設計 15）。 */}
-      <p className="mb-5 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
-        作成日 {formatTicketTimestamp(ticket.createdAt)}
-        <br />
-        更新日 {formatTicketTimestamp(ticket.updatedAt)}
-      </p>
+      {/* 添付とサブタスクは「無いことの方が多い」節。中身は載せたまま畳んでおき、件数だけ
+          見出しに出す。開かずとも 0 と分かるので、空の説明文で縦を食わずに済む。 */}
+      <div className="border-t border-surface-3 pt-4">
+        <TicketSection
+          title="添付"
+          collapsible
+          mountWhenClosed
+          count={attachmentCount ?? undefined}
+          defaultOpen={false}
+          key={`attachments-${ticket.id}`}
+        >
+          <TicketAttachmentSection
+            workspaceSlug={workspaceSlug}
+            ticketId={ticket.id}
+            canEdit={editable}
+            onCountChange={setAttachmentCount}
+          />
+        </TicketSection>
 
-      <TicketSection title="アクティビティ">
-        <TicketCommentSection workspaceSlug={workspaceSlug} ticketId={ticket.id} compact />
-      </TicketSection>
+        <TicketSection
+          title="サブタスク"
+          collapsible
+          mountWhenClosed
+          count={childCount ?? undefined}
+          defaultOpen={false}
+          key={`children-${ticket.id}`}
+        >
+          <TicketChildrenSection
+            workspaceSlug={workspaceSlug}
+            ticketId={ticket.id}
+            projectKey={projectKey}
+            statuses={statuses}
+            onCountChange={setChildCount}
+          />
+        </TicketSection>
+      </div>
+
+      <div className="border-t border-surface-3 pt-4">
+        <TicketSection title="コメント">
+          <TicketCommentSection workspaceSlug={workspaceSlug} ticketId={ticket.id} compact />
+        </TicketSection>
+      </div>
+
+      {/* 作成・更新と、チケットそのものへの操作はどの項目より後ろ。読む順の最後に来るのが自然。 */}
+      <div className="flex flex-wrap items-end justify-between gap-3 border-t border-surface-3 pt-4">
+        <p className="text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+          作成 {formatTicketTimestamp(ticket.createdAt)}
+          <br />
+          更新 {formatTicketTimestamp(ticket.updatedAt)}
+        </p>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => void (archived ? onRestore() : onArchive())}
+            disabled={busy}
+            className="min-h-9 rounded-md border border-surface-3 px-3 text-xs font-medium text-[var(--color-text-secondary)] transition-colors duration-fast hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50 [@media(pointer:coarse)]:min-h-11"
+          >
+            {archived ? '現役に戻す' : 'アーカイブ'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

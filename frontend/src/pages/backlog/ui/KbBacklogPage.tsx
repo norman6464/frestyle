@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowTopRightOnSquareIcon, ExclamationCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
-import { BacklogSidebar } from '@/widgets/backlog-sidebar';
+import { BacklogSidebar, useBacklogFilterCounts } from '@/widgets/backlog-sidebar';
 import { SecondaryPanel } from '@/widgets/secondary-panel';
 import { EmptyState, Loading, SidebarSection } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
-import { TicketRepository } from '@/entities/ticket';
+import { TicketRepository, formatTicketKey } from '@/entities/ticket';
 import type { SprintState } from '@/entities/sprint';
 import { useTicketList } from '../model/useTicketList';
 import { useTicketMasters } from '../model/useTicketMasters';
@@ -15,6 +15,7 @@ import { usePrincipalNames } from '../model/usePrincipalNames';
 import { useBacklogProject } from '../model/useBacklogProject';
 import { useBacklogUrlState } from '../model/useBacklogUrlState';
 import BacklogFilterBar from './BacklogFilterBar';
+import BacklogQuickFilters from './BacklogQuickFilters';
 import BacklogList, { BACKLOG_GROUP_ID, type BacklogGroupModel } from './BacklogList';
 import BacklogTabs from './BacklogTabs';
 import SprintBoard from './SprintBoard';
@@ -24,6 +25,28 @@ import { useSprintTickets } from '../model/useSprintTickets';
 import TicketDetailPanel from './TicketDetailPanel';
 import TicketStatusAdmin from './TicketStatusAdmin';
 import TicketTypeAdmin from './TicketTypeAdmin';
+
+/**
+ * 面ごとの見出し。小さな見出しは設計ボード ST08 の文言（バックログ）と、面の名前（ほか）。
+ * 一文は「この面で何をするか」を一言で。
+ */
+const HEADING: Record<BacklogView, { eyebrow: string; title: string; lede: (projectName: string) => string }> = {
+  backlog: {
+    eyebrow: 'Make room for the next thing',
+    title: 'バックログ',
+    lede: (name) => `${name} の次の一歩。いま動かす課題を選びましょう。`,
+  },
+  archive: {
+    eyebrow: 'Archive',
+    title: 'アーカイブ',
+    lede: () => 'アーカイブしたチケット。必要なときに現役へ戻せます。',
+  },
+  settings: {
+    eyebrow: 'Settings',
+    title: '設定',
+    lede: () => '状態・種別・スプリントの決まりごと。バックログの動き方をここで整えます。',
+  },
+};
 
 export interface KbBacklogPageProps {
   /** どの面か。経路が決める（/backlog/:projectId・/settings・/archive）。 */
@@ -53,11 +76,12 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     assignedToMe,
     overdue,
     q,
+    quickFilter,
     selectTicket,
     setStatusId,
     setTypeId,
     setLabelId,
-    setAssignedToMe,
+    setQuickFilter,
     setQuery,
     clearFilters,
     reset,
@@ -103,7 +127,9 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     void sprints.reload();
     void reloadSprintTickets();
   };
-  const { principals, nameOf, initialsOf } = usePrincipalNames(workspaceSlug ?? undefined);
+  const { principals, nameOf } = usePrincipalNames(workspaceSlug ?? undefined);
+  // 「保存した絞り込み」の件数と全件数。柱ではなく一覧の真上に出す（設計ボード ST08）。
+  const counts = useBacklogFilterCounts(workspaceSlug ?? undefined, project?.id);
 
   /**
    * 一覧を段に割る。1 件のチケットはどこか 1 つの段にしか出さない —— 見本と同じく、
@@ -175,6 +201,12 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     setDetailMobileOpen(true);
   };
 
+  const handleCreateBlank = () =>
+    void withToastOnFailure(
+      () => list.createTicket({ title: '無題のチケット' }).then((t) => handleSelect(t.id)),
+      'チケットを作成できませんでした。',
+    );
+
   /** 段の見出しから作る。名前は連番の既定を置くだけにして、変更は「状態と種別」側へ寄せない。 */
   const handleCreateSprint = async () => {
     const name = window.prompt('スプリントの名前', `スプリント ${sprints.sprints.length + 1}`);
@@ -244,41 +276,50 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
           </div>
         ) : (
           <>
-            {/* プロジェクトの見出し。その下に面のタブ列を置く（見本と同じ並び）。 */}
-            <div className="shrink-0 border-b border-surface-3">
-              <div className="flex flex-wrap items-center gap-3 px-4 pb-4 pt-5">
-                <div className="min-w-0 flex-1 basis-48">
-                <h1 className="text-2xl font-bold text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{project.name}</h1>
-                <span className="mt-2 block text-xs text-[var(--color-text-muted)]">
-                  プロジェクト・{project.key.toUpperCase()}
-                </span>
+            {/*
+              見出しの塊（設計ボード ST08）。プロジェクトの行 → 小さな見出し → 大きな面の名前 → 一文 →
+              保存した絞り込み。面のタブはプロジェクトの行の右端。柱に同じ行き先を置かない。
+            */}
+            <div className="shrink-0 border-b border-surface-3 px-4 pb-3 pt-4 sm:px-6">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                <div className="flex min-w-0 items-center gap-2 text-sm">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-taupe-600 text-[11px] font-bold text-white"
+                  >
+                    {project.key.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || project.key.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span className="min-w-0 truncate font-semibold text-[var(--color-text-primary)]">{project.name}</span>
+                  <span aria-hidden="true" className="text-[var(--color-text-faint)]">/</span>
+                  <span className="shrink-0 text-[var(--color-text-muted)]">プロジェクト {project.key.toUpperCase()}</span>
                 </div>
-                {view === 'backlog' && enabled && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void withToastOnFailure(
-                        () => list.createTicket({ title: '無題のチケット' }).then((t) => handleSelect(t.id)),
-                        'チケットを作成できませんでした。',
-                      )
-                    }
-                    className="min-h-11 shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-                  >
-                    チケットを作成
-                  </button>
-                )}
-                {view === 'backlog' && !enabled && !masters.loading && !masters.error && (
-                  <button
-                    type="button"
-                    onClick={() => void handleEnable()}
-                    disabled={enabling}
-                    className="min-h-11 shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
-                  >
-                    {enabling ? '有効化中…' : 'チケットを有効化'}
-                  </button>
-                )}
+                <BacklogTabs projectId={project.id} current={view} />
               </div>
-              <BacklogTabs projectId={project.id} current={view} />
+
+              <p className="mt-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-brand-700" aria-hidden="true">
+                {HEADING[view].eyebrow}
+              </p>
+              <h1 className="mt-1 text-3xl font-bold leading-tight tracking-tight text-[var(--color-text-primary)] sm:text-4xl">
+                {HEADING[view].title}
+              </h1>
+              <p className="mt-2 max-w-[44em] text-sm text-[var(--color-text-muted)]">{HEADING[view].lede(project.name)}</p>
+
+              {view === 'backlog' && !enabled && !masters.loading && !masters.error && (
+                <button
+                  type="button"
+                  onClick={() => void handleEnable()}
+                  disabled={enabling}
+                  className="mt-4 min-h-11 shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
+                >
+                  {enabling ? '有効化中…' : 'チケットを有効化'}
+                </button>
+              )}
+
+              {view === 'backlog' && enabled && (
+                <div className="mt-3">
+                  <BacklogQuickFilters counts={counts} value={quickFilter} onChange={setQuickFilter} />
+                </div>
+              )}
             </div>
 
             {view !== 'settings' && enabled && (
@@ -289,15 +330,15 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                 statusId={statusId}
                 typeId={typeId}
                 labelId={labelId}
-                assignedToMe={assignedToMe}
                 q={q}
-                extraFilters={[...(unassigned ? ['未割り当て'] : []), ...(overdue ? ['期限切れ'] : [])]}
-                onClearFilters={clearFilters}
+                quick={quickFilter}
                 onChangeStatusId={setStatusId}
                 onChangeTypeId={setTypeId}
                 onChangeLabelId={setLabelId}
-                onToggleAssignedToMe={setAssignedToMe}
                 onChangeQuery={setQuery}
+                onClearQuick={() => setQuickFilter(null)}
+                onClearFilters={clearFilters}
+                onCreate={view === 'backlog' ? handleCreateBlank : undefined}
               />
             )}
 
@@ -337,6 +378,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                     )}
                     <BacklogList
                       filtered={Boolean(statusId || typeId || labelId || assignedToMe || unassigned || overdue || q)}
+                      totalCount={counts?.total ?? null}
                       groups={groups}
                       statuses={masters.statuses}
                       types={masters.types}
@@ -348,7 +390,6 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       selectedId={selectedId}
                       busyId={list.busyId}
                       nameOf={nameOf}
-                      initialsOf={initialsOf}
                       onSelect={handleSelect}
                       onCreate={(title) => list.createTicket({ title }).then((t) => handleSelect(t.id))}
                       onChangeStatus={(ticketId, nextStatusId) => {
@@ -380,7 +421,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                             type="button"
                             disabled={sprints.busyId === group.id}
                             onClick={() => void handleChangeSprintState(group.id, group.sprintState)}
-                            className="rounded border border-surface-3 px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-1 disabled:opacity-50"
+                            className="rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] transition-colors duration-fast hover:bg-surface-2 disabled:opacity-50"
                           >
                             {group.sprintState === 'active' ? 'スプリントを完了' : 'スプリントを開始'}
                           </button>
@@ -388,7 +429,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                           <button
                             type="button"
                             onClick={() => void handleCreateSprint()}
-                            className="rounded border border-surface-3 px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-1"
+                            className="rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] transition-colors duration-fast hover:bg-surface-2"
                           >
                             スプリントを作成
                           </button>
@@ -448,7 +489,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
 
       {view !== 'settings' && selectedTicket && (
         <SecondaryPanel
-          title="チケット"
+          title={`選択中 ${formatTicketKey(project?.key ?? '', selectedTicket.number)}`}
           side="right"
           resizable
           resizeStorageKey="frestyle.panel.ticket-detail.width"
@@ -468,8 +509,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
               <button
                 type="button"
                 onClick={() => selectTicket(null)}
-                aria-label="詳細を閉じる"
-                title="詳細を閉じる"
+                aria-label="選択解除"
+                title="選択解除"
                 className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-surface-3 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
               >
                 <XMarkIcon className="h-3.5 w-3.5" aria-hidden="true" />
