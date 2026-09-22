@@ -40,10 +40,10 @@ describe('EmptyState', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('アイコンが表示される', () => {
+  it('渡したアイコンが描かれる（別のアイコンでは通らない）', () => {
     const { container } = render(<EmptyState icon={fsIcon('chat')} title="テスト" />);
-    const svg = container.querySelector('svg');
-    expect(svg).toBeTruthy();
+    // svg があるだけでは別の絵でも通ってしまう。FsIcon が持つ data-icon で名前まで見る。
+    expect(container.querySelector('svg')).toHaveAttribute('data-icon', 'chat');
   });
 
   it('説明文なしの場合説明が表示されない', () => {
@@ -63,10 +63,9 @@ describe('EmptyState', () => {
     expect(container.querySelector('svg')).toBeTruthy();
   });
 
-  it('タイトルがh3要素で表示される', () => {
+  it('タイトルは見出し（既定は h3）として読み上げられる', () => {
     render(<EmptyState icon={fsIcon('chat')} title="見出しテスト" />);
-    const heading = screen.getByText('見出しテスト');
-    expect(heading.tagName).toBe('H3');
+    expect(screen.getByRole('heading', { level: 3, name: '見出しテスト' })).toBeInTheDocument();
   });
 
   it('アクションボタンに説明文とともに表示できる', () => {

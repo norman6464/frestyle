@@ -1,6 +1,6 @@
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { KbSidebar } from '@/widgets/kb-sidebar';
-import { SidebarSection, FsIcon, fsIcon } from '@/shared/ui';
+import { SidebarSection, FsIcon, type FsIconName } from '@/shared/ui';
 import { useKbSpaceEntry, KbSpaceTabs } from '@/entities/kb';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -75,12 +75,12 @@ export default function KbSpaceOverviewPage() {
                 <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">知っていることを、チームの力に。</h2>
                 <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-muted)]">ページを読んで背景をつかみ、必要な情報を見つけましょう。</p>
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                  {[
-                    { suffix: 'pages', label: 'ナレッジを開く', description: 'ページを一覧から探して、作業の背景を確認。', icon: fsIcon('book') },
-                    { suffix: 'favorites', label: 'お気に入りを開く', description: 'ワークスペース内で保存したページに、すぐ戻る。', icon: fsIcon('star') },
-                  ].map(({ suffix, label, description, icon: Icon }) => (
+                  {([
+                    { suffix: 'pages', label: 'ナレッジを開く', description: 'ページを一覧から探して、作業の背景を確認。', icon: 'book' },
+                    { suffix: 'favorites', label: 'お気に入りを開く', description: 'ワークスペース内で保存したページに、すぐ戻る。', icon: 'star' },
+                  ] satisfies { suffix: string; label: string; description: string; icon: FsIconName }[]).map(({ suffix, label, description, icon }) => (
                     <Link key={suffix} to={`/kb/spaces/${space.id}/${suffix}`} className="group rounded-xl border border-surface-3 bg-surface-1 p-5 hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">
-                      <Icon aria-hidden="true" className="mb-4 h-6 w-6 text-[var(--color-text-muted)]" />
+                      <FsIcon name={icon} className="mb-4 h-6 w-6 text-[var(--color-text-muted)]" />
                       <span className="flex items-center justify-between gap-2 font-semibold text-[var(--color-text-primary)]">{label}<FsIcon name="arrow-right" className="h-4 w-4 shrink-0" /></span>
                       <span className="mt-2 block text-sm leading-relaxed text-[var(--color-text-muted)]">{description}</span>
                     </Link>

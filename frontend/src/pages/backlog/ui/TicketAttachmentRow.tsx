@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TicketRepository, type TicketAttachment } from '@/entities/ticket';
 import { formatFileSize } from '../lib/formatFileSize';
-import { FsIcon, fsIcon } from '@/shared/ui';
+import { FsIcon } from '@/shared/ui';
 
 export interface TicketAttachmentRowProps {
   workspaceSlug: string;
@@ -41,11 +41,13 @@ export default function TicketAttachmentRow({
     }
   };
 
-  const Icon = attachment.contentType.startsWith('image/') ? fsIcon('image') : fsIcon('document');
 
   return (
     <li className="flex items-center gap-2 rounded border border-surface-3 px-2 py-1.5 text-xs">
-      <Icon className="h-4 w-4 flex-none text-[var(--color-text-muted)]" aria-hidden="true" />
+      <FsIcon
+        name={attachment.contentType.startsWith('image/') ? 'image' : 'document'}
+        className="h-4 w-4 flex-none text-[var(--color-text-muted)]"
+      />
       <button
         type="button"
         onClick={() => void handleDownload()}

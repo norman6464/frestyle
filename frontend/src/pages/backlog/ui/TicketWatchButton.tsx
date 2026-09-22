@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { TicketRepository } from '@/entities/ticket';
-import { fsIcon } from '@/shared/ui';
+import { FsIcon } from '@/shared/ui';
 
 export interface TicketWatchButtonProps {
   workspaceSlug: string;
@@ -57,7 +57,6 @@ export default function TicketWatchButton({ workspaceSlug, ticketId }: TicketWat
 
   if (!ready) return null;
 
-  const Icon = watching ? fsIcon('eye') : fsIcon('eye-off');
 
   return (
     <button
@@ -73,7 +72,7 @@ export default function TicketWatchButton({ workspaceSlug, ticketId }: TicketWat
           : 'border-surface-3 text-[var(--color-text-secondary)] hover:bg-surface-2'
       }`}
     >
-      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      <FsIcon name={watching ? 'eye' : 'eye-off'} className="h-3.5 w-3.5" />
       <span className="tabular-nums">{count}</span>
     </button>
   );
