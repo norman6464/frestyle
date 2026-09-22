@@ -32,11 +32,17 @@ export default function BlankableField({ value, placeholder, editable, render }:
   }
 
   return (
+    /*
+     * 未設定は「値」ではなく「入れられる場所」。点線の下線を足して、入っている値と
+     * 見分けが付くようにする（色を薄くするだけだと、薄い値なのか空なのか読めない）。
+     */
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className={`-mx-1 rounded px-1 py-0.5 text-left hover:bg-surface-2 ${
-        filled ? '' : 'text-[var(--color-text-muted)]'
+      className={`-mx-1 rounded px-1 py-0.5 text-left transition-colors duration-fast hover:bg-surface-2 ${
+        filled
+          ? 'text-[var(--color-text-primary)]'
+          : 'text-[var(--color-text-muted)] underline decoration-dotted underline-offset-4'
       }`}
     >
       {filled ? value : placeholder}

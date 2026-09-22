@@ -84,10 +84,19 @@ type Story = StoryObj<typeof meta>;
 
 export const 既定: Story = {};
 
+/**
+ * 絞り込みはネイティブの `<select>` ではなく Base UI の選択欄。候補は別の器（ポータル）へ
+ * 描かれるので、探す場所が canvas ではなく document になる。
+ */
+async function choose(trigger: HTMLElement, optionName: string) {
+  await userEvent.click(trigger);
+  await userEvent.click(await within(document.body).findByRole('option', { name: optionName }));
+}
+
 export const 状態を選ぶ: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.selectOptions(canvas.getByLabelText('状態で絞り込む'), 'st-2');
+    await choose(canvas.getByLabelText('状態で絞り込む'), '開発');
     await expect(args.onChangeStatusId).toHaveBeenCalledWith('st-2');
   },
 };
@@ -95,7 +104,7 @@ export const 状態を選ぶ: Story = {
 export const ラベルを選ぶ: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.selectOptions(canvas.getByLabelText('ラベルで絞り込む'), 'l-1');
+    await choose(canvas.getByLabelText('ラベルで絞り込む'), '不具合');
     await expect(args.onChangeLabelId).toHaveBeenCalledWith('l-1');
   },
 };
@@ -103,7 +112,7 @@ export const ラベルを選ぶ: Story = {
 export const 種別を選ぶ: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.selectOptions(canvas.getByLabelText('種別で絞り込む'), 'ty-1');
+    await choose(canvas.getByLabelText('種別で絞り込む'), '開発タスク');
     await expect(args.onChangeTypeId).toHaveBeenCalledWith('ty-1');
   },
 };

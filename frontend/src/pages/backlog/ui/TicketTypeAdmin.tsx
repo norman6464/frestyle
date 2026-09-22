@@ -1,3 +1,4 @@
+import { FieldSelect } from '@/shared/ui';
 import { useId, useState, type FormEvent } from 'react';
 import type { TicketHierarchyLevel, TicketType, TicketTypeInput } from '@/entities/ticket';
 import { getApiError } from '@/shared/lib/classifyApiError';
@@ -135,19 +136,22 @@ export default function TicketTypeAdmin({ types, onCreate, onSetDefault, onArchi
           />
         </div>
         <div>
-          <label htmlFor={levelId} className="mb-0.5 block text-xs text-[var(--color-text-muted)]">
+          {/* FieldSelect の起点はボタンなので、label の htmlFor では結び付かない。
+              見える項目名は残し、読み上げ用の名前は FieldSelect 側の label で持つ。 */}
+          <span id={levelId} className="mb-0.5 block text-xs text-[var(--color-text-muted)]">
             階層
-          </label>
-          <select
-            id={levelId}
-            value={hierarchyLevel}
-            onChange={(e) => setHierarchyLevel(Number(e.target.value) as TicketHierarchyLevel)}
-            className="rounded border border-surface-3 bg-surface-1 px-2 py-1 text-sm"
-          >
-            <option value={1}>束ね（1）</option>
-            <option value={0}>標準（0）</option>
-            <option value={-1}>小作業（-1）</option>
-          </select>
+          </span>
+          <FieldSelect
+            label="階層"
+            value={String(hierarchyLevel)}
+            onChange={(value) => setHierarchyLevel(Number(value) as TicketHierarchyLevel)}
+            options={[
+              { value: '1', label: '束ね（1）' },
+              { value: '0', label: '標準（0）' },
+              { value: '-1', label: '小作業（-1）' },
+            ]}
+            className="rounded-md border-surface-3 bg-surface-1 px-2 text-sm font-normal"
+          />
         </div>
         <input
           type="color"

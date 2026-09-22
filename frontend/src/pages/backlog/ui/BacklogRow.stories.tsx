@@ -166,7 +166,8 @@ export const 優先度と状態の見え方: Story = {
     await expect(canvas.getByText('見積り 5')).toBeInTheDocument();
     // 状態は選べる（押せるのに変わらない見た目にはしない）。
     const status = canvas.getByLabelText(`${baseTicket.title} の状態`);
-    await expect(status).toHaveValue('st-2');
+    await expect(status).toHaveAccessibleName(`${baseTicket.title} の状態`);
+    await expect(status).toHaveTextContent('開発');
   },
 };
 
@@ -174,7 +175,9 @@ export const 優先度と状態の見え方: Story = {
 export const 状態を変えても行は開かない: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.selectOptions(canvas.getByLabelText(`${baseTicket.title} の状態`), 'st-5');
+    // 候補は別の器（ポータル）へ描かれるので、探す場所が canvas ではなく document になる。
+    await userEvent.click(canvas.getByLabelText(`${baseTicket.title} の状態`));
+    await userEvent.click(await within(document.body).findByRole('option', { name: 'リリース' }));
     await expect(args.onChangeStatus).toHaveBeenCalledWith('st-5');
     await expect(args.onOpen).not.toHaveBeenCalled();
   },

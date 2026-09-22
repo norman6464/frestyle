@@ -1,3 +1,4 @@
+import { FieldSelect } from '@/shared/ui';
 import { useId, useState, type FormEvent } from 'react';
 import { TicketStatusPill, type TicketStatus, type TicketStatusCategory, type TicketStatusInput } from '@/entities/ticket';
 import { getApiError } from '@/shared/lib/classifyApiError';
@@ -147,19 +148,22 @@ export default function TicketStatusAdmin({ statuses, onCreate, onSetInitial, on
           />
         </div>
         <div>
-          <label htmlFor={catId} className="mb-0.5 block text-xs text-[var(--color-text-muted)]">
+          {/* FieldSelect の起点はボタンなので、label の htmlFor では結び付かない。
+              見える項目名は残し、読み上げ用の名前は FieldSelect 側の label で持つ。 */}
+          <span id={catId} className="mb-0.5 block text-xs text-[var(--color-text-muted)]">
             枠
-          </label>
-          <select
-            id={catId}
+          </span>
+          <FieldSelect
+            label="枠"
             value={category}
-            onChange={(e) => setCategory(e.target.value as TicketStatusCategory)}
-            className="rounded border border-surface-3 bg-surface-1 px-2 py-1 text-sm"
-          >
-            <option value="todo">未着手</option>
-            <option value="in_progress">進行中</option>
-            <option value="done">完了</option>
-          </select>
+            onChange={(value) => setCategory(value as TicketStatusCategory)}
+            options={[
+              { value: 'todo', label: '未着手' },
+              { value: 'in_progress', label: '進行中' },
+              { value: 'done', label: '完了' },
+            ]}
+            className="rounded-md border-surface-3 bg-surface-1 px-2 text-sm font-normal"
+          />
         </div>
         <input
           type="color"

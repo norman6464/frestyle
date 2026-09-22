@@ -1,3 +1,5 @@
+import { FieldSelect } from '@/shared/ui';
+
 export interface BacklogReorderBarProps {
   /** 選択中チケットの表示キー（例 FRESTYLE-457）。未選択なら null。 */
   selectedKey: string | null;
@@ -20,6 +22,9 @@ export interface BacklogReorderBarProps {
   /** 選択中のチケットをスプリントから出す（バックログへ戻る）。段がスプリントのときだけ渡る。 */
   onRemoveFromSprint?: () => void;
 }
+
+const REORDER_RULE =
+  '並び替えの決まり: 並び替えは同じ段の中だけ（スプリントとバックログは別の並びを持つ）。アーカイブでは出さない';
 
 const ICON_PROPS = {
   width: 12,
@@ -99,28 +104,22 @@ export default function BacklogReorderBar({
         末尾へ
       </button>
       {onMoveToSprint && sprints.length > 0 && (
-        <label className="flex items-center gap-1.5 text-[var(--color-text-muted)]">
-          スプリントへ
-          <select
-            aria-label="入れ先のスプリント"
-            value=""
-            disabled={!hasSelection}
-            onChange={(e) => {
-              if (e.target.value === '') return;
-              onMoveToSprint(e.target.value);
-              // 選び直せるよう毎回空へ戻す（同じスプリントへ続けて入れられるように）。
-              e.target.value = '';
-            }}
-            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-1 text-xs text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <option value="">選ぶ…</option>
-            {sprints.map((sprint) => (
-              <option key={sprint.id} value={sprint.id}>
-                {sprint.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        /* value は空のまま持たない。ここに「現在値」は無く、選んだ瞬間が操作なので、
+           毎回「選ぶ…」へ戻って同じスプリントへ続けて入れられる。 */
+        <FieldSelect
+          label="入れ先のスプリント"
+          prefix="スプリントへ"
+          value=""
+          disabled={!hasSelection}
+          onChange={(value) => {
+            if (value) onMoveToSprint(value);
+          }}
+          options={[
+            { value: '', label: '選ぶ…' },
+            ...sprints.map((sprint) => ({ value: sprint.id, label: sprint.name })),
+          ]}
+          className="rounded border-surface-3 bg-surface-1 px-2 text-xs font-normal"
+        />
       )}
       {onRemoveFromSprint && (
         <button
@@ -132,14 +131,15 @@ export default function BacklogReorderBar({
           スプリントから出す
         </button>
       )}
-      {/* 仕様の但し書きは常設しない。毎回読むものではないので「?」へ畳み、
-          知りたい人だけがホバー／フォーカスで読めるようにする。 */}
+      {/* 仕様の但し書きは常設しない。毎回読むものではないので「?」へ畳む。
+          ただし中身を title だけに置くとホバーでしか読めない —— 読み上げとキーボードにも
+          決まりそのものが届くよう、短い見出しではなく本文を名前にしている。 */}
       <span
         className="ml-auto inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-surface-3 text-[10px] font-bold text-[var(--color-text-muted)]"
         tabIndex={0}
         role="note"
-        aria-label="並び替えの決まり"
-        title="並び替えは同じ段の中だけ（スプリントとバックログは別の並びを持つ）。アーカイブでは出さない"
+        aria-label={REORDER_RULE}
+        title={REORDER_RULE}
       >
         ?
       </span>

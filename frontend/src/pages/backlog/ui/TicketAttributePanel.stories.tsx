@@ -129,8 +129,10 @@ export const 編集できる: Story = {
     const canvas = within(canvasElement);
     // 状態はこの面には無い（題名の直下の TicketStatusSelect が持つ）。
     await expect(canvas.queryByLabelText('状態')).toBeNull();
-    await expect(canvas.getByLabelText('担当')).toHaveValue('p-1');
-    await expect(canvas.getByLabelText('優先度')).toHaveValue('1');
+    // 担当・優先度はネイティブの `<select>` ではなく Base UI の選択欄なので、
+    // 値ではなく起点のボタンが何を表示しているかで見る。
+    await expect(canvas.getByLabelText('担当')).toHaveTextContent('norman6464');
+    await expect(canvas.getByLabelText('優先度')).toHaveTextContent('高');
     // 期限は押すまで文字（見本と同じ）。押してはじめて日付の入力欄になる。
     await expect(canvas.queryByLabelText('期限')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '2026-09-12' }));

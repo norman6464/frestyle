@@ -6,6 +6,7 @@ import type { ProjectVersion } from '@/entities/project-version';
 import type { Team } from '@/entities/team';
 import type { Sprint } from '@/entities/sprint';
 import type { KbGrantablePrincipal } from '@/entities/kb';
+import { FieldSelect } from '@/shared/ui';
 import { useTicketParentCandidates } from '../model/useTicketParentCandidates';
 import { useWorkspaceMembers } from '../model/useWorkspaceMembers';
 import TicketParentPicker from './TicketParentPicker';
@@ -13,6 +14,14 @@ import TicketLabelBar from './TicketLabelBar';
 import BlankableField from './BlankableField';
 
 const PRIORITY_LABEL: Record<TicketPriority, string> = { 1: '高', 2: '中', 3: '低' };
+
+/**
+ * 属性欄の選択コントロールの見た目。
+ *
+ * 高さは fieldListClass 側（通常 36px / タッチ 44px）が決めるので、ここでは持たない。
+ * 値の欄なので枠は控えめにし、ラベルの列と競わせない。
+ */
+const ATTRIBUTE_SELECT_CLASS = 'w-full rounded-md border-surface-3 bg-surface-1 px-2 text-sm font-normal';
 
 export interface TicketAttributePanelProps {
   /** 全画面では作業に直結する項目を先に見せ、計画項目は必要時に開く。 */
@@ -110,7 +119,12 @@ export default function TicketAttributePanel({
     setParentPickerOpen(false);
   };
 
-  const fieldListClass = "grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)] items-center gap-x-3 gap-y-2 text-sm [&_dd]:min-w-0 [&_dd]:[overflow-wrap:anywhere] [&_select]:min-h-9 [&_select]:max-w-full [&_input]:min-h-9 [&_input]:max-w-full [&_button]:min-h-9 [&_button]:min-w-11 [@media(pointer:coarse)]:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_select]:min-h-11 [@media(pointer:coarse)]:[&_input]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600";
+  /*
+   * 項目名と値を 2 列で並べる。行の高さは値の中身で変わる（選択欄がある行は高く、文字だけの
+   * 行は低い）ので、両方の升に最低の高さを持たせて縦のリズムを揃える。揃っていないと、
+   * 項目の多い一覧が「詰まっている所と空いている所」のまだら模様になって読みにくい。
+   */
+  const fieldListClass = "grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)] items-center gap-x-3 text-sm [&_dt]:flex [&_dt]:min-h-9 [&_dt]:items-center [&_dd]:flex [&_dd]:min-h-9 [&_dd]:min-w-0 [&_dd]:flex-wrap [&_dd]:items-center [&_dd]:[overflow-wrap:anywhere] [&_select]:min-h-9 [&_select]:max-w-full [&_input]:min-h-9 [&_input]:max-w-full [&_button]:min-h-9 [&_button]:min-w-11 [@media(pointer:coarse)]:[&_dt]:min-h-11 [@media(pointer:coarse)]:[&_dd]:min-h-11 [@media(pointer:coarse)]:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_select]:min-h-11 [@media(pointer:coarse)]:[&_input]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600";
 
   return (
     <div className="space-y-4">
@@ -119,24 +133,20 @@ export default function TicketAttributePanel({
       <dt className="text-[var(--color-text-muted)]">担当者</dt>
       <dd>
         {canEdit ? (
-          <select
+          <FieldSelect
+            label="担当"
             value={ticket.assigneePrincipalId ?? ''}
             disabled={busy}
-            onChange={(e) => {
-              const value = e.target.value;
+            onChange={(value) => {
               if (value) onAssign(value);
               else onUnassign();
             }}
-            aria-label="担当"
-            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
-          >
-            <option value="">未割り当て</option>
-            {assigneeUsers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name || p.id}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: '', label: '未割り当て' },
+              ...assigneeUsers.map((p) => ({ value: p.id, label: p.name || p.id })),
+            ]}
+            className={ATTRIBUTE_SELECT_CLASS}
+          />
         ) : (
           assigneeUsers.find((p) => p.id === ticket.assigneePrincipalId)?.name || '未割り当て'
         )}
@@ -145,16 +155,17 @@ export default function TicketAttributePanel({
       <dt className="text-[var(--color-text-muted)]">優先度</dt>
       <dd>
         {canEdit && !archived ? (
-          <select
-            value={priority}
-            onChange={(e) => onChangePriority(Number(e.target.value) as TicketPriority)}
-            aria-label="優先度"
-            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
-          >
-            <option value={1}>高</option>
-            <option value={2}>中</option>
-            <option value={3}>低</option>
-          </select>
+          <FieldSelect
+            label="優先度"
+            value={String(priority)}
+            onChange={(value) => onChangePriority(Number(value) as TicketPriority)}
+            options={[
+              { value: '1', label: '高' },
+              { value: '2', label: '中' },
+              { value: '3', label: '低' },
+            ]}
+            className={ATTRIBUTE_SELECT_CLASS}
+          />
         ) : (
           <span className={ticket.priority === 1 ? 'font-bold text-brand-700' : undefined}>
             {PRIORITY_LABEL[ticket.priority]}
@@ -261,19 +272,13 @@ export default function TicketAttributePanel({
       <dt className="text-[var(--color-text-muted)]">チーム</dt>
       <dd>
         {canEdit && !archived && teams.length > 0 ? (
-          <select
+          <FieldSelect
+            label="Team"
             value={teamId ?? ''}
-            aria-label="Team"
-            onChange={(e) => onChangeTeam(e.target.value)}
-            className="rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
-          >
-            <option value="">未設定</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+            onChange={onChangeTeam}
+            options={[{ value: '', label: '未設定' }, ...teams.map((t) => ({ value: t.id, label: t.name }))]}
+            className={ATTRIBUTE_SELECT_CLASS}
+          />
         ) : (
           teams.find((t) => t.id === teamId)?.name ?? (
             <span className="text-[var(--color-text-muted)]">未設定</span>
@@ -303,26 +308,23 @@ export default function TicketAttributePanel({
             ))}
           </span>
         )}
+        {/* 選んだ値は保持しない（追加が操作の中身で、この欄自体に現在値は無い）。
+            value を空のままにしておけば、追加のたびに「バージョンを追加…」へ戻る。 */}
         {canEdit && !archived && versions.length > 0 && (
-          <select
+          <FieldSelect
+            label="修正バージョンを追加"
             value=""
-            aria-label="修正バージョンを追加"
-            onChange={(e) => {
-              if (!e.target.value) return;
-              onSetFixVersion(e.target.value, true);
-              e.target.value = '';
+            onChange={(value) => {
+              if (value) onSetFixVersion(value, true);
             }}
-            className="mt-1 block rounded border border-surface-3 bg-surface-1 px-1.5 py-0.5 text-sm"
-          >
-            <option value="">バージョンを追加…</option>
-            {versions
-              .filter((v) => !fixVersions.some((f) => f.id === v.id))
-              .map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-          </select>
+            options={[
+              { value: '', label: 'バージョンを追加…' },
+              ...versions
+                .filter((v) => !fixVersions.some((f) => f.id === v.id))
+                .map((v) => ({ value: v.id, label: v.name })),
+            ]}
+            className={ATTRIBUTE_SELECT_CLASS}
+          />
         )}
       </dd>
 

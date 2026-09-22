@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import type { Label, TicketStatus, TicketType } from '@/entities/ticket';
+import { FieldSelect } from '@/shared/ui';
+
+/** 3 つの絞り込みは同じ幅の振る舞いにする。狭幅では 2 列、広くなったら内容なりの幅。 */
+const FILTER_SELECT_CLASS =
+  'flex-1 basis-[calc(50%-0.5rem)] rounded-md border-surface-3 bg-surface-1 text-sm font-normal sm:flex-none sm:basis-auto';
 
 export interface BacklogFilterBarProps {
   statuses: TicketStatus[];
@@ -81,47 +86,36 @@ export default function BacklogFilterBar({
         />
       </div>
 
-      <select
+      {/*
+        絞り込みの 3 つは同じ形で横に並ぶので、選んだ値だけだと何の項目か分からなくなる。
+        トリガーの中に項目名を残す（prefix）。値は URL に載るので、空文字 = 「すべて」。
+      */}
+      <FieldSelect
+        label="状態で絞り込む"
+        prefix="状態"
         value={statusId ?? ''}
-        onChange={(e) => onChangeStatusId(e.target.value || null)}
-        aria-label="状態で絞り込む"
-        className="min-h-11 min-w-0 max-w-full flex-1 basis-[calc(50%-0.5rem)] rounded-md border border-surface-3 bg-surface-1 px-2 py-2 text-base text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-600 sm:flex-none sm:basis-auto sm:text-sm"
-      >
-        <option value="">状態: すべて</option>
-        {statuses.map((status) => (
-          <option key={status.id} value={status.id}>
-            {status.name}
-          </option>
-        ))}
-      </select>
+        onChange={(value) => onChangeStatusId(value || null)}
+        options={[{ value: '', label: 'すべて' }, ...statuses.map((s) => ({ value: s.id, label: s.name }))]}
+        className={FILTER_SELECT_CLASS}
+      />
 
-      <select
+      <FieldSelect
+        label="種別で絞り込む"
+        prefix="種別"
         value={typeId ?? ''}
-        onChange={(e) => onChangeTypeId(e.target.value || null)}
-        aria-label="種別で絞り込む"
-        className="min-h-11 min-w-0 max-w-full flex-1 basis-[calc(50%-0.5rem)] rounded-md border border-surface-3 bg-surface-1 px-2 py-2 text-base text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-600 sm:flex-none sm:basis-auto sm:text-sm"
-      >
-        <option value="">種別: すべて</option>
-        {types.map((type) => (
-          <option key={type.id} value={type.id}>
-            {type.name}
-          </option>
-        ))}
-      </select>
+        onChange={(value) => onChangeTypeId(value || null)}
+        options={[{ value: '', label: 'すべて' }, ...types.map((t) => ({ value: t.id, label: t.name }))]}
+        className={FILTER_SELECT_CLASS}
+      />
 
-      <select
+      <FieldSelect
+        label="ラベルで絞り込む"
+        prefix="ラベル"
         value={labelId ?? ''}
-        onChange={(e) => onChangeLabelId(e.target.value || null)}
-        aria-label="ラベルで絞り込む"
-        className="min-h-11 min-w-0 max-w-full flex-1 basis-[calc(50%-0.5rem)] rounded-md border border-surface-3 bg-surface-1 px-2 py-2 text-base text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-600 sm:flex-none sm:basis-auto sm:text-sm"
-      >
-        <option value="">ラベル: すべて</option>
-        {labels.map((label) => (
-          <option key={label.id} value={label.id}>
-            {label.name}
-          </option>
-        ))}
-      </select>
+        onChange={(value) => onChangeLabelId(value || null)}
+        options={[{ value: '', label: 'すべて' }, ...labels.map((l) => ({ value: l.id, label: l.name }))]}
+        className={FILTER_SELECT_CLASS}
+      />
 
       <button
         type="button"
