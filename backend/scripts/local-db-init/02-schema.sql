@@ -188,9 +188,11 @@ CREATE TABLE "notifications" (
   "title" text NOT NULL DEFAULT '',
   "body" text NOT NULL DEFAULT '',
   "is_read" boolean NOT NULL DEFAULT false,
-  "created_at" timestamptz NOT NULL,
+  "link_path" text NOT NULL DEFAULT '',
+  "created_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("id"),
-  CONSTRAINT "fk_notifications_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT "fk_notifications_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "ck_notifications_link_path" CHECK ((link_path = ''::text) OR (("left"(link_path, 1) = '/'::text) AND ("left"(link_path, 2) <> '//'::text) AND ("left"(link_path, 2) <> ('/'::text || chr(92)))))
 );
 -- Create index "idx_notifications_user_id" to table: "notifications"
 CREATE INDEX "idx_notifications_user_id" ON "notifications" ("user_id");

@@ -78,6 +78,7 @@ type Notification struct {
 	Title     string
 	Body      string
 	IsRead    bool
+	LinkPath  string
 	CreatedAt time.Time
 }
 

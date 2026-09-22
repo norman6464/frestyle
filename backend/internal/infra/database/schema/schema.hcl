@@ -527,12 +527,26 @@ table "notifications" {
     type    = boolean
     default = false
   }
+  # 通知の飛び先。アプリ内のパス（"/tickets/<id>" 等）だけを持ち、外部 URL は入れない。
+  # 空文字は「飛び先なし」（旧データ・行き先の無い種別）。
+  column "link_path" {
+    null    = false
+    type    = text
+    default = ""
+  }
   column "created_at" {
-    null = false
-    type = timestamptz
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
   }
   primary_key {
     columns = [column.id]
+  }
+  # 飛び先は空か、スラッシュ 1 つで始まる相対パスに限る。"//evil.example" はスキーム相対の
+  # 外部 URL、"/\evil" はブラウザが "//" と同じに解釈するので、どちらも DB で弾く
+  # （フロントが同じ検査をしていても、DB を最後の砦にする）。
+  check "ck_notifications_link_path" {
+    expr = "(link_path = ''::text) OR ((left(link_path, 1) = '/'::text) AND (left(link_path, 2) <> '//'::text) AND (left(link_path, 2) <> ('/'::text || chr(92))))"
   }
   # 持ち物: 本人の行が消えれば一緒に消える。
   foreign_key "fk_notifications_user" {

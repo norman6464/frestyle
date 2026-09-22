@@ -101,6 +101,8 @@ func Test_発言作成_メンションはワークスペースの一員にだけ
 	require.Len(t, captured, 1, "メンバーの2だけに届く（自分=1は除外・非メンバー=9は除外）")
 	assert.Equal(t, uint64(2), captured[0].UserID)
 	assert.Equal(t, domain.NotificationTypeTicketMentioned, captured[0].Type)
+	// 通知の行から当のチケットへ飛べる。フロントの /tickets/:ticketId と一致。
+	assert.Equal(t, "/tickets/"+tkTicket, captured[0].LinkPath)
 }
 
 // 担当が付いていて発言者本人でなければ ticket_commented が届く。
@@ -134,6 +136,7 @@ func Test_発言作成_担当者への通知(t *testing.T) {
 	require.Len(t, captured, 1)
 	assert.Equal(t, assigneeUserID, captured[0].UserID)
 	assert.Equal(t, domain.NotificationTypeTicketCommented, captured[0].Type)
+	assert.Equal(t, "/tickets/"+tkTicket, captured[0].LinkPath)
 }
 
 func Test_発言編集_投稿者本人は編集できる(t *testing.T) {
