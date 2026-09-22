@@ -24,7 +24,7 @@ test.describe('トップ（/）', () => {
 
     await expect(page).toHaveURL(/\/login/);
     // ログイン画面が実際に描画されている（URL だけ変わって白紙、を除く）。
-    await expect(page.getByRole('button', { name: 'ログインする' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ログイン画面へ進む' })).toBeVisible();
   });
 
   test('ログイン済みならどこへも送られずホームがそのまま出る', async ({ page }) => {
@@ -33,7 +33,7 @@ test.describe('トップ（/）', () => {
 
     // ホームが実際に描画されるまで待つ。URL だけを見ると、MenuPage の遅延ロードが
     // 失敗して ErrorBoundary が出ていても "/" のままなので通ってしまう。
-    await expect(page.getByRole('heading', { name: 'FreStyle へようこそ' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'ホーム', exact: true })).toBeVisible();
     await expect(page).toHaveURL('/');
     await expect(page).not.toHaveURL(/\/login/);
   });

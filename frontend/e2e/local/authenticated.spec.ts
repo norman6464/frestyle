@@ -36,7 +36,7 @@ test.describe('認証ガード', () => {
     await page.goto('/');
 
     // URL だけ見ると、ホームが描画に失敗して ErrorBoundary が出ていても通ってしまう。
-    await expect(page.getByRole('heading', { name: 'FreStyle へようこそ' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'ホーム', exact: true })).toBeVisible();
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page).toHaveURL('/');
   });
