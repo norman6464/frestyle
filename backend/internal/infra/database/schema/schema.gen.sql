@@ -162,6 +162,61 @@ CREATE TABLE "comments" (
 );
 -- Create index "idx_comments_thread" to table: "comments"
 CREATE INDEX "idx_comments_thread" ON "comments" ("thread_id");
+-- Create "invitations" table
+CREATE TABLE "invitations" (
+  "id" uuid NOT NULL,
+  "workspace_id" uuid NOT NULL,
+  "scope" character varying(16) NOT NULL,
+  "space_id" uuid NULL,
+  "page_id" uuid NULL,
+  "role" character varying(16) NOT NULL,
+  "email" text NOT NULL,
+  "invitee_name" character varying(200) NOT NULL DEFAULT '',
+  "token_hash" bytea NOT NULL,
+  "invited_by_user_id" bigint NOT NULL,
+  "expires_at" timestamptz NOT NULL,
+  "last_sent_at" timestamptz NOT NULL DEFAULT now(),
+  "last_sent_by_user_id" bigint NOT NULL,
+  "send_count" integer NOT NULL DEFAULT 1,
+  "accepted_at" timestamptz NULL,
+  "accepted_by_user_id" bigint NULL,
+  "declined_at" timestamptz NULL,
+  "declined_by_user_id" bigint NULL,
+  "revoked_at" timestamptz NULL,
+  "revoked_by_user_id" bigint NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "uq_invitations_token_hash" UNIQUE ("token_hash"),
+  CONSTRAINT "uq_invitations_workspace_id" UNIQUE ("workspace_id", "id"),
+  CONSTRAINT "fk_invitations_page" FOREIGN KEY ("workspace_id", "page_id") REFERENCES "pages" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_invitations_space" FOREIGN KEY ("workspace_id", "space_id") REFERENCES "spaces" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_invitations_workspace" FOREIGN KEY ("workspace_id") REFERENCES "workspaces" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "ck_invitations_accepted_in_time" CHECK ((accepted_at IS NULL) OR ((accepted_at >= created_at) AND (accepted_at <= expires_at))),
+  CONSTRAINT "ck_invitations_accepted_pair" CHECK ((accepted_at IS NULL) = (accepted_by_user_id IS NULL)),
+  CONSTRAINT "ck_invitations_declined_pair" CHECK ((declined_at IS NULL) = (declined_by_user_id IS NULL)),
+  CONSTRAINT "ck_invitations_email_normalized" CHECK ((email <> ''::text) AND (email = lower(btrim(email, '	
+ '::text))) AND ("position"(email, '@'::text) > 1) AND (char_length(email) <= 254)),
+  CONSTRAINT "ck_invitations_expires_after_created" CHECK (expires_at > created_at),
+  CONSTRAINT "ck_invitations_revoked_pair" CHECK ((revoked_at IS NULL) = (revoked_by_user_id IS NULL)),
+  CONSTRAINT "ck_invitations_role" CHECK ((role)::text = ANY (ARRAY[('admin'::character varying)::text, ('editor'::character varying)::text, ('commenter'::character varying)::text, ('viewer'::character varying)::text])),
+  CONSTRAINT "ck_invitations_scope" CHECK ((scope)::text = ANY (ARRAY[('workspace'::character varying)::text, ('space'::character varying)::text, ('page'::character varying)::text])),
+  CONSTRAINT "ck_invitations_scoped_role_not_admin" CHECK (((scope)::text = 'workspace'::text) OR ((role)::text <> 'admin'::text)),
+  CONSTRAINT "ck_invitations_send_count" CHECK (send_count >= 1),
+  CONSTRAINT "ck_invitations_single_outcome" CHECK (((((accepted_at IS NOT NULL))::integer + ((declined_at IS NOT NULL))::integer) + ((revoked_at IS NOT NULL))::integer) <= 1),
+  CONSTRAINT "ck_invitations_target" CHECK ((((scope)::text = 'workspace'::text) AND (space_id IS NULL) AND (page_id IS NULL)) OR (((scope)::text = 'space'::text) AND (space_id IS NOT NULL) AND (page_id IS NULL)) OR (((scope)::text = 'page'::text) AND (space_id IS NULL) AND (page_id IS NOT NULL))),
+  CONSTRAINT "ck_invitations_token_hash_len" CHECK (octet_length(token_hash) = 32)
+);
+-- Create index "idx_invitations_email_created" to table: "invitations"
+CREATE INDEX "idx_invitations_email_created" ON "invitations" ("email", "created_at" DESC);
+-- Create index "idx_invitations_inviter_created" to table: "invitations"
+CREATE INDEX "idx_invitations_inviter_created" ON "invitations" ("invited_by_user_id", "created_at" DESC);
+-- Create index "idx_invitations_open_inviter" to table: "invitations"
+CREATE INDEX "idx_invitations_open_inviter" ON "invitations" ("invited_by_user_id") WHERE ((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL));
+-- Create index "idx_invitations_workspace_created" to table: "invitations"
+CREATE INDEX "idx_invitations_workspace_created" ON "invitations" ("workspace_id", "created_at" DESC);
+-- Create index "uq_invitations_open_target" to table: "invitations"
+CREATE UNIQUE INDEX "uq_invitations_open_target" ON "invitations" ("workspace_id", "email", "scope", (COALESCE(space_id, '00000000-0000-0000-0000-000000000000'::uuid)), (COALESCE(page_id, '00000000-0000-0000-0000-000000000000'::uuid))) WHERE ((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL));
 -- Create "membership_events" table
 CREATE TABLE "membership_events" (
   "id" uuid NOT NULL,

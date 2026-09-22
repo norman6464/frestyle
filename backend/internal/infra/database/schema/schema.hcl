@@ -4260,3 +4260,292 @@ table "page_ticket_links" {
     columns = [column.target_ticket_id]
   }
 }
+
+# ---------------------------------------------------------------------------
+# 招待（invitations）
+#
+# 「招待」は、admin が「このメールアドレスの人を、この場所に、この役割で入れたい」という意思を、
+# 相手がまだ入っていない時点で記録した 1 行。承諾されるまで principals（所属）にも *_grants（権限）
+# にも何も書かない。承諾した瞬間に、所属・主体・付与をこの行の accepted_at と同じトランザクションで作る。
+#
+# 相手は email で指す（users.id ではない）。users.id を受ける口は「実在する id なら 204、無ければ
+# 404」で他人の実在を探れる走査器になっていた。email なら、まだアカウントの無い人も招ける。
+#
+# 1 表にする理由: 場所の種類（scope）は workspace / space / page の 3 つだが、違うのは「どの id を
+# 指すか」だけで、宛先・トークン・期限・承諾・辞退・取消の列は共通。種類ごとに表を分けると
+# 「自分宛の招待」が 3 表の UNION になり、「未決は宛先 × 場所ごとに 1 件」の制約も 3 か所に散る。
+# NULL になるのは space_id / page_id の 2 列だけで、CHECK で scope と 1 対 1 に固定する
+# （principals の kind + user_id / space_id / page_id と同じ作法）。
+#
+# 状態は列で持たず、日時列から導く:
+#   未決     = accepted_at / declined_at / revoked_at がすべて NULL かつ now() < expires_at
+#   期限切れ = 同上で now() >= expires_at（列は書き換えない。再送で復活する）
+#   承諾 / 辞退 / 取消 = 対応する *_at が非 NULL（高々 1 つ。CHECK）
+# 期限切れの行も部分一意索引の上では「未決」のままなので、同じ宛先 × 場所への 2 回目は必ず
+# 既存行の UPDATE（再送 = トークン差し替え・期限延長）になる。INSERT ... ON CONFLICT ... DO UPDATE。
+#
+# users への FK は張らない。users の物理削除（CASCADE）と一緒に、未承諾の招待と「誰が招いたか」の
+# 記録が音もなく消えるのを避けるため（tickets / pages の created_by_user_id と同じ流派）。
+# ---------------------------------------------------------------------------
+table "invitations" {
+  schema = schema.public
+  # 承諾 API はこの id で招待を指す（トークンではない）。id を知られても、承諾には「招待の email と
+  # 一致する確認済みアカウントでのログイン」が要るので単体では何もできない。
+  column "id" {
+    null = false
+    type = uuid
+  }
+  # テナント。ワークスペースが消えれば招待も消える。
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  # 場所の種類。承諾時にどの表へ付与を張るかを決める。
+  column "scope" {
+    null = false
+    type = character_varying(16)
+  }
+  # scope='space' のときの対象。複合 FK で別ワークスペースのスペースを弾く。
+  column "space_id" {
+    null = true
+    type = uuid
+  }
+  # scope='page' のときの対象。ページは別スペースへ移動できるので space_id と組にせず、
+  # page_grants と同じく (workspace_id, page_id) だけで pages を指す。
+  column "page_id" {
+    null = true
+    type = uuid
+  }
+  # 承諾時にその場所へ張る役割。既存の *_grants と同じ 4 値。
+  column "role" {
+    null = false
+    type = character_varying(16)
+  }
+  # 宛先。domain.NormalizeEmail（前後の ASCII 空白除去 + 小文字化）の正規形だけを保存する。
+  # users の一意索引 uq_users_email_active と同じ式で照合するため、承諾時の「ログイン中の
+  # ユーザーの email と一致するか」が索引で引ける。+tag や Gmail のドットは畳まない（別人を
+  # 同一視する危険）。
+  column "email" {
+    null = false
+    type = text
+  }
+  # 招いた人が付けた相手の表示名。一覧・通知・承諾前の案内に「○○さんへの招待」と出すためだけに
+  # 使う。承諾しても users.name は上書きしない（本人の名前は本人と発行者のもの）。
+  column "invitee_name" {
+    null    = false
+    type    = character_varying(200)
+    default = ""
+  }
+  # 招待 URL に載せる 256 ビット乱数の SHA-256。平文は発行・再送の応答で 1 回返すだけで
+  # DB・ログ・通知には残さない（share_links.token_hash と同じ作法）。再送のたびに差し替える。
+  # 用途は未認証の案内（誰から・どこへ・どの役割か）だけで、承諾の鍵ではない。
+  column "token_hash" {
+    null = false
+    type = bytea
+  }
+  # 招いた人。承諾時に「今もその場所の admin か」を再判定する（除名後の裏口を塞ぐ）。
+  column "invited_by_user_id" {
+    null = false
+    type = bigint
+  }
+  # 承諾できる期限。無期限の招待は作れない。既定は発行から 7 日。列を書き換えず now() との
+  # 比較で失効し、再送で延ばす。
+  column "expires_at" {
+    null = false
+    type = timestamptz
+  }
+  # 最後に届けた時刻・実行者・回数。再送の間隔（同一宛先 10 分に 1 回）と一覧の表示に使う。
+  # send_count は INSERT では渡さず、増分は SQL 側（send_count + 1）だけで行う。
+  column "last_sent_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  column "last_sent_by_user_id" {
+    null = false
+    type = bigint
+  }
+  column "send_count" {
+    null    = false
+    type    = integer
+    default = 1
+  }
+  # 承諾。accepted_by_user_id は実際に承諾したアカウント（email 一致を検証済み）。
+  column "accepted_at" {
+    null = true
+    type = timestamptz
+  }
+  column "accepted_by_user_id" {
+    null = true
+    type = bigint
+  }
+  # 辞退。招かれた本人が「参加しない」を選んだ。admin は同じ宛先へ招き直せる。
+  column "declined_at" {
+    null = true
+    type = timestamptz
+  }
+  column "declined_by_user_id" {
+    null = true
+    type = bigint
+  }
+  # 取消。admin が止めた、または招いた人の除名・降格に伴いシステムが止めた（revoked_by は操作者）。
+  # 行は消さず「誰がいつ止めたか」を残す（share_links.revoked_at と同じ方針）。
+  column "revoked_at" {
+    null = true
+    type = timestamptz
+  }
+  column "revoked_by_user_id" {
+    null = true
+    type = bigint
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  # ORM を通さないので自動更新は無い。すべての UPDATE 文に updated_at = now() を書く。
+  column "updated_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  # 他の表から複合 FK で指せるようにしておく（spaces / principals と同じ癖）。
+  unique "uq_invitations_workspace_id" {
+    columns = [column.workspace_id, column.id]
+  }
+  # トークンは全体で一意。案内（プレビュー）はこの索引 1 本で引く。
+  unique "uq_invitations_token_hash" {
+    columns = [column.token_hash]
+  }
+  foreign_key "fk_invitations_workspace" {
+    columns     = [column.workspace_id]
+    ref_columns = [table.workspaces.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  # 別テナントのスペース / ページを書けない（複合 FK）。対象が消えれば招待も消える。
+  foreign_key "fk_invitations_space" {
+    columns     = [column.workspace_id, column.space_id]
+    ref_columns = [table.spaces.column.workspace_id, table.spaces.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  foreign_key "fk_invitations_page" {
+    columns     = [column.workspace_id, column.page_id]
+    ref_columns = [table.pages.column.workspace_id, table.pages.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  # 「未決の招待は宛先 × 場所ごとに 1 件」。space_id / page_id の NULL を同じ値として扱うため
+  # COALESCE の式索引にする（uq_users_email_active と同じ式索引の形）。同じ宛先 × 場所への
+  # 2 回目の INSERT は ON CONFLICT (同じ式) WHERE (同じ述語) DO UPDATE で再送にする。
+  index "uq_invitations_open_target" {
+    unique = true
+    on {
+      column = column.workspace_id
+    }
+    on {
+      column = column.email
+    }
+    on {
+      column = column.scope
+    }
+    on {
+      expr = "COALESCE(space_id, '00000000-0000-0000-0000-000000000000'::uuid)"
+    }
+    on {
+      expr = "COALESCE(page_id, '00000000-0000-0000-0000-000000000000'::uuid)"
+    }
+    where = "((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL))"
+  }
+  # 「自分宛の招待」と「同じ宛先へ 1 日に何件招いたか」を 1 本で引く。email で全ワークスペースを
+  # 横断する唯一の経路。
+  index "idx_invitations_email_created" {
+    on {
+      column = column.email
+    }
+    on {
+      column = column.created_at
+      desc   = true
+    }
+  }
+  # admin の招待一覧（ワークスペースごと・新しい順）。
+  index "idx_invitations_workspace_created" {
+    on {
+      column = column.workspace_id
+    }
+    on {
+      column = column.created_at
+      desc   = true
+    }
+  }
+  # 招いた人の除名・降格時に、その人が出した未決の招待をまとめて取り消す。
+  index "idx_invitations_open_inviter" {
+    columns = [column.invited_by_user_id]
+    where   = "((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL))"
+  }
+  # 「招いた人が 1 日に何件招いたか」を数える。
+  index "idx_invitations_inviter_created" {
+    on {
+      column = column.invited_by_user_id
+    }
+    on {
+      column = column.created_at
+      desc   = true
+    }
+  }
+  # 列挙値は varchar + CHECK（enum 型は値の追加・削除が移行になるので使わない）。
+  check "ck_invitations_scope" {
+    expr = "(scope)::text = ANY (ARRAY[('workspace'::character varying)::text, ('space'::character varying)::text, ('page'::character varying)::text])"
+  }
+  # scope と id 列の対応を固定する。「どの表に付与を張るか」が行だけで決まる。
+  check "ck_invitations_target" {
+    expr = "(((scope)::text = 'workspace'::text) AND (space_id IS NULL) AND (page_id IS NULL)) OR (((scope)::text = 'space'::text) AND (space_id IS NOT NULL) AND (page_id IS NULL)) OR (((scope)::text = 'page'::text) AND (space_id IS NULL) AND (page_id IS NOT NULL))"
+  }
+  check "ck_invitations_role" {
+    expr = "(role)::text = ANY (ARRAY[('admin'::character varying)::text, ('editor'::character varying)::text, ('commenter'::character varying)::text, ('viewer'::character varying)::text])"
+  }
+  # スペース宛・ページ宛（承諾者はゲスト）に admin は張れない。
+  check "ck_invitations_scoped_role_not_admin" {
+    expr = "((scope)::text = 'workspace'::text) OR ((role)::text <> 'admin'::text)"
+  }
+  # 正規形をアプリ任せにせず DB でも固定する。btrim の第 2 引数は uq_users_email_active と同じ
+  # 6 文字（TAB LF VT FF CR SP）。形式の本検査（net/mail.ParseAddress）は handler で行い、
+  # ここは最小（@ が 2 文字目以降・254 文字以下）だけ。
+  check "ck_invitations_email_normalized" {
+    expr = "(email <> ''::text) AND (email = lower(btrim(email, '\t\n\u000b\u000c\r '::text))) AND (\"position\"(email, '@'::text) > 1) AND (char_length(email) <= 254)"
+  }
+  # SHA-256 以外（平文や別のハッシュ）が紛れ込むのを長さで弾く。
+  check "ck_invitations_token_hash_len" {
+    expr = "octet_length(token_hash) = 32"
+  }
+  check "ck_invitations_send_count" {
+    expr = "send_count >= 1"
+  }
+  # 作った瞬間に期限切れの行を作れない。
+  check "ck_invitations_expires_after_created" {
+    expr = "expires_at > created_at"
+  }
+  # 「いつ」と「誰が」は必ず対で書く。
+  check "ck_invitations_accepted_pair" {
+    expr = "(accepted_at IS NULL) = (accepted_by_user_id IS NULL)"
+  }
+  check "ck_invitations_declined_pair" {
+    expr = "(declined_at IS NULL) = (declined_by_user_id IS NULL)"
+  }
+  check "ck_invitations_revoked_pair" {
+    expr = "(revoked_at IS NULL) = (revoked_by_user_id IS NULL)"
+  }
+  # 結果は高々 1 つ（承諾 / 辞退 / 取消は両立しない）。承諾済みの人を外すのは招待ではなく
+  # 所属・付与の削除（既存の DELETE）で行い、この行は触らない。
+  check "ck_invitations_single_outcome" {
+    expr = "(((accepted_at IS NOT NULL))::integer + ((declined_at IS NOT NULL))::integer + ((revoked_at IS NOT NULL))::integer) <= 1"
+  }
+  # 承諾は期限内にしか起きない。辞退・取消は期限後でも正当（残った行を止める操作）なので対象外。
+  check "ck_invitations_accepted_in_time" {
+    expr = "(accepted_at IS NULL) OR ((accepted_at >= created_at) AND (accepted_at <= expires_at))"
+  }
+}
