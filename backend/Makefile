@@ -90,10 +90,12 @@ SCOPE_TARGET = \
 # （Atlas は extension を管理しない＝作成も削除もしない。ここで先に作るだけで足りる）。
 # ローカルに psql が無い環境でも動くよう、使い捨ての postgres コンテナから叩く。
 #
-# TARGET は Supabase の **Session pooler**（aws-0-<region>.pooler.supabase.com:5432・IPv4）の
-# DSN を渡す。直結ホスト db.<ref>.supabase.co は IPv6 アドレスしか持たず、Docker Desktop の
-# コンテナは IPv6 で外へ出られないので、この psql が「Network unreachable」で止まる
-# （2026-09-22 に踏んだ。Mac 自体からは届くので Atlas 本体は通り、ここだけが落ちる）。
+# TARGET は Supabase ダッシュボード → Connect → **Session pooler** に表示される DSN を渡す
+# （ホスト名は <something>.pooler.supabase.com、ポート 5432。リージョン等で変わるので表示に従う）。
+# 直結ホスト db.<ref>.supabase.co は、IPv4 アドオンを付けていない既定の構成では IPv6 アドレス
+# しか持たない。Docker Desktop のコンテナは IPv6 で外へ出られないので、この psql が
+# 「Network unreachable」で止まる（2026-09-22 に踏んだ。Mac 自体からは届くので Atlas 本体は
+# 通り、ここだけが落ちる）。IPv4 アドオンを付けていれば直結ホストでも届く。
 # Transaction pooler（6543）は DDL・トランザクションの都合で使わない。
 #
 # WITH SCHEMA public と、その直後の確認がどちらも要る。
@@ -105,20 +107,25 @@ SCOPE_TARGET = \
 .PHONY: schema-ensure-pg-trgm
 schema-ensure-pg-trgm:
 	@if [ -z "$(TARGET)" ]; then echo "使い方: make schema-ensure-pg-trgm TARGET=postgres://..."; exit 1; fi
-	@docker run --rm public.ecr.aws/docker/library/postgres:17.6-alpine \
+	@out="$$(mktemp)"; \
+	docker run --rm public.ecr.aws/docker/library/postgres:17.6-alpine \
 	  psql "$(TARGET)" -v ON_ERROR_STOP=1 \
 	  -c "CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;" \
 	  -c "DO \$$\$$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_opclass o JOIN pg_namespace n ON n.oid = o.opcnamespace WHERE o.opcname = 'gin_trgm_ops' AND n.nspname = 'public') THEN RAISE EXCEPTION 'gin_trgm_ops が public にありません。pg_trgm が別のスキーマに入っています（ALTER EXTENSION pg_trgm SET SCHEMA public; で移せます）'; END IF; END \$$\$$;" \
-	  || { \
-	    case "$(TARGET)" in \
-	      *@db.*.supabase.co*) \
+	  2>"$$out"; rc=$$?; \
+	cat "$$out" >&2; \
+	if [ $$rc -ne 0 ]; then \
+	  case "$(TARGET)" in \
+	    *@db.*.supabase.co*) \
+	      if grep -q "Network unreachable\|Network is unreachable" "$$out"; then \
 	        echo "" >&2; \
-	        echo "ヒント: TARGET が Supabase の直結ホスト（db.<ref>.supabase.co）です。このホストは IPv6 のみで、" >&2; \
-	        echo "        Docker のコンテナからは届きません（Network unreachable）。Supabase ダッシュボード → Connect →" >&2; \
-	        echo "        Session pooler（aws-0-<region>.pooler.supabase.com:5432）の DSN を TARGET に使ってください。" >&2 ;; \
-	    esac; \
-	    exit 1; \
-	  }
+	        echo "ヒント: TARGET が Supabase の直結ホスト（db.<ref>.supabase.co）で、経路が無くて届いていません。" >&2; \
+	        echo "        IPv4 アドオンの無い構成では直結ホストは IPv6 のみで、Docker のコンテナからは出られません。" >&2; \
+	        echo "        ダッシュボード → Connect → Session pooler（*.pooler.supabase.com:5432）の DSN を使ってください。" >&2; \
+	      fi ;; \
+	  esac; \
+	fi; \
+	rm -f "$$out"; exit $$rc
 
 .PHONY: ensure-atlas
 ensure-atlas:
