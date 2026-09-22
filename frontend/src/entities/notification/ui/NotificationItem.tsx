@@ -1,5 +1,7 @@
 import { memo } from 'react';
+import { Link } from 'react-router-dom';
 import type { Notification } from '../model/types';
+import { isAppPath } from '../lib/linkPath';
 import { formatDateTime } from '@/shared/lib/formatters';
 import { Button, FsIcon } from '@/shared/ui';
 
@@ -30,6 +32,13 @@ interface NotificationItemProps {
 }
 
 export default memo(function NotificationItem({ notification, onMarkAsRead, disabled = false }: NotificationItemProps) {
+  // 飛び先があれば題名をリンクにする。行全体をリンクにしないのは、中に「既読にする」ボタンが
+  // あって操作の入れ子になるため。押したら既読にしてから遷移する —— 未読のまま飛ぶと、
+  // 戻ってきたときにまた未読が光る。既読化は待たない（遷移を止めない。失敗しても一覧の
+  // 再取得でサーバーの状態に合う）。
+  // 列が入る前の応答には linkPath が無い（undefined）。無い＝'' と同じ「飛び先なし」。
+  const linkPath = notification.linkPath ?? '';
+  const linked = isAppPath(linkPath);
   return (
     <div
       className={`rounded-2xl border p-4 sm:p-5 ${
@@ -49,7 +58,22 @@ export default memo(function NotificationItem({ notification, onMarkAsRead, disa
               {TYPE_LABELS[notification.type] ?? notification.type}
             </span>
           </div>
-          <p className="mb-1 text-base font-semibold leading-relaxed text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{notification.title}</p>
+          {linked ? (
+            <p className="mb-1 text-base font-semibold leading-relaxed [overflow-wrap:anywhere]">
+              <Link
+                to={linkPath}
+                onClick={() => {
+                  if (!notification.isRead) onMarkAsRead(notification.id);
+                }}
+                className="inline-flex items-start gap-1 rounded-sm text-[var(--color-text-primary)] underline-offset-4 hover:text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+              >
+                <span>{notification.title}</span>
+                <FsIcon name="arrow-up-right" className="mt-1 h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
+              </Link>
+            </p>
+          ) : (
+            <p className="mb-1 text-base font-semibold leading-relaxed text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{notification.title}</p>
+          )}
           <p className="text-sm leading-relaxed text-[var(--color-text-muted)] [overflow-wrap:anywhere]">{notification.body}</p>
           {/* 時刻は情報なので faint（飾り用の淡さ）ではなく muted を使う。faint は白地で 1.5:1 しかない。 */}
           <time dateTime={notification.createdAt} className="mt-3 block text-xs text-[var(--color-text-muted)]">
