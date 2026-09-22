@@ -34,7 +34,7 @@ export default function ScrollToTop({ targetId, threshold = 200 }: ScrollToTopPr
     <button
       onClick={handleClick}
       aria-label="ページ上部に戻る"
-      className="fixed bottom-6 right-6 z-40 w-10 h-10 bg-brand-600 hover:bg-brand-700 text-white rounded-full shadow-lg flex items-center justify-center transition-colors duration-fast animate-fade-in"
+      className="fixed bottom-[calc(var(--app-bottom-nav-h)+env(safe-area-inset-bottom,0px)+1rem)] right-4 z-40 md:bottom-6 md:right-6 w-10 h-10 bg-brand-600 hover:bg-brand-700 text-white rounded-full shadow-lg flex items-center justify-center transition-colors duration-fast animate-fade-in"
     >
       <ChevronUpIcon className="w-5 h-5" />
     </button>

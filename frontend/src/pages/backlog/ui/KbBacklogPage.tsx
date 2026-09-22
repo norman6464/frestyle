@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { BacklogSidebar, useBacklogFilterCounts } from '@/widgets/backlog-sidebar';
 import { SecondaryPanel } from '@/widgets/secondary-panel';
 import { EmptyState, FsIcon, FsIllustration, Loading, SidebarSection } from '@/shared/ui';
@@ -496,25 +496,17 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
           mobileOpen={detailMobileOpen}
           onMobileClose={() => setDetailMobileOpen(false)}
           headerActions={
-            <div className="flex shrink-0 items-center gap-1.5">
-              <Link
-                to={`/tickets/${selectedTicket.id}`}
-                aria-label="全画面で開く"
-                title="全画面で開く"
-                className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-surface-3 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-              >
-                <FsIcon name="arrow-up-right" className="h-3.5 w-3.5" />
-              </Link>
-              <button
-                type="button"
-                onClick={() => selectTicket(null)}
-                aria-label="選択解除"
-                title="選択解除"
-                className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-surface-3 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-              >
-                <FsIcon name="x" className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            /* 全画面へは本文の身元（キー・種別）のリンクから開く。ここに同じ行き先の矢印を置くと
+               入口が 2 つになるので持たない。ここに残すのは選択を解く操作だけ。 */
+            <button
+              type="button"
+              onClick={() => selectTicket(null)}
+              aria-label="選択解除"
+              title="選択解除"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-surface-3 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+            >
+              <FsIcon name="x" className="h-3.5 w-3.5" />
+            </button>
           }
         >
           <TicketDetailPanel

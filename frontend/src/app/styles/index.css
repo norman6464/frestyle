@@ -365,6 +365,8 @@
   --color-nav-selected-rule: #2563eb;
   /* ヘッダーの高さ。SecondaryPanel 側のオフセット（ホバー検知ゾーン・浮きパネル）もこれを基準にする。 */
   --app-header-h: 56px;
+  /* 狭い画面の下部ナビの高さ（safe-area は含まない）。本文の下余白と「上に戻る」の位置がこれを読む。 */
+  --app-bottom-nav-h: 56px;
   --color-text-primary: var(--fs-text-strong);
   --color-text-secondary: #37352F;
   /* 読みやすさ（コントラスト比）は**白地だけで決めない**。小さな文字には 4.5:1 が要る。

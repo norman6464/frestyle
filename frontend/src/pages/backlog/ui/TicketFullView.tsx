@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { AutoResizeTextarea, PageFrame } from '@/shared/ui';
+import { AutoResizeTextarea, FsIcon, PageFrame } from '@/shared/ui';
 import {
   TicketKeyBadge,
   type Label,
@@ -138,11 +138,15 @@ export default function TicketFullView({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex flex-none flex-wrap items-center gap-2 border-b border-surface-3 px-4 py-3 md:px-6">
+        {/* 戻り先には今のチケットを載せる。一覧に戻ったとき、このチケットが選ばれた状態で
+            開き、詳細パネルも出る。素の /backlog/:projectId へ戻すと選択が消えて、
+            一覧の中からもう一度探すことになる。 */}
         <Link
-          to={`/backlog/${ticket.projectId}`}
-          className="inline-flex min-h-11 items-center rounded-md px-2 text-sm text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+          to={`/backlog/${ticket.projectId}?ticket=${encodeURIComponent(ticket.id)}`}
+          className="inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-sm text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
         >
-          ◂ バックログ
+          <FsIcon name="chevron-left" className="h-4 w-4" />
+          バックログ
         </Link>
         <TicketAncestorTrail ancestors={ancestors} projectKey={projectKey} />
         <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--color-text-secondary)]">

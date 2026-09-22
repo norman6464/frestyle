@@ -1,6 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import { ExclamationCircleIcon } from '@heroicons/react/24/outline';
-import { EmptyState } from '@/shared/ui';
+import { EmptyState, FsIllustration } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import Loading from '@/shared/ui/Loading';
@@ -41,7 +40,7 @@ export default function KbTicketPage() {
 
   if (page.error) {
     return (
-      <EmptyState headingLevel={1} icon={ExclamationCircleIcon} title="チケットを開けません" description={page.error} action={{ label: 'バックログへ戻る', onClick: () => navigate('/backlog') }} />
+      <EmptyState headingLevel={1} illustration={<FsIllustration name="load-error" />} title="チケットを開けません" description={page.error} action={{ label: 'バックログへ戻る', onClick: () => navigate('/backlog') }} />
     );
   }
 

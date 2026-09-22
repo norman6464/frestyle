@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { FsIcon } from '@/shared/ui';
 import { useCommandPalette } from '../model/useCommandPalette';
 import type { CommandItem } from '../config/commandPaletteItems';
 
@@ -90,7 +90,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       <div className="relative w-full max-w-lg bg-[var(--color-surface-1)] border border-[var(--color-surface-3)] rounded-xl shadow-2xl overflow-hidden">
         {/* 検索入力 */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-surface-3)]">
-          <MagnifyingGlassIcon className="w-5 h-5 text-[var(--color-text-muted)] flex-shrink-0" />
+          <FsIcon name="search" className="h-5 w-5 flex-shrink-0 text-[var(--color-text-muted)]" />
           <input
             ref={inputRef}
             type="text"
@@ -136,7 +136,6 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
                 {items.map((item, i) => {
                   const globalIndex = startIndex + i;
                   const isSelected = globalIndex === selectedIndex;
-                  const Icon = item.icon;
                   return (
                     <div
                       key={item.id}
@@ -152,7 +151,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
                         // マウスホバーで選択を変更するならここで
                       }}
                     >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <FsIcon name={item.icon} className="h-4 w-4 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{item.label}</div>
                         {item.description && (

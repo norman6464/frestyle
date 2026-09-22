@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GLOBAL_NAV_PRIMARY, GLOBAL_NAV_UTILITY, navActive } from '../globalNav';
+import { GLOBAL_NAV_PRIMARY, navActive } from '../globalNav';
 
 describe('ナレッジへの導線', () => {
   it('柱の行き先にナレッジがある', () => {
@@ -12,10 +12,16 @@ describe('ナレッジへの導線', () => {
   });
 
   it('/notes という項目・パスはもう無い（撤去済み）', () => {
-    const items = [...GLOBAL_NAV_PRIMARY, ...GLOBAL_NAV_UTILITY];
+    expect(GLOBAL_NAV_PRIMARY.map((item) => item.id)).not.toContain('notes');
+    expect(GLOBAL_NAV_PRIMARY.map((item) => item.to)).not.toContain('/notes');
+  });
 
-    expect(items.map((item) => item.id)).not.toContain('notes');
-    expect(items.map((item) => item.to)).not.toContain('/notes');
+  it('通知と設定は柱に無い（ヘッダーのベルとユーザーメニューが唯一の入口）', () => {
+    // 同じ目的地の常設入口を 2 か所に置かない。柱に足すと、ヘッダーと二重になる。
+    const paths = GLOBAL_NAV_PRIMARY.map((item) => item.to);
+    expect(paths).not.toContain('/notifications');
+    expect(paths).not.toContain('/settings');
+    expect(GLOBAL_NAV_PRIMARY).toHaveLength(4);
   });
 
   it('ページの中（/kb/…）にいても選ばれた状態になる', () => {

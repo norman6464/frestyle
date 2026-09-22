@@ -84,9 +84,34 @@ type Story = StoryObj<typeof meta>;
 export const 既定: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // 行き先は左端の柱が持つ（ヘッダーには無い）。
+    // 行き先は左端の柱が持つ（ヘッダーには無い）。広い画面では下部ナビは出ない。
     await expect(canvas.getByRole('navigation', { name: 'アプリのナビゲーション' })).toBeVisible();
+    await expect(canvas.queryByRole('navigation', { name: '主な行き先' })).toBeNull();
     await expect(canvas.getByRole('heading', { name: 'ここが本文' })).toBeVisible();
+  },
+};
+
+/**
+ * 狭い画面では毎日使う行き先は下部ナビ（設計ボード ST12）が持つ。三本線の引き出しには
+ * 今いる画面の区画とスペースの一覧だけが残り、同じ階層のナビが 2 系統並ばない。
+ */
+export const モバイルは下部ナビ: Story = {
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bottom = canvas.getByRole('navigation', { name: '主な行き先' });
+    await expect(bottom).toBeVisible();
+    for (const label of ['ホーム', '自分の担当', 'ナレッジ', 'バックログ']) {
+      await expect(within(bottom).getByRole('link', { name: label })).toBeVisible();
+    }
+    await expect(within(bottom).getByRole('link', { name: 'ホーム' })).toHaveAttribute('aria-current', 'page');
+    // 柱の行き先は狭い画面では出さない（下部ナビと二重になる）。
+    await expect(canvas.queryByRole('navigation', { name: 'アプリのナビゲーション' })).toBeNull();
+    // 画面の下端に張り付く。本文はその分だけ下に余白を取り、最後の行が隠れない。
+    const rect = bottom.getBoundingClientRect();
+    await expect(Math.round(rect.bottom)).toBe(Math.round(window.innerHeight));
+    const main = canvasElement.querySelector('main')!;
+    await expect(parseFloat(getComputedStyle(main).paddingBottom)).toBeGreaterThanOrEqual(rect.height);
   },
 };
 
@@ -98,13 +123,17 @@ export const モバイルのメニューをキーボードで操作: Story = {
     await userEvent.click(trigger);
     const close = await canvas.findByRole('button', { name: 'メニューを閉じる' });
     await waitFor(() => expect(close).toHaveFocus());
+    // 引き出しの中身はスペースの一覧だけ（行き先は下部ナビが持つ）。
+    await expect(canvas.queryByRole('navigation', { name: 'アプリのナビゲーション' })).toBeNull();
+    await expect(await canvas.findByRole('link', { name: '設計スペース' })).toBeVisible();
+    // Shift+Tab は引き出しの最後（すべてのスペース）へ回り、Tab で閉じるボタンへ戻る。
     await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
-    await expect(canvas.getByRole('link', { name: '設定' })).toHaveFocus();
+    await expect(canvas.getByRole('link', { name: 'すべてのスペース' })).toHaveFocus();
     await userEvent.keyboard('{Tab}');
     await expect(close).toHaveFocus();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(trigger).toHaveFocus());
-    await waitFor(() => expect(canvas.queryByRole('navigation', { name: 'アプリのナビゲーション' })).toBeNull());
+    await waitFor(() => expect(canvas.queryByRole('button', { name: 'メニューを閉じる' })).toBeNull());
   },
 };
 
