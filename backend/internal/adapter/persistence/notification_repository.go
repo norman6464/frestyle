@@ -35,6 +35,7 @@ func (r *notificationRepository) Create(ctx context.Context, n *domain.Notificat
 		Title:     n.Title,
 		Body:      n.Body,
 		IsRead:    n.IsRead,
+		LinkPath:  n.LinkPath,
 		CreatedAt: createdAt,
 	})
 	if err != nil {
@@ -47,11 +48,12 @@ func (r *notificationRepository) Create(ctx context.Context, n *domain.Notificat
 
 // createManyItem は json_to_recordset に渡す 1 行分。キー名は SQL 側の列名と一致させる。
 type createManyItem struct {
-	UserID uint64 `json:"user_id"`
-	Type   string `json:"type"`
-	Title  string `json:"title"`
-	Body   string `json:"body"`
-	IsRead bool   `json:"is_read"`
+	UserID   uint64 `json:"user_id"`
+	Type     string `json:"type"`
+	Title    string `json:"title"`
+	Body     string `json:"body"`
+	IsRead   bool   `json:"is_read"`
+	LinkPath string `json:"link_path"`
 }
 
 // CreateMany は複数件を 1 回の INSERT でまとめて作成する。
@@ -64,11 +66,12 @@ func (r *notificationRepository) CreateMany(ctx context.Context, ns []domain.Not
 	items := make([]createManyItem, 0, len(ns))
 	for _, n := range ns {
 		items = append(items, createManyItem{
-			UserID: n.UserID,
-			Type:   n.Type,
-			Title:  n.Title,
-			Body:   n.Body,
-			IsRead: n.IsRead,
+			UserID:   n.UserID,
+			Type:     n.Type,
+			Title:    n.Title,
+			Body:     n.Body,
+			IsRead:   n.IsRead,
+			LinkPath: n.LinkPath,
 		})
 	}
 	itemsJSON, err := json.Marshal(items)
@@ -96,6 +99,7 @@ func (r *notificationRepository) ListByUserID(ctx context.Context, userID uint64
 			Title:     row.Title,
 			Body:      row.Body,
 			IsRead:    row.IsRead,
+			LinkPath:  row.LinkPath,
 			CreatedAt: row.CreatedAt,
 		})
 	}

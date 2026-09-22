@@ -99,6 +99,7 @@ func (u *CreateTicketCommentUseCase) notify(ctx context.Context, in CreateTicket
 		notifs = append(notifs, domain.Notification{
 			UserID: userID, Type: domain.NotificationTypeTicketMentioned,
 			Title: "チケットで名指しされました", Body: t.Title,
+			LinkPath: ticketLinkPath(in.TicketID),
 		})
 	}
 
@@ -112,6 +113,7 @@ func (u *CreateTicketCommentUseCase) notify(ctx context.Context, in CreateTicket
 				notifs = append(notifs, domain.Notification{
 					UserID: assigneeUserID, Type: domain.NotificationTypeTicketCommented,
 					Title: "担当チケットにコメントが付きました", Body: t.Title,
+					LinkPath: ticketLinkPath(in.TicketID),
 				})
 			}
 		}
@@ -298,4 +300,10 @@ func (u *RemoveTicketCommentReactionUseCase) Execute(ctx context.Context, worksp
 		return err
 	}
 	return u.comments.RemoveTicketCommentReaction(ctx, workspaceID, commentID, userID, emoji)
+}
+
+// ticketLinkPath は通知からチケットの全画面へ飛ぶためのアプリ内パス。フロントの
+// /tickets/:ticketId と一致させる。ここで組み立てておけば、通知の行は種別を知らなくても飛べる。
+func ticketLinkPath(ticketID string) string {
+	return "/tickets/" + ticketID
 }

@@ -2,8 +2,10 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -63,9 +65,27 @@ func Test_通知ハンドラ_一覧(t *testing.T) {
 	})
 	t.Run("正常系", func(t *testing.T) {
 		w, c := notifCtx(7, "")
-		newNotifHandler(&fakeNotifRepo{rows: []domain.Notification{{ID: 1}}}).List(c)
+		newNotifHandler(&fakeNotifRepo{rows: []domain.Notification{{ID: 1, UserID: 7, Title: "t", LinkPath: "/tickets/abc"}}}).List(c)
 		if w.Code != http.StatusOK {
 			t.Fatalf("want 200, got %d", w.Code)
+		}
+		// 応答は dto。飛び先 linkPath が載り、本人の一覧なので userId は返さない。
+		var got []map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatalf("json: %v", err)
+		}
+		if len(got) != 1 || got[0]["linkPath"] != "/tickets/abc" {
+			t.Fatalf("want linkPath=/tickets/abc, got %v", got)
+		}
+		if _, leaked := got[0]["userId"]; leaked {
+			t.Fatalf("userId must not be in the response: %v", got[0])
+		}
+	})
+	t.Run("0 件は null ではなく []", func(t *testing.T) {
+		w, c := notifCtx(7, "")
+		newNotifHandler(&fakeNotifRepo{}).List(c)
+		if body := strings.TrimSpace(w.Body.String()); body != "[]" {
+			t.Fatalf("want [], got %q", body)
 		}
 	})
 	t.Run("リポジトリエラー → 400", func(t *testing.T) {

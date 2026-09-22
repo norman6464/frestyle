@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/norman6464/frestyle/backend/internal/domain"
+	"github.com/norman6464/frestyle/backend/internal/handler/dto"
 	"github.com/norman6464/frestyle/backend/internal/handler/middleware"
 	"github.com/norman6464/frestyle/backend/internal/usecase/notification"
 )
@@ -39,7 +40,8 @@ func (h *NotificationHandler) List(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, rows)
+	// domain をそのまま返さない（userId が漏れる・domain を直すと API の形が変わる）。
+	c.JSON(http.StatusOK, dto.NotificationsFromDomain(rows))
 }
 
 // MarkRead は所有者検証つきで通知を既読化する。
