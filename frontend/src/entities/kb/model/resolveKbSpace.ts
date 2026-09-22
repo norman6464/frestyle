@@ -11,13 +11,23 @@ export interface ResolvedKbSpace {
  * 決める。所属する最初のワークスペース → 自分がアクセスできる最初のスペース
  * （配列の順序=並び順）。どのワークスペースにもアクセスできるスペースが無ければ null。
  *
+ * `preferredWorkspaceSlug` を渡すと、そのワークスペースを最初に見る（柱の「すべての
+ * スペース」が対象ワークスペースを持ち越すため。FRESTYLE-596 の残り）。所属に無い slug
+ * （招待の取り消し等）は無視し、通常どおり先頭から見る。
+ *
  * pages/backlog/model/resolveBacklogSpace.ts と同じ形だが、fetchSpaces（可視スペース
  * 全件）ではなく fetchMySpaces（自分の役割つき）を使う。バックログ側は今回のスコープ外
  * として触らない（動いている別機能への影響を避けるため、あえて共有しない）。
  */
-export async function resolveEntryKbSpaceId(): Promise<string | null> {
+export async function resolveEntryKbSpaceId(preferredWorkspaceSlug?: string): Promise<string | null> {
   const workspaces = await KbRepository.fetchWorkspaces();
-  for (const workspace of workspaces) {
+  const ordered = preferredWorkspaceSlug
+    ? [
+        ...workspaces.filter((w) => w.slug === preferredWorkspaceSlug),
+        ...workspaces.filter((w) => w.slug !== preferredWorkspaceSlug),
+      ]
+    : workspaces;
+  for (const workspace of ordered) {
     const spaces = await KbRepository.fetchMySpaces(workspace.slug);
     if (spaces[0]) return spaces[0].id;
   }

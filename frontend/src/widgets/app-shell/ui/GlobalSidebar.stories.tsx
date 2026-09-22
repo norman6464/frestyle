@@ -72,7 +72,12 @@ export const スペースが並ぶ: Story = {
     const canvas = within(canvasElement);
     await expect(await canvas.findByRole('link', { name: '設計スペース' })).toBeVisible();
     await expect(canvas.getByRole('button', { name: '開発チームのスペース' })).toBeVisible();
-    await expect(canvas.getByRole('link', { name: 'すべてのスペース' })).toBeVisible();
+    // 対象ワークスペースを ?workspace= で持ち越す。無いと全件画面が所属の先頭ワーク
+    // スペースを解決してしまい、いま見ているのと別のワークスペースが開く（FRESTYLE-596）。
+    await expect(canvas.getByRole('link', { name: 'すべてのスペース' })).toHaveAttribute(
+      'href',
+      '/kb/spaces?workspace=acme',
+    );
     // 所属が 1 つならワークスペースの切替は出さない。
     await expect(canvas.queryByRole('combobox', { name: 'スペースを並べるワークスペース' })).toBeNull();
   },
@@ -128,6 +133,11 @@ export const ワークスペースが複数のとき: Story = {
     await expect(await canvas.findByRole('link', { name: '営業スペース' })).toBeVisible();
     await expect(canvas.queryByRole('link', { name: '設計スペース' })).toBeNull();
     await expect(canvas.getByRole('button', { name: '営業チームのスペース' })).toBeVisible();
+    // 切り替えたあとは「すべてのスペース」も切り替え後の対象を指す。
+    await expect(canvas.getByRole('link', { name: 'すべてのスペース' })).toHaveAttribute(
+      'href',
+      '/kb/spaces?workspace=beta',
+    );
   },
 };
 

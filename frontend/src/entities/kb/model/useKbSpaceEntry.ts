@@ -18,18 +18,26 @@ const EMPTY: KbSpaceEntryState = { workspaceSlug: null, space: null, noSpaces: f
  * （段14。概要・すべてのページ・お気に入り・メンバーの 4 画面が共有する）。
  * pages/backlog/model/useBacklogSpace.ts と同じ形（前者は最初に見つかったスペースへ
  * 移す・後者は spaceId からワークスペースを引く）。
+ *
+ * `preferredWorkspaceSlug` は spaceId 無し（/kb/spaces）のときだけ効く。柱の
+ * 「すべてのスペース」が対象ワークスペースを持ち越すために渡す（FRESTYLE-596 の残り）。
+ * spaceId が既にあれば、その ID から一意にワークスペースが決まるので使わない。
  */
-export function useKbSpaceEntry(spaceId: string | undefined, onResolvedEntrySpaceId: (id: string) => void) {
+export function useKbSpaceEntry(
+  spaceId: string | undefined,
+  onResolvedEntrySpaceId: (id: string) => void,
+  preferredWorkspaceSlug?: string,
+) {
   const [state, setState] = useState<KbSpaceEntryState>(EMPTY);
   const active = useRef<string>('');
 
   useEffect(() => {
-    const key = spaceId ?? '__entry__';
+    const key = spaceId ?? `__entry__:${preferredWorkspaceSlug ?? ''}`;
     active.current = key;
     setState({ ...EMPTY, loading: true });
 
     if (!spaceId) {
-      resolveEntryKbSpaceId()
+      resolveEntryKbSpaceId(preferredWorkspaceSlug)
         .then((id) => {
           if (active.current !== key) return;
           if (id) {
@@ -65,7 +73,7 @@ export function useKbSpaceEntry(spaceId: string | undefined, onResolvedEntrySpac
         setState({ ...EMPTY, error: 'スペースを読み込めませんでした。' });
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spaceId]);
+  }, [spaceId, preferredWorkspaceSlug]);
 
   return state;
 }

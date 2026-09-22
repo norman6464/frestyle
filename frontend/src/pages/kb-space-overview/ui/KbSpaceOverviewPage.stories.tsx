@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { expect, waitFor, within } from 'storybook/test';
 import KbSpaceOverviewPage from './KbSpaceOverviewPage';
 import { routerWithParam, withApi, withToast } from '../../../../.storybook/decorators';
@@ -37,6 +38,40 @@ export const ふつう: Story = {
       await expect(canvas.getByRole('heading', { name: '開発部' })).toBeInTheDocument();
     });
     await expect(canvas.getByText(/編集者/)).toBeInTheDocument();
+  },
+};
+
+/**
+ * 柱の「すべてのスペース」が ?workspace= で対象を持ち越したとき（FRESTYLE-596 の残り）。
+ * 所属順では acme が先だが、workspace=beta を指定しているので beta のスペースが開く。
+ */
+export const 対象ワークスペースを引き継ぐ: Story = {
+  decorators: [
+    (Story) => (
+      <MemoryRouter initialEntries={['/kb/spaces?workspace=beta']}>
+        <Routes>
+          <Route path="/kb/spaces" element={<Story />} />
+          <Route path="/kb/spaces/:spaceId" element={<Story />} />
+        </Routes>
+      </MemoryRouter>
+    ),
+    withApi({
+      '/kb/workspaces/acme/me/spaces': [{ id: 'space-1', name: '開発部', role: 'editor' }],
+      '/kb/workspaces/beta/me/spaces': [{ id: 'space-9', name: '営業部', role: 'viewer' }],
+      '/spaces/space-9/pages': { pages: [], hasHiddenChildren: false },
+      '/kb/workspaces': [
+        { slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:00:00Z', canManage: true },
+        { slug: 'beta', name: 'Beta 社', createdAt: '2026-01-01T00:00:00Z', canManage: false },
+      ],
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(async () => {
+      await expect(canvas.getByRole('heading', { name: '営業部' })).toBeInTheDocument();
+    });
+    await expect(canvas.getByText(/閲覧者/)).toBeInTheDocument();
+    await expect(canvas.queryByRole('heading', { name: '開発部' })).toBeNull();
   },
 };
 
