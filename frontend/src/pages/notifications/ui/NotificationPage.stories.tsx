@@ -34,6 +34,7 @@ const notification = (id: number, title: string, body: string, isRead: boolean) 
   title,
   body,
   isRead,
+  linkPath: '',
   createdAt: '2026-09-06T09:41:00Z',
 });
 

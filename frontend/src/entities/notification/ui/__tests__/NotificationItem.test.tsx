@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import NotificationItem from '../NotificationItem';
 import type { Notification } from '../../model/types';
 
@@ -17,6 +18,7 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
     title: 'コメントに返信がありました',
     body: '「設計メモ」のコメントに返信が付きました。',
     isRead: false,
+    linkPath: '',
     createdAt: '2026-08-02T10:00:00Z',
     ...overrides,
   };
@@ -24,7 +26,11 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
 
 function renderItem(overrides: Partial<Notification> = {}) {
   const onMarkAsRead = vi.fn();
-  render(<NotificationItem notification={makeNotification(overrides)} onMarkAsRead={onMarkAsRead} />);
+  render(
+    <MemoryRouter>
+      <NotificationItem notification={makeNotification(overrides)} onMarkAsRead={onMarkAsRead} />
+    </MemoryRouter>,
+  );
   return { onMarkAsRead };
 }
 
@@ -79,9 +85,49 @@ describe('NotificationItem', () => {
 
     it('更新中は既読ボタンを無効にする', () => {
       const onMarkAsRead = vi.fn();
-      render(<NotificationItem notification={makeNotification()} onMarkAsRead={onMarkAsRead} disabled />);
+      render(
+        <MemoryRouter>
+          <NotificationItem notification={makeNotification()} onMarkAsRead={onMarkAsRead} disabled />
+        </MemoryRouter>,
+      );
       fireEvent.click(screen.getByRole('button', { name: '既読にする' }));
       expect(onMarkAsRead).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('飛び先', () => {
+    it('linkPath があれば題名が目的地へのリンクになる', () => {
+      renderItem({ linkPath: '/tickets/t-1' });
+      expect(screen.getByRole('link', { name: 'コメントに返信がありました' })).toHaveAttribute('href', '/tickets/t-1');
+    });
+
+    it('リンクを押すと既読にしてから遷移する（未読のとき）', () => {
+      const { onMarkAsRead } = renderItem({ id: 9, isRead: false, linkPath: '/tickets/t-1' });
+      fireEvent.click(screen.getByRole('link', { name: 'コメントに返信がありました' }));
+      expect(onMarkAsRead).toHaveBeenCalledWith(9);
+    });
+
+    it('既読ならリンクを押しても既読化を呼ばない（無駄な往復をしない）', () => {
+      const { onMarkAsRead } = renderItem({ isRead: true, linkPath: '/tickets/t-1' });
+      fireEvent.click(screen.getByRole('link', { name: 'コメントに返信がありました' }));
+      expect(onMarkAsRead).not.toHaveBeenCalled();
+    });
+
+    it('linkPath が空なら題名は文字のまま（飛び先の無い種別）', () => {
+      renderItem({ linkPath: '' });
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
+      expect(screen.getByText('コメントに返信がありました')).toBeInTheDocument();
+    });
+
+    it('linkPath が無い旧応答でも壊れず、題名は文字のまま（backend より先に出しても安全）', () => {
+      renderItem({ linkPath: undefined });
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
+      expect(screen.getByText('コメントに返信がありました')).toBeInTheDocument();
+    });
+
+    it('外部 URL への誘導はリンクにしない（backend の CHECK と同じ規則を画面でも守る）', () => {
+      renderItem({ linkPath: '//evil.example' });
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
     });
   });
 });

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
+import { withRouter } from '../../../../.storybook/decorators';
 import NotificationItem from './NotificationItem';
 import type { Notification } from '../model/types';
 
@@ -23,6 +24,7 @@ const meta = {
   parameters: { layout: 'padded' },
   args: { onMarkAsRead: fn() },
   decorators: [
+    withRouter,
     (Story) => (
       <div className="max-w-xl">
         <Story />
@@ -41,6 +43,7 @@ const notification = (over: Partial<Notification> = {}): Notification => ({
   title: 'コメントに返信がありました',
   body: '「設計メモ」のコメントに返信が付きました。',
   isRead: false,
+  linkPath: '',
   createdAt: '2026-09-06T09:41:00Z',
   ...over,
 });
@@ -105,6 +108,46 @@ export const 既読にする: Story = {
   play: async ({ args, canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole('button', { name: '既読にする' }));
     await expect(args.onMarkAsRead).toHaveBeenCalledWith(7);
+  },
+};
+
+/**
+ * 飛び先があるとき。題名が目的地（チケット）へのリンクになり、押すと既読にしてから遷移する。
+ * 行全体ではなく題名だけをリンクにするのは、中に「既読にする」ボタンがあって操作が入れ子に
+ * なるため。矢印は「ここから出て行く」の印。
+ */
+export const 飛び先あり: Story = {
+  args: { notification: notification({ id: 3, linkPath: '/tickets/t-1' }) },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: 'コメントに返信がありました' });
+    await expect(link).toHaveAttribute('href', '/tickets/t-1');
+    await userEvent.click(link);
+    await expect(args.onMarkAsRead).toHaveBeenCalledWith(3);
+  },
+};
+
+/** 既読で飛び先があるとき。リンクは残り、「既読にする」だけが消える。押しても既読化は呼ばない。 */
+export const 既読で飛び先あり: Story = {
+  args: { notification: notification({ isRead: true, linkPath: '/tickets/t-1' }) },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: '既読にする' })).toBeNull();
+    await userEvent.click(canvas.getByRole('link', { name: 'コメントに返信がありました' }));
+    await expect(args.onMarkAsRead).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * 飛び先が外部 URL（スキーム相対）のとき。backend の CHECK が弾くので本来は来ないが、
+ * 画面側でも同じ規則で確かめ、リンクにせず文字だけを出す。
+ */
+export const 飛び先が外部URLなら文字だけ: Story = {
+  args: { notification: notification({ linkPath: '//evil.example' }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('link')).toBeNull();
+    await expect(canvas.getByText('コメントに返信がありました')).toBeVisible();
   },
 };
 

@@ -26,6 +26,7 @@ const mockNotifications: Notification[] = [
     title: 'コメントに返信がありました',
     body: '「設計メモ」のコメントに返信が付きました。',
     isRead: false,
+    linkPath: '',
     createdAt: '2026-08-02T10:30:00Z',
   },
   {
@@ -34,6 +35,7 @@ const mockNotifications: Notification[] = [
     title: 'コメントに返信がありました',
     body: '「議事録」のコメントに返信が付きました。',
     isRead: true,
+    linkPath: '',
     createdAt: '2026-08-02T09:00:00Z',
   },
 ];

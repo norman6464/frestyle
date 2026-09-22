@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import NotificationPage from '../ui/NotificationPage';
 import { useNotification } from '../model/useNotification';
 
@@ -28,7 +29,7 @@ describe('NotificationPage', () => {
       refresh: vi.fn(),
     });
 
-    render(<NotificationPage />);
+    render(<MemoryRouter><NotificationPage /></MemoryRouter>);
     expect(screen.getByText('通知を読み込み中...')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: '通知' })).toBeInTheDocument();
   });
@@ -36,13 +37,13 @@ describe('NotificationPage', () => {
   it('未読だけに切り替え、読み終わった通知もすべてから確認できる', () => {
     mockedUseNotification.mockReturnValue({
       notifications: [
-        { id: 1, type: 'ticket_mentioned', title: '確認のお願い', body: '未読の本文', isRead: false, createdAt: '2026-09-21T10:00:00Z' },
-        { id: 2, type: 'ticket_commented', title: '対応済みのお知らせ', body: '既読の本文', isRead: true, createdAt: '2026-09-20T10:00:00Z' },
+        { id: 1, type: 'ticket_mentioned', title: '確認のお願い', body: '未読の本文', isRead: false, linkPath: '', createdAt: '2026-09-21T10:00:00Z' },
+        { id: 2, type: 'ticket_commented', title: '対応済みのお知らせ', body: '既読の本文', isRead: true, linkPath: '', createdAt: '2026-09-20T10:00:00Z' },
       ],
       unreadCount: 1, loading: false, error: null,
       markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
     });
-    render(<NotificationPage />);
+    render(<MemoryRouter><NotificationPage /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: '未読' }));
     expect(screen.getByRole('button', { name: '未読' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('未読の本文')).toBeInTheDocument();
@@ -53,11 +54,11 @@ describe('NotificationPage', () => {
 
   it('未読がないときは全件0件と区別し、すべての通知に戻れる', () => {
     mockedUseNotification.mockReturnValue({
-      notifications: [{ id: 1, type: 'ticket_mentioned', title: '確認済み', body: '既読の本文', isRead: true, createdAt: '2026-09-21T10:00:00Z' }],
+      notifications: [{ id: 1, type: 'ticket_mentioned', title: '確認済み', body: '既読の本文', isRead: true, linkPath: '', createdAt: '2026-09-21T10:00:00Z' }],
       unreadCount: 0, loading: false, error: null,
       markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
     });
-    render(<NotificationPage />);
+    render(<MemoryRouter><NotificationPage /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: '未読' }));
     expect(screen.getByText('未読の通知はありません')).toBeInTheDocument();
     expect(screen.queryByText('通知はありません')).not.toBeInTheDocument();
@@ -67,11 +68,11 @@ describe('NotificationPage', () => {
 
   it('更新中も取得済みの通知を残し、既読操作の連打を防ぐ', () => {
     mockedUseNotification.mockReturnValue({
-      notifications: [{ id: 1, type: 'ticket_mentioned', title: '確認のお願い', body: '表示を残す本文', isRead: false, createdAt: '2026-09-21T10:00:00Z' }],
+      notifications: [{ id: 1, type: 'ticket_mentioned', title: '確認のお願い', body: '表示を残す本文', isRead: false, linkPath: '', createdAt: '2026-09-21T10:00:00Z' }],
       unreadCount: 1, loading: true, error: null,
       markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
     });
-    render(<NotificationPage />);
+    render(<MemoryRouter><NotificationPage /></MemoryRouter>);
     expect(screen.getByText('表示を残す本文')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'すべて既読にする' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '既読にする' })).toBeDisabled();
@@ -89,15 +90,15 @@ describe('NotificationPage', () => {
       refresh: vi.fn(),
     });
 
-    render(<NotificationPage />);
+    render(<MemoryRouter><NotificationPage /></MemoryRouter>);
     expect(screen.getByText('通知はありません')).toBeInTheDocument();
   });
 
   it('通知一覧が表示される', () => {
     mockedUseNotification.mockReturnValue({
       notifications: [
-        { id: 1, type: 'sample_type', title: 'コメントに返信がありました', body: '「設計メモ」のコメントに返信が付きました。', isRead: false, createdAt: '2026-08-02T10:00:00Z' },
-        { id: 2, type: 'sample_type', title: 'コメントに返信がありました', body: '「議事録」のコメントに返信が付きました。', isRead: true, createdAt: '2026-08-01T10:00:00Z' },
+        { id: 1, type: 'sample_type', title: 'コメントに返信がありました', body: '「設計メモ」のコメントに返信が付きました。', isRead: false, linkPath: '', createdAt: '2026-08-02T10:00:00Z' },
+        { id: 2, type: 'sample_type', title: 'コメントに返信がありました', body: '「議事録」のコメントに返信が付きました。', isRead: true, linkPath: '', createdAt: '2026-08-01T10:00:00Z' },
       ],
       unreadCount: 1,
       loading: false,
@@ -107,7 +108,7 @@ describe('NotificationPage', () => {
       refresh: vi.fn(),
     });
 
-    render(<NotificationPage />);
+    render(<MemoryRouter><NotificationPage /></MemoryRouter>);
     // 同じタイトルが 2 件並ぶため、区別のつく本文で検証する。
     expect(screen.getByText('「設計メモ」のコメントに返信が付きました。')).toBeInTheDocument();
     expect(screen.getByText('「議事録」のコメントに返信が付きました。')).toBeInTheDocument();
@@ -117,7 +118,7 @@ describe('NotificationPage', () => {
   it('未読がある場合「すべて既読にする」ボタンが表示される', () => {
     mockedUseNotification.mockReturnValue({
       notifications: [
-        { id: 1, type: 'sample_type', title: 'コメントに返信がありました', body: 'テスト', isRead: false, createdAt: '2026-08-02T10:00:00Z' },
+        { id: 1, type: 'sample_type', title: 'コメントに返信がありました', body: 'テスト', isRead: false, linkPath: '', createdAt: '2026-08-02T10:00:00Z' },
       ],
       unreadCount: 1,
       loading: false,
@@ -127,7 +128,7 @@ describe('NotificationPage', () => {
       refresh: vi.fn(),
     });
 
-    render(<NotificationPage />);
+    render(<MemoryRouter><NotificationPage /></MemoryRouter>);
     const btn = screen.getByText('すべて既読にする');
     fireEvent.click(btn);
     expect(mockMarkAllAsRead).toHaveBeenCalled();
@@ -136,7 +137,7 @@ describe('NotificationPage', () => {
   it('未読が0件の場合「すべて既読にする」ボタンが非表示', () => {
     mockedUseNotification.mockReturnValue({
       notifications: [
-        { id: 1, type: 'sample_type', title: 'コメントに返信がありました', body: 'テスト', isRead: true, createdAt: '2026-08-02T10:00:00Z' },
+        { id: 1, type: 'sample_type', title: 'コメントに返信がありました', body: 'テスト', isRead: true, linkPath: '', createdAt: '2026-08-02T10:00:00Z' },
       ],
       unreadCount: 0,
       loading: false,
@@ -146,7 +147,7 @@ describe('NotificationPage', () => {
       refresh: vi.fn(),
     });
 
-    render(<NotificationPage />);
+    render(<MemoryRouter><NotificationPage /></MemoryRouter>);
     expect(screen.queryByText('すべて既読にする')).not.toBeInTheDocument();
   });
 
@@ -166,7 +167,7 @@ describe('NotificationPage', () => {
     it('エラーを知らせ、空状態を出さない', () => {
       mockedUseNotification.mockReturnValue(failing());
 
-      render(<NotificationPage />);
+      render(<MemoryRouter><NotificationPage /></MemoryRouter>);
 
       expect(screen.getByRole('alert')).toHaveTextContent('通知の取得に失敗しました。');
       expect(screen.queryByText('通知はありません')).not.toBeInTheDocument();
@@ -175,7 +176,7 @@ describe('NotificationPage', () => {
     it('0 件ではなく読み込めていないことを明示する', () => {
       mockedUseNotification.mockReturnValue(failing());
 
-      render(<NotificationPage />);
+      render(<MemoryRouter><NotificationPage /></MemoryRouter>);
 
       expect(
         screen.getByText('通知が無いのではなく、読み込めていない状態です。'),
@@ -186,7 +187,7 @@ describe('NotificationPage', () => {
       const refresh = vi.fn();
       mockedUseNotification.mockReturnValue(failing({ refresh }));
 
-      render(<NotificationPage />);
+      render(<MemoryRouter><NotificationPage /></MemoryRouter>);
       fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
       expect(refresh).toHaveBeenCalled();
@@ -203,13 +204,14 @@ describe('NotificationPage', () => {
               title: 'コメントに返信がありました',
               body: '「設計メモ」のコメントに返信が付きました。',
               isRead: false,
+              linkPath: '',
               createdAt: '2026-08-02T10:00:00Z',
             },
           ],
         }),
       );
 
-      render(<NotificationPage />);
+      render(<MemoryRouter><NotificationPage /></MemoryRouter>);
 
       // エラーの帯と一緒に、取得済みの通知も見えていること。
       expect(screen.getByRole('alert')).toBeInTheDocument();
