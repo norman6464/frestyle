@@ -13,7 +13,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -77,8 +76,7 @@ type Config struct {
 	//
 	// **ClientID は常に受け入れる**（置き換えにしない）。id_token の aud は client_id なので、
 	// 置き換えにすると「プロジェクト識別子を設定したらログインが全員落ちる」ことになる。
-	Audiences []string
-	// JWKSCacheTTL は JWKS キャッシュの有効期限。
+	Audiences    []string
 	JWKSCacheTTL time.Duration
 }
 
@@ -129,14 +127,6 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 		jwk:      jwk,
 		leeway:   60 * time.Second,
 	}, nil
-}
-
-// WithHTTPClient はテストで通信先を差し替えるための設定。
-func (v *Verifier) WithHTTPClient(client *http.Client) *Verifier {
-	if client != nil {
-		v.jwk.fetcher = newJWKSFetcherWithClient(client)
-	}
-	return v
 }
 
 // Verify は access_token を検証し、検証済みの claims を返す。

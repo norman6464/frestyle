@@ -14,7 +14,6 @@ import (
 	"time"
 )
 
-// jwk は JWKS 内の 1 鍵を表す。
 type jwk struct {
 	Kid      string `json:"kid"`
 	Kty      string `json:"kty"`
@@ -24,21 +23,19 @@ type jwk struct {
 	Exponent string `json:"e"`
 }
 
-// maxJWKSBytes は JWKS 応答の読み取り上限。発行者が壊れて巨大な応答を返したときに
-// メモリを食い尽くさないための蓋。
+// maxJWKSBytes は JWKS 応答の読み取り上限。
 const maxJWKSBytes = 1024 * 1024 // 1 MiB
 
-// NISTのRSA鍵長の推奨に合わせ、2048bit未満のRSA署名鍵は受け入れない。。
+// NISTのRSA鍵長の推奨に合わせ、2048bit未満のRSA署名鍵は受け入れない。
 const minRSAModulusBits = 2048
 
-// generateRSAPublicKey は JWK に含まれる RSA 公開鍵の
-// Modulus（法）と Exponent（公開指数）から rsa.PublicKey を生成する。
-func (k jwk) generateRSAPublicKey() (*rsa.PublicKey, error) {
-	nBytes, err := base64URLDecode(k.Modulus)
+// JWK の Modulusと Exponentをデコードし、RSA公開鍵へ変換する。
+func (key *jwk) generateRSAPublicKey() (*rsa.PublicKey, error) {
+	nBytes, err := base64URLDecode(key.Modulus)
 	if err != nil {
 		return nil, err
 	}
-	eBytes, err := base64URLDecode(k.Exponent)
+	eBytes, err := base64URLDecode(key.Exponent)
 	if err != nil {
 		return nil, err
 	}
@@ -63,9 +60,9 @@ type jwkProvider struct {
 	jwksEndpointURL string
 	fetcher         *jwksFetcher
 
-	jwksStateMu sync.RWMutex
-	keys        map[string]*rsa.PublicKey
-	fetchedAt   time.Time
+	jwksStateMutex sync.RWMutex
+	keys           map[string]*rsa.PublicKey
+	fetchedAt      time.Time
 
 	// triedAt は取得を試みた時刻。成功だけ記録すると発行者に届かない間も毎回再取得可能と判定され、
 	// 待ち時間の長い取得が全リクエストで直列に並んでしまう。
@@ -103,7 +100,7 @@ func newJWKProvider(
 	}
 }
 
-func cacheTTLFromHeader(cacheControl string, fallback time.Duration) time.Duration {
+func cacheTTLFromCacheControl(cacheControl string, fallbackTTL time.Duration) time.Duration {
 	for _, directive := range strings.Split(cacheControl, ",") {
 		value, found := strings.CutPrefix(strings.TrimSpace(directive), "max-age=")
 		if !found {
@@ -116,12 +113,12 @@ func cacheTTLFromHeader(cacheControl string, fallback time.Duration) time.Durati
 		}
 	}
 
-	return fallback
+	return fallbackTTL
 }
 
 func (p *jwkProvider) getFreshKey(kid string) (*rsa.PublicKey, bool) {
-	p.jwksStateMu.RLock()
-	defer p.jwksStateMu.RUnlock()
+	p.jwksStateMutex.RLock()
+	defer p.jwksStateMutex.RUnlock()
 
 	key, ok := p.keys[kid]
 	if !ok || p.fetchedAt.IsZero() || time.Since(p.fetchedAt) > p.cacheTTL {
@@ -132,8 +129,8 @@ func (p *jwkProvider) getFreshKey(kid string) (*rsa.PublicKey, bool) {
 }
 
 func (p *jwkProvider) lookup(kid string) (*rsa.PublicKey, bool) {
-	p.jwksStateMu.RLock()
-	defer p.jwksStateMu.RUnlock()
+	p.jwksStateMutex.RLock()
+	defer p.jwksStateMutex.RUnlock()
 
 	key, ok := p.keys[kid]
 	return key, ok
@@ -173,14 +170,14 @@ func (p *jwkProvider) fetchJWKS(ctx context.Context) ([]jwk, time.Duration, erro
 }
 
 func (p *jwkProvider) refresh(ctx context.Context) (retErr error) {
-	p.jwksStateMu.RLock()
+	p.jwksStateMutex.RLock()
 	fetchedAt := p.fetchedAt
-	p.jwksStateMu.RUnlock()
+	p.jwksStateMutex.RUnlock()
 	// 試みた時刻は、成功しても失敗しても記録する（keyForKid の間隔判定の根拠）。
 	defer func() {
-		p.jwksStateMu.Lock()
+		p.jwksStateMutex.Lock()
 		p.triedAt = time.Now()
-		p.jwksStateMu.Unlock()
+		p.jwksStateMutex.Unlock()
 	}()
 	defer func() {
 		cacheAge := time.Duration(0)
@@ -214,11 +211,11 @@ func (p *jwkProvider) refresh(ctx context.Context) (retErr error) {
 	if len(keys) == 0 {
 		return fmt.Errorf("%w: no usable rsa keys", ErrJWKSUnavailable)
 	}
-	p.jwksStateMu.Lock()
+	p.jwksStateMutex.Lock()
 	p.keys = keys
 	p.fetchedAt = time.Now()
 	p.cacheTTL = cacheTTL
-	p.jwksStateMu.Unlock()
+	p.jwksStateMutex.Unlock()
 	return nil
 }
 
@@ -234,11 +231,11 @@ func (p *jwkProvider) keyForKid(ctx context.Context, kid string) (*rsa.PublicKey
 	if key, ok := p.getFreshKey(kid); ok {
 		return key, nil
 	}
-	p.jwksStateMu.RLock()
+	p.jwksStateMutex.RLock()
 	// 成功時刻ではなく「試みた時刻」で間隔を測る。成功だけを見ると、発行者に
 	// 届かない間も毎回再取得可能と判定され、タイムアウト待ちが全リクエストで直列に並ぶ。
 	cooldownElapsed := time.Since(p.triedAt) > p.refreshCooldown
-	p.jwksStateMu.RUnlock()
+	p.jwksStateMutex.RUnlock()
 	if !cooldownElapsed {
 		return nil, ErrJWTUnknownKey
 	}
@@ -261,16 +258,16 @@ func (p *jwkProvider) refreshKeyForKid(
 	if key, ok := p.lookup(kid); ok && key != oldKey {
 		return key, nil
 	}
-	p.jwksStateMu.RLock()
+	p.jwksStateMutex.RLock()
 	canRefresh := p.signatureRefreshAt.IsZero() ||
 		time.Since(p.signatureRefreshAt) > p.refreshCooldown
-	p.jwksStateMu.RUnlock()
+	p.jwksStateMutex.RUnlock()
 	if !canRefresh {
 		return oldKey, nil
 	}
-	p.jwksStateMu.Lock()
+	p.jwksStateMutex.Lock()
 	p.signatureRefreshAt = time.Now()
-	p.jwksStateMu.Unlock()
+	p.jwksStateMutex.Unlock()
 
 	if err := p.refresh(ctx); err != nil {
 		return nil, err

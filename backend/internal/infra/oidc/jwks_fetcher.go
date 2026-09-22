@@ -7,29 +7,17 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/norman6464/frestyle/backend/internal/infra/httpclient"
 )
 
-const defaultJWKSHTTPTimeout = 5 * time.Second
-
 type jwksFetcher struct {
-	client *http.Client
+	httpClient *httpclient.Client
 }
 
 func newJWKSFetcher() *jwksFetcher {
 	return &jwksFetcher{
-		client: &http.Client{
-			Timeout: defaultJWKSHTTPTimeout,
-		},
-	}
-}
-
-func newJWKSFetcherWithClient(client *http.Client) *jwksFetcher {
-	if client == nil {
-		return newJWKSFetcher()
-	}
-
-	return &jwksFetcher{
-		client: client,
+		httpClient: httpclient.New(),
 	}
 }
 
@@ -38,12 +26,7 @@ func (f *jwksFetcher) fetch(
 	endpointURL string,
 	fallbackTTL time.Duration,
 ) ([]jwk, time.Duration, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL, nil)
-	if err != nil {
-		return nil, 0, fmt.Errorf("%w: %w", ErrJWKSUnavailable, err)
-	}
-
-	resp, err := f.client.Do(req)
+	resp, err := f.httpClient.SendGetRequest(ctx, endpointURL)
 	if err != nil {
 		return nil, 0, fmt.Errorf("%w: %w", ErrJWKSUnavailable, err)
 	}
@@ -60,7 +43,7 @@ func (f *jwksFetcher) fetch(
 		return nil, 0, fmt.Errorf("%w: %w", ErrJWKSUnavailable, err)
 	}
 
-	cacheTTL := cacheTTLFromHeader(
+	cacheTTL := cacheTTLFromCacheControl(
 		resp.Header.Get("Cache-Control"),
 		fallbackTTL,
 	)

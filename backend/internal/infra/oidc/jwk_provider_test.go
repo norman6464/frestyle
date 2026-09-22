@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-func TestCacheTTLFromHeader_MaxAgeを使う(t *testing.T) {
-	fallback := 30 * time.Minute
+func TestCacheTTLFromCacheControl_MaxAgeを使う(t *testing.T) {
+	fallbackTTL := 30 * time.Minute
 
-	got := cacheTTLFromHeader("public, max-age=3600", fallback)
+	got := cacheTTLFromCacheControl("public, max-age=3600", fallbackTTL)
 
 	want := time.Hour
 	if got != want {
@@ -16,30 +16,30 @@ func TestCacheTTLFromHeader_MaxAgeを使う(t *testing.T) {
 	}
 }
 
-func TestCacheTTLFromHeader_MaxAgeがない場合はFallbackを使う(t *testing.T) {
-	fallback := 30 * time.Minute
+func TestCacheTTLFromCacheControl_MaxAgeがない場合はFallbackを使う(t *testing.T) {
+	fallbackTTL := 30 * time.Minute
 
-	got := cacheTTLFromHeader("public", fallback)
+	got := cacheTTLFromCacheControl("public", fallbackTTL)
 
-	if got != fallback {
-		t.Fatalf("cacheTTL = %v, want %v", got, fallback)
+	if got != fallbackTTL {
+		t.Fatalf("cacheTTL = %v, want %v", got, fallbackTTL)
 	}
 }
 
-func TestCacheTTLFromHeader_MaxAgeが不正な場合はFallbackを使う(t *testing.T) {
-	fallback := 30 * time.Minute
+func TestCacheTTLFromCacheControl_MaxAgeが不正な場合はFallbackを使う(t *testing.T) {
+	fallbackTTL := 30 * time.Minute
 
-	got := cacheTTLFromHeader("public, max-age=invalid", fallback)
+	got := cacheTTLFromCacheControl("public, max-age=invalid", fallbackTTL)
 
-	if got != fallback {
-		t.Fatalf("cacheTTL = %v, want %v", got, fallback)
+	if got != fallbackTTL {
+		t.Fatalf("cacheTTL = %v, want %v", got, fallbackTTL)
 	}
 }
 
-func TestCacheTTLFromHeader_MaxAgeが0の場合は0を使う(t *testing.T) {
-	fallback := 30 * time.Minute
+func TestCacheTTLFromCacheControl_MaxAgeが0の場合は0を使う(t *testing.T) {
+	fallbackTTL := 30 * time.Minute
 
-	got := cacheTTLFromHeader("public, max-age=0", fallback)
+	got := cacheTTLFromCacheControl("public, max-age=0", fallbackTTL)
 
 	if got != 0 {
 		t.Fatalf("cacheTTL = %v, want 0", got)
