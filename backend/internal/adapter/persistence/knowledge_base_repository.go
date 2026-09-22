@@ -608,6 +608,9 @@ func (r *knowledgeBaseRepository) CreatePage(ctx context.Context, page *domain.P
 	var created sqlcgen.Page
 	err = r.runInTx(ctx, func(qtx *sqlcgen.Queries) error {
 		if _, err := qtx.LockPageHierarchy(ctx, wsID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return repository.ErrWorkspaceNotFound
+			}
 			return err
 		}
 		if err := validatePagePlacement(ctx, qtx, wsID, parent, 0); err != nil {
@@ -771,6 +774,9 @@ func (r *knowledgeBaseRepository) MovePage(ctx context.Context, workspaceID, pag
 
 	return r.runInTx(ctx, func(qtx *sqlcgen.Queries) error {
 		if _, err := qtx.LockPageHierarchy(ctx, wsID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return repository.ErrWorkspaceNotFound
+			}
 			return err
 		}
 		// usecaseの確認後に別の移動が完了している場合も、ロック内で循環を拒否する。

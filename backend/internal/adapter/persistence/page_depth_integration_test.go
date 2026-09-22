@@ -6,12 +6,37 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/norman6464/frestyle/backend/internal/domain"
 	"github.com/norman6464/frestyle/backend/internal/testsupport"
 	"github.com/norman6464/frestyle/backend/internal/usecase/kb"
+	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPageHierarchyMissingWorkspace_Integration(t *testing.T) {
+	db := testsupport.OpenTestDB(t)
+	uc := newKbUseCases(db)
+	ctx := context.Background()
+	missingWorkspace := uuid.NewString()
+	space := uuid.NewString()
+
+	t.Run("create returns workspace not found", func(t *testing.T) {
+		page := &domain.Page{
+			WorkspaceID: missingWorkspace, SpaceID: space,
+			Title: "missing workspace", Position: "a0", CreatedByUserID: 1,
+		}
+		err := uc.repo.CreatePage(ctx, page)
+		require.ErrorIs(t, err, repository.ErrWorkspaceNotFound)
+		assert.Empty(t, page.ID)
+	})
+
+	t.Run("move returns workspace not found", func(t *testing.T) {
+		err := uc.repo.MovePage(ctx, missingWorkspace, uuid.NewString(), nil, space, "a0")
+		require.ErrorIs(t, err, repository.ErrWorkspaceNotFound)
+	})
+}
 
 func TestPageDepth_Integration(t *testing.T) {
 	db := testsupport.OpenTestDB(t)
