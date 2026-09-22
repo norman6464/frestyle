@@ -1,4 +1,4 @@
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowRightIcon, BookOpenIcon, StarIcon } from '@heroicons/react/24/outline';
 import { KbSidebar } from '@/widgets/kb-sidebar';
 import { SidebarSection } from '@/shared/ui';
@@ -19,9 +19,17 @@ const ROLE_LABEL: Record<string, string> = {
 export default function KbSpaceOverviewPage() {
   const { spaceId } = useParams<{ spaceId?: string }>();
   const navigate = useNavigate();
+  // 柱の「すべてのスペース」が対象ワークスペースを ?workspace= で持ち越す（FRESTYLE-596 の
+  // 残り）。spaceId が既にあるとき（/kb/spaces/:spaceId）は無視してよい —— spaceId から
+  // ワークスペースが一意に決まる。解決後の遷移先 URL にはこのクエリを持ち越さない
+  // （スペースが決まれば対象は URL の中に無くても一意）。
+  const [searchParams] = useSearchParams();
+  const preferredWorkspaceSlug = spaceId ? undefined : (searchParams.get('workspace') ?? undefined);
 
-  const { workspaceSlug, space, noSpaces, loading, error } = useKbSpaceEntry(spaceId, (id) =>
-    navigate(`/kb/spaces/${id}`, { replace: true }),
+  const { workspaceSlug, space, noSpaces, loading, error } = useKbSpaceEntry(
+    spaceId,
+    (id) => navigate(`/kb/spaces/${id}`, { replace: true }),
+    preferredWorkspaceSlug,
   );
 
   return (

@@ -246,7 +246,14 @@ export default function GlobalSidebar({
               {spacesOpen && (
                 <>
                   {spaceRows()}
-                  <Link to="/kb/spaces" onClick={onMobileClose} className={rowClass(location.pathname === '/kb/spaces')}>
+                  {/* 対象ワークスペースを ?workspace= で持ち越す。無いと全件画面が所属の
+                      先頭ワークスペースを解決してしまい、いま見ているのと別のワークスペースの
+                      スペースが開く（FRESTYLE-596 の残り）。 */}
+                  <Link
+                    to={`/kb/spaces?workspace=${encodeURIComponent(target.slug)}`}
+                    onClick={onMobileClose}
+                    className={rowClass(location.pathname === '/kb/spaces')}
+                  >
                     <FsIcon name="archive" className="h-4 w-4 shrink-0" />
                     <span className="truncate">すべてのスペース</span>
                     {hiddenCount > 0 && (
