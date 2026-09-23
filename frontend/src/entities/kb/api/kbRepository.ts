@@ -4,7 +4,12 @@ import { toArray } from '@/shared/lib/toArray';
 import { KB_API } from '@/shared/config/apiRoutes';
 import type { CommentAnchor } from '@/shared/ui/RichTextEditor';
 import type {
+  KbAcceptedInvitation,
   KbAdminWorkspaceMember,
+  KbInvitation,
+  KbInvitationPreview,
+  KbInviteByEmailInput,
+  KbIssuedInvitation,
   KbComment,
   KbCommentThread,
   KbFavoritePage,
@@ -809,6 +814,60 @@ const KbRepository = {
       KB_API.rejectPageSuggestion(workspaceSlug, pageId, suggestionId),
     );
     return res.data;
+  },
+
+  /**
+   * email 宛にワークスペースへ招く（admin だけ）。相手が承諾するまで所属も権限も発生しない。
+   * 同じ宛先に未決の招待があれば再送になる（新しい行は作らない）。応答の token は
+   * このときしか返らない — 呼び出し側はすぐリンクにして相手へ渡す。
+   * 上限（1 日の件数・再送の間隔）は 429、承諾待ちの上限は 409 で断られる。
+   */
+  async inviteByEmail(workspaceSlug: string, input: KbInviteByEmailInput): Promise<KbIssuedInvitation> {
+    const res = await apiClient.post<KbIssuedInvitation>(KB_API.invitations(workspaceSlug), input);
+    return res.data;
+  },
+
+  /** ワークスペースの招待一覧（結果が出たものも含む・新しい順）。admin だけが叩ける。 */
+  async fetchInvitations(workspaceSlug: string): Promise<KbInvitation[]> {
+    const res = await apiClient.get<KbInvitation[]>(KB_API.invitations(workspaceSlug));
+    return toArray<KbInvitation>(res.data);
+  },
+
+  /** 未決の招待のトークンを差し替えて期限を延ばす（admin だけ）。前のリンクは使えなくなる。 */
+  async resendInvitation(workspaceSlug: string, invitationId: string): Promise<KbIssuedInvitation> {
+    const res = await apiClient.post<KbIssuedInvitation>(KB_API.invitationResend(workspaceSlug, invitationId));
+    return res.data;
+  },
+
+  /** 招待を取り消す（admin だけ・冪等）。承諾・辞退済みは 409。 */
+  async revokeInvitation(workspaceSlug: string, invitationId: string): Promise<void> {
+    await apiClient.delete(KB_API.invitation(workspaceSlug, invitationId));
+  },
+
+  /**
+   * 招待リンクのトークンから案内を引く。**未認証で叩ける**唯一の招待 API。
+   * トークンは URL ではなく本文で送る（アクセスログや Referer に残さない）。
+   */
+  async previewInvitation(token: string): Promise<KbInvitationPreview> {
+    const res = await apiClient.post<KbInvitationPreview>(KB_API.invitationPreview, { token });
+    return res.data;
+  },
+
+  /** 自分宛（確認済み email 宛）の未決の招待。email が無いアカウントは 403 で断られる。 */
+  async fetchMyInvitations(): Promise<KbInvitation[]> {
+    const res = await apiClient.get<KbInvitation[]>(KB_API.myInvitations);
+    return toArray<KbInvitation>(res.data);
+  },
+
+  /** 招待を承諾する。所属と役割がこの瞬間にできる。宛先が違えば 404、使えなければ 409。 */
+  async acceptInvitation(invitationId: string): Promise<KbAcceptedInvitation> {
+    const res = await apiClient.post<KbAcceptedInvitation>(KB_API.myInvitationAccept(invitationId));
+    return res.data;
+  },
+
+  /** 招待を辞退する（期限切れでも可）。 */
+  async declineInvitation(invitationId: string): Promise<void> {
+    await apiClient.post(KB_API.myInvitationDecline(invitationId));
   },
 };
 

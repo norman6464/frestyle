@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useState } from 'react';
+import { consumePostLoginPath } from '@/shared/lib/postLoginPath';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '@/shared/lib/store';
 import { setAuthData } from '@/entities/user';
@@ -72,7 +73,7 @@ export function useLoginPage(): LoginPageState {
       await authRepository.login();
       dispatch(setAuthData());
       setAuthHint();
-      navigate('/');
+      navigate(consumePostLoginPath() ?? '/');
     } catch (err) {
       setSessionError(classifyApiError(err, 'ログインに失敗しました。'));
     }

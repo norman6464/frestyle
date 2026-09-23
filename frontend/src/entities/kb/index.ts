@@ -17,6 +17,7 @@ export {
 } from './lib/tree';
 export type { KbDropTarget, KbMoveActions } from './lib/tree';
 export { rememberVisitedPage, getLastVisitedPageId, forgetVisitedPageIfMatches } from './lib/lastVisitedPage';
+export { buildInviteUrl, readInviteToken } from './lib/invitationLink';
 export type {
   KbWorkspace,
   KbSpace,
@@ -40,6 +41,12 @@ export type {
   KbGrantablePrincipal,
   KbWorkspaceMember,
   KbAdminWorkspaceMember,
+  KbInvitation,
+  KbInvitationStatus,
+  KbIssuedInvitation,
+  KbInviteByEmailInput,
+  KbInvitationPreview,
+  KbAcceptedInvitation,
   KbCommentAuthorRef,
   KbComment,
   KbCommentThread,

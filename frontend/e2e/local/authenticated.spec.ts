@@ -193,3 +193,54 @@ test.describe('スペース追加導線（POST モック）', () => {
     await expect(page.getByText('営業定例').and(visible).first()).toBeVisible();
   });
 });
+
+test.describe('届いている招待（/invitations）', () => {
+  const INVITATION = {
+    id: 'inv-1',
+    scope: 'workspace',
+    role: 'editor',
+    email: 'taro@example.com',
+    inviteeName: '山田 太郎',
+    status: 'pending',
+    workspaceSlug: 'acme',
+    workspaceName: 'Acme 社',
+    invitedByUserId: 1,
+    inviterName: '鈴木 花子',
+    expiresAt: '2026-09-30T00:00:00Z',
+    lastSentAt: '2026-09-23T00:00:00Z',
+    sendCount: 1,
+    createdAt: '2026-09-23T00:00:00Z',
+  };
+
+  test('一覧が出て、参加するとそのワークスペースのナレッジへ移る', async ({ page }) => {
+    await mockAuthenticated(page, {
+      '**/api/v2/kb/invitations': [INVITATION],
+      '**/api/v2/kb/invitations/inv-1/accept': { workspaceSlug: 'acme', scope: 'workspace' },
+    });
+
+    await page.goto('/invitations');
+
+    await expect(page.getByRole('heading', { level: 1, name: '届いている招待' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Acme 社' })).toBeVisible();
+
+    await page.getByRole('button', { name: '参加する' }).click();
+    await expect(page).toHaveURL(/\/kb\/spaces\?workspace=acme/);
+  });
+
+  test('招待リンクからログインした後は /invitations へ戻る', async ({ page }) => {
+    await mockAuthenticated(page, { '**/api/v2/kb/invitations': [] });
+    // /invite が置く「ログイン後の戻り先」を先に置いておく（ログイン自体は発行者側の画面なので再現しない）。
+    await page.addInitScript(() => {
+      sessionStorage.setItem('fs.postLoginPath', '/invitations');
+    });
+    await page.route('**/api/v2/kb/invitations/preview', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"pending","workspaceName":"Acme 社","email":"taro@example.com","role":"editor","scope":"workspace"}' })
+    );
+
+    // ログイン済みで招待リンクを開くと、一覧へ進む案内になる。
+    await page.goto('/invite#t=e2e-token');
+    await page.getByRole('button', { name: '招待を確認して参加する' }).click();
+    await expect(page).toHaveURL(/\/invitations$/);
+    await expect(page.getByText('届いている招待はありません')).toBeVisible();
+  });
+});

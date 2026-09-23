@@ -18,6 +18,7 @@ const LoginPage = lazyWithReload(() => import('@/pages/login').then((m) => ({ de
 const SignupPage = lazyWithReload(() => import('@/pages/signup').then((m) => ({ default: m.SignupPage })), 'SignupPage');
 const LoginCallback = lazyWithReload(() => import('@/pages/login-callback').then((m) => ({ default: m.LoginCallback })), 'LoginCallback');
 const PasswordResetPage = lazyWithReload(() => import('@/pages/password-reset').then((m) => ({ default: m.PasswordResetPage })), 'PasswordResetPage');
+const InvitePage = lazyWithReload(() => import('@/pages/invite').then((m) => ({ default: m.InvitePage })), 'InvitePage');
 
 // 認証必要ページ
 const MenuPage = lazyWithReload(() => import('@/pages/home').then((m) => ({ default: m.MenuPage })), 'MenuPage');
@@ -34,6 +35,10 @@ const KbBacklogPage = lazyWithReload(
 const KbTicketPage = lazyWithReload(
   () => import('@/pages/backlog').then((m) => ({ default: m.KbTicketPage })),
   'KbTicketPage',
+);
+const InvitationsPage = lazyWithReload(
+  () => import('@/pages/invitations').then((m) => ({ default: m.InvitationsPage })),
+  'InvitationsPage',
 );
 const KbMembersPage = lazyWithReload(
   () => import('@/pages/kb-members').then((m) => ({ default: m.KbMembersPage })),
@@ -97,6 +102,8 @@ export default function App() {
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/login/callback" element={<LoginCallback />} />
       <Route path="/password-reset" element={<PasswordResetPage />} />
+      {/* 招待リンク（/invite#t=…）の案内。ログイン前に見られる。参加はログイン後の /invitations で行う。 */}
+      <Route path="/invite" element={<InvitePage />} />
       {/* inkwell UI カタログ（見た目確認用・認証不要） */}
       <Route path="/dev/inkwell" element={<InkwellShowcasePage />} />
 
@@ -154,6 +161,8 @@ export default function App() {
         <Route path="/kb/spaces/:spaceId/favorites" element={<KbSpaceFavoritesPage />} />
         <Route path="/kb/spaces/:spaceId/members" element={<KbSpaceMembersPage />} />
         <Route path="/notifications" element={<NotificationPage />} />
+        {/* 自分宛の招待。通知の飛び先で、/invite からログインした後の戻り先。 */}
+        <Route path="/invitations" element={<InvitationsPage />} />
       </Route>
 
       {/* どのルートにも一致しない URL の受け皿。
