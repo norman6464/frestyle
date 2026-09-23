@@ -37,8 +37,9 @@ describe('inviteFailure', () => {
 });
 
 describe('formatInvitationDate', () => {
-  it('月日だけにする', () => {
-    expect(formatInvitationDate('2026-09-30T00:00:00+09:00')).toBe('9月30日');
+  it('月日だけにする（読む人のタイムゾーンで）', () => {
+    // 固定の ISO 文字列だと CI（UTC）と手元（JST）で日付が変わる。その環境の 9/30 0:00 から作る。
+    expect(formatInvitationDate(new Date(2026, 8, 30, 0, 0, 0).toISOString())).toBe('9月30日');
   });
 
   it('読めない値は空文字', () => {
