@@ -1,8 +1,9 @@
-package oidc
+package jwk
 
 import (
 	"context"
 	"crypto/rsa"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,6 +14,8 @@ import (
 	"sync"
 	"time"
 )
+
+var ErrUnknownKey = errors.New("jwk: signing key not found")
 
 type jwk struct {
 	Kid      string `json:"kid"`
@@ -28,6 +31,14 @@ const maxJWKSBytes = 1024 * 1024 // 1 MiB
 
 // NISTのRSA鍵長の推奨に合わせ、2048bit未満のRSA署名鍵は受け入れない。
 const minRSAModulusBits = 2048
+
+func base64URLDecode(value string) ([]byte, error) {
+	if decoded, err := base64.RawURLEncoding.DecodeString(value); err == nil {
+		return decoded, nil
+	}
+
+	return base64.URLEncoding.DecodeString(value)
+}
 
 // JWK の Modulusと Exponentをデコードし、RSA公開鍵へ変換する。
 func (key *jwk) generateRSAPublicKey() (*rsa.PublicKey, error) {
@@ -56,7 +67,7 @@ func (key *jwk) generateRSAPublicKey() (*rsa.PublicKey, error) {
 	return &rsa.PublicKey{N: n, E: int(e)}, nil
 }
 
-type jwkProvider struct {
+type Provider struct {
 	jwksEndpointURL string
 	fetcher         *jwksFetcher
 
@@ -84,15 +95,14 @@ type jwkProvider struct {
 	cacheTTL time.Duration
 }
 
-func newJWKProvider(
+func NewProvider(
 	jwksEndpointURL string,
-	fetcher *jwksFetcher,
 	refreshCooldown time.Duration,
 	jwksCacheTTL time.Duration,
-) *jwkProvider {
-	return &jwkProvider{
+) *Provider {
+	return &Provider{
 		jwksEndpointURL: jwksEndpointURL,
-		fetcher:         fetcher,
+		fetcher:         newJWKSFetcher(),
 		keys:            map[string]*rsa.PublicKey{},
 		refreshCooldown: refreshCooldown,
 		jwksCacheTTL:    jwksCacheTTL,
@@ -116,7 +126,7 @@ func cacheTTLFromCacheControl(cacheControl string, fallbackTTL time.Duration) ti
 	return fallbackTTL
 }
 
-func (p *jwkProvider) getFreshKey(kid string) (*rsa.PublicKey, bool) {
+func (p *Provider) getFreshKey(kid string) (*rsa.PublicKey, bool) {
 	p.jwksStateMutex.RLock()
 	defer p.jwksStateMutex.RUnlock()
 
@@ -128,7 +138,7 @@ func (p *jwkProvider) getFreshKey(kid string) (*rsa.PublicKey, bool) {
 	return key, true
 }
 
-func (p *jwkProvider) lookup(kid string) (*rsa.PublicKey, bool) {
+func (p *Provider) lookup(kid string) (*rsa.PublicKey, bool) {
 	p.jwksStateMutex.RLock()
 	defer p.jwksStateMutex.RUnlock()
 
@@ -161,7 +171,7 @@ func buildSigningKeys(jwks []jwk) map[string]*rsa.PublicKey {
 	return keys
 }
 
-func (p *jwkProvider) fetchJWKS(ctx context.Context) ([]jwk, time.Duration, error) {
+func (p *Provider) fetchJWKS(ctx context.Context) ([]jwk, time.Duration, error) {
 	return p.fetcher.fetch(
 		ctx,
 		p.jwksEndpointURL,
@@ -169,7 +179,7 @@ func (p *jwkProvider) fetchJWKS(ctx context.Context) ([]jwk, time.Duration, erro
 	)
 }
 
-func (p *jwkProvider) refresh(ctx context.Context) (retErr error) {
+func (p *Provider) refresh(ctx context.Context) (retErr error) {
 	p.jwksStateMutex.RLock()
 	fetchedAt := p.fetchedAt
 	p.jwksStateMutex.RUnlock()
@@ -209,7 +219,7 @@ func (p *jwkProvider) refresh(ctx context.Context) (retErr error) {
 
 	// 空 / 壊れた JWKS で有効なキャッシュを潰さない（認証の全断を避ける）。
 	if len(keys) == 0 {
-		return fmt.Errorf("%w: no usable rsa keys", ErrJWKSUnavailable)
+		return fmt.Errorf("%w: no usable rsa keys", errJWKSUnavailable)
 	}
 	p.jwksStateMutex.Lock()
 	p.keys = keys
@@ -219,7 +229,7 @@ func (p *jwkProvider) refresh(ctx context.Context) (retErr error) {
 	return nil
 }
 
-func (p *jwkProvider) keyForKid(ctx context.Context, kid string) (*rsa.PublicKey, error) {
+func (p *Provider) KeyForKid(ctx context.Context, kid string) (*rsa.PublicKey, error) {
 	if key, ok := p.getFreshKey(kid); ok {
 		return key, nil
 	}
@@ -237,7 +247,7 @@ func (p *jwkProvider) keyForKid(ctx context.Context, kid string) (*rsa.PublicKey
 	cooldownElapsed := time.Since(p.triedAt) > p.refreshCooldown
 	p.jwksStateMutex.RUnlock()
 	if !cooldownElapsed {
-		return nil, ErrJWTUnknownKey
+		return nil, ErrUnknownKey
 	}
 	if err := p.refresh(ctx); err != nil {
 		return nil, err
@@ -245,10 +255,10 @@ func (p *jwkProvider) keyForKid(ctx context.Context, kid string) (*rsa.PublicKey
 	if key, ok := p.lookup(kid); ok {
 		return key, nil
 	}
-	return nil, ErrJWTUnknownKey
+	return nil, ErrUnknownKey
 }
 
-func (p *jwkProvider) refreshKeyForKid(
+func (p *Provider) RefreshKeyForKid(
 	ctx context.Context,
 	kid string,
 	oldKey *rsa.PublicKey,
@@ -275,5 +285,5 @@ func (p *jwkProvider) refreshKeyForKid(
 	if key, ok := p.lookup(kid); ok {
 		return key, nil
 	}
-	return nil, ErrJWTUnknownKey
+	return nil, ErrUnknownKey
 }

@@ -6,16 +6,14 @@ import (
 	"time"
 )
 
-const defaultRequestTimeout = 5 * time.Second
-
 type Client struct {
 	httpClient *http.Client
 }
 
-func New() *Client {
+func New(requestTimeout time.Duration) *Client {
 	return &Client{
 		httpClient: &http.Client{
-			Timeout: defaultRequestTimeout,
+			Timeout: requestTimeout,
 		},
 	}
 }

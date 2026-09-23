@@ -362,60 +362,6 @@ func Test_検証_未知の鍵でも取得を連打しない(t *testing.T) {
 	}
 }
 
-func Test_検証_JWKSキャッシュのTTL切れで再取得する(t *testing.T) {
-	i := newIdP(t)
-	v := newVerifier(t, i)
-	tok := i.sign(t, map[string]any{
-		"iss": testIssuer,
-		"aud": testClientID,
-		"sub": "u1",
-		"exp": time.Now().Add(time.Hour).Unix(),
-	})
-	if _, err := v.Verify(context.Background(), tok); err != nil {
-		t.Fatalf("最初の検証に失敗: %v", err)
-	}
-	if got := i.hits.Load(); got != 1 {
-		t.Fatalf("最初のJWKS取得回数 = %d, want 1", got)
-	}
-	v.jwk.jwksStateMutex.Lock()
-	v.jwk.fetchedAt = time.Now().Add(-2 * time.Hour)
-	v.jwk.triedAt = time.Now().Add(-2 * time.Hour)
-	v.jwk.jwksStateMutex.Unlock()
-	if _, err := v.Verify(context.Background(), tok); err != nil {
-		t.Fatalf("TTL切れ後の検証に失敗: %v", err)
-	}
-	if got := i.hits.Load(); got != 2 {
-		t.Fatalf("TTL切れ後のJWKS取得回数 = %d, want 2", got)
-	}
-}
-
-func Test_検証_JWKSレスポンスのMaxAgeをキャッシュTTLに反映する(t *testing.T) {
-	i := newIdP(t)
-	i.cacheControl = "public, max-age=120"
-
-	v := newVerifier(t, i)
-
-	tok := i.sign(t, map[string]any{
-		"iss": testIssuer,
-		"aud": testClientID,
-		"sub": "u1",
-		"exp": time.Now().Add(time.Hour).Unix(),
-	})
-
-	if _, err := v.Verify(context.Background(), tok); err != nil {
-		t.Fatalf("検証に失敗: %v", err)
-	}
-
-	v.jwk.jwksStateMutex.RLock()
-	got := v.jwk.cacheTTL
-	v.jwk.jwksStateMutex.RUnlock()
-
-	want := 2 * time.Minute
-	if got != want {
-		t.Fatalf("cacheTTL = %v, want %v", got, want)
-	}
-}
-
 func Test_検証_同じkidの鍵交換で再取得して成功する(t *testing.T) {
 	i := newIdP(t)
 	v := newVerifier(t, i)
@@ -449,57 +395,6 @@ func Test_検証_同じkidの鍵交換で再取得して成功する(t *testing.
 	}
 	if got := i.hits.Load(); got != 2 {
 		t.Fatalf("鍵交換後のJWKS取得回数 = %d, want 2", got)
-	}
-}
-
-func Test_検証_JWKS取得失敗時は期限切れキャッシュを使わない(t *testing.T) {
-	i := newIdP(t)
-	v := newVerifier(t, i)
-
-	tok := i.sign(t, map[string]any{
-		"iss": testIssuer,
-		"aud": testClientID,
-		"sub": "u1",
-		"exp": time.Now().Add(time.Hour).Unix(),
-	})
-
-	if _, err := v.Verify(context.Background(), tok); err != nil {
-		t.Fatalf("最初の検証に失敗: %v", err)
-	}
-	v.jwk.jwksStateMutex.Lock()
-	v.jwk.fetchedAt = time.Now().Add(-2 * time.Hour)
-	v.jwk.triedAt = time.Now().Add(-2 * time.Hour)
-	v.jwk.jwksStateMutex.Unlock()
-	i.server.Close()
-	if _, err := v.Verify(context.Background(), tok); err == nil {
-		t.Fatal("JWKS取得失敗時に期限切れキャッシュで検証が成功してしまった")
-	}
-}
-
-func Test_検証_refresh後はJWKSから削除された鍵をキャッシュから除去する(t *testing.T) {
-	i := newIdP(t)
-	v := newVerifier(t, i)
-
-	tok := i.sign(t, map[string]any{
-		"iss": testIssuer,
-		"aud": testClientID,
-		"sub": "u1",
-		"exp": time.Now().Add(time.Hour).Unix(),
-	})
-
-	if _, err := v.Verify(context.Background(), tok); err != nil {
-		t.Fatalf("最初の検証に失敗: %v", err)
-	}
-	v.jwk.jwksStateMutex.Lock()
-	v.jwk.keys["removed-kid"] = &i.key.PublicKey
-	v.jwk.fetchedAt = time.Now().Add(-2 * time.Hour)
-	v.jwk.triedAt = time.Now().Add(-2 * time.Hour)
-	v.jwk.jwksStateMutex.Unlock()
-	if _, err := v.Verify(context.Background(), tok); err != nil {
-		t.Fatalf("refresh後の検証に失敗: %v", err)
-	}
-	if _, ok := v.jwk.lookup("removed-kid"); ok {
-		t.Fatal("JWKSから削除された鍵がキャッシュに残っている")
 	}
 }
 

@@ -16,6 +16,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/norman6464/frestyle/backend/internal/infra/jwk"
 )
 
 const (
@@ -30,7 +32,7 @@ type Verifier struct {
 	aud      []string
 	clientID string
 
-	jwk *jwkProvider
+	jwkProvider *jwk.Provider
 
 	// leeway は時計ずれを吸収する許容誤差。
 	leeway time.Duration
@@ -53,7 +55,6 @@ var (
 	ErrJWTBadIssuer    = errors.New("oidc: unexpected issuer")
 	ErrJWTBadAudience  = errors.New("oidc: unexpected audience")
 	ErrJWTBadNonce     = errors.New("oidc: unexpected nonce")
-	ErrJWKSUnavailable = errors.New("oidc: jwks fetch failed")
 )
 
 // Config は Verifier に必要な設定。**どれも空にできない。**
@@ -112,20 +113,17 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 	if jwksCacheTTL <= 0 {
 		jwksCacheTTL = defaultJWKSCacheTTL
 	}
-	fetcher := newJWKSFetcher()
-
-	jwk := newJWKProvider(
+	jwkProvider := jwk.NewProvider(
 		cfg.JWKSURI,
-		fetcher,
 		defaultJWKSRefreshCooldown,
 		jwksCacheTTL,
 	)
 	return &Verifier{
-		issuer:   cfg.Issuer,
-		aud:      auds,
-		clientID: cfg.ClientID,
-		jwk:      jwk,
-		leeway:   60 * time.Second,
+		issuer:      cfg.Issuer,
+		aud:         auds,
+		clientID:    cfg.ClientID,
+		jwkProvider: jwkProvider,
+		leeway:      60 * time.Second,
 	}, nil
 }
 
@@ -187,8 +185,11 @@ func (v *Verifier) parse(ctx context.Context, token string) (map[string]any, err
 		return nil, ErrJWTMalformed
 	}
 
-	key, err := v.jwk.keyForKid(ctx, kid)
+	key, err := v.jwkProvider.KeyForKid(ctx, kid)
 	if err != nil {
+		if errors.Is(err, jwk.ErrUnknownKey) {
+			return nil, ErrJWTUnknownKey
+		}
 		return nil, err
 	}
 	if err := v.verifySignatureWithRefresh(
@@ -219,8 +220,11 @@ func (v *Verifier) verifySignatureWithRefresh(
 			return err
 		}
 
-		newKey, err := v.jwk.refreshKeyForKid(ctx, input.kid, input.key)
+		newKey, err := v.jwkProvider.RefreshKeyForKid(ctx, input.kid, input.key)
 		if err != nil {
+			if errors.Is(err, jwk.ErrUnknownKey) {
+				return ErrJWTUnknownKey
+			}
 			return err
 		}
 
