@@ -14,7 +14,7 @@ export interface KbInvitationsState {
 const EMPTY: KbInvitationsState = { invitations: [], loading: false, error: null, busyId: null };
 
 /**
- * useKbInvitations はメンバー管理画面の「招待中」の一覧取得と、発行・再送・取消をまとめる。
+ * useKbInvitations は招待の画面の一覧取得と、発行・再送・取消をまとめる。
  *
  * 書き込みはどれも**成功した後に一覧を丸ごと引き直す**（useKbAdminMembers と同じ）。発行は
  * 同じ宛先の未決を再送に変える（新しい行にならない）ので、差分をこちらで組み立てるより

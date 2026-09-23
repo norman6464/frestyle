@@ -1712,4 +1712,45 @@ describe('スペースの顔のポップアップ（外を押す・Escape で閉
     expect(screen.queryByRole('button', { name: 'スペースを作成' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'スペースの名前を変更' })).toBeInTheDocument();
   });
+
+  describe('メンバーと招待への入口', () => {
+    const renderAt = (path: string) =>
+      render(
+        <MemoryRouter initialEntries={[path]}>
+          <KbSidebar spaceId="space-1" />
+        </MemoryRouter>,
+      );
+
+    it('admin には常に見える場所に出す（切替を開かなくてよい）', async () => {
+      renderAt('/kb');
+
+      const link = await screen.findByRole('link', { name: 'メンバーと招待' });
+      expect(link).toHaveAttribute('href', '/kb/acme/members');
+    });
+
+    it('admin でなければ出さない（押せない行を並べない）', async () => {
+      hoisted.fetchWorkspaces.mockResolvedValue([workspace('acme', 'Acme 社', false)]);
+      renderAt('/kb');
+
+      await screen.findByText('設計メモ');
+      expect(screen.queryByRole('link', { name: 'メンバーと招待' })).not.toBeInTheDocument();
+    });
+
+    it('招待の画面にいるときも選択中として見せる（同じ見出しの 2 タブなので）', async () => {
+      renderAt('/kb/acme/invitations');
+
+      expect(await screen.findByRole('link', { name: 'メンバーと招待' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    });
+
+    it('関係ない画面では選択中にしない', async () => {
+      renderAt('/kb/spaces/space-1/members');
+
+      expect(await screen.findByRole('link', { name: 'メンバーと招待' })).not.toHaveAttribute(
+        'aria-current',
+      );
+    });
+  });
 });

@@ -44,6 +44,10 @@ const KbMembersPage = lazyWithReload(
   () => import('@/pages/kb-members').then((m) => ({ default: m.KbMembersPage })),
   'KbMembersPage',
 );
+const KbInvitationsPage = lazyWithReload(
+  () => import('@/pages/kb-invitations').then((m) => ({ default: m.KbInvitationsPage })),
+  'KbInvitationsPage',
+);
 const KbSpaceOverviewPage = lazyWithReload(
   () => import('@/pages/kb-space-overview').then((m) => ({ default: m.KbSpaceOverviewPage })),
   'KbSpaceOverviewPage',
@@ -148,9 +152,11 @@ export default function App() {
         <Route path="/backlog/:projectId/settings" element={<KbBacklogPage view="settings" />} />
         <Route path="/backlog/:projectId/archive" element={<KbBacklogPage view="archive" />} />
         <Route path="/tickets/:ticketId" element={<KbTicketPage />} />
-        {/* メンバー管理。role 変更・停止 / 復帰・削除。ワークスペース自体の設定なので
+        {/* ワークスペース単位の管理。役割変更・停止 / 復帰・削除（members）と、email での招待
+            （invitations）。見出しは共通で、タブで行き来する。ワークスペース自体の設定なので
             /kb/{pageId} と違い workspaceSlug を URL に出す。 */}
         <Route path="/kb/:workspaceSlug/members" element={<KbMembersPage />} />
+        <Route path="/kb/:workspaceSlug/invitations" element={<KbInvitationsPage />} />
         {/*
           スペース単位の 4 画面。「workspaceSlug を URL に持たず spaceId だけで解決する」流儀。/kb/spaces はスペース未選択の入口（自分がアクセス
           できる最初のスペースへ移す）を兼ねる。

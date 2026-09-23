@@ -1,17 +1,13 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import type { KbAdminWorkspaceMember, KbGrantRole, KbInvitation, KbIssuedInvitation } from '@/entities/kb';
-import { Button, ConfirmModal, FsIcon, Loading, PageHeader, fsIcon } from '@/shared/ui';
+import { KbWorkspaceTabs, useWorkspaceList, type KbAdminWorkspaceMember, type KbGrantRole } from '@/entities/kb';
+import { ConfirmModal, Loading, fsIcon } from '@/shared/ui';
 import EmptyState from '@/shared/ui/EmptyState';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useKbAdminMembers } from '../model/useKbAdminMembers';
-import { useKbInvitations } from '../model/useKbInvitations';
 import { useCurrentUserId } from '../model/useCurrentUserId';
-import { inviteFailure } from '../lib/invitationMessages';
 import KbMemberRow from './KbMemberRow';
-import KbInviteDialog from './KbInviteDialog';
-import KbInvitationsSection from './KbInvitationsSection';
 
 const GENERIC_FAILED = '操作に失敗しました。もう一度お試しください。';
 
@@ -37,46 +33,22 @@ function mutationErrorMessage(cause: unknown): string {
 }
 
 /**
- * メンバー管理画面（段 7）。役割変更・停止 / 復帰・削除と、email 宛の招待（発行・再送・取消）が
- * できる。呼べるのは admin だけ。
+ * メンバー管理画面。ワークスペースの名簿を直す（役割変更・停止 / 復帰・削除）。呼べるのは
+ * admin だけ。
+ *
+ * 人を招くのは同じ見出しの「招待」タブ（pages/kb-invitations）。名簿を直すことと招くことは
+ * 別の作業なので画面を分けてある。
  */
 export default function KbMembersPage() {
   const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
   const { showToast } = useToast();
   const currentUserId = useCurrentUserId();
+  const { workspaces } = useWorkspaceList();
   const { members, loading, error, busyUserId, retry, changeRole, suspend, restore, remove } =
     useKbAdminMembers(workspaceSlug);
-  const invitations = useKbInvitations(workspaceSlug);
   const [removing, setRemoving] = useState<KbAdminWorkspaceMember | null>(null);
-  // 招待ダイアログ。issuedForDialog は「再送」の結果（新しいリンク）を見せるために開くときの中身。
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [issuedForDialog, setIssuedForDialog] = useState<KbIssuedInvitation | null>(null);
-  const [revoking, setRevoking] = useState<KbInvitation | null>(null);
 
-  const openInviteDialog = () => {
-    setIssuedForDialog(null);
-    setInviteOpen(true);
-  };
-
-  const resendInvitation = async (invitation: KbInvitation) => {
-    try {
-      const issued = await invitations.resend(invitation.id);
-      setIssuedForDialog(issued);
-      setInviteOpen(true);
-    } catch (cause) {
-      showToast('error', inviteFailure(cause).text);
-      invitations.retry();
-    }
-  };
-
-  const revokeInvitation = async (invitation: KbInvitation) => {
-    try {
-      await invitations.revoke(invitation.id);
-    } catch (cause) {
-      showToast('error', inviteFailure(cause).text);
-      invitations.retry();
-    }
-  };
+  const workspaceName = workspaces.find((w) => w.slug === workspaceSlug)?.name;
 
   const runOrToast = async (action: () => Promise<void>) => {
     try {
@@ -112,16 +84,11 @@ export default function KbMembersPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:pt-12">
-      <PageHeader
-        title="メンバー管理"
-        description="ワークスペースの役割と参加状態を管理します。役割の変更はすぐに反映されます。"
-        action={
-          <Button variant="primary" onClick={openInviteDialog} className="min-h-11">
-            <FsIcon name="user-plus" className="h-4 w-4" />
-            メンバーを招く
-          </Button>
-        }
-      />
+      <KbWorkspaceTabs workspaceSlug={workspaceSlug ?? ''} workspaceName={workspaceName} active="members" />
+
+      <p className="mb-6 max-w-xl text-sm text-[var(--color-text-muted)]">
+        ワークスペースの役割と参加状態を管理します。役割の変更はすぐに反映されます。
+      </p>
 
       {loading ? <Loading className="min-h-56" message="メンバーを読み込んでいます" /> : members.length === 0 ? (
         <EmptyState icon={fsIcon('users')} title="メンバーがいません" />
@@ -163,41 +130,6 @@ export default function KbMembersPage() {
           </table>
         </div>
       )}
-
-      <KbInvitationsSection
-        invitations={invitations.invitations}
-        loading={invitations.loading}
-        failed={invitations.error !== null}
-        busyId={invitations.busyId}
-        onRetry={invitations.retry}
-        onResend={(inv) => void resendInvitation(inv)}
-        onRevoke={setRevoking}
-      />
-
-      <KbInviteDialog
-        isOpen={inviteOpen}
-        issued={issuedForDialog}
-        onInvite={invitations.invite}
-        onFailureToast={(text) => {
-          showToast('error', text);
-          invitations.retry();
-        }}
-        onClose={() => setInviteOpen(false)}
-      />
-
-      <ConfirmModal
-        isOpen={revoking !== null}
-        title="招待を取り消しますか？"
-        message={revoking ? `${revoking.email} 宛の招待を取り消します。送ったリンクは使えなくなります。また招きたいときは新しく作れます。` : ''}
-        confirmText="取り消す"
-        onConfirm={() => {
-          if (!revoking) return;
-          const target = revoking;
-          setRevoking(null);
-          void revokeInvitation(target);
-        }}
-        onCancel={() => setRevoking(null)}
-      />
 
       <ConfirmModal
         isOpen={removing !== null}

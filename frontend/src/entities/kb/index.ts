@@ -3,6 +3,8 @@ export { default as KbWorkspaceSwitcher } from './ui/KbWorkspaceSwitcher';
 export type { KbWorkspaceSwitcherProps } from './ui/KbWorkspaceSwitcher';
 export { default as KbSpaceTabs } from './ui/KbSpaceTabs';
 export type { KbSpaceTabsProps, KbSpaceTab } from './ui/KbSpaceTabs';
+export { default as KbWorkspaceTabs } from './ui/KbWorkspaceTabs';
+export type { KbWorkspaceTabsProps, KbWorkspaceTab } from './ui/KbWorkspaceTabs';
 export { useWorkspaceList } from './model/useWorkspaceList';
 export { useKbSpaceEntry } from './model/useKbSpaceEntry';
 export type { KbSpaceEntryState } from './model/useKbSpaceEntry';
