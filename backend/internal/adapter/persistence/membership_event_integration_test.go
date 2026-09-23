@@ -31,41 +31,25 @@ func TestMembershipEvents_Integration(t *testing.T) {
 		return events[0]
 	}
 
-	t.Run("招待は招待した人がactorで新旧ラベルとも空", func(t *testing.T) {
+	t.Run("招待の発行は所属の変化ではないので記録しない", func(t *testing.T) {
+		// 招待そのもの（誰がいつ誰を招いたか）は invitations 表が持つ。membership_events は
+		// 「この人がなぜ今の所属・役割か」の記録なので、承諾して初めて 1 行残る。
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
+		f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor)
 
-		e := lastEvent(t, f)
-		assert.Equal(t, domain.MembershipEventInvited, e.Action)
-		assert.Equal(t, f.bob, e.TargetUserID)
-		assert.Equal(t, f.alice, e.ActorUserID)
-		assert.Nil(t, e.OldLabel)
-		assert.Nil(t, e.NewLabel)
-	})
-
-	t.Run("招待済みへの再招待は実質変化が無いので記録しない", func(t *testing.T) {
-		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
 		events, err := f.perm.ListMembershipEvents(ctx, f.ws)
 		require.NoError(t, err)
-		require.Len(t, events, 1)
-
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
-		events, err = f.perm.ListMembershipEvents(ctx, f.ws)
-		require.NoError(t, err)
-		assert.Len(t, events, 1, "UpsertInvitedWorkspaceMember が 0 行更新（既に invited）なら記録も増えない")
+		assert.Empty(t, events)
 	})
 
-	t.Run("受諾は本人がactorで新ラベルはeditor", func(t *testing.T) {
+	t.Run("承諾は本人がactorで新ラベルは招待の役割", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
-		_, err := f.perm.AcceptWorkspaceInvitation(ctx, f.ws, f.bob)
-		require.NoError(t, err)
+		f.acceptInvitation(ctx, t, f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor), f.bob)
 
 		e := lastEvent(t, f)
 		assert.Equal(t, domain.MembershipEventInvitationAccepted, e.Action)
 		assert.Equal(t, f.bob, e.TargetUserID)
-		assert.Equal(t, f.bob, e.ActorUserID, "受諾は本人の操作")
+		assert.Equal(t, f.bob, e.ActorUserID, "承諾は本人の操作")
 		assert.Nil(t, e.OldLabel)
 		require.NotNil(t, e.NewLabel)
 		assert.Equal(t, "editor", *e.NewLabel)
@@ -73,8 +57,8 @@ func TestMembershipEvents_Integration(t *testing.T) {
 
 	t.Run("辞退は本人がactorで新旧ラベルとも空", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
-		require.NoError(t, f.perm.DeclineWorkspaceInvitation(ctx, f.ws, f.bob))
+		inv := f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor)
+		require.NoError(t, f.invitations.Decline(ctx, inv.ID, f.bob, f.emailOf(t, f.bob)))
 
 		e := lastEvent(t, f)
 		assert.Equal(t, domain.MembershipEventInvitationDeclined, e.Action)
@@ -86,9 +70,7 @@ func TestMembershipEvents_Integration(t *testing.T) {
 
 	t.Run("自分で退出するとleftで自分がactor旧ラベルは退出前の役割", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
-		_, err := f.perm.AcceptWorkspaceInvitation(ctx, f.ws, f.bob)
-		require.NoError(t, err)
+		f.acceptInvitation(ctx, t, f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor), f.bob)
 
 		require.NoError(t, f.perm.LeaveWorkspaceMembership(ctx, f.ws, f.bob, f.bob))
 
@@ -103,9 +85,7 @@ func TestMembershipEvents_Integration(t *testing.T) {
 
 	t.Run("adminが外すとmember_removedで外した人がactor", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
-		_, err := f.perm.AcceptWorkspaceInvitation(ctx, f.ws, f.bob)
-		require.NoError(t, err)
+		f.acceptInvitation(ctx, t, f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor), f.bob)
 
 		require.NoError(t, kb.NewRemoveWorkspaceMemberUseCase(f.perm).Execute(ctx, kb.RemoveWorkspaceMemberInput{
 			WorkspaceID: f.ws, UserID: f.bob, ActorUserID: f.alice,
@@ -204,7 +184,7 @@ func TestMembershipEvents_Integration(t *testing.T) {
 
 	t.Run("別テナントの記録は混ざらない", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
+		f.acceptInvitation(ctx, t, f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor), f.bob)
 
 		otherEvents, err := f.perm.ListMembershipEvents(ctx, f.otherWS)
 		require.NoError(t, err)
@@ -213,7 +193,7 @@ func TestMembershipEvents_Integration(t *testing.T) {
 
 	t.Run("ワークスペースを消すと記録も一緒に消える", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
+		f.acceptInvitation(ctx, t, f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor), f.bob)
 		events, err := f.perm.ListMembershipEvents(ctx, f.ws)
 		require.NoError(t, err)
 		require.NotEmpty(t, events)

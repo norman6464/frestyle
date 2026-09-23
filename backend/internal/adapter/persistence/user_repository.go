@@ -92,6 +92,24 @@ func (r *userRepository) FindByID(ctx context.Context, id uint64) (*domain.User,
 	return toDomainUser(row), nil
 }
 
+// FindActiveIDByEmail は正規形の email から退会していないユーザーの id を引く。無ければ found=false。
+// 呼び出し側が domain.NormalizeEmail を通していない値を渡すと、索引の式（lower + btrim）と
+// 一致せず引けないので、正規化はここでも行う（二重でも害は無い）。
+func (r *userRepository) FindActiveIDByEmail(ctx context.Context, email string) (uint64, bool, error) {
+	normalized := domain.NormalizeEmail(email)
+	if normalized == "" {
+		return 0, false, nil
+	}
+	id, err := r.queries(ctx).FindActiveUserIDByEmail(ctx, normalized)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return uint64(id), true, nil
+}
+
 // FindDisplayByID は人を表示するのに要る最小限（表示名・アイコン・状態メッセージ）を返す。
 // GetUserByID と違い status を絞らないクエリを使う（domain.UserDisplay の doc 参照）。
 func (r *userRepository) FindDisplayByID(ctx context.Context, id uint64) (*domain.UserDisplay, error) {

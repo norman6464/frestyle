@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -607,11 +609,8 @@ var errKbFakeNotModeled = errors.New("kb fake: この口は再現していない
 type kbFakePerms struct {
 	pages *kbFakePages
 	// principals は principalID -> 主体。実メンバー（招待を受諾済み）は kind='user' の
-	// 行の有無で表す（本番と同じ。invitations は招待中の人だけを別に持つ）。
+	// 行の有無で表す（本番と同じ。招待そのものは kbFakeInvitations が持つ）。
 	principals map[string]*domain.Principal
-	// invitations は招待中（invited）の所属。{workspaceID, userID} -> invitedByUserID。
-	// 受諾（AcceptWorkspaceInvitation）で principals へ移り、ここからは消える。
-	invitations map[kbScopeKey]uint64
 	// groupMembers は groupPrincipalID -> memberPrincipalID の集合。
 	groupMembers map[string]map[string]bool
 	nextID       int
@@ -684,7 +683,6 @@ func newKbFakePerms(pages *kbFakePages, fallback domain.PagePermission) *kbFakeP
 	return &kbFakePerms{
 		pages:        pages,
 		principals:   map[string]*domain.Principal{},
-		invitations:  map[kbScopeKey]uint64{},
 		groupMembers: map[string]map[string]bool{},
 		perPage:      map[kbPermKey]domain.PagePermission{},
 		scopeRoles:   map[kbScopeKey]domain.GrantRole{},
@@ -839,73 +837,12 @@ func (f *kbFakePerms) IsWorkspaceMemberBulk(_ context.Context, workspaceID strin
 
 // InviteWorkspaceMember は招待中の行を作る（冪等。既に active/invited なら何もしない）。
 // principal はまだ作らない（本番と同じ — 受諾するまで権限は届かない）。
-func (f *kbFakePerms) InviteWorkspaceMember(_ context.Context, workspaceID string, userID, invitedByUserID uint64) error {
-	if f.userPrincipal(workspaceID, userID) != nil {
-		return nil // 既に active
-	}
-	key := kbScopeKey{scopeID: workspaceID, userID: userID}
-	if _, invited := f.invitations[key]; invited {
-		return nil // 既に invited
-	}
-	f.invitations[key] = invitedByUserID
-	return nil
-}
-
-// AcceptWorkspaceInvitation は invited → active。principal を作り既定の editor を与える
-// （本番の EnsureUserPrincipal + GrantWorkspaceRoleIfAbsent と同じ手順）。
-func (f *kbFakePerms) AcceptWorkspaceInvitation(ctx context.Context, workspaceID string, userID uint64) (*domain.Principal, error) {
-	key := kbScopeKey{scopeID: workspaceID, userID: userID}
-	if _, invited := f.invitations[key]; !invited {
-		return nil, repository.ErrWorkspaceInvitationNotFound
-	}
-	delete(f.invitations, key)
-	principal, err := f.EnsureUserPrincipal(ctx, workspaceID, userID)
-	if err != nil {
-		return nil, err
-	}
-	if err := f.GrantWorkspaceRoleIfAbsent(ctx, workspaceID, principal.ID, domain.GrantRoleEditor); err != nil {
-		return nil, err
-	}
-	return principal, nil
-}
-
-// DeclineWorkspaceInvitation は invited → left（辞退。fake は行を消すだけ）。
-func (f *kbFakePerms) DeclineWorkspaceInvitation(_ context.Context, workspaceID string, userID uint64) error {
-	key := kbScopeKey{scopeID: workspaceID, userID: userID}
-	if _, invited := f.invitations[key]; !invited {
-		return repository.ErrWorkspaceInvitationNotFound
-	}
-	delete(f.invitations, key)
-	return nil
-}
-
-// ListMyWorkspaceInvitations はそのユーザー宛の招待を、招待先の slug / name を添えて返す。
-func (f *kbFakePerms) ListMyWorkspaceInvitations(_ context.Context, userID uint64) ([]domain.WorkspaceInvitation, error) {
-	out := make([]domain.WorkspaceInvitation, 0)
-	for key, invitedBy := range f.invitations {
-		if key.userID != userID {
-			continue
-		}
-		inv := domain.WorkspaceInvitation{InvitedByUserID: invitedBy}
-		for _, ws := range f.pages.workspaces {
-			if ws.ID == key.scopeID {
-				inv.WorkspaceSlug = ws.Slug
-				inv.WorkspaceName = ws.Name
-				break
-			}
-		}
-		out = append(out, inv)
-	}
-	return out, nil
-}
-
 // LeaveWorkspaceMembership は所属を終える（principal があれば消し、invited の行も消す）。
 // actorUserID（段 6・監査）は fake では追跡しない — 実際の記録内容の検証は結合テストが持つ。
 func (f *kbFakePerms) LeaveWorkspaceMembership(ctx context.Context, workspaceID string, userID, _ uint64) error {
 	if f.leaveWorkspaceErr != nil {
 		return f.leaveWorkspaceErr
 	}
-	delete(f.invitations, kbScopeKey{scopeID: workspaceID, userID: userID})
 	principal := f.userPrincipal(workspaceID, userID)
 	if principal == nil {
 		return nil // 既に非メンバー
@@ -1252,6 +1189,9 @@ func (f *kbFakePerms) ListMemberWorkspaces(_ context.Context, userID uint64) ([]
 type kbFakeUsers struct {
 	// names は users.name の写し（LookupUserDisplayUseCase のテスト用の設定口）。
 	names map[uint64]string
+	// emails は users.email の写し（正規形）。招待の承諾は「確認済みの email が宛先と一致するか」で
+	// 決まるので、テストが宛先側の状態を作るための設定口。
+	emails map[uint64]string
 	// failWith は次の FindByID / FindDisplayByID 呼び出しを失敗させる（LookupUserDisplayUseCase の
 	// 「失敗は伝える」を確かめるため）。
 	failWith error
@@ -1260,7 +1200,25 @@ type kbFakeUsers struct {
 var _ repository.UserRepository = (*kbFakeUsers)(nil)
 
 func newKbFakeUsers() *kbFakeUsers {
-	return &kbFakeUsers{names: map[uint64]string{}}
+	return &kbFakeUsers{names: map[uint64]string{}, emails: map[uint64]string{}}
+}
+
+// setUserEmail はそのユーザーの確認済み email を決める（本番の users.email。正規形で持つ）。
+func (f *kbFakeUsers) setUserEmail(userID uint64, email string) {
+	f.emails[userID] = domain.NormalizeEmail(email)
+}
+
+func (f *kbFakeUsers) FindActiveIDByEmail(_ context.Context, email string) (uint64, bool, error) {
+	if f.failWith != nil {
+		return 0, false, f.failWith
+	}
+	want := domain.NormalizeEmail(email)
+	for id, e := range f.emails {
+		if e == want {
+			return id, true, nil
+		}
+	}
+	return 0, false, nil
 }
 
 // setUserName はそのユーザーの表示名を決める（本番の users.name）。
@@ -1276,7 +1234,7 @@ func (f *kbFakeUsers) FindByID(_ context.Context, userID uint64) (*domain.User, 
 	if !hasName {
 		return nil, nil
 	}
-	return &domain.User{ID: userID, Name: name}, nil
+	return &domain.User{ID: userID, Name: name, Email: f.emails[userID]}, nil
 }
 
 // FindDisplayByID は user.LookupUserDisplayUseCase が読む経路（本番の GetUserDisplayByID
@@ -2406,4 +2364,270 @@ func (f *kbFakePerms) ListMySpaces(_ context.Context, workspaceID string, userID
 		out = append(out, domain.MySpace{ID: spaceID, Name: sp.Name, Role: *best})
 	}
 	return out, nil
+}
+
+// kbFakeInvitations は repository.InvitationRepository の in-memory 実装。
+// 本物と同じ規則（同じ宛先 × 場所の未決は 1 件・再送の間隔・宛先の照合・承諾で主体と役割ができる）
+// を最小限なぞる。時刻の判定は now() で行い、テストが差し替えられる。
+type kbFakeInvitations struct {
+	pages  *kbFakePages
+	perms  *kbFakePerms
+	users  *kbFakeUsers
+	rows   map[string]*domain.Invitation
+	nextID int
+	now    func() time.Time
+	// failWith は次の呼び出しを失敗させる（500 経路の確認用）。
+	failWith error
+}
+
+var _ repository.InvitationRepository = (*kbFakeInvitations)(nil)
+
+func newKbFakeInvitations(pages *kbFakePages, perms *kbFakePerms, users *kbFakeUsers) *kbFakeInvitations {
+	return &kbFakeInvitations{pages: pages, perms: perms, users: users, rows: map[string]*domain.Invitation{}, now: time.Now}
+}
+
+func (f *kbFakeInvitations) detail(inv *domain.Invitation) domain.InvitationDetail {
+	d := domain.InvitationDetail{Invitation: *inv, InviterName: f.users.names[inv.InvitedByUserID]}
+	for _, ws := range f.pages.workspaces {
+		if ws.ID == inv.WorkspaceID {
+			d.WorkspaceSlug, d.WorkspaceName = ws.Slug, ws.Name
+			break
+		}
+	}
+	return d
+}
+
+func sameTarget(a *domain.Invitation, in repository.InvitationWrite) bool {
+	ptrEq := func(x, y *string) bool { return (x == nil && y == nil) || (x != nil && y != nil && *x == *y) }
+	return a.WorkspaceID == in.WorkspaceID && a.Email == in.Email && a.Scope == in.Scope &&
+		ptrEq(a.SpaceID, in.SpaceID) && ptrEq(a.PageID, in.PageID)
+}
+
+func (f *kbFakeInvitations) Upsert(_ context.Context, in repository.InvitationWrite) (*domain.Invitation, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	for _, row := range f.rows {
+		if !row.Unresolved() || !sameTarget(row, in) {
+			continue
+		}
+		if row.LastSentAt.After(in.SentBefore) {
+			return nil, repository.ErrInvitationResendTooSoon
+		}
+		row.Role, row.InviteeName, row.TokenHash, row.ExpiresAt = in.Role, in.InviteeName, in.TokenHash, in.ExpiresAt
+		row.LastSentAt, row.LastSentByUserID, row.SendCount, row.UpdatedAt = f.now(), in.ActorUserID, row.SendCount+1, f.now()
+		copied := *row
+		return &copied, nil
+	}
+	f.nextID++
+	now := f.now()
+	row := &domain.Invitation{
+		ID: fmt.Sprintf("0198a000-0000-7000-8000-%012d", f.nextID), WorkspaceID: in.WorkspaceID, Scope: in.Scope,
+		SpaceID: in.SpaceID, PageID: in.PageID, Role: in.Role, Email: in.Email, InviteeName: in.InviteeName,
+		TokenHash: in.TokenHash, InvitedByUserID: in.ActorUserID, ExpiresAt: in.ExpiresAt,
+		LastSentAt: now, LastSentByUserID: in.ActorUserID, SendCount: 1, CreatedAt: now, UpdatedAt: now,
+	}
+	f.rows[row.ID] = row
+	copied := *row
+	return &copied, nil
+}
+
+func (f *kbFakeInvitations) Refresh(_ context.Context, in repository.InvitationRefresh) (*domain.Invitation, error) {
+	row, ok := f.rows[in.InvitationID]
+	if !ok || row.WorkspaceID != in.WorkspaceID {
+		return nil, repository.ErrInvitationNotFound
+	}
+	if !row.Unresolved() {
+		return nil, repository.ErrInvitationNotOpen
+	}
+	if row.LastSentAt.After(in.SentBefore) {
+		return nil, repository.ErrInvitationResendTooSoon
+	}
+	row.TokenHash, row.ExpiresAt = in.TokenHash, in.ExpiresAt
+	row.LastSentAt, row.LastSentByUserID, row.SendCount, row.UpdatedAt = f.now(), in.ActorUserID, row.SendCount+1, f.now()
+	copied := *row
+	return &copied, nil
+}
+
+func (f *kbFakeInvitations) Find(_ context.Context, workspaceID, invitationID string) (*domain.Invitation, error) {
+	row, ok := f.rows[invitationID]
+	if !ok || row.WorkspaceID != workspaceID {
+		return nil, repository.ErrInvitationNotFound
+	}
+	copied := *row
+	return &copied, nil
+}
+
+func (f *kbFakeInvitations) FindByID(_ context.Context, invitationID string) (*domain.Invitation, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	row, ok := f.rows[invitationID]
+	if !ok {
+		return nil, repository.ErrInvitationNotFound
+	}
+	copied := *row
+	return &copied, nil
+}
+
+func (f *kbFakeInvitations) FindDetailByTokenHash(_ context.Context, tokenHash []byte) (*domain.InvitationDetail, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	for _, row := range f.rows {
+		if bytes.Equal(row.TokenHash, tokenHash) {
+			d := f.detail(row)
+			return &d, nil
+		}
+	}
+	return nil, repository.ErrInvitationNotFound
+}
+
+func (f *kbFakeInvitations) sorted(keep func(*domain.Invitation) bool) []domain.InvitationDetail {
+	out := make([]domain.InvitationDetail, 0)
+	for _, row := range f.rows {
+		if keep(row) {
+			out = append(out, f.detail(row))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out
+}
+
+func (f *kbFakeInvitations) ListByWorkspace(_ context.Context, workspaceID string, limit int) ([]domain.InvitationDetail, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	out := f.sorted(func(inv *domain.Invitation) bool { return inv.WorkspaceID == workspaceID })
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (f *kbFakeInvitations) ListOpenByEmail(_ context.Context, email string) ([]domain.InvitationDetail, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	now := f.now()
+	return f.sorted(func(inv *domain.Invitation) bool { return inv.Email == email && inv.Open(now) }), nil
+}
+
+func (f *kbFakeInvitations) Accept(ctx context.Context, invitationID string, userID uint64, email string) (*domain.Invitation, error) {
+	row, ok := f.rows[invitationID]
+	if !ok || row.Email != email {
+		return nil, repository.ErrInvitationNotFound
+	}
+	if !row.Open(f.now()) {
+		return nil, repository.ErrInvitationNotOpen
+	}
+	if row.Scope != domain.InvitationScopeWorkspace {
+		return nil, repository.ErrInvitationScopeUnsupported
+	}
+	principal, err := f.perms.EnsureUserPrincipal(ctx, row.WorkspaceID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := f.perms.GrantWorkspaceRoleIfAbsent(ctx, row.WorkspaceID, principal.ID, row.Role); err != nil {
+		return nil, err
+	}
+	at := f.now()
+	row.AcceptedAt, row.AcceptedByUserID, row.UpdatedAt = &at, &userID, at
+	copied := *row
+	return &copied, nil
+}
+
+func (f *kbFakeInvitations) Decline(_ context.Context, invitationID string, userID uint64, email string) error {
+	row, ok := f.rows[invitationID]
+	if !ok || row.Email != email {
+		return repository.ErrInvitationNotFound
+	}
+	if !row.Unresolved() {
+		return repository.ErrInvitationNotOpen
+	}
+	at := f.now()
+	row.DeclinedAt, row.DeclinedByUserID, row.UpdatedAt = &at, &userID, at
+	return nil
+}
+
+func (f *kbFakeInvitations) Revoke(_ context.Context, workspaceID, invitationID string, actorUserID uint64) error {
+	row, ok := f.rows[invitationID]
+	if !ok || row.WorkspaceID != workspaceID {
+		return repository.ErrInvitationNotFound
+	}
+	if row.RevokedAt != nil {
+		return nil
+	}
+	if !row.Unresolved() {
+		return repository.ErrInvitationNotOpen
+	}
+	at := f.now()
+	row.RevokedAt, row.RevokedByUserID, row.UpdatedAt = &at, &actorUserID, at
+	return nil
+}
+
+func (f *kbFakeInvitations) CountOpenInWorkspace(_ context.Context, workspaceID string) (int64, error) {
+	now := f.now()
+	var n int64
+	for _, row := range f.rows {
+		if row.WorkspaceID == workspaceID && row.Open(now) {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (f *kbFakeInvitations) CountSentBySince(_ context.Context, userID uint64, since time.Time) (int64, error) {
+	var n int64
+	for _, row := range f.rows {
+		if row.LastSentByUserID == userID && !row.LastSentAt.Before(since) {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (f *kbFakeInvitations) CountSentToEmailSince(_ context.Context, email string, since time.Time) (int64, error) {
+	var n int64
+	for _, row := range f.rows {
+		if row.Email == email && !row.LastSentAt.Before(since) {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// kbFakeNotifications は repository.NotificationRepository の in-memory 実装（作った通知を溜めるだけ）。
+type kbFakeNotifications struct {
+	created []domain.Notification
+}
+
+var _ repository.NotificationRepository = (*kbFakeNotifications)(nil)
+
+func newKbFakeNotifications() *kbFakeNotifications { return &kbFakeNotifications{} }
+
+func (f *kbFakeNotifications) Create(_ context.Context, n *domain.Notification) error {
+	f.created = append(f.created, *n)
+	return nil
+}
+
+func (f *kbFakeNotifications) CreateMany(_ context.Context, ns []domain.Notification) error {
+	f.created = append(f.created, ns...)
+	return nil
+}
+
+func (f *kbFakeNotifications) ListByUserID(_ context.Context, userID uint64) ([]domain.Notification, error) {
+	out := make([]domain.Notification, 0)
+	for _, n := range f.created {
+		if n.UserID == userID {
+			out = append(out, n)
+		}
+	}
+	return out, nil
+}
+
+func (f *kbFakeNotifications) MarkRead(context.Context, uint64, uint64) error { return nil }
+func (f *kbFakeNotifications) MarkAllRead(context.Context, uint64) error      { return nil }
+func (f *kbFakeNotifications) CountUnread(context.Context, uint64) (int64, error) {
+	return 0, nil
 }

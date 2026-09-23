@@ -556,26 +556,6 @@ func (m *mockKBPermissionRepo) ListMemberWorkspaces(ctx context.Context, userID 
 	return w, args.Error(1)
 }
 
-func (m *mockKBPermissionRepo) InviteWorkspaceMember(ctx context.Context, workspaceID string, userID, invitedByUserID uint64) error {
-	return m.Called(ctx, workspaceID, userID, invitedByUserID).Error(0)
-}
-
-func (m *mockKBPermissionRepo) AcceptWorkspaceInvitation(ctx context.Context, workspaceID string, userID uint64) (*domain.Principal, error) {
-	args := m.Called(ctx, workspaceID, userID)
-	p, _ := args.Get(0).(*domain.Principal)
-	return p, args.Error(1)
-}
-
-func (m *mockKBPermissionRepo) DeclineWorkspaceInvitation(ctx context.Context, workspaceID string, userID uint64) error {
-	return m.Called(ctx, workspaceID, userID).Error(0)
-}
-
-func (m *mockKBPermissionRepo) ListMyWorkspaceInvitations(ctx context.Context, userID uint64) ([]domain.WorkspaceInvitation, error) {
-	args := m.Called(ctx, userID)
-	rows, _ := args.Get(0).([]domain.WorkspaceInvitation)
-	return rows, args.Error(1)
-}
-
 func (m *mockKBPermissionRepo) LeaveWorkspaceMembership(ctx context.Context, workspaceID string, userID, actorUserID uint64) error {
 	return m.Called(ctx, workspaceID, userID, actorUserID).Error(0)
 }

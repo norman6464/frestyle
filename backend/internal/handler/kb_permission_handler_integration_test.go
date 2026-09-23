@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"testing"
 
 	"github.com/norman6464/frestyle/backend/internal/domain"
@@ -207,9 +206,9 @@ func TestKnowledgeBasePermissionAPI_Integration(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, w.Code, "ワークスペース全体の grant には届かない")
 		assert.Equal(t, kbDeniedBody, w.Body.String())
 
-		w = e.do(t, http.MethodPut,
-			"/api/v2/kb/workspaces/"+env.slug+"/members/"+strconv.FormatUint(env.outsider, 10), "")
-		assert.Equal(t, http.StatusNotFound, w.Code, "メンバーの追加にも届かない")
+		w = e.do(t, http.MethodPost,
+			"/api/v2/kb/workspaces/"+env.slug+"/invitations", `{"email":"outsider@example.test","role":"viewer"}`)
+		assert.Equal(t, http.StatusNotFound, w.Code, "人を招く（ワークスペース全体の操作）にも届かない")
 	})
 
 	t.Run("別スペースのスペースadminは他スペースの権限を変えられない", func(t *testing.T) {
@@ -242,16 +241,6 @@ func TestKnowledgeBasePermissionAPI_Integration(t *testing.T) {
 		w := e.do(t, http.MethodDelete,
 			"/api/v2/kb/workspaces/"+env.slug+"/grants/"+env.adminPrincipal, "")
 		assert.Equal(t, http.StatusConflict, w.Code, "グループの admin では代わりにならない")
-	})
-
-	t.Run("存在しないユーザーのメンバー招待は500ではなく404", func(t *testing.T) {
-		// workspace_members.user_id は users への FK。実在しない ID を渡すと制約違反に
-		// なるが、それは入力の誤りであってサーバの故障ではない。
-		env := newKbPermEnv(t, sqlDB)
-		w := env.as(env.admin).do(t, http.MethodPut,
-			"/api/v2/kb/workspaces/"+env.slug+"/members/"+kbMissingIntegrationUserID, "")
-		assert.Equal(t, http.StatusNotFound, w.Code)
-		assert.Equal(t, kbDeniedBody, w.Body.String())
 	})
 
 	t.Run("グループ名の重複は500ではなく409", func(t *testing.T) {

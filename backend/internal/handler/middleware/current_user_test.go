@@ -23,6 +23,10 @@ func (s *stubUsers) FindDisplayByID(context.Context, uint64) (*domain.UserDispla
 	return nil, nil
 }
 
+func (s *stubUsers) FindActiveIDByEmail(context.Context, string) (uint64, bool, error) {
+	return 0, false, nil
+}
+
 func (s *stubUsers) ListByWorkspaceID(context.Context, string) ([]domain.User, error) {
 	return nil, nil
 }

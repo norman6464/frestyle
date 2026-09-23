@@ -37,6 +37,12 @@ func (m *mockUserRepo) FindDisplayByID(ctx context.Context, id uint64) (*domain.
 	return d, args.Error(1)
 }
 
+func (m *mockUserRepo) FindActiveIDByEmail(ctx context.Context, email string) (uint64, bool, error) {
+	args := m.Called(ctx, email)
+	id, _ := args.Get(0).(uint64)
+	return id, args.Bool(1), args.Error(2)
+}
+
 func (m *mockUserRepo) Create(ctx context.Context, u *domain.User) error {
 	return m.Called(ctx, u).Error(0)
 }
@@ -301,26 +307,6 @@ func (m *mockKBPermissionRepo) IsWorkspaceMemberBulk(ctx context.Context, worksp
 	args := m.Called(ctx, workspaceID, userIDs)
 	out, _ := args.Get(0).(map[uint64]bool)
 	return out, args.Error(1)
-}
-
-func (m *mockKBPermissionRepo) InviteWorkspaceMember(ctx context.Context, workspaceID string, userID, invitedByUserID uint64) error {
-	return m.Called(ctx, workspaceID, userID, invitedByUserID).Error(0)
-}
-
-func (m *mockKBPermissionRepo) AcceptWorkspaceInvitation(ctx context.Context, workspaceID string, userID uint64) (*domain.Principal, error) {
-	args := m.Called(ctx, workspaceID, userID)
-	p, _ := args.Get(0).(*domain.Principal)
-	return p, args.Error(1)
-}
-
-func (m *mockKBPermissionRepo) DeclineWorkspaceInvitation(ctx context.Context, workspaceID string, userID uint64) error {
-	return m.Called(ctx, workspaceID, userID).Error(0)
-}
-
-func (m *mockKBPermissionRepo) ListMyWorkspaceInvitations(ctx context.Context, userID uint64) ([]domain.WorkspaceInvitation, error) {
-	args := m.Called(ctx, userID)
-	rows, _ := args.Get(0).([]domain.WorkspaceInvitation)
-	return rows, args.Error(1)
 }
 
 func (m *mockKBPermissionRepo) LeaveWorkspaceMembership(ctx context.Context, workspaceID string, userID, actorUserID uint64) error {
@@ -748,4 +734,118 @@ func (m *mockLabelRepo) ListLabelsByPageIDs(ctx context.Context, workspaceID str
 	args := m.Called(ctx, workspaceID, pageIDs)
 	l, _ := args.Get(0).(map[string][]domain.Label)
 	return l, args.Error(1)
+}
+
+// --- mock: InvitationRepository ---
+
+type mockInvitationRepo struct{ mock.Mock }
+
+var _ repository.InvitationRepository = (*mockInvitationRepo)(nil)
+
+func (m *mockInvitationRepo) Upsert(ctx context.Context, in repository.InvitationWrite) (*domain.Invitation, error) {
+	args := m.Called(ctx, in)
+	inv, _ := args.Get(0).(*domain.Invitation)
+	return inv, args.Error(1)
+}
+
+func (m *mockInvitationRepo) Refresh(ctx context.Context, in repository.InvitationRefresh) (*domain.Invitation, error) {
+	args := m.Called(ctx, in)
+	inv, _ := args.Get(0).(*domain.Invitation)
+	return inv, args.Error(1)
+}
+
+func (m *mockInvitationRepo) Find(ctx context.Context, workspaceID, invitationID string) (*domain.Invitation, error) {
+	args := m.Called(ctx, workspaceID, invitationID)
+	inv, _ := args.Get(0).(*domain.Invitation)
+	return inv, args.Error(1)
+}
+
+func (m *mockInvitationRepo) FindByID(ctx context.Context, invitationID string) (*domain.Invitation, error) {
+	args := m.Called(ctx, invitationID)
+	inv, _ := args.Get(0).(*domain.Invitation)
+	return inv, args.Error(1)
+}
+
+func (m *mockInvitationRepo) FindDetailByTokenHash(ctx context.Context, tokenHash []byte) (*domain.InvitationDetail, error) {
+	args := m.Called(ctx, tokenHash)
+	d, _ := args.Get(0).(*domain.InvitationDetail)
+	return d, args.Error(1)
+}
+
+func (m *mockInvitationRepo) ListByWorkspace(ctx context.Context, workspaceID string, limit int) ([]domain.InvitationDetail, error) {
+	args := m.Called(ctx, workspaceID, limit)
+	ds, _ := args.Get(0).([]domain.InvitationDetail)
+	return ds, args.Error(1)
+}
+
+func (m *mockInvitationRepo) ListOpenByEmail(ctx context.Context, email string) ([]domain.InvitationDetail, error) {
+	args := m.Called(ctx, email)
+	ds, _ := args.Get(0).([]domain.InvitationDetail)
+	return ds, args.Error(1)
+}
+
+func (m *mockInvitationRepo) Accept(ctx context.Context, invitationID string, userID uint64, email string) (*domain.Invitation, error) {
+	args := m.Called(ctx, invitationID, userID, email)
+	inv, _ := args.Get(0).(*domain.Invitation)
+	return inv, args.Error(1)
+}
+
+func (m *mockInvitationRepo) Decline(ctx context.Context, invitationID string, userID uint64, email string) error {
+	return m.Called(ctx, invitationID, userID, email).Error(0)
+}
+
+func (m *mockInvitationRepo) Revoke(ctx context.Context, workspaceID, invitationID string, actorUserID uint64) error {
+	return m.Called(ctx, workspaceID, invitationID, actorUserID).Error(0)
+}
+
+func (m *mockInvitationRepo) CountOpenInWorkspace(ctx context.Context, workspaceID string) (int64, error) {
+	args := m.Called(ctx, workspaceID)
+	n, _ := args.Get(0).(int64)
+	return n, args.Error(1)
+}
+
+func (m *mockInvitationRepo) CountSentBySince(ctx context.Context, userID uint64, since time.Time) (int64, error) {
+	args := m.Called(ctx, userID, since)
+	n, _ := args.Get(0).(int64)
+	return n, args.Error(1)
+}
+
+func (m *mockInvitationRepo) CountSentToEmailSince(ctx context.Context, email string, since time.Time) (int64, error) {
+	args := m.Called(ctx, email, since)
+	n, _ := args.Get(0).(int64)
+	return n, args.Error(1)
+}
+
+// --- mock: NotificationRepository ---
+
+type mockNotificationRepo struct{ mock.Mock }
+
+var _ repository.NotificationRepository = (*mockNotificationRepo)(nil)
+
+func (m *mockNotificationRepo) Create(ctx context.Context, n *domain.Notification) error {
+	return m.Called(ctx, n).Error(0)
+}
+
+func (m *mockNotificationRepo) CreateMany(ctx context.Context, ns []domain.Notification) error {
+	return m.Called(ctx, ns).Error(0)
+}
+
+func (m *mockNotificationRepo) ListByUserID(ctx context.Context, userID uint64) ([]domain.Notification, error) {
+	args := m.Called(ctx, userID)
+	ns, _ := args.Get(0).([]domain.Notification)
+	return ns, args.Error(1)
+}
+
+func (m *mockNotificationRepo) MarkRead(ctx context.Context, userID, id uint64) error {
+	return m.Called(ctx, userID, id).Error(0)
+}
+
+func (m *mockNotificationRepo) MarkAllRead(ctx context.Context, userID uint64) error {
+	return m.Called(ctx, userID).Error(0)
+}
+
+func (m *mockNotificationRepo) CountUnread(ctx context.Context, userID uint64) (int64, error) {
+	args := m.Called(ctx, userID)
+	n, _ := args.Get(0).(int64)
+	return n, args.Error(1)
 }

@@ -4461,8 +4461,9 @@ table "invitations" {
     }
     where = "((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL))"
   }
-  # 「自分宛の招待」と「同じ宛先へ 1 日に何件招いたか」を 1 本で引く。email で全ワークスペースを
-  # 横断する唯一の経路。
+  # 「自分宛の招待」（email = ? ORDER BY created_at）と「同じ宛先へ 1 日に何件届けたか」
+  # （email で絞って last_sent_at を見る）を 1 本で引く。email で全ワークスペースを横断する
+  # 唯一の経路。
   index "idx_invitations_email_created" {
     on {
       column = column.email
@@ -4487,13 +4488,14 @@ table "invitations" {
     columns = [column.invited_by_user_id]
     where   = "((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL))"
   }
-  # 「招いた人が 1 日に何件招いたか」を数える。
-  index "idx_invitations_inviter_created" {
+  # 「この人が 1 日に何件届けたか」（発行も再送も数える）。last_sent_* で数えるのは、
+  # created_at だと再送（既存行の UPDATE）が数に入らず、再送で送信数の上限を回れてしまうため。
+  index "idx_invitations_sender_sent" {
     on {
-      column = column.invited_by_user_id
+      column = column.last_sent_by_user_id
     }
     on {
-      column = column.created_at
+      column = column.last_sent_at
       desc   = true
     }
   }

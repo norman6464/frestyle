@@ -50,6 +50,31 @@ type CommentThread struct {
 	UpdatedAt        time.Time
 }
 
+type Invitation struct {
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	Scope            string
+	SpaceID          uuid.NullUUID
+	PageID           uuid.NullUUID
+	Role             string
+	Email            string
+	InviteeName      string
+	TokenHash        []byte
+	InvitedByUserID  int64
+	ExpiresAt        time.Time
+	LastSentAt       time.Time
+	LastSentByUserID int64
+	SendCount        int32
+	AcceptedAt       sql.NullTime
+	AcceptedByUserID sql.NullInt64
+	DeclinedAt       sql.NullTime
+	DeclinedByUserID sql.NullInt64
+	RevokedAt        sql.NullTime
+	RevokedByUserID  sql.NullInt64
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 type Label struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID

@@ -33,6 +33,10 @@ func (s *stubUserRepo) FindDisplayByID(_ context.Context, userID uint64) (*domai
 	return &domain.UserDisplay{UserID: userID, Name: s.user.Name}, nil
 }
 
+func (s *stubUserRepo) FindActiveIDByEmail(context.Context, string) (uint64, bool, error) {
+	return 0, false, nil
+}
+
 func (s *stubUserRepo) ListByWorkspaceID(_ context.Context, _ string) ([]domain.User, error) {
 	return nil, s.err
 }

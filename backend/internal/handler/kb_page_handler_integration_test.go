@@ -51,6 +51,8 @@ type kbEnv struct {
 	txManager        repository.TxManager
 	kbImagePresigner repository.KbImagePresigner
 	labels           repository.LabelRepository
+	invitations      repository.InvitationRepository
+	notifications    repository.NotificationRepository
 	workspaceID      string
 	slug             string
 	spaceID          string
@@ -77,6 +79,8 @@ func newKbEnv(t *testing.T, sqlDB *sql.DB, slug string) *kbEnv {
 		txManager:        persistence.NewTxManager(sqlDB),
 		kbImagePresigner: persistence.NewStubKbImagePresigner("stub-bucket"),
 		labels:           persistence.NewLabelRepository(sqlDB),
+		invitations:      persistence.NewInvitationRepository(sqlDB),
+		notifications:    persistence.NewNotificationRepository(sqlDB),
 		slug:             slug,
 	}
 	env.workspaceID = kbInsertWorkspace(t, sqlDB, slug)
@@ -95,11 +99,11 @@ func (e *kbEnv) as(userID uint64) *kbEnv {
 	})
 	registerKnowledgeBaseRoutesWith(
 		g, e.pages, e.permissions, e.shareLinks, e.provisioner, e.users, e.comments, e.versions, e.views, e.favorites,
-		e.templates, e.suggestions, e.tickets, e.txManager, e.kbImagePresigner, e.labels,
+		e.templates, e.suggestions, e.tickets, e.txManager, e.kbImagePresigner, e.labels, e.invitations, e.notifications,
 	)
-	// 認証不要のルート（共有リンクの検証）は current user を注入しない group に張る。
+	// 認証不要のルート（共有リンクの検証・招待の案内）は current user を注入しない group に張る。
 	// 本番の NewRouter と同じ位置関係にしないと「未認証でも通ること」を確かめられない。
-	registerKnowledgeBasePublicRoutesWith(r.Group("/api/v2"), e.pages, e.permissions, e.shareLinks)
+	registerKnowledgeBasePublicRoutesWith(r.Group("/api/v2"), e.pages, e.permissions, e.shareLinks, e.invitations)
 	clone := *e
 	clone.router = r
 	return &clone

@@ -53,27 +53,30 @@ type kbPermFixture struct {
 	db         *sql.DB
 	perm       repository.KnowledgeBasePermissionRepository
 	shareLinks repository.ShareLinkRepository
-	pages      repository.KnowledgeBaseRepository
-	pageUC     kbUseCases
-	ws         string
-	otherWS    string
-	spaceA     string
-	spaceB     string
-	otherSpc   string
-	alice      uint64
-	bob        uint64
-	carol      uint64
+	// invitations は email 宛の招待。bob 等をメンバーにする経路（invite → acceptInvitation）にも使う。
+	invitations repository.InvitationRepository
+	pages       repository.KnowledgeBaseRepository
+	pageUC      kbUseCases
+	ws          string
+	otherWS     string
+	spaceA      string
+	spaceB      string
+	otherSpc    string
+	alice       uint64
+	bob         uint64
+	carol       uint64
 }
 
 func setupKBPermission(t *testing.T, sqlDB *sql.DB) kbPermFixture {
 	t.Helper()
 	testsupport.TruncateAll(t, sqlDB, kbTables...)
 	f := kbPermFixture{
-		db:         sqlDB,
-		perm:       persistence.NewKnowledgeBasePermissionRepository(sqlDB),
-		shareLinks: persistence.NewShareLinkRepository(sqlDB),
-		pages:      persistence.NewKnowledgeBaseRepository(sqlDB),
-		pageUC:     newKbUseCases(sqlDB),
+		db:          sqlDB,
+		perm:        persistence.NewKnowledgeBasePermissionRepository(sqlDB),
+		shareLinks:  persistence.NewShareLinkRepository(sqlDB),
+		invitations: persistence.NewInvitationRepository(sqlDB),
+		pages:       persistence.NewKnowledgeBaseRepository(sqlDB),
+		pageUC:      newKbUseCases(sqlDB),
 	}
 	f.ws = createWorkspace(t, sqlDB, "perm-main")
 	f.otherWS = createWorkspace(t, sqlDB, "perm-other")
@@ -2003,28 +2006,25 @@ func TestWorkspaceMembership_Integration(t *testing.T) {
 		return status, true
 	}
 
-	t.Run("招待だけではprincipalも権限も発生しない", func(t *testing.T) {
+	t.Run("招待だけでは所属もprincipalも権限も発生しない", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
 
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
+		f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor)
 
-		status, ok := membershipStatus(t, f.ws, f.bob)
-		require.True(t, ok)
-		assert.Equal(t, "invited", status)
+		_, ok := membershipStatus(t, f.ws, f.bob)
+		assert.False(t, ok, "workspace_members に行を作らない（承諾するまで）")
 		_, err := f.perm.FindUserPrincipal(ctx, f.ws, f.bob)
-		assert.ErrorIs(t, err, repository.ErrPrincipalNotFound, "受諾するまで principal は無い")
+		assert.ErrorIs(t, err, repository.ErrPrincipalNotFound, "承諾するまで principal は無い")
 		member, err := f.perm.IsWorkspaceMember(ctx, f.ws, f.bob)
 		require.NoError(t, err)
-		assert.False(t, member, "invited はまだメンバーではない")
+		assert.False(t, member)
 	})
 
-	t.Run("受諾するとprincipalができ既定editorが届き一覧に出る", func(t *testing.T) {
+	t.Run("承諾するとactiveになりprincipalができ招待の役割が届く", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
+		inv := f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor)
 
-		principal, err := f.perm.AcceptWorkspaceInvitation(ctx, f.ws, f.bob)
-		require.NoError(t, err)
-		assert.Equal(t, domain.PrincipalKindUser, principal.Kind)
+		f.acceptInvitation(ctx, t, inv, f.bob)
 
 		status, ok := membershipStatus(t, f.ws, f.bob)
 		require.True(t, ok)
@@ -2032,66 +2032,59 @@ func TestWorkspaceMembership_Integration(t *testing.T) {
 		member, err := f.perm.IsWorkspaceMember(ctx, f.ws, f.bob)
 		require.NoError(t, err)
 		assert.True(t, member)
-
-		page := mustCreatePage(ctx, t, f.pageUC, f.ws, f.spaceA, nil, "受諾後に見えるはず")
-		assert.True(t, f.permFor(ctx, t, page.ID, f.bob).CanEdit, "既定 editor が届く")
-
-		invitations, err := f.perm.ListMyWorkspaceInvitations(ctx, f.bob)
+		principal, err := f.perm.FindUserPrincipal(ctx, f.ws, f.bob)
 		require.NoError(t, err)
-		assert.Empty(t, invitations, "受諾済みは一覧から消える")
+		assert.Equal(t, domain.PrincipalKindUser, principal.Kind)
+
+		page := mustCreatePage(ctx, t, f.pageUC, f.ws, f.spaceA, nil, "承諾後に見えるはず")
+		assert.True(t, f.permFor(ctx, t, page.ID, f.bob).CanEdit, "招待の役割（editor）が届く")
+
+		mine, err := f.invitations.ListOpenByEmail(ctx, f.emailOf(t, f.bob))
+		require.NoError(t, err)
+		assert.Empty(t, mine, "承諾済みは自分宛の一覧から消える")
 	})
 
-	t.Run("受諾は招待されていなければErrWorkspaceInvitationNotFound", func(t *testing.T) {
+	t.Run("辞退すると所属の行は作られず主体も無い", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		_, err := f.perm.AcceptWorkspaceInvitation(ctx, f.ws, f.bob)
-		assert.ErrorIs(t, err, repository.ErrWorkspaceInvitationNotFound)
-	})
+		inv := f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor)
 
-	t.Run("辞退するとleftになりprincipalは作られない", func(t *testing.T) {
-		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
+		require.NoError(t, f.invitations.Decline(ctx, inv.ID, f.bob, f.emailOf(t, f.bob)))
 
-		require.NoError(t, f.perm.DeclineWorkspaceInvitation(ctx, f.ws, f.bob))
-
-		status, ok := membershipStatus(t, f.ws, f.bob)
-		require.True(t, ok)
-		assert.Equal(t, "left", status)
+		_, ok := membershipStatus(t, f.ws, f.bob)
+		assert.False(t, ok, "辞退は workspace_members に何も書かない")
 		_, err := f.perm.FindUserPrincipal(ctx, f.ws, f.bob)
 		assert.ErrorIs(t, err, repository.ErrPrincipalNotFound)
 
-		// 辞退済みの招待をもう一度受諾しようとしても通らない。
-		_, err = f.perm.AcceptWorkspaceInvitation(ctx, f.ws, f.bob)
-		assert.ErrorIs(t, err, repository.ErrWorkspaceInvitationNotFound)
+		// 辞退済みの招待はもう承諾できない。
+		_, err = f.invitations.Accept(ctx, inv.ID, f.bob, f.emailOf(t, f.bob))
+		assert.ErrorIs(t, err, repository.ErrInvitationNotOpen)
 	})
 
-	t.Run("再招待するとleftからinvitedへ戻る", func(t *testing.T) {
+	t.Run("辞退のあとは新しい招待を出して承諾できる", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
-		require.NoError(t, f.perm.DeclineWorkspaceInvitation(ctx, f.ws, f.bob))
+		first := f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor)
+		require.NoError(t, f.invitations.Decline(ctx, first.ID, f.bob, f.emailOf(t, f.bob)))
 
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.carol))
+		second := f.invite(ctx, t, f.bob, f.carol, domain.GrantRoleViewer)
+		assert.NotEqual(t, first.ID, second.ID, "辞退した行は再利用せず新しい行を作る")
 
+		f.acceptInvitation(ctx, t, second, f.bob)
 		status, ok := membershipStatus(t, f.ws, f.bob)
 		require.True(t, ok)
-		assert.Equal(t, "invited", status, "left から invited へ戻る")
-
-		principal, err := f.perm.AcceptWorkspaceInvitation(ctx, f.ws, f.bob)
-		require.NoError(t, err)
-		assert.NotEmpty(t, principal.ID)
+		assert.Equal(t, "active", status)
 	})
 
-	t.Run("既にactiveな相手への招待は何もしない（上書きしない）", func(t *testing.T) {
+	t.Run("既にactiveな相手が承諾しても役割は上書きしない", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
-		principal, err := f.perm.AcceptWorkspaceInvitation(ctx, f.ws, f.bob)
+		f.acceptInvitation(ctx, t, f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor), f.bob)
+		principal, err := f.perm.FindUserPrincipal(ctx, f.ws, f.bob)
+		require.NoError(t, err)
+		// admin へ格上げしてから viewer で招き直して承諾しても admin のまま
+		// （役割は無いときだけ与える。変更は権限画面の操作で行う）。
+		_, err = f.perm.UpsertWorkspaceGrant(ctx, f.ws, principal.ID, domain.GrantRoleAdmin, f.alice)
 		require.NoError(t, err)
 
-		// admin へ格上げしてから再招待しても admin のまま（招待は無いときだけ invited を作る）。
-		require.NoError(t, f.db.QueryRow(
-			`UPDATE workspace_grants SET role = 'admin' WHERE workspace_id = $1 AND principal_id = $2 RETURNING role`,
-			f.ws, principal.ID,
-		).Scan(new(string)))
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.carol))
+		f.acceptInvitation(ctx, t, f.invite(ctx, t, f.bob, f.carol, domain.GrantRoleViewer), f.bob)
 
 		status, ok := membershipStatus(t, f.ws, f.bob)
 		require.True(t, ok)
@@ -2101,33 +2094,37 @@ func TestWorkspaceMembership_Integration(t *testing.T) {
 			`SELECT role FROM workspace_grants WHERE workspace_id = $1 AND principal_id = $2`,
 			f.ws, principal.ID,
 		).Scan(&role))
-		assert.Equal(t, "admin", role, "再招待で admin が editor に落ちない")
+		assert.Equal(t, "admin", role, "招き直しで admin が viewer に落ちない")
 	})
 
 	t.Run("退出すると主体が消え記録はleftのまま残る", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
-		_, err := f.perm.AcceptWorkspaceInvitation(ctx, f.ws, f.bob)
-		require.NoError(t, err)
+		f.acceptInvitation(ctx, t, f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor), f.bob)
 
 		require.NoError(t, f.perm.LeaveWorkspaceMembership(ctx, f.ws, f.bob, f.bob))
 
 		status, ok := membershipStatus(t, f.ws, f.bob)
 		require.True(t, ok, "記録は消えない")
 		assert.Equal(t, "left", status)
-		_, err = f.perm.FindUserPrincipal(ctx, f.ws, f.bob)
+		_, err := f.perm.FindUserPrincipal(ctx, f.ws, f.bob)
 		assert.ErrorIs(t, err, repository.ErrPrincipalNotFound, "principal は消える")
 	})
 
-	t.Run("招待中に取り消してもleftになる", func(t *testing.T) {
+	t.Run("退出した人を招き直して承諾するとleftからactiveへ戻る", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
-		require.NoError(t, f.perm.InviteWorkspaceMember(ctx, f.ws, f.bob, f.alice))
+		f.acceptInvitation(ctx, t, f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor), f.bob)
+		require.NoError(t, f.perm.LeaveWorkspaceMembership(ctx, f.ws, f.bob, f.bob))
 
-		require.NoError(t, f.perm.LeaveWorkspaceMembership(ctx, f.ws, f.bob, f.alice))
+		f.acceptInvitation(ctx, t, f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleViewer), f.bob)
 
 		status, ok := membershipStatus(t, f.ws, f.bob)
 		require.True(t, ok)
-		assert.Equal(t, "left", status)
+		assert.Equal(t, "active", status)
+		var leftAt sql.NullTime
+		require.NoError(t, f.db.QueryRow(
+			`SELECT left_at FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`, f.ws, f.bob,
+		).Scan(&leftAt))
+		assert.False(t, leftAt.Valid, "戻ったら left_at は消える")
 	})
 
 	t.Run("非メンバーの退出は何もしない（冪等）", func(t *testing.T) {
@@ -2137,10 +2134,15 @@ func TestWorkspaceMembership_Integration(t *testing.T) {
 		assert.False(t, ok, "行自体を作らない")
 	})
 
-	t.Run("招待は実在しないユーザーだとErrUserNotFound", func(t *testing.T) {
+	t.Run("承諾は実在しないユーザーだとErrUserNotFound", func(t *testing.T) {
+		// workspace_members.user_id は users への FK。宛先が一致しても、その id の行が
+		// 無ければ制約違反になる — 入力の誤りであってサーバの故障ではない。
 		f := setupKBPermission(t, sqlDB)
-		err := f.perm.InviteWorkspaceMember(ctx, f.ws, 999999999, f.alice)
+		inv := f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor)
+		_, err := f.invitations.Accept(ctx, inv.ID, 999999999, f.emailOf(t, f.bob))
 		assert.ErrorIs(t, err, repository.ErrUserNotFound)
+		_, ok := membershipStatus(t, f.ws, 999999999)
+		assert.False(t, ok)
 	})
 
 	t.Run("ck_workspace_members_statusは4値以外を拒否する", func(t *testing.T) {

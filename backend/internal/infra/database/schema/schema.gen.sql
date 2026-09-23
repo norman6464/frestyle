@@ -209,10 +209,10 @@ CREATE TABLE "invitations" (
 );
 -- Create index "idx_invitations_email_created" to table: "invitations"
 CREATE INDEX "idx_invitations_email_created" ON "invitations" ("email", "created_at" DESC);
--- Create index "idx_invitations_inviter_created" to table: "invitations"
-CREATE INDEX "idx_invitations_inviter_created" ON "invitations" ("invited_by_user_id", "created_at" DESC);
 -- Create index "idx_invitations_open_inviter" to table: "invitations"
 CREATE INDEX "idx_invitations_open_inviter" ON "invitations" ("invited_by_user_id") WHERE ((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL));
+-- Create index "idx_invitations_sender_sent" to table: "invitations"
+CREATE INDEX "idx_invitations_sender_sent" ON "invitations" ("last_sent_by_user_id", "last_sent_at" DESC);
 -- Create index "idx_invitations_workspace_created" to table: "invitations"
 CREATE INDEX "idx_invitations_workspace_created" ON "invitations" ("workspace_id", "created_at" DESC);
 -- Create index "uq_invitations_open_target" to table: "invitations"

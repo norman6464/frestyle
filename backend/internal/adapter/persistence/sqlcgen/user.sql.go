@@ -21,6 +21,25 @@ func (q *Queries) DeleteOidcIdentitiesByUserID(ctx context.Context, userID int64
 	return err
 }
 
+const findActiveUserIDByEmail = `-- name: FindActiveUserIDByEmail :one
+SELECT id FROM users
+WHERE lower(btrim(email, E'\t\n\x0B\x0C\r ')) = $1
+  AND deleted_at IS NULL
+  AND btrim(email, E'\t\n\x0B\x0C\r ') <> ''
+`
+
+// 正規形（domain.NormalizeEmail）の email から、退会していないユーザーの id を引く。
+// 式は uq_users_email_active と同じ（lower + TAB LF VT FF CR SP の 6 文字を btrim）に
+// 揃えてあるので、その索引で引ける。索引は部分索引（deleted_at IS NULL かつ email が空でない）
+// なので、WHERE にも同じ 2 条件を書いて索引の述語を満たしていることを planner に示す。
+// 招待で「相手にアカウントがあるか（あればアプリ内通知も出す）」の判定に使う。無ければ sql.ErrNoRows。
+func (q *Queries) FindActiveUserIDByEmail(ctx context.Context, email string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, findActiveUserIDByEmail, email)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getOidcIdentityOwner = `-- name: GetOidcIdentityOwner :one
 SELECT user_id FROM user_oidc_identities
 WHERE provider = $1 AND subject = $2

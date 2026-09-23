@@ -45,19 +45,21 @@ var (
 
 // kbFixture は fake repository と、本番と同じ wiring で組んだルータの組。
 type kbFixture struct {
-	pages       *kbFakePages
-	perms       *kbFakePerms
-	provisioner *kbFakeProvisioner
-	users       *kbFakeUsers
-	comments    *kbFakeComments
-	versions    *kbFakePageVersions
-	views       *kbFakePageViews
-	favorites   *kbFakePageFavorites
-	templates   *kbFakePageTemplates
-	suggestions *kbFakePageSuggestions
-	presigner   *kbFakeImagePresigner
-	tickets     *ticketFakeRepo
-	router      *gin.Engine
+	pages         *kbFakePages
+	perms         *kbFakePerms
+	provisioner   *kbFakeProvisioner
+	users         *kbFakeUsers
+	comments      *kbFakeComments
+	versions      *kbFakePageVersions
+	views         *kbFakePageViews
+	favorites     *kbFakePageFavorites
+	templates     *kbFakePageTemplates
+	suggestions   *kbFakePageSuggestions
+	presigner     *kbFakeImagePresigner
+	tickets       *ticketFakeRepo
+	invitations   *kbFakeInvitations
+	notifications *kbFakeNotifications
+	router        *gin.Engine
 }
 
 // newKbFixture はワークスペース 2 つ・スペース 1 つ・ページ 3 つ（root / child / dest）の
@@ -115,18 +117,21 @@ func newKbFixture(fallback domain.PagePermission, uid uint64) kbFixture {
 		ID: kbOtherWsLabelID, WorkspaceID: "0198a000-0000-7000-8000-0000000000fe",
 		Name: "別ワークスペース", Color: "#888888",
 	}
+	invitations := newKbFakeInvitations(pages, perms, users)
+	notifications := newKbFakeNotifications()
 	registerKnowledgeBaseRoutesWith(
 		g, pages, perms, perms, provisioner, users, comments, versions, views, favorites, templates, suggestions, tickets, fakeTxManager{}, presigner, tickets,
+		invitations, notifications,
 	)
-	// 認証不要のルート（共有リンクの検証）は current user を注入しない group に張る。
+	// 認証不要のルート（共有リンクの検証・招待の案内）は current user を注入しない group に張る。
 	// 本番の NewRouter と同じく認証 middleware の外側なので、ここでも外側に置かないと
 	// 「未認証でも通ること」を検証できない。
-	registerKnowledgeBasePublicRoutesWith(r.Group("/api/v2"), pages, perms, perms)
+	registerKnowledgeBasePublicRoutesWith(r.Group("/api/v2"), pages, perms, perms, invitations)
 	return kbFixture{
 		pages: pages, perms: perms, provisioner: provisioner, users: users,
 		comments: comments, versions: versions, views: views, favorites: favorites,
 		templates: templates, suggestions: suggestions,
-		presigner: presigner, tickets: tickets, router: r,
+		presigner: presigner, tickets: tickets, invitations: invitations, notifications: notifications, router: r,
 	}
 }
 
@@ -391,9 +396,11 @@ func Test_ナレッジAPI_登録済みルートは全て認可テストの対象
 		// 自分宛の招待（段 2）。認証だけで所属は問わない特殊な経路（受諾するまで
 		// 非メンバーが叩く）ので表にせず、kb_invitation_handler_test.go の
 		// Test_招待API_* が直接叩く。
-		http.MethodGet + " /api/v2/kb/invitations":                         true,
-		http.MethodPost + " /api/v2/kb/invitations/:workspaceSlug/accept":  true,
-		http.MethodPost + " /api/v2/kb/invitations/:workspaceSlug/decline": true,
+		http.MethodGet + " /api/v2/kb/invitations":                        true,
+		http.MethodPost + " /api/v2/kb/invitations/:invitationId/accept":  true,
+		http.MethodPost + " /api/v2/kb/invitations/:invitationId/decline": true,
+		// 招待 URL の案内。未認証で、認可はトークンが担う（kb_invitation_handler_test.go）。
+		http.MethodPost + " /api/v2/kb/invitations/preview": true,
 		// /p/{pageId} の解決。Test_ナレッジAPI_IDだけでの解決 が直接叩く。
 		http.MethodGet + " /api/v2/kb/pages/:pageId": true,
 		// 自分の最近見たページ（段2）。認証だけで所属は問わない特殊な経路（ワークスペース

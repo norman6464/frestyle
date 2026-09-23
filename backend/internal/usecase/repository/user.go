@@ -35,4 +35,8 @@ type UserRepository interface {
 	// UpdateEmail は email だけを更新する。email_verified を確認できたログインで、それまで
 	// email を持たなかったユーザーへ後から付ける場合に呼ぶ。使用済みの値なら ErrEmailTaken。
 	UpdateEmail(ctx context.Context, userID uint64, email string) error
+	// FindActiveIDByEmail は正規形（domain.NormalizeEmail）の email から、退会していないユーザーの
+	// id を引く。無ければ found=false（エラーではない）。招待で「相手に既にアカウントがあるか」を
+	// 知るための口で、users の一意索引 uq_users_email_active と同じ式で引く。
+	FindActiveIDByEmail(ctx context.Context, email string) (id uint64, found bool, err error)
 }
