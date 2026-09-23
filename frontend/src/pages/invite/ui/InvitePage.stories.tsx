@@ -94,13 +94,28 @@ export const トークンが無い: Story = {
   },
 };
 
-/** 通信に失敗した。招待が無いのではなく確かめられていない、と伝えて読み直せる。 */
+/** 通信に失敗した。招待が無いのではなく確かめられていない、と伝え、同じトークンで引き直せる。 */
 export const 確認に失敗した: Story = {
-  decorators: [withHash('#t=story-token'), withApi({})],
+  decorators: [
+    withHash('#t=story-token'),
+    withApi({
+      // 1 回目は失敗（500）、2 回目から案内が返る。
+      '/kb/invitations/preview': (() => {
+        let calls = 0;
+        return () => {
+          calls += 1;
+          if (calls === 1) throw new Error('network down');
+          return pendingPreview;
+        };
+      })(),
+    }),
+  ],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByRole('heading', { name: '招待を確認できませんでした' })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'もう一度読み込む' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'もう一度読み込む' }));
+    // URL からトークンを消したあとでも、持っている値で引き直せる。
+    await expect(await canvas.findByRole('heading', { name: 'ワークスペースへの招待が届いています' })).toBeVisible();
   },
 };
 

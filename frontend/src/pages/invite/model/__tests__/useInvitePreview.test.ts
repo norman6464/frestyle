@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KbRepository } from '@/entities/kb';
 import { useInvitePreview } from '../useInvitePreview';
@@ -50,6 +50,19 @@ describe('useInvitePreview', () => {
     preview.mockRejectedValue(new Error('network'));
     const second = renderHook(() => useInvitePreview());
     await waitFor(() => expect(second.result.current.state.status).toBe('error'));
+  });
+
+  it('通信に失敗したあとは、URL から消した同じトークンで引き直せる', async () => {
+    window.history.replaceState(null, '', '/invite#t=again');
+    preview.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({ status: 'pending', workspaceName: 'Acme 社' });
+
+    const { result } = renderHook(() => useInvitePreview());
+    await waitFor(() => expect(result.current.state.status).toBe('error'));
+    expect(window.location.hash).toBe('');
+
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.state.status).toBe('pending'));
+    expect(preview).toHaveBeenNthCalledWith(2, 'again');
   });
 
   it('ログイン済みの目印 Cookie があれば signedIn', () => {

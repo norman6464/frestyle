@@ -24,12 +24,13 @@ function formatDate(iso: string): string {
  *
  * ここでは参加できない — トークンは案内を見る鍵で、入る鍵ではない。参加は、宛先の
  * メールアドレスで確認済みのアカウントでログインしてから /invitations で行う。
- * ログイン後にその画面へ戻れるよう、ログインへ送る前に戻り先を置いておく（rememberPostLoginPath）。
+ * ログイン後にその画面へ戻れるよう、離れる前に戻り先を置いておく（rememberPostLoginPath）。
+ * 通信に失敗したときは同じトークンで引き直す（読み直すと URL にはもうトークンが無い）。
  */
 export default function InvitePage() {
   useDocumentMeta({ robots: 'noindex, nofollow' });
   const navigate = useNavigate();
-  const { state, signedIn } = useInvitePreview();
+  const { state, signedIn, retry } = useInvitePreview();
 
   const goToLogin = (path: '/login' | '/signup') => {
     rememberPostLoginPath('/invitations');
@@ -47,7 +48,7 @@ export default function InvitePage() {
   if (state.status === 'error') {
     return (
       <AuthLayout title="招待を確認できませんでした" description="通信が切れたか、一時的な不調です。少し待ってからもう一度リンクを開いてください。" header={<PublicHeader />}>
-        <Button variant="secondary" fullWidth onClick={() => window.location.reload()} className="min-h-12">
+        <Button variant="secondary" fullWidth onClick={retry} className="min-h-12">
           もう一度読み込む
         </Button>
       </AuthLayout>
@@ -93,7 +94,17 @@ export default function InvitePage() {
         </dl>
         {signedIn ? (
           <>
-            <Button variant="primary" fullWidth onClick={() => navigate('/invitations')} className="min-h-12">
+            <Button
+              variant="primary"
+              fullWidth
+              onClick={() => {
+                // 目印 Cookie が残っていてもセッションが切れていることはある。その場合 Protected が
+                // /login へ送るので、戻り先を置いてから移る（ログインし直したら一覧へ戻る）。
+                rememberPostLoginPath('/invitations');
+                navigate('/invitations');
+              }}
+              className="min-h-12"
+            >
               招待を確認して参加する
               <FsIcon name="arrow-right" className="h-4 w-4" />
             </Button>

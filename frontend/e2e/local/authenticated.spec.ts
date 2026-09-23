@@ -227,12 +227,12 @@ test.describe('届いている招待（/invitations）', () => {
     await expect(page).toHaveURL(/\/kb\/spaces\?workspace=acme/);
   });
 
-  test('招待リンクからログインした後は /invitations へ戻る', async ({ page }) => {
+  test('ログイン済みで招待リンクを開くと、案内から一覧へ進める', async ({ page }) => {
+    // ログイン後に戻る経路そのもの（consumePostLoginPath）はここでは通らない — ログインは
+    // 発行者側の画面で、この E2E では再現できない。戻り先の保存と消費は単体テストが持つ。
     await mockAuthenticated(page, { '**/api/v2/kb/invitations': [] });
-    // /invite が置く「ログイン後の戻り先」を先に置いておく（ログイン自体は発行者側の画面なので再現しない）。
-    // /invite は認証の外側にあり、ログイン済みかは目印 Cookie（fs_signed_in）で見るので、それも置く。
+    // /invite は認証の外側にあり、ログイン済みかは目印 Cookie（fs_signed_in）で見るので、それを置く。
     await page.addInitScript(() => {
-      sessionStorage.setItem('fs.postLoginPath', '/invitations');
       document.cookie = 'fs_signed_in=1; path=/';
     });
     await page.route('**/api/v2/kb/invitations/preview', (route) =>
