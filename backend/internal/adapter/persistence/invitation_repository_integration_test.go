@@ -371,7 +371,7 @@ func TestInvitationRepository_Integration(t *testing.T) {
 		assert.Equal(t, int64(1), n, "期限切れは未決の件数に入らない")
 		sent, err := f.invitations.CountSentBySince(ctx, f.alice, time.Now().Add(-time.Hour))
 		require.NoError(t, err)
-		assert.Equal(t, int64(3), sent)
+		assert.Equal(t, int64(2), sent, "期限切れの行は last_sent_at も 8 日前へ動かしたので数に入らない")
 		toBob, err := f.invitations.CountSentToEmailSince(ctx, f.emailOf(t, f.bob), time.Now().Add(-time.Hour))
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), toBob, "全ワークスペース横断で数える")
