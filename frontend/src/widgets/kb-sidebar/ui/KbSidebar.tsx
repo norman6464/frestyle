@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { NameCreateForm, FsIcon } from '@/shared/ui';
 import { emitKbTreeEvent, type KbDropTarget, KbWorkspaceSwitcher } from '@/entities/kb';
@@ -74,6 +74,11 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
 
   const space = spaces.find((s) => s.id === spaceId);
   const workspaceCanManage = workspaces.find((w) => w.slug === activeSlug)?.canManage ?? false;
+  // メンバーと招待は同じ見出しの 2 タブなので、どちらにいても入口を選択中として見せる。
+  const { pathname } = useLocation();
+  const workspaceAdminActive =
+    activeSlug !== null &&
+    (pathname === `/kb/${activeSlug}/members` || pathname === `/kb/${activeSlug}/invitations`);
 
   // ワークスペース作成は入口が 2 つ（切替ポップアップ / 所属 0 件の常設フォーム）ある。
   // 作成 → 失敗の知らせ → /kb へ戻る、を 1 つに集約して入口ごとの差を作らない。
@@ -184,6 +189,29 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
         }}
         onManageMembers={(slug) => navigate(`/kb/${slug}/members`)}
       />
+
+      {/*
+        ワークスペース単位の管理への固定入口。切替の一覧に出るホバーのアイコンだけだと、
+        触るまで存在が分からず「どこから招くのか」にたどり着けない（実際に迷った）。
+        押せる人にだけ見せたいので canManage のときだけ出す。メンバーと招待はタブで
+        行き来するので、どちらを開いていても選択中として見せる。
+      */}
+      {workspaceCanManage && activeSlug && (
+        <nav aria-label="ワークスペースの管理" className="mb-2 mt-0.5">
+          <Link
+            to={`/kb/${activeSlug}/members`}
+            aria-current={workspaceAdminActive ? 'page' : undefined}
+            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+              workspaceAdminActive
+                ? 'bg-brand-500/10 font-medium text-brand-700'
+                : 'text-[var(--color-text-tertiary)] hover:bg-surface-2'
+            }`}
+          >
+            <FsIcon name="users" className="h-4 w-4 shrink-0" />
+            <span className="truncate">メンバーと招待</span>
+          </Link>
+        </nav>
+      )}
 
       {workspacesLoading && (
         <p className="px-2 py-2 text-xs text-[var(--color-text-muted)]">読み込み中…</p>

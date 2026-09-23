@@ -24,7 +24,7 @@ function StatusBadge({ invitation }: { invitation: KbInvitation }) {
 }
 
 /**
- * KbInvitationsSection はメンバー管理画面の「招待中」。未決（承諾待ち・期限切れ）を表に出し、
+ * KbInvitationsSection は招待の画面の「招待中」。未決（承諾待ち・期限切れ）を表に出し、
  * 結果が出たもの（承諾・辞退・取り消し）は畳んだ「過去の招待」に置く。
  *
  * 招待リンクはここには出ない — トークンは発行・再送の応答でしか返らないため。
@@ -43,7 +43,7 @@ export default function KbInvitationsSection({
   const history = invitations.filter((inv) => inv.status !== 'pending' && inv.status !== 'expired');
 
   return (
-    <section aria-labelledby="kb-invitations-heading" className="mt-10">
+    <section aria-labelledby="kb-invitations-heading">
       <div className="mb-3">
         <h2 id="kb-invitations-heading" className="text-base font-semibold text-[var(--color-text-primary)]">
           招待中 <span className="font-normal text-[var(--color-text-muted)]">{open.length}件</span>
