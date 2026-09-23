@@ -103,6 +103,31 @@ export const KB_API = {
    */
   adminMembers: (workspaceSlug: string) =>
     `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/admin/members`,
+  /**
+   * GET(一覧) / POST(email 宛に発行) — /api/v2/kb/workspaces/:slug/invitations（admin だけ）。
+   * 同じ宛先に未決の招待があれば POST は再送になる。応答の token はこのときしか返らない。
+   */
+  invitations: (workspaceSlug: string) =>
+    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/invitations`,
+  /** DELETE(取消・冪等) — /api/v2/kb/workspaces/:slug/invitations/:invitationId（admin だけ） */
+  invitation: (workspaceSlug: string, invitationId: string) =>
+    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/invitations/${encodeURIComponent(invitationId)}`,
+  /** POST(再送) — .../invitations/:invitationId/resend。トークンが差し替わり、前のリンクは使えなくなる */
+  invitationResend: (workspaceSlug: string, invitationId: string) =>
+    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/invitations/${encodeURIComponent(invitationId)}/resend`,
+  /**
+   * POST — /api/v2/kb/invitations/preview。**未認証で叩く**。{token} を本文で送り、案内
+   * （誰から・どこへ・どの役割で・どの宛先へ）が返る。使えない招待は 200 の {status:"unavailable"}
+   */
+  invitationPreview: `${API_V2}/kb/invitations/preview`,
+  /** GET — /api/v2/kb/invitations。自分宛（確認済み email 宛）の未決。email が無ければ 403 */
+  myInvitations: `${API_V2}/kb/invitations`,
+  /** POST — /api/v2/kb/invitations/:invitationId/accept。承諾すると所属と役割ができる */
+  myInvitationAccept: (invitationId: string) =>
+    `${API_V2}/kb/invitations/${encodeURIComponent(invitationId)}/accept`,
+  /** POST — /api/v2/kb/invitations/:invitationId/decline */
+  myInvitationDecline: (invitationId: string) =>
+    `${API_V2}/kb/invitations/${encodeURIComponent(invitationId)}/decline`,
   /** DELETE(削除) — /api/v2/kb/workspaces/:slug/members/:userId。冪等 */
   member: (workspaceSlug: string, userId: number) =>
     `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/members/${encodeURIComponent(userId)}`,

@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useState } from 'react';
+import { consumePostLoginPath } from '@/shared/lib/postLoginPath';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '@/shared/lib/store';
 import { setAuthData } from '@/entities/user';
@@ -61,7 +62,7 @@ export function useSignupPage(): SignupPageState {
       await authRepository.login();
       dispatch(setAuthData());
       setAuthHint();
-      navigate('/');
+      navigate(consumePostLoginPath() ?? '/');
     } catch (err) {
       setSessionError(classifyApiError(err, 'アカウントの作成に失敗しました。'));
     }

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { consumePostLoginPath } from '@/shared/lib/postLoginPath';
 import { useAppDispatch } from '@/shared/lib/store';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 
@@ -84,7 +85,7 @@ export function useLoginCallback() {
       .then(() => {
         dispatch(setAuthData());
         setAuthHint();
-        navigate('/');
+        navigate(consumePostLoginPath() ?? '/');
       })
       .catch((err) => {
         const toast =

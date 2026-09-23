@@ -163,6 +163,20 @@ describe('useLoginCallback', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 
+  it('戻り先（fs.postLoginPath）が置いてあれば、ホームではなくそこへ戻り、使い切る', async () => {
+    // 招待リンク（/invite）がログインへ送る前に置く値。外部 URL は置けない（postLoginPath の単体テスト）。
+    sessionStorage.setItem('fs.postLoginPath', '/invitations');
+    mockSearchParams = 'code=test-code&state=my-state';
+    vi.mocked(authRepository.login).mockResolvedValue({ message: 'ログインしました。' });
+
+    await act(async () => {
+      renderHook(() => useLoginCallback());
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith('/invitations');
+    expect(sessionStorage.getItem('fs.postLoginPath')).toBeNull();
+  });
+
   it('トークン交換に失敗したら案内つきでログイン画面へ戻す', async () => {
     mockSearchParams = 'code=test-code&state=my-state';
     mockExchangeCodeForToken.mockRejectedValue(new Error('token endpoint returned 400'));

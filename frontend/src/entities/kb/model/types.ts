@@ -346,6 +346,80 @@ export interface KbAdminWorkspaceMember {
   role?: KbGrantRole;
 }
 
+/** 招待の状態。サーバーの時刻で導いた値（expired は未決のまま期限を過ぎたもの。再送で pending に戻る）。 */
+export type KbInvitationStatus = 'pending' | 'expired' | 'accepted' | 'declined' | 'revoked';
+
+/**
+ * email 宛の招待 1 件（admin の一覧・自分宛の一覧・発行直後で共通）。
+ *
+ * トークンは含まない — 招待 URL のトークンは発行・再送の応答（KbIssuedInvitation）でしか返らず、
+ * 一覧からリンクを取り出す手段は無い（DB にはハッシュしか残らないため）。
+ */
+export interface KbInvitation {
+  id: string;
+  /** 場所の種類。いま画面が扱うのは workspace だけ。 */
+  scope: 'workspace' | 'space' | 'page';
+  spaceId?: string;
+  pageId?: string;
+  /** 承諾したときにその場所へ張られる役割。 */
+  role: KbGrantRole;
+  /** 宛先（正規形。小文字・前後の空白なし）。 */
+  email: string;
+  /** 招いた人が付けた相手の表示名。無ければ空文字。 */
+  inviteeName: string;
+  status: KbInvitationStatus;
+  workspaceSlug: string;
+  workspaceName: string;
+  invitedByUserId: number;
+  /** 招いた人の表示名。退会していれば空文字。 */
+  inviterName: string;
+  expiresAt: string;
+  lastSentAt: string;
+  sendCount: number;
+  acceptedAt?: string;
+  declinedAt?: string;
+  revokedAt?: string;
+  createdAt: string;
+}
+
+/** 発行・再送の直後だけ返る形。token は平文で、この応答の外には残らない。 */
+export interface KbIssuedInvitation {
+  invitation: KbInvitation;
+  token: string;
+}
+
+/** POST /kb/workspaces/:slug/invitations の入力。 */
+export interface KbInviteByEmailInput {
+  email: string;
+  /** 相手の表示名（任意）。 */
+  name?: string;
+  role: KbGrantRole;
+}
+
+/**
+ * 招待リンクを開いた人（未ログイン）に見せる案内。status が unavailable のときは他の項目が無い
+ * （無い・期限切れ・結果済みのどれなのかは返らない）。
+ */
+export interface KbInvitationPreview {
+  status: 'pending' | 'unavailable';
+  workspaceName?: string;
+  inviterName?: string;
+  inviteeName?: string;
+  /** 宛先。参加にはこのアドレスで確認済みのアカウントが要る、と案内するために返る。 */
+  email?: string;
+  role?: KbGrantRole;
+  scope?: 'workspace' | 'space' | 'page';
+  expiresAt?: string;
+}
+
+/** 承諾直後の返却形。画面はこれで入った先へ移動する。 */
+export interface KbAcceptedInvitation {
+  workspaceSlug: string;
+  scope: 'workspace' | 'space' | 'page';
+  spaceId?: string;
+  pageId?: string;
+}
+
 /**
  * コメントの投稿者・解決者などの参照 1 件。
  *
