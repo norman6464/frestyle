@@ -59,6 +59,7 @@ type kbFixture struct {
 	tickets       *ticketFakeRepo
 	invitations   *kbFakeInvitations
 	notifications *kbFakeNotifications
+	mailer        *kbFakeMailer
 	router        *gin.Engine
 }
 
@@ -119,9 +120,10 @@ func newKbFixture(fallback domain.PagePermission, uid uint64) kbFixture {
 	}
 	invitations := newKbFakeInvitations(pages, perms, users)
 	notifications := newKbFakeNotifications()
+	mailer := &kbFakeMailer{}
 	registerKnowledgeBaseRoutesWith(
 		g, pages, perms, perms, provisioner, users, comments, versions, views, favorites, templates, suggestions, tickets, fakeTxManager{}, presigner, tickets,
-		invitations, notifications,
+		invitations, notifications, mailer, "http://localhost:5173",
 	)
 	// 認証不要のルート（共有リンクの検証・招待の案内）は current user を注入しない group に張る。
 	// 本番の NewRouter と同じく認証 middleware の外側なので、ここでも外側に置かないと
@@ -131,7 +133,7 @@ func newKbFixture(fallback domain.PagePermission, uid uint64) kbFixture {
 		pages: pages, perms: perms, provisioner: provisioner, users: users,
 		comments: comments, versions: versions, views: views, favorites: favorites,
 		templates: templates, suggestions: suggestions,
-		presigner: presigner, tickets: tickets, invitations: invitations, notifications: notifications, router: r,
+		presigner: presigner, tickets: tickets, invitations: invitations, notifications: notifications, mailer: mailer, router: r,
 	}
 }
 

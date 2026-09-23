@@ -93,6 +93,7 @@ func (h *KnowledgeBaseInvitationHandler) Invite(c *gin.Context) {
 	c.JSON(http.StatusCreated, dto.KbIssuedInvitationResponse{
 		Invitation: dto.KbInvitationFromDomain(*out.Invitation, time.Now()),
 		Token:      out.Token,
+		MailStatus: string(out.MailStatus),
 	})
 }
 
@@ -136,6 +137,7 @@ func (h *KnowledgeBaseInvitationHandler) Resend(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.KbIssuedInvitationResponse{
 		Invitation: dto.KbInvitationFromDomain(*out.Invitation, time.Now()),
 		Token:      out.Token,
+		MailStatus: string(out.MailStatus),
 	})
 }
 

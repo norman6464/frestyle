@@ -44,6 +44,7 @@ export type {
   KbInvitation,
   KbInvitationStatus,
   KbIssuedInvitation,
+  KbInvitationMailStatus,
   KbInviteByEmailInput,
   KbInvitationPreview,
   KbAcceptedInvitation,

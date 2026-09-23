@@ -269,6 +269,7 @@ function invitationApi(rows: KbInvitation[]): ApiStubs {
     '/kb/workspaces/acme/invitations/inv-1/resend': () => ({
       invitation: invitation({ sendCount: 2, lastSentAt: '2026-09-23T01:00:00Z' }),
       token: 'resent-token-xyz',
+      mailStatus: 'sent',
     }),
     '/kb/workspaces/acme/invitations/inv-1': () => {
       state.rows = state.rows.map((row) => (row.id === 'inv-1' ? { ...row, status: 'revoked', revokedAt: '2026-09-23T02:00:00Z' } : row));
@@ -279,7 +280,7 @@ function invitationApi(rows: KbInvitation[]): ApiStubs {
         const body = JSON.parse(String(config.data)) as { email: string; name?: string; role: string };
         const created = invitation({ id: 'inv-new', email: body.email.trim().toLowerCase(), inviteeName: body.name ?? '', role: body.role as KbInvitation['role'] });
         state.rows = [created, ...state.rows];
-        return { invitation: created, token: 'fresh-token-abc' };
+        return { invitation: created, token: 'fresh-token-abc', mailStatus: 'sent' };
       }
       return state.rows;
     },
@@ -301,7 +302,7 @@ export const 招待を作ってリンクを受け取る: Story = {
     await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: '役割' }), 'viewer');
     await userEvent.click(within(dialog).getByRole('button', { name: '招待を作る' }));
 
-    await expect(await screen.findByRole('heading', { name: 'hanako@example.com 宛の招待リンクを作りました' })).toBeVisible();
+    await expect(await screen.findByRole('heading', { name: 'hanako@example.com に招待を送りました' })).toBeVisible();
     await expect(screen.getByRole('textbox', { name: '招待リンク' })).toHaveDisplayValue(/\/invite#t=fresh-token-abc$/);
     await expect(screen.getByRole('note')).toHaveTextContent('閉じると表示できません');
     // 閉じると一覧に承諾待ちとして並ぶ（リンクは二度と出ない）。
@@ -398,5 +399,52 @@ export const メールアドレスの形が違う: Story = {
       await expect(email).toHaveAttribute('aria-invalid', 'true');
     });
     await expect(within(dialog).getByText(/メールアドレスの形式を確認してください/)).toBeVisible();
+  },
+};
+
+/** メールを送れなかった。招待はできているので、リンクを渡すか再送する案内を出す。 */
+export const メールを送れなかった: Story = {
+  decorators: [
+    withApi({
+      '/kb/workspaces/acme/invitations': (config: { method?: string }) => {
+        if (config.method === 'post') return { invitation: invitation({ id: 'inv-new' }), token: 'fresh-token-abc', mailStatus: 'failed' };
+        return [];
+      },
+      ...baseApi(),
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText('承諾待ちの招待はありません。');
+    await userEvent.click(canvas.getByRole('button', { name: 'メンバーを招く' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'メールアドレス' }), 'taro@example.com');
+    await userEvent.click(within(dialog).getByRole('button', { name: '招待を作る' }));
+    await expect(await screen.findByRole('heading', { name: 'taro@example.com 宛の招待リンクを作りました' })).toBeVisible();
+    await expect(screen.getByRole('alert')).toHaveTextContent('メールを送れませんでした');
+    await expect(screen.getByRole('textbox', { name: '招待リンク' })).toHaveDisplayValue(/fresh-token-abc$/);
+  },
+};
+
+/** メールを送らない運用（backend が mailStatus を返さない、または disabled）。従来の文言。 */
+export const メールを送らない運用: Story = {
+  decorators: [
+    withApi({
+      '/kb/workspaces/acme/invitations': (config: { method?: string }) => {
+        if (config.method === 'post') return { invitation: invitation({ id: 'inv-new' }), token: 'fresh-token-abc' };
+        return [];
+      },
+      ...baseApi(),
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText('承諾待ちの招待はありません。');
+    await userEvent.click(canvas.getByRole('button', { name: 'メンバーを招く' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'メールアドレス' }), 'taro@example.com');
+    await userEvent.click(within(dialog).getByRole('button', { name: '招待を作る' }));
+    await expect(await screen.findByRole('heading', { name: 'taro@example.com 宛の招待リンクを作りました' })).toBeVisible();
+    await expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   },
 };

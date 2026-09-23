@@ -48,6 +48,17 @@ services:
       # の 3 箇所が同時にずれ、気づかないまま全員 401 になる。変えるなら 3 箇所を揃えて変えること。
       - '127.0.0.1:5556:5556'
 
+  # ローカル開発用のメール受け（Mailpit）。backend が出す招待メールをここで受け、ブラウザ
+  # （http://localhost:8025）で本文と招待リンクを見る。外へは一切送らない。
+  # 本番は Amazon SES（MAIL_PROVIDER=ses）で、この SMTP 経路は使わない。
+  mail:
+    image: axllent/mailpit:v1.28.0
+    container_name: frestyle-local-mail
+    restart: unless-stopped
+    ports:
+      # 画面だけをループバックに配る。SMTP（1025）はコンテナ間だけで足りるので出さない。
+      - '127.0.0.1:${LOCAL_MAIL_UI_PORT:-8025}:8025'
+
   backend:
     build:
       context: ./backend
@@ -73,6 +84,13 @@ services:
       OIDC_ISSUER: ${OIDC_ISSUER:-http://localhost:5556/dex}
       OIDC_JWKS_URI: ${OIDC_JWKS_URI:-http://idp:5556/dex/keys}
       OIDC_AUDIENCES: ${OIDC_AUDIENCES:-frestyle-local}
+      # ===== 招待メール =====
+      # ローカルは Mailpit（上の mail サービス）へ SMTP で流す。.env で MAIL_PROVIDER=none にすれば
+      # 送らない（リンクを手で渡す運用）。承諾 URL の origin は APP_BASE_URL。
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-smtp}
+      MAIL_SMTP_ADDR: ${MAIL_SMTP_ADDR:-mail:1025}
+      MAIL_FROM: ${MAIL_FROM:-FreStyle <no-reply@frestyle.local>}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:5173}
     ports:
       # db と同じくループバックにだけ配る。frontend の dev server もホスト上で動くので
       # これで足りる。LAN 内の実機から叩きたいときだけ docker-compose.override.yml

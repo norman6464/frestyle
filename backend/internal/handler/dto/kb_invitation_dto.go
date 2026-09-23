@@ -86,6 +86,9 @@ func KbInvitationsFromDomain(ds []domain.InvitationDetail, now time.Time) []KbIn
 type KbIssuedInvitationResponse struct {
 	Invitation KbInvitationResponse `json:"invitation"`
 	Token      string               `json:"token" example:"3q2-7uMBEjRWeJq83vzMzQ"`
+	// MailStatus は招待メールの結果。sent = 送った、failed = 送れなかった（リンクを渡すか再送）、
+	// disabled = メールを送らない運用（リンクを渡す）。どの値でも招待は作られている。
+	MailStatus string `json:"mailStatus" example:"sent"`
 }
 
 // KbInvitationPreviewRequest は POST /kb/invitations/preview の入力。トークンをクエリや path では

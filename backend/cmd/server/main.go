@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/infra/config"
 	"github.com/norman6464/frestyle/backend/internal/infra/database"
 	"github.com/norman6464/frestyle/backend/internal/infra/logging"
+	"github.com/norman6464/frestyle/backend/internal/infra/mail"
 	"github.com/norman6464/frestyle/backend/internal/infra/oidc"
 )
 
@@ -62,7 +64,14 @@ func main() {
 		fatal("oidc verifier init failed", err)
 	}
 
-	r := handler.NewRouter(sqlDB, cfg, verifier)
+	// 招待メールの送り先も起動時に組み立てる。設定の過不足は config.Load が止めているので、
+	// ここで落ちるのは AWS の設定読み込み等の環境の問題。
+	mailer, err := mail.New(context.Background(), cfg.Mail)
+	if err != nil {
+		fatal("mailer init failed", err)
+	}
+
+	r := handler.NewRouter(sqlDB, cfg, verifier, mailer)
 	addr := ":" + cfg.ServerPort
 	srv := &http.Server{
 		Addr:              addr,

@@ -15,6 +15,7 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/adapter/persistence"
 	"github.com/norman6464/frestyle/backend/internal/domain"
 	"github.com/norman6464/frestyle/backend/internal/handler/middleware"
+	"github.com/norman6464/frestyle/backend/internal/infra/mail"
 	"github.com/norman6464/frestyle/backend/internal/testsupport"
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 	"github.com/stretchr/testify/assert"
@@ -100,6 +101,7 @@ func (e *kbEnv) as(userID uint64) *kbEnv {
 	registerKnowledgeBaseRoutesWith(
 		g, e.pages, e.permissions, e.shareLinks, e.provisioner, e.users, e.comments, e.versions, e.views, e.favorites,
 		e.templates, e.suggestions, e.tickets, e.txManager, e.kbImagePresigner, e.labels, e.invitations, e.notifications,
+		mail.Disabled{}, "http://localhost:5173",
 	)
 	// 認証不要のルート（共有リンクの検証・招待の案内）は current user を注入しない group に張る。
 	// 本番の NewRouter と同じ位置関係にしないと「未認証でも通ること」を確かめられない。
