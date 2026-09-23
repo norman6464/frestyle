@@ -150,6 +150,17 @@ export const 招待の一覧と再送と取消: Story = {
   ],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // 書き込みのあとは一覧を引き直す（その間は Loading に差し替わる）ので、表も行も
+    // 掴んだままにせず操作の直前に引き直す。前の DOM を押しても何も起きない。
+    const rowOf = async (email: string): Promise<HTMLElement> => {
+      const table = await canvas.findByRole('table', { name: '承諾待ちの招待' });
+      const row = within(table)
+        .getAllByRole('row')
+        .find((candidate) => within(candidate).queryByText(email) !== null);
+      if (!row) throw new Error(`承諾待ちの招待に ${email} の行が無い`);
+      return row;
+    };
+
     const table = await canvas.findByRole('table', { name: '承諾待ちの招待' });
     await expect(within(table).getByText('taro@example.com')).toBeVisible();
     await expect(within(table).getByText('期限切れ')).toBeVisible();
@@ -158,14 +169,13 @@ export const 招待の一覧と再送と取消: Story = {
     await expect(canvas.getByText('done@example.com')).toBeVisible();
 
     // 再送: 新しいリンクだけがダイアログに出る（「もう 1 人招く」は出ない）。
-    const rows = within(table).getAllByRole('row');
-    await userEvent.click(within(rows[1]).getByRole('button', { name: '再送' }));
+    await userEvent.click(within(await rowOf('taro@example.com')).getByRole('button', { name: '再送' }));
     await expect(await screen.findByRole('textbox', { name: '招待リンク' })).toHaveDisplayValue(/resent-token-xyz$/);
     await expect(screen.queryByRole('button', { name: 'もう 1 人招く' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '閉じる' }));
 
     // 取消: 確認を経て表から消え、過去の招待へ移る。
-    await userEvent.click(within(rows[1]).getByRole('button', { name: '取り消す' }));
+    await userEvent.click(within(await rowOf('taro@example.com')).getByRole('button', { name: '取り消す' }));
     await userEvent.click(await screen.findByRole('button', { name: '取り消す' }));
     await waitFor(async () => {
       await expect(within(canvas.getByRole('table', { name: '承諾待ちの招待' })).queryByText('taro@example.com')).not.toBeInTheDocument();
