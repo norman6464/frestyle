@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/norman6464/frestyle/backend/internal/domain"
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
@@ -134,12 +135,32 @@ var kbPermissionEndpoints = []kbPermissionEndpoint{
 		okStatus: http.StatusOK,
 	},
 	{
-		// 段 2: 招待だけで principal・権限は発生しない（本人が受諾するまで）ため、
-		// 返す主体が無くなり 204 に変わった（それまでは 200 + 主体の JSON）。
-		name: "メンバー招待", method: http.MethodPut,
-		pattern:  "/api/v2/kb/workspaces/:workspaceSlug/members/:userId",
-		path:     "/api/v2/kb/workspaces/{slug}/members/" + strconv.FormatUint(kbSecondUserID, 10),
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/members/" + kbMissingUserID},
+		// 人を招く入口は email 宛の招待（users.id を受ける口は無い）。missing は持たない — 宛先の
+		// 実在は応答で分からない（無いアドレスにも 201 で招待が作られる）。
+		name: "email招待", method: http.MethodPost,
+		pattern:  "/api/v2/kb/workspaces/:workspaceSlug/invitations",
+		path:     "/api/v2/kb/workspaces/{slug}/invitations",
+		body:     `{"email":"taro@example.com","role":"editor"}`,
+		okStatus: http.StatusCreated,
+	},
+	{
+		name: "招待一覧", method: http.MethodGet,
+		pattern:  "/api/v2/kb/workspaces/:workspaceSlug/invitations",
+		path:     "/api/v2/kb/workspaces/{slug}/invitations",
+		okStatus: http.StatusOK,
+	},
+	{
+		name: "招待の再送", method: http.MethodPost,
+		pattern:  "/api/v2/kb/workspaces/:workspaceSlug/invitations/:invitationId/resend",
+		path:     "/api/v2/kb/workspaces/{slug}/invitations/{invitation}/resend",
+		missing:  []string{"/api/v2/kb/workspaces/{slug}/invitations/" + kbMissingID + "/resend"},
+		okStatus: http.StatusOK,
+	},
+	{
+		name: "招待の取消", method: http.MethodDelete,
+		pattern:  "/api/v2/kb/workspaces/:workspaceSlug/invitations/:invitationId",
+		path:     "/api/v2/kb/workspaces/{slug}/invitations/{invitation}",
+		missing:  []string{"/api/v2/kb/workspaces/{slug}/invitations/" + kbMissingID},
 		okStatus: http.StatusNoContent,
 	},
 	{
@@ -215,6 +236,8 @@ type kbPermFixture struct {
 	shareLinkID string
 	// shareToken は shareLinkID の平文トークン（検証経路の入力）。
 	shareToken string
+	// invitationID は発行済み（未決）の email 宛の招待。再送・取消の対象。
+	invitationID string
 }
 
 // newKbPermFixture は uid の立場を作って権限操作 API を叩ける環境を返す。
@@ -257,6 +280,16 @@ func newKbPermFixture(t *testing.T, uid uint64, role *domain.GrantRole) kbPermFi
 	})
 	require.NoError(t, err)
 	out.shareLinkID = link.ID
+
+	invitation, err := f.invitations.Upsert(ctx, repository.InvitationWrite{
+		WorkspaceID: kbWorkspaceID, Scope: domain.InvitationScopeWorkspace, Role: domain.GrantRoleEditor,
+		Email: "pending@example.com", TokenHash: kbTestTokenHash("invitation-token-for-test"),
+		ActorUserID: kbUserID, ExpiresAt: time.Now().Add(7 * 24 * time.Hour), SentBefore: time.Now().Add(-10 * time.Minute),
+	})
+	require.NoError(t, err)
+	// 再送の間隔（10 分）を空けた状態にしておく（admin の再送が 429 で落ちないように）。
+	f.invitations.rows[invitation.ID].LastSentAt = time.Now().Add(-time.Hour)
+	out.invitationID = invitation.ID
 	return out
 }
 
@@ -275,6 +308,7 @@ func (f kbPermFixture) fill(s string) string {
 		"{target}", f.targetPrincipalID,
 		"{group}", f.groupPrincipalID,
 		"{link}", f.shareLinkID,
+		"{invitation}", f.invitationID,
 	).Replace(s)
 }
 
@@ -721,17 +755,16 @@ func Test_ナレッジ権限API_同じ存在しないトークンでも上限の
 	}
 }
 
-func Test_ナレッジ権限API_メンバー招待はユーザー単位で頭打ちになる(t *testing.T) {
-	// この口は users.id をそのまま受け取り、204 と 404 の差で実在が分かる
-	// （招待だけでは principal・権限は発生しない。段 2）。
-	// ワークスペースは誰でも作れて作った本人が admin になるので、放っておくと
-	// 全ログインユーザーが使えるユーザー ID の走査器になる。
+func Test_ナレッジ権限API_email招待はユーザー単位で頭打ちになる(t *testing.T) {
+	// ワークスペースは誰でも作れて作った本人が admin になるので、放っておくと全ログインユーザーが
+	// 好きな宛先へ招待を撃てる口になる（1 日の件数上限は usecase が別に持つ。ここは連打の速度）。
 	// 鍵は検証済み JWT 由来のユーザー ID なので、XFF を変えても抜けられない。
 	f := newKbPermFixture(t, kbUserID, kbGrantRolePtr(domain.GrantRoleAdmin))
-	base := "/api/v2/kb/workspaces/" + kbWorkspaceSlug + "/members/"
 
-	call := func(userID int, xff string) int {
-		req := httptest.NewRequest(http.MethodPut, base+strconv.Itoa(userID), nil)
+	call := func(i int, xff string) int {
+		body := `{"email":"burst-` + strconv.Itoa(i) + `@example.com","role":"viewer"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/v2/kb/workspaces/"+kbWorkspaceSlug+"/invitations", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		req.RemoteAddr = "198.51.100.7:1234"
 		req.Header.Set("X-Forwarded-For", xff)
 		w := httptest.NewRecorder()
@@ -739,9 +772,9 @@ func Test_ナレッジ権限API_メンバー招待はユーザー単位で頭打
 		return w.Code
 	}
 
-	for i := 0; i < kbAddMemberBurst; i++ {
-		require.NotEqual(t, http.StatusTooManyRequests, call(1000+i, "203.0.113."+strconv.Itoa(i)),
-			"burst 内は通る: %d 回目", i+1)
+	for i := 0; i < kbInviteByEmailBurst; i++ {
+		require.Equal(t, http.StatusCreated, call(i, "203.0.113."+strconv.Itoa(i)),
+			"burst 内は通る（招待が作られる）: %d 回目", i+1)
 	}
 	assert.Equal(t, http.StatusTooManyRequests, call(2000, "203.0.113.200"),
 		"IP を変えても同じユーザーなら頭打ちになる")

@@ -26,11 +26,6 @@ var ErrLastWorkspaceAdmin = errors.New("last workspace admin cannot be removed")
 // 権限を張る先を人が選べなくなる。
 var ErrPrincipalGroupNameTaken = errors.New("principal group name is already taken")
 
-// ErrWorkspaceInvitationNotFound は「自分宛の invited な招待」が無いときに返す
-// （受諾・辞退しようとした workspace_members の行が無い・別ワークスペース・既に
-// active/left/suspended のいずれか）。
-var ErrWorkspaceInvitationNotFound = errors.New("workspace invitation not found")
-
 // PageWithViewFacts は 1 ページと、そのページを閲覧できるかを決める事実の組。
 // ListSpacePageViewFacts が返す（ふるい落としは domain.ResolvePageView が行う）。
 type PageWithViewFacts struct {
@@ -102,20 +97,6 @@ type KnowledgeBasePermissionRepository interface {
 	// 答える口）で、絞り込みは user_id だけが行う。
 	ListMemberWorkspaces(ctx context.Context, userID uint64) ([]domain.MemberWorkspace, error)
 
-	// InviteWorkspaceMember は招待中の所属を作る（冪等。既に active/invited なら何もしない。
-	// left/suspended だった相手は invited へ戻す）。principal はまだ作らない —
-	// 招待の間は権限が一切届かない。
-	InviteWorkspaceMember(ctx context.Context, workspaceID string, userID, invitedByUserID uint64) error
-	// AcceptWorkspaceInvitation は自分宛の招待を受諾する。invited → active に進め、
-	// 同じトランザクションで principal（kind='user'）を作り、既定の editor を与える。
-	// invited の行が無ければ（招待されていない・既に受諾済み・辞退済み）
-	// ErrWorkspaceInvitationNotFound。
-	AcceptWorkspaceInvitation(ctx context.Context, workspaceID string, userID uint64) (*domain.Principal, error)
-	// DeclineWorkspaceInvitation は自分宛の招待を辞退する（invited → left）。
-	// invited の行が無ければ ErrWorkspaceInvitationNotFound。
-	DeclineWorkspaceInvitation(ctx context.Context, workspaceID string, userID uint64) error
-	// ListMyWorkspaceInvitations はそのユーザー宛の未受諾の招待を新しい順で返す。
-	ListMyWorkspaceInvitations(ctx context.Context, userID uint64) ([]domain.WorkspaceInvitation, error)
 	// LeaveWorkspaceMembership は所属を終える（status を left にし、principal があれば
 	// 削除する。削除は「最後の admin」検査を同じトランザクションで通す）。既に非メンバーなら
 	// 何もしない（冪等）。actorUserID は userID と同じなら本人の退会、違えば admin による

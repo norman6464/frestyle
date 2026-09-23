@@ -102,3 +102,14 @@ UPDATE users SET email = $2, updated_at = now() WHERE id = $1;
 -- 場合は 0 件（呼び出し側が not-found にする）。
 UPDATE users SET status = 'deactivated', deleted_at = now(), updated_at = now()
 WHERE id = $1 AND status <> 'deactivated';
+
+-- name: FindActiveUserIDByEmail :one
+-- 正規形（domain.NormalizeEmail）の email から、退会していないユーザーの id を引く。
+-- 式は uq_users_email_active と同じ（lower + TAB LF VT FF CR SP の 6 文字を btrim）に
+-- 揃えてあるので、その索引で引ける。索引は部分索引（deleted_at IS NULL かつ email が空でない）
+-- なので、WHERE にも同じ 2 条件を書いて索引の述語を満たしていることを planner に示す。
+-- 招待で「相手にアカウントがあるか（あればアプリ内通知も出す）」の判定に使う。無ければ sql.ErrNoRows。
+SELECT id FROM users
+WHERE lower(btrim(email, E'\t\n\x0B\x0C\r ')) = $1
+  AND deleted_at IS NULL
+  AND btrim(email, E'\t\n\x0B\x0C\r ') <> '';

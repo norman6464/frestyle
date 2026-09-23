@@ -500,10 +500,42 @@ func recordWorkspaceRoleChange(
 	if (oldLabel == nil && newLabel == nil) || (oldLabel != nil && newLabel != nil && *oldLabel == *newLabel) {
 		return nil
 	}
-	return recordMembershipEvent(
+	if err := recordMembershipEvent(
 		ctx, qtx, workspaceID, principal.UserID.Int64, actorUserID,
 		domain.MembershipEventRoleChanged, oldLabel, newLabel,
-	)
+	); err != nil {
+		return err
+	}
+	// admin から降格・剥奪されたら、その人が出した未決の招待を同じトランザクションで止める。
+	if adminLost(oldLabel, newLabel) {
+		return revokeOpenInvitationsByInviter(ctx, qtx, workspaceID, principal.UserID.Int64, actorUserID)
+	}
+	return nil
+}
+
+// adminLost は役割の変更で admin でなくなったかを返す（admin → 他の役割 / 剥奪）。
+func adminLost(oldLabel, newLabel *string) bool {
+	if oldLabel == nil || *oldLabel != string(domain.GrantRoleAdmin) {
+		return false
+	}
+	return newLabel == nil || *newLabel != string(domain.GrantRoleAdmin)
+}
+
+// revokeOpenInvitationsByInviter は、その人が出した未決の招待（invitations）をまとめて取り消す。
+//
+// 招待は「招いた人が今も admin であること」を承諾時に再判定するので、放置しても承諾はされない。
+// それでもここで止めるのは、admin でなくなった人の招待が一覧に「未決」として残り続け、再送も
+// できる状態（再送は admin なら誰でもできる）にしないため。除名・降格・剥奪と同じ
+// トランザクションで呼ぶ（LeaveWorkspaceMembership / recordWorkspaceRoleChange）。
+func revokeOpenInvitationsByInviter(
+	ctx context.Context, qtx *sqlcgen.Queries, workspaceID uuid.UUID, inviterUserID, actorUserID int64,
+) error {
+	_, err := qtx.RevokeOpenInvitationsByInviter(ctx, sqlcgen.RevokeOpenInvitationsByInviterParams{
+		ActorUserID:   actorUserID,
+		WorkspaceID:   workspaceID,
+		InviterUserID: inviterUserID,
+	})
+	return err
 }
 
 // UpsertWorkspaceGrant はワークスペース全体の既定の役割を 1 行に揃える。admin を**与える**
@@ -1306,139 +1338,6 @@ func (r *knowledgeBasePermissionRepository) ListMemberWorkspaces(ctx context.Con
 	return out, nil
 }
 
-func (r *knowledgeBasePermissionRepository) InviteWorkspaceMember(
-	ctx context.Context, workspaceID string, userID, invitedByUserID uint64,
-) error {
-	wsID, ok := kbParseID(workspaceID)
-	if !ok {
-		return repository.ErrWorkspaceNotFound
-	}
-	uid, uok := toInt64ID(userID)
-	if !uok {
-		return repository.ErrUserNotFound
-	}
-	invitedBy, ibok := toInt64ID(invitedByUserID)
-	if !ibok {
-		return repository.ErrUserNotFound
-	}
-	return r.runInTx(ctx, func(qtx *sqlcgen.Queries) error {
-		n, err := qtx.UpsertInvitedWorkspaceMember(ctx, sqlcgen.UpsertInvitedWorkspaceMemberParams{
-			WorkspaceID:     wsID,
-			UserID:          uid,
-			InvitedByUserID: sql.NullInt64{Int64: invitedBy, Valid: true},
-		})
-		if err != nil {
-			// 実在しないユーザー ID は users / workspaces への FK で落ちる（招待相手・招待した人の
-			// どちらの入力誤りかは区別できないが、呼び出し側は必ず招待した本人の ID を渡すので
-			// 通常は招待相手側の誤り）。
-			if isForeignKeyViolation(err) {
-				return repository.ErrUserNotFound
-			}
-			return err
-		}
-		if n == 0 {
-			// 既に active/invited だった（UpsertInvitedWorkspaceMember の WHERE 句参照）。
-			// 実際には何も変わっていないので記録しない。
-			return nil
-		}
-		return recordMembershipEvent(ctx, qtx, wsID, uid, invitedBy, domain.MembershipEventInvited, nil, nil)
-	})
-}
-
-func (r *knowledgeBasePermissionRepository) AcceptWorkspaceInvitation(
-	ctx context.Context, workspaceID string, userID uint64,
-) (*domain.Principal, error) {
-	wsID, ok := kbParseID(workspaceID)
-	if !ok {
-		return nil, repository.ErrWorkspaceInvitationNotFound
-	}
-	uid, uok := toInt64ID(userID)
-	if !uok {
-		return nil, repository.ErrWorkspaceInvitationNotFound
-	}
-	var principal domain.Principal
-	err := r.runInTx(ctx, func(qtx *sqlcgen.Queries) error {
-		n, err := qtx.ActivateWorkspaceMembership(ctx, sqlcgen.ActivateWorkspaceMembershipParams{
-			WorkspaceID: wsID,
-			UserID:      uid,
-		})
-		if err != nil {
-			return err
-		}
-		if n == 0 {
-			return repository.ErrWorkspaceInvitationNotFound
-		}
-		row, err := ensureUserPrincipalInTx(ctx, qtx, wsID, uid)
-		if err != nil {
-			return err
-		}
-		// 受諾した瞬間から全員が書ける（AddWorkspaceMemberUseCase が踏襲していた既定と
-		// 同じ）。無いときだけ与える（上書きしない）。
-		if err := qtx.InsertWorkspaceGrantIfAbsent(ctx, sqlcgen.InsertWorkspaceGrantIfAbsentParams{
-			WorkspaceID: wsID,
-			PrincipalID: row.ID,
-			Role:        string(domain.GrantRoleEditor),
-		}); err != nil {
-			return err
-		}
-		principal = toDomainPrincipal(row)
-		editor := string(domain.GrantRoleEditor)
-		return recordMembershipEvent(ctx, qtx, wsID, uid, uid, domain.MembershipEventInvitationAccepted, nil, &editor)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &principal, nil
-}
-
-func (r *knowledgeBasePermissionRepository) DeclineWorkspaceInvitation(ctx context.Context, workspaceID string, userID uint64) error {
-	wsID, ok := kbParseID(workspaceID)
-	if !ok {
-		return repository.ErrWorkspaceInvitationNotFound
-	}
-	uid, uok := toInt64ID(userID)
-	if !uok {
-		return repository.ErrWorkspaceInvitationNotFound
-	}
-	return r.runInTx(ctx, func(qtx *sqlcgen.Queries) error {
-		n, err := qtx.DeclineWorkspaceInvitation(ctx, sqlcgen.DeclineWorkspaceInvitationParams{
-			WorkspaceID: wsID,
-			UserID:      uid,
-		})
-		if err != nil {
-			return err
-		}
-		if n == 0 {
-			return repository.ErrWorkspaceInvitationNotFound
-		}
-		return recordMembershipEvent(ctx, qtx, wsID, uid, uid, domain.MembershipEventInvitationDeclined, nil, nil)
-	})
-}
-
-func (r *knowledgeBasePermissionRepository) ListMyWorkspaceInvitations(ctx context.Context, userID uint64) ([]domain.WorkspaceInvitation, error) {
-	uid, uok := toInt64ID(userID)
-	if !uok {
-		return []domain.WorkspaceInvitation{}, nil
-	}
-	rows, err := r.queries(ctx).ListMyWorkspaceInvitations(ctx, uid)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]domain.WorkspaceInvitation, 0, len(rows))
-	for _, row := range rows {
-		inv := domain.WorkspaceInvitation{
-			WorkspaceSlug: row.WorkspaceSlug,
-			WorkspaceName: row.WorkspaceName,
-			InvitedAt:     row.InvitedAt,
-		}
-		if row.InvitedByUserID.Valid {
-			inv.InvitedByUserID = uint64(row.InvitedByUserID.Int64)
-		}
-		out = append(out, inv)
-	}
-	return out, nil
-}
-
 // ListMembershipEvents は所属・権限の変更履歴を新しい順で返す（段 6・監査）。
 func (r *knowledgeBasePermissionRepository) ListMembershipEvents(ctx context.Context, workspaceID string) ([]domain.MembershipEvent, error) {
 	wsID, ok := kbParseID(workspaceID)
@@ -1528,8 +1427,12 @@ func (r *knowledgeBasePermissionRepository) LeaveWorkspaceMembership(ctx context
 			}); delErr != nil {
 				return delErr
 			}
+			// 所属を失った人（admin だったなら特に）が出した未決の招待は、ここで止める。
+			if err := revokeOpenInvitationsByInviter(ctx, qtx, wsID, uid, actorID); err != nil {
+				return err
+			}
 		case errors.Is(err, sql.ErrNoRows):
-			// principal が無い（invited のままだった、既に非メンバー等）。所属の記録だけ更新する。
+			// principal が無い（既に非メンバー等）。所属の記録だけ更新する。
 		default:
 			return err
 		}

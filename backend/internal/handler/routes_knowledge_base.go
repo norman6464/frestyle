@@ -16,23 +16,28 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/usecase/user"
 )
 
-// 共有リンクの検証・メンバー追加・ワークスペース/スペース作成・本文解釈系エンドポイントに
-// 掛けるレート上限。共有リンクの検証は総当たりの速度を、ワークスペース作成はユーザーを鍵に
-// slug の先取り連打を、本文解釈系（保存・提案・雛形作成）は 0.8 秒ごとの自動保存が詰まらない
+// 共有リンクの検証・招待の発行・ワークスペース/スペース作成・本文解釈系エンドポイントに
+// 掛けるレート上限。共有リンクの検証は総当たりの速度を、招待の発行はユーザーを鍵に宛先の
+// 連打（1 日の上限は usecase 側が別に持つ）を、ワークスペース作成はユーザーを鍵に slug の
+// 先取り連打を、本文解釈系（保存・提案・雛形作成）は 0.8 秒ごとの自動保存が詰まらない
 // 水準を保ちつつ抑える。
 const (
 	kbShareLinkVerifyPerMinute = 10
 	kbShareLinkVerifyBurst     = 5
-	kbAddMemberPerMinute       = 30
-	kbAddMemberBurst           = 10
-	kbCreateWorkspacePerMinute = 10
-	kbCreateWorkspaceBurst     = 5
-	kbCreateSpacePerMinute     = 20
-	kbCreateSpaceBurst         = 10
-	kbReplaceContentPerMinute  = 120
-	kbReplaceContentBurst      = 30
-	kbParseDocPerMinute        = 30
-	kbParseDocBurst            = 10
+	kbInviteByEmailPerMinute   = 10
+	kbInviteByEmailBurst       = 5
+	// 招待の案内（プレビュー）は未認証なので IP 単位。トークンは 256 bit で当てられず、案内に
+	// 秘密は無いので、素直な大量アクセスを薄める層だけでよい。
+	kbInvitationPreviewPerMinute = 20
+	kbInvitationPreviewBurst     = 10
+	kbCreateWorkspacePerMinute   = 10
+	kbCreateWorkspaceBurst       = 5
+	kbCreateSpacePerMinute       = 20
+	kbCreateSpaceBurst           = 10
+	kbReplaceContentPerMinute    = 120
+	kbReplaceContentBurst        = 30
+	kbParseDocPerMinute          = 30
+	kbParseDocBurst              = 10
 )
 
 // registerKnowledgeBaseRoutes はナレッジのページ操作と権限操作のエンドポイントを登録する。
@@ -56,6 +61,8 @@ func registerKnowledgeBaseRoutes(g *gin.RouterGroup, deps *routeDeps) {
 		persistence.NewTxManager(deps.db),
 		newKbImagePresignerOrFallback(deps),
 		persistence.NewLabelRepository(deps.db),
+		persistence.NewInvitationRepository(deps.db),
+		persistence.NewNotificationRepository(deps.db),
 	)
 }
 
@@ -78,14 +85,16 @@ func newKbImagePresignerOrFallback(deps *routeDeps) repository.KbImagePresigner 
 
 // registerKnowledgeBasePublicRoutes は認証不要のナレッジエンドポイントを登録する。
 //
-// ここに置いてよいのは「ログインしていない相手が使う」ものだけ。今のところ共有リンクの
-// 検証 1 本で、認可はトークン（と任意のパスワード）そのものが担う。
+// ここに置いてよいのは「ログインしていない相手が使う」ものだけ。共有リンクの検証（認可は
+// トークンと任意のパスワードそのものが担う）と、招待 URL の案内（承諾はできず、見せるのは
+// 宛先本人向けの案内だけ）の 2 本。
 func registerKnowledgeBasePublicRoutes(g *gin.RouterGroup, deps *routeDeps) {
 	registerKnowledgeBasePublicRoutesWith(
 		g,
 		persistence.NewKnowledgeBaseRepository(deps.db),
 		persistence.NewKnowledgeBasePermissionRepository(deps.db),
 		persistence.NewShareLinkRepository(deps.db),
+		persistence.NewInvitationRepository(deps.db),
 	)
 }
 
@@ -109,6 +118,8 @@ func registerKnowledgeBaseRoutesWith(
 	txManager repository.TxManager,
 	kbImagePresigner repository.KbImagePresigner,
 	labels repository.LabelRepository,
+	invitations repository.InvitationRepository,
+	notifications repository.NotificationRepository,
 ) {
 	// ReplacePageBlocksUseCase は本文保存の成功直後に versionRepo.CreateVersionIfDue を同じ
 	// トランザクションで呼ぶので、PageVersionHandler と同じ 1 つの
@@ -247,7 +258,6 @@ func registerKnowledgeBaseRoutesWith(
 
 	mh := NewKnowledgeBaseMemberHandler(
 		gate,
-		kb.NewInviteWorkspaceMemberUseCase(permissions),
 		kb.NewRemoveWorkspaceMemberUseCase(permissions),
 		kb.NewCreatePrincipalGroupUseCase(permissions),
 		kb.NewAddGroupMemberUseCase(permissions),
@@ -291,16 +301,22 @@ func registerKnowledgeBaseRoutesWith(
 	// 鍵はユーザー単位（kbCreateWorkspacePerMinute の doc 参照）。
 	g.POST("/kb/workspaces", middleware.RateLimitPerMinutePerUser(kbCreateWorkspacePerMinute, kbCreateWorkspaceBurst), wh.Create)
 
-	// 自分宛の招待（段 2）。受諾するまで所属していないので、ここも
-	// middleware.KnowledgeBaseWorkspace を通さない（所属済みしか通さないため）。
+	// email 宛の招待。招かれた側（自分宛の一覧・承諾・辞退）は承諾するまで所属していないので、
+	// middleware.KnowledgeBaseWorkspace を通さない（所属済みしか通さないため）。admin 側
+	// （発行・一覧・再送・取消）は下の kbGroup に登録する。
 	ih := NewKnowledgeBaseInvitationHandler(
-		kb.NewListMyWorkspaceInvitationsUseCase(permissions),
-		kb.NewAcceptWorkspaceInvitationUseCase(pages, permissions),
-		kb.NewDeclineWorkspaceInvitationUseCase(pages, permissions),
+		gate,
+		kb.NewInviteByEmailUseCase(invitations, users, notifications, txManager),
+		kb.NewListWorkspaceInvitationsUseCase(invitations),
+		kb.NewResendInvitationUseCase(invitations),
+		kb.NewRevokeInvitationUseCase(invitations),
+		kb.NewListMyInvitationsUseCase(invitations, users),
+		kb.NewAcceptInvitationUseCase(invitations, users, pages, permissions),
+		kb.NewDeclineInvitationUseCase(invitations, users),
 	)
-	g.GET("/kb/invitations", ih.List)
-	g.POST("/kb/invitations/:workspaceSlug/accept", ih.Accept)
-	g.POST("/kb/invitations/:workspaceSlug/decline", ih.Decline)
+	g.GET("/kb/invitations", ih.ListMine)
+	g.POST("/kb/invitations/:invitationId/accept", ih.Accept)
+	g.POST("/kb/invitations/:invitationId/decline", ih.Decline)
 
 	kbGroup := g.Group("", middleware.KnowledgeBaseWorkspace(
 		kb.NewResolveWorkspaceUseCase(pages, permissions),
@@ -404,15 +420,18 @@ func registerKnowledgeBaseRoutesWith(
 	// 権限を張れる相手（画面の相手選び）。認可はページ単位で、返る中身はワークスペース全体。
 	kbGroup.GET("/kb/workspaces/:workspaceSlug/pages/:pageId/principals", gh.ListGrantablePrincipals)
 
+	// 人をワークスペースへ招く入口は email 宛の招待だけ（users.id を受ける口は無い —
+	// 「実在する id なら 204」で他人の実在を探れる走査器になるため）。招待しただけでは
+	// principal も権限も一切発生せず、本人が /kb/invitations/:invitationId/accept を呼ぶまで
+	// 所属しない。発行と再送は回数に上限を置く。鍵はログイン中のユーザー（検証済み JWT 由来
+	// なので付け替えられない。IP は XFF で付け替えられるため鍵に使わない）。
+	kbGroup.GET("/kb/workspaces/:workspaceSlug/invitations", ih.List)
+	kbGroup.POST("/kb/workspaces/:workspaceSlug/invitations",
+		middleware.RateLimitPerMinutePerUser(kbInviteByEmailPerMinute, kbInviteByEmailBurst), ih.Invite)
+	kbGroup.POST("/kb/workspaces/:workspaceSlug/invitations/:invitationId/resend",
+		middleware.RateLimitPerMinutePerUser(kbInviteByEmailPerMinute, kbInviteByEmailBurst), ih.Resend)
+	kbGroup.DELETE("/kb/workspaces/:workspaceSlug/invitations/:invitationId", ih.Revoke)
 	// 権限を張る相手（principals）の出し入れ。
-	// メンバー招待だけは回数に上限を置く。この口は users.id をそのまま受け取るため、
-	// 招待の成否（204 と 404 の差）でユーザーの実在は分かる（列挙そのものは完全には
-	// 塞げていない）。ただし招待しただけでは principal も権限も一切発生しない
-	// （本人が /kb/invitations/:workspaceSlug/accept を呼ぶまで所属しない — 「同意なく
-	// 他人を追加できる」問題はこちらで塞いでいる）。鍵はログイン中のユーザー（検証済み
-	// JWT 由来なので付け替えられない。IP は XFF で付け替えられるため鍵に使わない）。
-	kbGroup.PUT("/kb/workspaces/:workspaceSlug/members/:userId",
-		middleware.RateLimitPerMinutePerUser(kbAddMemberPerMinute, kbAddMemberBurst), mh.InviteMember)
 	kbGroup.DELETE("/kb/workspaces/:workspaceSlug/members/:userId", mh.RemoveMember)
 	// アカウントの停止・復帰（段 7）。効果は全ワークスペースに及ぶが、実行できるのは
 	// 対象が現に所属するこのワークスペースの admin だけ（kb_member_handler.go の
@@ -446,6 +465,7 @@ func registerKnowledgeBasePublicRoutesWith(
 	pages repository.KnowledgeBaseRepository,
 	permissions repository.KnowledgeBasePermissionRepository,
 	shareLinks repository.ShareLinkRepository,
+	invitations repository.InvitationRepository,
 ) {
 	sh := NewKnowledgeBaseShareLinkHandler(
 		newKbPermissionGate(
@@ -463,4 +483,10 @@ func registerKnowledgeBasePublicRoutesWith(
 	// 素直な大量アクセスを薄めるだけの層（XFF を詐称すれば鍵が変わるので、これだけでは
 	// パスワードの総当たりを止められない）。詳細は kbShareLinkAttemptKey の doc。
 	g.POST("/kb/share-links/verify", middleware.RateLimitPerMinute(20, 10), sh.VerifyShareLink)
+
+	// 招待 URL を開いた人への案内。承諾はここではできない（宛先の email で確認済みのアカウントで
+	// ログインしてから /kb/invitations/:invitationId/accept）。
+	ph := NewKnowledgeBaseInvitationPreviewHandler(kb.NewPreviewInvitationUseCase(invitations))
+	g.POST("/kb/invitations/preview",
+		middleware.RateLimitPerMinute(kbInvitationPreviewPerMinute, kbInvitationPreviewBurst), ph.Preview)
 }

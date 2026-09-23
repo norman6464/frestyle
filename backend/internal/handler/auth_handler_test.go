@@ -51,6 +51,10 @@ func (r *fakeUserRepo) FindDisplayByID(_ context.Context, _ uint64) (*domain.Use
 	return nil, nil
 }
 
+func (r *fakeUserRepo) FindActiveIDByEmail(context.Context, string) (uint64, bool, error) {
+	return 0, false, nil
+}
+
 func (r *fakeUserRepo) Create(_ context.Context, u *domain.User) error {
 	if r.createErr != nil {
 		return r.createErr

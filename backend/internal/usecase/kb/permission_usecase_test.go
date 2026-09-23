@@ -319,28 +319,6 @@ func Test_サブツリー編集可否_事実の収集が失敗したら伝える
 	assert.False(t, got, "確認できないなら許可に倒さない")
 }
 
-func Test_メンバー招待_invited行を作るだけで権限は発生しない(t *testing.T) {
-	repo := &mockKBPermissionRepo{}
-	repo.On("InviteWorkspaceMember", mock.Anything, kbWS, uint64(7), uint64(1)).Return(nil)
-	uc := kb.NewInviteWorkspaceMemberUseCase(repo)
-
-	err := uc.Execute(context.Background(), kb.InviteWorkspaceMemberInput{
-		WorkspaceID: kbWS, UserID: 7, InvitedByUserID: 1,
-	})
-	require.NoError(t, err)
-	repo.AssertExpectations(t)
-	// 招待だけでは principal も権限も一切作らない（EnsureUserPrincipal / GrantWorkspaceRoleIfAbsent
-	// を呼んでいないことを、mock に登録していないことで確認する — 呼ばれれば mock.Mock が
-	// 未登録呼び出しとして panic する）。
-
-	err = uc.Execute(context.Background(), kb.InviteWorkspaceMemberInput{UserID: 7, InvitedByUserID: 1})
-	require.Error(t, err, "workspaceID 必須")
-	err = uc.Execute(context.Background(), kb.InviteWorkspaceMemberInput{WorkspaceID: kbWS, InvitedByUserID: 1})
-	require.Error(t, err, "userID 必須")
-	err = uc.Execute(context.Background(), kb.InviteWorkspaceMemberInput{WorkspaceID: kbWS, UserID: 7})
-	require.Error(t, err, "invitedByUserID 必須")
-}
-
 func Test_メンバー削除_所属を終える(t *testing.T) {
 	repo := &mockKBPermissionRepo{}
 	repo.On("LeaveWorkspaceMembership", mock.Anything, kbWS, uint64(7), uint64(1)).Return(nil)

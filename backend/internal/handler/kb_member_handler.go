@@ -14,11 +14,11 @@ import (
 // KnowledgeBaseMemberHandler はナレッジの主体（principals）の出し入れを受ける。
 // ワークスペース所属・グループ・スペースの「全員」はどれも principals の 1 行で表す
 // （専用のメンバーシップ表は持たない）ので、この handler が扱うのは「権限を張る相手を
-// 用意する / 片づける」こと。役割そのものは KnowledgeBaseGrantHandler が扱う。
+// 用意する / 片づける」こと。役割そのものは KnowledgeBaseGrantHandler が、人をワークスペースへ
+// 招く入口（email 宛の招待）は KnowledgeBaseInvitationHandler が扱う。
 // 認可はすべて kbPermissionGate が持つ（判断の根拠は kb_permission_gate.go の冒頭を参照）。
 type KnowledgeBaseMemberHandler struct {
 	*kbPermissionGate
-	inviteMember      *kb.InviteWorkspaceMemberUseCase
 	removeMember      *kb.RemoveWorkspaceMemberUseCase
 	createGroup       *kb.CreatePrincipalGroupUseCase
 	addGroupMember    *kb.AddGroupMemberUseCase
@@ -30,7 +30,6 @@ type KnowledgeBaseMemberHandler struct {
 
 func NewKnowledgeBaseMemberHandler(
 	gate *kbPermissionGate,
-	inviteMember *kb.InviteWorkspaceMemberUseCase,
 	removeMember *kb.RemoveWorkspaceMemberUseCase,
 	createGroup *kb.CreatePrincipalGroupUseCase,
 	addGroupMember *kb.AddGroupMemberUseCase,
@@ -41,7 +40,6 @@ func NewKnowledgeBaseMemberHandler(
 ) *KnowledgeBaseMemberHandler {
 	return &KnowledgeBaseMemberHandler{
 		kbPermissionGate:  gate,
-		inviteMember:      inviteMember,
 		removeMember:      removeMember,
 		createGroup:       createGroup,
 		addGroupMember:    addGroupMember,
@@ -94,33 +92,6 @@ func kbUserIDParam(c *gin.Context) (uint64, bool) {
 		return 0, false
 	}
 	return id, true
-}
-
-// InviteMember はユーザーをワークスペースへ招待する（冪等）。workspace_members に invited
-// の行を作るだけで、principal・権限は本人が招待を受諾する（AcceptInvitation、
-// kb_invitation_handler.go）まで発生しない — 相手の同意なく追加させない・成功/404 の差で
-// ユーザーの実在を教えないため。
-func (h *KnowledgeBaseMemberHandler) InviteMember(c *gin.Context) {
-	scope, ok := kbScope(c)
-	if !ok {
-		return
-	}
-	if !h.requireWorkspaceAdmin(c, scope) {
-		return
-	}
-	userID, ok := kbUserIDParam(c)
-	if !ok {
-		return
-	}
-	if err := h.inviteMember.Execute(c.Request.Context(), kb.InviteWorkspaceMemberInput{
-		WorkspaceID:     scope.workspaceID,
-		UserID:          userID,
-		InvitedByUserID: scope.userID,
-	}); err != nil {
-		respondKbPermissionOperationErr(c, err)
-		return
-	}
-	c.Status(http.StatusNoContent)
 }
 
 // RemoveMember はユーザーをワークスペースから外す（冪等）。
