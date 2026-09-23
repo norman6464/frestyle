@@ -63,6 +63,8 @@ func registerKnowledgeBaseRoutes(g *gin.RouterGroup, deps *routeDeps) {
 		persistence.NewLabelRepository(deps.db),
 		persistence.NewInvitationRepository(deps.db),
 		persistence.NewNotificationRepository(deps.db),
+		deps.mailer,
+		deps.cfg.AppBaseURL,
 	)
 }
 
@@ -120,6 +122,8 @@ func registerKnowledgeBaseRoutesWith(
 	labels repository.LabelRepository,
 	invitations repository.InvitationRepository,
 	notifications repository.NotificationRepository,
+	mailer repository.InvitationMailer,
+	appBaseURL string,
 ) {
 	// ReplacePageBlocksUseCase は本文保存の成功直後に versionRepo.CreateVersionIfDue を同じ
 	// トランザクションで呼ぶので、PageVersionHandler と同じ 1 つの
@@ -306,9 +310,9 @@ func registerKnowledgeBaseRoutesWith(
 	// （発行・一覧・再送・取消）は下の kbGroup に登録する。
 	ih := NewKnowledgeBaseInvitationHandler(
 		gate,
-		kb.NewInviteByEmailUseCase(invitations, users, notifications, txManager),
+		kb.NewInviteByEmailUseCase(invitations, users, notifications, txManager, mailer, appBaseURL),
 		kb.NewListWorkspaceInvitationsUseCase(invitations),
-		kb.NewResendInvitationUseCase(invitations),
+		kb.NewResendInvitationUseCase(invitations, users, mailer, appBaseURL),
 		kb.NewRevokeInvitationUseCase(invitations),
 		kb.NewListMyInvitationsUseCase(invitations, users),
 		kb.NewAcceptInvitationUseCase(invitations, users, pages, permissions),

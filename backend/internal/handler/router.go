@@ -31,11 +31,13 @@ type routeDeps struct {
 	userRepo repository.UserRepository
 	// verifier は access_token / id_token の署名とクレームを検証する（handler も使う）。
 	verifier *oidc.Verifier
+	// mailer は招待メールの送り先（SES / SMTP / disabled）。cmd/server が設定から組み立てる。
+	mailer repository.InvitationMailer
 }
 
 // NewRouter は API ルーティングを組み立てる。verifier は呼び出し側（cmd/server）が組み立てて
 // 渡す — ここで組み立ててエラーを飲み込むと、設定が足りない状態のまま起動してしまう。
-func NewRouter(db *sql.DB, cfg *config.Config, verifier *oidc.Verifier) *gin.Engine {
+func NewRouter(db *sql.DB, cfg *config.Config, verifier *oidc.Verifier, mailer repository.InvitationMailer) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	// 本文サイズの上限。ログ・CORS より前、一番手前に置く（本文を読む前に切れるようにする）。
@@ -54,6 +56,7 @@ func NewRouter(db *sql.DB, cfg *config.Config, verifier *oidc.Verifier) *gin.Eng
 		cfg:      cfg,
 		userRepo: persistence.NewUserRepository(db),
 		verifier: verifier,
+		mailer:   mailer,
 	}
 
 	v2 := r.Group("/api/v2")

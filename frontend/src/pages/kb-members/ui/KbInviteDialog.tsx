@@ -85,6 +85,8 @@ export default function KbInviteDialog({ isOpen, issued: issuedProp, onInvite, o
 
   const inviteUrl = issued ? buildInviteUrl(window.location.origin, issued.token) : '';
   const copied = copiedId === 'invite-link';
+  // メールの結果で見出しと案内を変える。招待そのものはどの結果でもできている。
+  const mailStatus = issued?.mailStatus ?? 'disabled';
 
   return (
     <Dialog.Root open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -113,12 +115,22 @@ export default function KbInviteDialog({ isOpen, issued: issuedProp, onInvite, o
                   <FsIcon name="check" className="h-6 w-6" />
                 </div>
                 <Dialog.Title id={titleId} className="text-xl font-semibold text-[var(--fs-text-strong)] [overflow-wrap:anywhere]">
-                  {issued.invitation.email} 宛の招待リンクを作りました
+                  {mailStatus === 'sent'
+                    ? `${issued.invitation.email} に招待を送りました`
+                    : `${issued.invitation.email} 宛の招待リンクを作りました`}
                 </Dialog.Title>
                 <Dialog.Description className="text-sm leading-relaxed text-[var(--fs-text-muted)]">
-                  このリンクを相手に渡してください。開くと招待の内容が見られ、同じメールアドレスのアカウントでログインすると参加できます。
+                  {mailStatus === 'sent'
+                    ? 'メールに招待リンクを載せて送りました。届かないときは、下のリンクを相手に渡してください。'
+                    : 'このリンクを相手に渡してください。開くと招待の内容が見られ、同じメールアドレスのアカウントでログインすると参加できます。'}
                 </Dialog.Description>
               </div>
+              {mailStatus === 'failed' && (
+                <p role="alert" className="flex gap-2 rounded-lg border border-danger-border bg-danger-soft p-3 text-sm text-danger-ink">
+                  <FsIcon name="alert-triangle" className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>メールを送れませんでした。招待はできているので、下のリンクを相手に渡すか、あとで一覧の「再送」でもう一度送ってください。</span>
+                </p>
+              )}
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="kb-invite-link" className="text-sm font-medium text-[var(--color-text-secondary)]">招待リンク</label>
                 <div className="flex gap-2">

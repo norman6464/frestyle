@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -85,6 +87,61 @@ func normalizeInviteeName(raw string) (string, error) {
 	return name, nil
 }
 
+// InvitationMailStatus は招待メールがどうなったか。招待そのものは作れているので、画面はこれで
+// 「メールを送りました」「送れなかったのでリンクを渡して」「メールは無い運用」を出し分ける。
+type InvitationMailStatus string
+
+const (
+	InvitationMailSent     InvitationMailStatus = "sent"
+	InvitationMailFailed   InvitationMailStatus = "failed"
+	InvitationMailDisabled InvitationMailStatus = "disabled"
+)
+
+// buildInviteURL は招待メールに載せる承諾 URL（/invite#t=<token>）を組み立てる。
+// origin は設定（APP_BASE_URL）。トークンはフラグメントに載せる（サーバーのログに残さない。
+// frontend の buildInviteUrl と同じ形）。
+func buildInviteURL(appBaseURL, token string) string {
+	return strings.TrimRight(appBaseURL, "/") + "/invite#t=" + url.PathEscape(token)
+}
+
+// sendInvitationMail は DB の書き込みが済んだ**あと**に招待メールを送り、結果を状態にする。
+// 失敗しても招待は残っている（再送で届け直せる）ので、エラーは返さず記録して状態で伝える。
+// ログに宛先とトークンは出さない。
+func sendInvitationMail(
+	ctx context.Context, mailer repository.InvitationMailer, appBaseURL string,
+	detail *domain.InvitationDetail, token, replyTo string,
+) InvitationMailStatus {
+	err := mailer.SendInvitation(ctx, repository.InvitationMail{
+		To:            detail.Email,
+		ToName:        detail.InviteeName,
+		WorkspaceName: detail.WorkspaceName,
+		InviterName:   detail.InviterName,
+		ReplyTo:       replyTo,
+		Role:          detail.Role,
+		InviteURL:     buildInviteURL(appBaseURL, token),
+		ExpiresAt:     detail.ExpiresAt,
+	})
+	switch {
+	case err == nil:
+		return InvitationMailSent
+	case errors.Is(err, repository.ErrMailDisabled):
+		return InvitationMailDisabled
+	default:
+		slog.WarnContext(ctx, "invitation mail failed (invitation kept; ask admin to resend)",
+			"invitationID", detail.ID, "workspaceID", detail.WorkspaceID, "err", err)
+		return InvitationMailFailed
+	}
+}
+
+// replyToOf は招いた人の email（Reply-To 用）。引けなくてもメールは送るので、失敗は空文字に畳む。
+func replyToOf(ctx context.Context, users repository.UserRepository, userID uint64) string {
+	u, err := users.FindByID(ctx, userID)
+	if err != nil || u == nil {
+		return ""
+	}
+	return domain.NormalizeEmail(u.Email)
+}
+
 // checkInvitationSendLimits は「招く側が 1 日に届けた回数」と「その宛先へ 1 日に届いた回数」の
 // 上限を確かめる。発行と再送の両方が通る（どちらも 1 回の送信として送信履歴に残る）。
 func checkInvitationSendLimits(
@@ -111,8 +168,9 @@ func checkInvitationSendLimits(
 // InviteByEmailUseCase はワークスペースへ email で人を招く。
 //
 // 招待の行を作る（同じ宛先 × 場所に未決の行があれば再送として更新する）だけで、所属・主体・
-// 付与は本人が承諾するまで発生しない。宛先に既にアカウントがあればアプリ内通知も出す —
-// メールの送信基盤はまだ無く、招待 URL は発行者が相手へ渡す（応答の Token）。
+// 付与は本人が承諾するまで発生しない。宛先に既にアカウントがあればアプリ内通知も出す。
+// 招待メールは DB の書き込みを終えたあとに送り、送れなくても招待は残す（応答の Token から
+// 発行者がリンクを手で渡せる）。
 //
 // 呼び出し側（handler）が admin であることを確かめてから呼ぶ。
 type InviteByEmailUseCase struct {
@@ -120,6 +178,8 @@ type InviteByEmailUseCase struct {
 	users         repository.UserRepository
 	notifications repository.NotificationRepository
 	tx            repository.TxManager
+	mailer        repository.InvitationMailer
+	appBaseURL    string
 	now           func() time.Time
 }
 
@@ -128,9 +188,12 @@ func NewInviteByEmailUseCase(
 	users repository.UserRepository,
 	notifications repository.NotificationRepository,
 	tx repository.TxManager,
+	mailer repository.InvitationMailer,
+	appBaseURL string,
 ) *InviteByEmailUseCase {
 	return &InviteByEmailUseCase{
-		invitations: invitations, users: users, notifications: notifications, tx: tx, now: time.Now,
+		invitations: invitations, users: users, notifications: notifications, tx: tx,
+		mailer: mailer, appBaseURL: appBaseURL, now: time.Now,
 	}
 }
 
@@ -153,6 +216,8 @@ type InviteByEmailOutput struct {
 	Token string
 	// NotifiedUserID は宛先に既にアカウントがあり、アプリ内通知を出した相手。無ければ 0。
 	NotifiedUserID uint64
+	// MailStatus は招待メールの結果（送った / 送れなかった / 送らない運用）。
+	MailStatus InvitationMailStatus
 }
 
 func (u *InviteByEmailUseCase) Execute(ctx context.Context, in InviteByEmailInput) (*InviteByEmailOutput, error) {
@@ -242,6 +307,9 @@ func (u *InviteByEmailUseCase) Execute(ctx context.Context, in InviteByEmailInpu
 	if err != nil {
 		return nil, err
 	}
+	// メールはトランザクションの外で送る（ネットワーク待ちで DB のロックを抱えない。失敗しても
+	// 招待は残す）。
+	out.MailStatus = sendInvitationMail(ctx, u.mailer, u.appBaseURL, out.Invitation, token, replyToOf(ctx, u.users, in.ActorUserID))
 	return out, nil
 }
 
@@ -266,15 +334,25 @@ func (u *ListWorkspaceInvitationsUseCase) Execute(ctx context.Context, in ListWo
 	return u.invitations.ListByWorkspace(ctx, in.WorkspaceID, invitationListLimit)
 }
 
-// ResendInvitationUseCase は未決の招待のトークンを差し替えて期限を延ばす（admin の「もう一度送る」）。
-// 前のトークンで開いた URL は使えなくなる。
+// ResendInvitationUseCase は未決の招待のトークンを差し替えて期限を延ばし、招待メールを送り直す
+// （admin の「もう一度送る」）。前のトークンで開いた URL は使えなくなる。
 type ResendInvitationUseCase struct {
 	invitations repository.InvitationRepository
+	users       repository.UserRepository
+	mailer      repository.InvitationMailer
+	appBaseURL  string
 	now         func() time.Time
 }
 
-func NewResendInvitationUseCase(invitations repository.InvitationRepository) *ResendInvitationUseCase {
-	return &ResendInvitationUseCase{invitations: invitations, now: time.Now}
+func NewResendInvitationUseCase(
+	invitations repository.InvitationRepository,
+	users repository.UserRepository,
+	mailer repository.InvitationMailer,
+	appBaseURL string,
+) *ResendInvitationUseCase {
+	return &ResendInvitationUseCase{
+		invitations: invitations, users: users, mailer: mailer, appBaseURL: appBaseURL, now: time.Now,
+	}
 }
 
 type ResendInvitationInput struct {
@@ -286,6 +364,7 @@ type ResendInvitationInput struct {
 type ResendInvitationOutput struct {
 	Invitation *domain.InvitationDetail
 	Token      string
+	MailStatus InvitationMailStatus
 }
 
 func (u *ResendInvitationUseCase) Execute(ctx context.Context, in ResendInvitationInput) (*ResendInvitationOutput, error) {
@@ -323,7 +402,8 @@ func (u *ResendInvitationUseCase) Execute(ctx context.Context, in ResendInvitati
 	if err != nil {
 		return nil, err
 	}
-	return &ResendInvitationOutput{Invitation: detail, Token: token}, nil
+	status := sendInvitationMail(ctx, u.mailer, u.appBaseURL, detail, token, replyToOf(ctx, u.users, in.ActorUserID))
+	return &ResendInvitationOutput{Invitation: detail, Token: token, MailStatus: status}, nil
 }
 
 // RevokeInvitationUseCase は admin が招待を取り消す（冪等）。行は消さず revoked_at を立てる。

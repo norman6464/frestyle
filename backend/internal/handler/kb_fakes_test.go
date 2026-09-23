@@ -2631,3 +2631,19 @@ func (f *kbFakeNotifications) MarkAllRead(context.Context, uint64) error      { 
 func (f *kbFakeNotifications) CountUnread(context.Context, uint64) (int64, error) {
 	return 0, nil
 }
+
+// kbFakeMailer は repository.InvitationMailer の fake。送ったメールを溜め、failWith で失敗させる。
+type kbFakeMailer struct {
+	sent     []repository.InvitationMail
+	failWith error
+}
+
+var _ repository.InvitationMailer = (*kbFakeMailer)(nil)
+
+func (f *kbFakeMailer) SendInvitation(_ context.Context, m repository.InvitationMail) error {
+	if f.failWith != nil {
+		return f.failWith
+	}
+	f.sent = append(f.sent, m)
+	return nil
+}

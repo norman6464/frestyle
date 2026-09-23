@@ -28,7 +28,37 @@ type Config struct {
 
 	OIDC   OIDCConfig
 	Images ImagesConfig
+	Mail   MailConfig
 }
+
+// MailProvider は招待メールをどこへ渡すか（MAIL_PROVIDER）。
+type MailProvider string
+
+const (
+	// MailProviderNone は送らない。招待リンクは発行した人が手で相手へ渡す（メール送信を
+	// 入れる前の本番と同じ振る舞い。ロールバックの逃げ道でもある）。
+	MailProviderNone MailProvider = "none"
+	// MailProviderSMTP は認証なしの SMTP へ流す。ローカルの Mailpit（docker-compose.yml の mail）用で、
+	// 本番の送信基盤には使わない。
+	MailProviderSMTP MailProvider = "smtp"
+	// MailProviderSES は Amazon SES（sesv2 の SendEmail）で送る。本番用。
+	MailProviderSES MailProvider = "ses"
+)
+
+// MailConfig は招待メールの送信に要る設定。provider が none 以外なら、足りない項目があるとき
+// 起動を止める（OIDC と同じ fail-closed。「送っているつもりで送っていない」を作らない）。
+type MailConfig struct {
+	Provider MailProvider
+	// From は差出人。"FreStyle <no-reply@frestyle.dev>" の形か、アドレスだけ。
+	From string
+	// SMTPAddr は provider=smtp のときの宛先（host:port）。TLS も認証も無い前提（ローカル専用）。
+	SMTPAddr string
+	// SESRegion は provider=ses のときのリージョン。既定は東京。
+	SESRegion string
+}
+
+// Enabled はメールを実際に送る設定かを返す。
+func (c MailConfig) Enabled() bool { return c.Provider != MailProviderNone }
 
 // ImagesConfig は profile / リッチテキスト画像 / KB ページ画像 upload の presign 発行に必要な
 // 設定。バケットは Cloud Storage（internal/infra/gcs.Presigner）。GCS のバケット名は
@@ -80,6 +110,12 @@ func Load() (*Config, error) {
 		Images: ImagesConfig{
 			Bucket: os.Getenv("IMAGES_BUCKET"),
 		},
+		Mail: MailConfig{
+			Provider:  MailProvider(getEnvOrDefault("MAIL_PROVIDER", string(MailProviderNone))),
+			From:      os.Getenv("MAIL_FROM"),
+			SMTPAddr:  os.Getenv("MAIL_SMTP_ADDR"),
+			SESRegion: getEnvOrDefault("MAIL_SES_REGION", "ap-northeast-1"),
+		},
 	}
 	if cfg.DatabaseURL == "" && cfg.DBHost == "" {
 		return nil, fmt.Errorf("DATABASE_URL or DB_HOST is required")
@@ -97,7 +133,42 @@ func Load() (*Config, error) {
 		)
 	}
 
+	if err := validateMail(cfg.Mail, cfg.AppBaseURL, os.Getenv); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+// validateMail は MAIL_PROVIDER に応じて要る設定が揃っているかを確かめる。lookup は環境変数の
+// 読み手（テストで差し替える）。
+func validateMail(m MailConfig, appBaseURL string, lookup func(string) string) error {
+	switch m.Provider {
+	case MailProviderNone:
+		return nil
+	case MailProviderSMTP, MailProviderSES:
+	default:
+		return fmt.Errorf("MAIL_PROVIDER が不正です: %q（none / smtp / ses のどれか）", m.Provider)
+	}
+	if m.From == "" {
+		return fmt.Errorf("MAIL_PROVIDER=%s には MAIL_FROM が必須です", m.Provider)
+	}
+	// 招待メールに載せる承諾 URL の origin。リクエストヘッダから推測しない（Host を細工した
+	// リクエストで、偽サイトへ誘導するリンクをメールに載せられる）。
+	if appBaseURL == "" {
+		return fmt.Errorf("MAIL_PROVIDER=%s には APP_BASE_URL が必須です（招待メールの承諾 URL の origin）", m.Provider)
+	}
+	if m.Provider == MailProviderSMTP && m.SMTPAddr == "" {
+		return fmt.Errorf("MAIL_PROVIDER=smtp には MAIL_SMTP_ADDR（host:port）が必須です")
+	}
+	if m.Provider == MailProviderSES {
+		// 資格情報は AWS SDK が環境変数から読む。無いまま起動すると、最初の送信で初めて
+		// 落ちる（しかも「送れませんでした」に畳まれる）ので、ここで止める。
+		if lookup("AWS_ACCESS_KEY_ID") == "" || lookup("AWS_SECRET_ACCESS_KEY") == "" {
+			return fmt.Errorf("MAIL_PROVIDER=ses には AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY が必須です")
+		}
+	}
+	return nil
 }
 
 // PostgresDSN は GORM に渡す DSN を返す。DATABASE_URL があればそのまま、

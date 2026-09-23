@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -88,6 +89,11 @@ func Test_招待API_adminはemailで招きトークンが1回だけ返る(t *tes
 	assert.Equal(t, 1, got.Invitation.SendCount)
 	assert.NotEmpty(t, got.Token)
 	assert.NotContains(t, w.Body.String(), `"tokenHash"`, "SHA-256 は応答に出さない")
+	// 招待メールは宛先へ 1 通。リンクは応答の token と同じもの。
+	assert.Equal(t, "sent", got.MailStatus)
+	require.Len(t, f.mailer.sent, 1)
+	assert.Equal(t, kbInviteeEmail, f.mailer.sent[0].To)
+	assert.Equal(t, "http://localhost:5173/invite#t="+got.Token, f.mailer.sent[0].InviteURL)
 
 	// 招待 URL を開いた人（未認証）への案内はトークンで引ける。
 	public := newKbFixture(kbCanEdit, 0)
@@ -309,4 +315,16 @@ func Test_招待API_案内は未認証で通り使えない招待は理由を伏
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.JSONEq(t, `{"status":"unavailable"}`, w.Body.String(), "無いトークンでも 404 にしない")
 	assert.Equal(t, http.StatusBadRequest, f.do(t, http.MethodPost, kbPreviewPath, `{}`).Code)
+}
+
+func Test_招待API_メールを送れなくても招待は作られfailedを返す(t *testing.T) {
+	f := kbAdminFixture(t)
+	f.mailer.failWith = errors.New("ses down")
+	w := f.do(t, http.MethodPost, kbInvitePath, `{"email":"`+kbInviteeEmail+`","role":"editor"}`)
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	got := decodeIssued(t, w.Body.Bytes())
+	assert.Equal(t, "failed", got.MailStatus)
+	assert.NotEmpty(t, got.Token, "リンクを手で渡せる")
+	list := f.do(t, http.MethodGet, kbInvitePath, "")
+	assert.Contains(t, list.Body.String(), kbInviteeEmail, "招待は残っている")
 }

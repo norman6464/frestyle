@@ -849,3 +849,13 @@ func (m *mockNotificationRepo) CountUnread(ctx context.Context, userID uint64) (
 	n, _ := args.Get(0).(int64)
 	return n, args.Error(1)
 }
+
+// --- mock: InvitationMailer ---
+
+type mockInvitationMailer struct{ mock.Mock }
+
+var _ repository.InvitationMailer = (*mockInvitationMailer)(nil)
+
+func (m *mockInvitationMailer) SendInvitation(ctx context.Context, in repository.InvitationMail) error {
+	return m.Called(ctx, in).Error(0)
+}

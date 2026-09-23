@@ -382,10 +382,15 @@ export interface KbInvitation {
   createdAt: string;
 }
 
+/** 招待メールの結果。sent = 送った、failed = 送れなかった（リンクを渡すか再送）、disabled = メールを送らない運用。 */
+export type KbInvitationMailStatus = 'sent' | 'failed' | 'disabled';
+
 /** 発行・再送の直後だけ返る形。token は平文で、この応答の外には残らない。 */
 export interface KbIssuedInvitation {
   invitation: KbInvitation;
   token: string;
+  /** 招待メールの結果。古い backend は返さないので、無ければ disabled として扱う。 */
+  mailStatus?: KbInvitationMailStatus;
 }
 
 /** POST /kb/workspaces/:slug/invitations の入力。 */

@@ -45,12 +45,31 @@ func tokenMatchesHash(t *testing.T, token string, hash []byte) {
 	assert.Equal(t, sum[:], hash, "DB に渡すのは平文の SHA-256")
 }
 
+const invAppBaseURL = "https://frestyle.dev/"
+
 func newInviteMocks() (*mockInvitationRepo, *mockUserRepo, *mockNotificationRepo, *fakeTxManager) {
 	inv := &mockInvitationRepo{}
 	inv.On("CountSentBySince", mock.Anything, uint64(1), mock.Anything).Return(int64(0), nil).Maybe()
 	inv.On("CountSentToEmailSince", mock.Anything, invEmail, mock.Anything).Return(int64(0), nil).Maybe()
 	inv.On("CountOpenInWorkspace", mock.Anything, invWS).Return(int64(0), nil).Maybe()
-	return inv, &mockUserRepo{}, &mockNotificationRepo{}, &fakeTxManager{}
+	users := &mockUserRepo{}
+	// Reply-To 用に招いた人を引く。無くてもメールは送る。
+	users.On("FindByID", mock.Anything, uint64(1)).Return(&domain.User{ID: 1, Email: "hanako@example.com"}, nil).Maybe()
+	return inv, users, &mockNotificationRepo{}, &fakeTxManager{}
+}
+
+// replyToUsers は再送のとき Reply-To 用に招いた人（actor=2）を引く mock。
+func replyToUsers() *mockUserRepo {
+	users := &mockUserRepo{}
+	users.On("FindByID", mock.Anything, uint64(2)).Return(&domain.User{ID: 2, Email: "carol@example.com"}, nil).Maybe()
+	return users
+}
+
+// disabledMailer はメールを送らない運用（MAIL_PROVIDER=none）の mock。
+func disabledMailer() *mockInvitationMailer {
+	m := &mockInvitationMailer{}
+	m.On("SendInvitation", mock.Anything, mock.Anything).Return(repository.ErrMailDisabled).Maybe()
+	return m
 }
 
 func Test_email招待_招待を作り既にアカウントのある宛先には通知を出す(t *testing.T) {
@@ -72,7 +91,7 @@ func Test_email招待_招待を作り既にアカウントのある宛先には�
 		return n.UserID == 7 && n.Type == domain.NotificationTypeWorkspaceInvitation &&
 			n.LinkPath == "/invitations" && strings.Contains(n.Title, "鈴木") && strings.Contains(n.Title, "Acme 社")
 	})).Return(nil)
-	uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx)
+	uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx, disabledMailer(), invAppBaseURL)
 
 	out, err := uc.Execute(context.Background(), kb.InviteByEmailInput{
 		WorkspaceID: invWS, WorkspaceName: "Acme 社",
@@ -93,7 +112,7 @@ func Test_email招待_宛先にアカウントが無ければ通知は出さな�
 	inv.On("Upsert", mock.Anything, mock.Anything).Return(pendingInvitation(time.Now()), nil)
 	inv.On("FindDetailByTokenHash", mock.Anything, mock.Anything).Return(detailOf(pendingInvitation(time.Now())), nil)
 	users.On("FindActiveIDByEmail", mock.Anything, invEmail).Return(uint64(0), false, nil)
-	uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx)
+	uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx, disabledMailer(), invAppBaseURL)
 
 	out, err := uc.Execute(context.Background(), kb.InviteByEmailInput{
 		WorkspaceID: invWS, Email: invEmail, Role: domain.GrantRoleViewer, ActorUserID: 1,
@@ -109,7 +128,7 @@ func Test_email招待_自分自身の宛先には通知しない(t *testing.T) {
 	inv.On("Upsert", mock.Anything, mock.Anything).Return(pendingInvitation(time.Now()), nil)
 	inv.On("FindDetailByTokenHash", mock.Anything, mock.Anything).Return(detailOf(pendingInvitation(time.Now())), nil)
 	users.On("FindActiveIDByEmail", mock.Anything, invEmail).Return(uint64(1), true, nil)
-	uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx)
+	uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx, disabledMailer(), invAppBaseURL)
 
 	out, err := uc.Execute(context.Background(), kb.InviteByEmailInput{
 		WorkspaceID: invWS, Email: invEmail, Role: domain.GrantRoleAdmin, ActorUserID: 1,
@@ -120,7 +139,7 @@ func Test_email招待_自分自身の宛先には通知しない(t *testing.T) {
 
 func Test_email招待_入力の検査(t *testing.T) {
 	inv, users, notifications, tx := newInviteMocks()
-	uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx)
+	uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx, disabledMailer(), invAppBaseURL)
 	base := kb.InviteByEmailInput{WorkspaceID: invWS, Email: invEmail, Role: domain.GrantRoleEditor, ActorUserID: 1}
 
 	for _, email := range []string{"", "taro", "@example.com", "山田 <taro@example.com>", "a@b, c@d", strings.Repeat("a", 250) + "@x.jp"} {
@@ -154,7 +173,7 @@ func Test_email招待_上限に達したら断る(t *testing.T) {
 	t.Run("招く側の1日の件数", func(t *testing.T) {
 		inv := &mockInvitationRepo{}
 		inv.On("CountSentBySince", mock.Anything, uint64(1), mock.Anything).Return(int64(kb.InvitationDailyLimitPerInviter), nil)
-		uc := kb.NewInviteByEmailUseCase(inv, &mockUserRepo{}, &mockNotificationRepo{}, &fakeTxManager{})
+		uc := kb.NewInviteByEmailUseCase(inv, &mockUserRepo{}, &mockNotificationRepo{}, &fakeTxManager{}, disabledMailer(), invAppBaseURL)
 		_, err := uc.Execute(context.Background(), base)
 		assert.ErrorIs(t, err, kb.ErrInvitationInviterLimit)
 	})
@@ -162,7 +181,7 @@ func Test_email招待_上限に達したら断る(t *testing.T) {
 		inv := &mockInvitationRepo{}
 		inv.On("CountSentBySince", mock.Anything, uint64(1), mock.Anything).Return(int64(0), nil)
 		inv.On("CountSentToEmailSince", mock.Anything, invEmail, mock.Anything).Return(int64(kb.InvitationDailyLimitPerEmail), nil)
-		uc := kb.NewInviteByEmailUseCase(inv, &mockUserRepo{}, &mockNotificationRepo{}, &fakeTxManager{})
+		uc := kb.NewInviteByEmailUseCase(inv, &mockUserRepo{}, &mockNotificationRepo{}, &fakeTxManager{}, disabledMailer(), invAppBaseURL)
 		_, err := uc.Execute(context.Background(), base)
 		assert.ErrorIs(t, err, kb.ErrInvitationEmailLimit)
 	})
@@ -171,14 +190,14 @@ func Test_email招待_上限に達したら断る(t *testing.T) {
 		inv.On("CountSentBySince", mock.Anything, uint64(1), mock.Anything).Return(int64(0), nil)
 		inv.On("CountSentToEmailSince", mock.Anything, invEmail, mock.Anything).Return(int64(0), nil)
 		inv.On("CountOpenInWorkspace", mock.Anything, invWS).Return(int64(kb.InvitationOpenLimitPerWorkspace), nil)
-		uc := kb.NewInviteByEmailUseCase(inv, &mockUserRepo{}, &mockNotificationRepo{}, &fakeTxManager{})
+		uc := kb.NewInviteByEmailUseCase(inv, &mockUserRepo{}, &mockNotificationRepo{}, &fakeTxManager{}, disabledMailer(), invAppBaseURL)
 		_, err := uc.Execute(context.Background(), base)
 		assert.ErrorIs(t, err, kb.ErrInvitationWorkspaceLimit)
 	})
 	t.Run("再送の間隔はrepositoryの判定をそのまま伝える", func(t *testing.T) {
 		inv, users, notifications, tx := newInviteMocks()
 		inv.On("Upsert", mock.Anything, mock.Anything).Return(nil, repository.ErrInvitationResendTooSoon)
-		uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx)
+		uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx, disabledMailer(), invAppBaseURL)
 		_, err := uc.Execute(context.Background(), base)
 		assert.ErrorIs(t, err, repository.ErrInvitationResendTooSoon)
 	})
@@ -196,7 +215,7 @@ func Test_招待再送_トークンを差し替えて期限を延ばす(t *testi
 			time.Until(in.ExpiresAt) > kb.InvitationTTL-time.Minute
 	})).Return(pendingInvitation(time.Now()), nil)
 	inv.On("FindDetailByTokenHash", mock.Anything, mock.Anything).Return(detailOf(pendingInvitation(time.Now())), nil)
-	uc := kb.NewResendInvitationUseCase(inv)
+	uc := kb.NewResendInvitationUseCase(inv, replyToUsers(), disabledMailer(), invAppBaseURL)
 
 	out, err := uc.Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, InvitationID: invID, ActorUserID: 2})
 	require.NoError(t, err)
@@ -213,7 +232,7 @@ func Test_招待再送_発行と同じ1日の上限を数える(t *testing.T) {
 		inv := &mockInvitationRepo{}
 		inv.On("Find", mock.Anything, invWS, invID).Return(pendingInvitation(time.Now()), nil)
 		inv.On("CountSentBySince", mock.Anything, uint64(2), mock.Anything).Return(int64(kb.InvitationDailyLimitPerInviter), nil)
-		_, err := kb.NewResendInvitationUseCase(inv).Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, InvitationID: invID, ActorUserID: 2})
+		_, err := kb.NewResendInvitationUseCase(inv, replyToUsers(), disabledMailer(), invAppBaseURL).Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, InvitationID: invID, ActorUserID: 2})
 		assert.ErrorIs(t, err, kb.ErrInvitationInviterLimit)
 		inv.AssertNotCalled(t, "Refresh", mock.Anything, mock.Anything)
 	})
@@ -222,14 +241,14 @@ func Test_招待再送_発行と同じ1日の上限を数える(t *testing.T) {
 		inv.On("Find", mock.Anything, invWS, invID).Return(pendingInvitation(time.Now()), nil)
 		inv.On("CountSentBySince", mock.Anything, uint64(2), mock.Anything).Return(int64(0), nil)
 		inv.On("CountSentToEmailSince", mock.Anything, invEmail, mock.Anything).Return(int64(kb.InvitationDailyLimitPerEmail), nil)
-		_, err := kb.NewResendInvitationUseCase(inv).Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, InvitationID: invID, ActorUserID: 2})
+		_, err := kb.NewResendInvitationUseCase(inv, replyToUsers(), disabledMailer(), invAppBaseURL).Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, InvitationID: invID, ActorUserID: 2})
 		assert.ErrorIs(t, err, kb.ErrInvitationEmailLimit)
 		inv.AssertNotCalled(t, "Refresh", mock.Anything, mock.Anything)
 	})
 	t.Run("招待が無ければ上限を数える前に not found", func(t *testing.T) {
 		inv := &mockInvitationRepo{}
 		inv.On("Find", mock.Anything, invWS, invID).Return(nil, repository.ErrInvitationNotFound)
-		_, err := kb.NewResendInvitationUseCase(inv).Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, InvitationID: invID, ActorUserID: 2})
+		_, err := kb.NewResendInvitationUseCase(inv, replyToUsers(), disabledMailer(), invAppBaseURL).Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, InvitationID: invID, ActorUserID: 2})
 		assert.ErrorIs(t, err, repository.ErrInvitationNotFound)
 		inv.AssertNotCalled(t, "CountSentBySince", mock.Anything, mock.Anything, mock.Anything)
 	})
@@ -414,4 +433,77 @@ func Test_招待辞退_宛先を添えてrepositoryへ渡す(t *testing.T) {
 
 	err := uc.Execute(context.Background(), kb.DeclineInvitationInput{UserID: 7})
 	assert.ErrorIs(t, err, repository.ErrInvitationNotFound)
+}
+
+func Test_email招待_メールはトランザクションの後に送り結果を状態で返す(t *testing.T) {
+	t.Run("送れたら sent。宛先・承諾 URL・Reply-To が揃う", func(t *testing.T) {
+		inv, users, notifications, tx := newInviteMocks()
+		inv.On("Upsert", mock.Anything, mock.Anything).Return(pendingInvitation(time.Now()), nil)
+		inv.On("FindDetailByTokenHash", mock.Anything, mock.Anything).Return(detailOf(pendingInvitation(time.Now())), nil)
+		users.On("FindActiveIDByEmail", mock.Anything, invEmail).Return(uint64(0), false, nil)
+		mailer := &mockInvitationMailer{}
+		var sent repository.InvitationMail
+		mailer.On("SendInvitation", mock.Anything, mock.MatchedBy(func(m repository.InvitationMail) bool {
+			sent = m
+			return m.To == invEmail && m.WorkspaceName == "Acme 社" && m.InviterName == "鈴木" && m.ReplyTo == "hanako@example.com"
+		})).Return(nil)
+		uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx, mailer, invAppBaseURL)
+
+		out, err := uc.Execute(context.Background(), kb.InviteByEmailInput{
+			WorkspaceID: invWS, WorkspaceName: "Acme 社", Email: invEmail, Role: domain.GrantRoleEditor, ActorUserID: 1,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, kb.InvitationMailSent, out.MailStatus)
+		assert.Equal(t, "https://frestyle.dev/invite#t="+out.Token, sent.InviteURL, "origin は設定、トークンはフラグメント")
+		mailer.AssertExpectations(t)
+	})
+	t.Run("送れなくても招待は残り failed を返す（エラーにしない）", func(t *testing.T) {
+		inv, users, notifications, tx := newInviteMocks()
+		inv.On("Upsert", mock.Anything, mock.Anything).Return(pendingInvitation(time.Now()), nil)
+		inv.On("FindDetailByTokenHash", mock.Anything, mock.Anything).Return(detailOf(pendingInvitation(time.Now())), nil)
+		users.On("FindActiveIDByEmail", mock.Anything, invEmail).Return(uint64(0), false, nil)
+		mailer := &mockInvitationMailer{}
+		mailer.On("SendInvitation", mock.Anything, mock.Anything).Return(errors.New("ses throttled"))
+		uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx, mailer, invAppBaseURL)
+
+		out, err := uc.Execute(context.Background(), kb.InviteByEmailInput{
+			WorkspaceID: invWS, Email: invEmail, Role: domain.GrantRoleEditor, ActorUserID: 1,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, kb.InvitationMailFailed, out.MailStatus)
+		assert.NotEmpty(t, out.Token, "リンクを手で渡せるようトークンは返す")
+		assert.Equal(t, 1, tx.calls, "メールの失敗でトランザクションは巻き戻さない（送信は外）")
+	})
+	t.Run("送らない運用は disabled", func(t *testing.T) {
+		inv, users, notifications, tx := newInviteMocks()
+		inv.On("Upsert", mock.Anything, mock.Anything).Return(pendingInvitation(time.Now()), nil)
+		inv.On("FindDetailByTokenHash", mock.Anything, mock.Anything).Return(detailOf(pendingInvitation(time.Now())), nil)
+		users.On("FindActiveIDByEmail", mock.Anything, invEmail).Return(uint64(0), false, nil)
+		uc := kb.NewInviteByEmailUseCase(inv, users, notifications, tx, disabledMailer(), invAppBaseURL)
+
+		out, err := uc.Execute(context.Background(), kb.InviteByEmailInput{
+			WorkspaceID: invWS, Email: invEmail, Role: domain.GrantRoleEditor, ActorUserID: 1,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, kb.InvitationMailDisabled, out.MailStatus)
+	})
+}
+
+func Test_招待再送_メールも送り直す(t *testing.T) {
+	inv := &mockInvitationRepo{}
+	inv.On("Find", mock.Anything, invWS, invID).Return(pendingInvitation(time.Now()), nil)
+	inv.On("CountSentBySince", mock.Anything, uint64(2), mock.Anything).Return(int64(0), nil)
+	inv.On("CountSentToEmailSince", mock.Anything, invEmail, mock.Anything).Return(int64(0), nil)
+	inv.On("Refresh", mock.Anything, mock.Anything).Return(pendingInvitation(time.Now()), nil)
+	inv.On("FindDetailByTokenHash", mock.Anything, mock.Anything).Return(detailOf(pendingInvitation(time.Now())), nil)
+	mailer := &mockInvitationMailer{}
+	mailer.On("SendInvitation", mock.Anything, mock.MatchedBy(func(m repository.InvitationMail) bool {
+		return m.To == invEmail && m.ReplyTo == "carol@example.com" && strings.HasPrefix(m.InviteURL, "https://frestyle.dev/invite#t=")
+	})).Return(nil)
+	uc := kb.NewResendInvitationUseCase(inv, replyToUsers(), mailer, invAppBaseURL)
+
+	out, err := uc.Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, InvitationID: invID, ActorUserID: 2})
+	require.NoError(t, err)
+	assert.Equal(t, kb.InvitationMailSent, out.MailStatus)
+	mailer.AssertExpectations(t)
 }
