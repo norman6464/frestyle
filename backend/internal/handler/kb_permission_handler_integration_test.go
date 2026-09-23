@@ -133,10 +133,6 @@ func kbInsertChildPage(t *testing.T, db *sql.DB, workspaceID, spaceID, parentID 
 	return id
 }
 
-// kbMissingIntegrationUserID は存在しないユーザー ID
-// （users は他の結合テストと共有するので、実在しそうにない大きな値を使う）。
-const kbMissingIntegrationUserID = "987654321"
-
 // kbDeniedBody は権限操作 API の唯一の拒否応答。バイト列で固定する。
 const kbDeniedBody = `{"error":"not_found"}`
 
