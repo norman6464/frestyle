@@ -1655,3 +1655,61 @@ describe('ワークスペースの削除', () => {
     expect(screen.queryByRole('button', { name: 'Acme 社 を削除' })).not.toBeInTheDocument();
   });
 });
+
+describe('スペースの顔のポップアップ（外を押す・Escape で閉じる）', () => {
+  /** 切替を開く。作成の入口は切替の中にしか無いので、それが「開いている」印。 */
+  async function openSwitcher() {
+    renderSidebar();
+    fireEvent.click(await screen.findByRole('button', { name: 'スペースを切り替える' }));
+    await screen.findByRole('button', { name: 'スペースを作成' });
+  }
+
+  it('切替を開いて外を押すと閉じる', async () => {
+    await openSwitcher();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('button', { name: 'スペースを作成' })).not.toBeInTheDocument();
+  });
+
+  it('同じ行の「ページを追加」を押しても切替は閉じる（別の部品として扱う）', async () => {
+    await openSwitcher();
+    fireEvent.mouseDown(screen.getByRole('button', { name: '開発部 にページを追加' }));
+    expect(screen.queryByRole('button', { name: 'スペースを作成' })).not.toBeInTheDocument();
+  });
+
+  it('切替の中（作成の入力欄）を押しても閉じない', async () => {
+    await openSwitcher();
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを作成' }));
+    const input = screen.getByRole('textbox', { name: 'スペースの名前' });
+    fireEvent.mouseDown(input);
+    expect(screen.getByRole('textbox', { name: 'スペースの名前' })).toBeInTheDocument();
+  });
+
+  it('Escape で閉じる。日本語入力の変換中の Escape では閉じない（打ちかけの名前を守る）', async () => {
+    await openSwitcher();
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを作成' }));
+    const input = screen.getByRole('textbox', { name: 'スペースの名前' });
+    fireEvent.keyDown(input, { key: 'Escape', isComposing: true });
+    fireEvent.keyDown(input, { key: 'Escape', keyCode: 229 });
+    expect(screen.getByRole('textbox', { name: 'スペースの名前' })).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByRole('textbox', { name: 'スペースの名前' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'スペースを作成' })).not.toBeInTheDocument();
+  });
+
+  it('「…」の操作メニューも外を押すと閉じる', async () => {
+    renderSidebar();
+    fireEvent.click(await screen.findByRole('button', { name: '開発部 の操作' }));
+    expect(screen.getByRole('button', { name: 'スペースの名前を変更' })).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('button', { name: 'スペースの名前を変更' })).not.toBeInTheDocument();
+  });
+
+  it('切替が開いたまま「…」を押すと、切替は閉じて操作メニューだけが開く', async () => {
+    await openSwitcher();
+    const more = screen.getByRole('button', { name: '開発部 の操作' });
+    fireEvent.mouseDown(more);
+    fireEvent.click(more);
+    expect(screen.queryByRole('button', { name: 'スペースを作成' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'スペースの名前を変更' })).toBeInTheDocument();
+  });
+});

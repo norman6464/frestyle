@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, waitFor, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { withApi, withRouter, withToast } from '../../../../.storybook/decorators';
 import KbSidebar from './KbSidebar';
 
@@ -118,5 +118,29 @@ export const スペースが無い: Story = {
     await expect(
       await within(canvasElement).findByText(/まだスペースがありません/),
     ).toBeVisible();
+  },
+};
+
+/** 切替のポップアップは、外を押すか Escape で閉じる。開いたまま残らない。 */
+export const 切替を外で閉じる: Story = {
+  decorators: [withApi(fullApi)],
+  args: { workspaceSlug: 'w-3f2a9c', spaceId: 's-1' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = await canvas.findByRole('button', { name: 'スペースを切り替える' }, { timeout: 5000 });
+    await userEvent.click(trigger);
+    await expect(await canvas.findByRole('button', { name: 'スペースを作成' })).toBeVisible();
+    // ポップアップの外（枠の地の部分）を押す。
+    await userEvent.click(canvasElement);
+    await waitFor(async () => {
+      await expect(canvas.queryByRole('button', { name: 'スペースを作成' })).not.toBeInTheDocument();
+    });
+    // 開き直して Escape でも閉じる。
+    await userEvent.click(trigger);
+    await expect(await canvas.findByRole('button', { name: 'スペースを作成' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(async () => {
+      await expect(canvas.queryByRole('button', { name: 'スペースを作成' })).not.toBeInTheDocument();
+    });
   },
 };
