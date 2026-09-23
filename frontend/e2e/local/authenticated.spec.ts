@@ -230,8 +230,10 @@ test.describe('届いている招待（/invitations）', () => {
   test('招待リンクからログインした後は /invitations へ戻る', async ({ page }) => {
     await mockAuthenticated(page, { '**/api/v2/kb/invitations': [] });
     // /invite が置く「ログイン後の戻り先」を先に置いておく（ログイン自体は発行者側の画面なので再現しない）。
+    // /invite は認証の外側にあり、ログイン済みかは目印 Cookie（fs_signed_in）で見るので、それも置く。
     await page.addInitScript(() => {
       sessionStorage.setItem('fs.postLoginPath', '/invitations');
+      document.cookie = 'fs_signed_in=1; path=/';
     });
     await page.route('**/api/v2/kb/invitations/preview', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"pending","workspaceName":"Acme 社","email":"taro@example.com","role":"editor","scope":"workspace"}' })

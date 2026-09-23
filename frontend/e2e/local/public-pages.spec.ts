@@ -41,6 +41,11 @@ test.describe('トップ（/）', () => {
 
 test.describe('招待リンク（/invite）', () => {
   test('未ログインでも案内が出て、トークンは URL から消え、ログインへ進める', async ({ page }) => {
+    // Playwright の route は**後に登録したものが先に当たる**ので、全体の 401 を先に置き、
+    // 招待の案内だけ後から上書きする。
+    await page.route('**/api/v2/**', (route) =>
+      route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthorized"}' })
+    );
     let previewBody: unknown = null;
     await page.route('**/api/v2/kb/invitations/preview', async (route) => {
       previewBody = route.request().postDataJSON();
@@ -59,10 +64,6 @@ test.describe('招待リンク（/invite）', () => {
         }),
       });
     });
-    // それ以外の API は未ログインとして 401。
-    await page.route('**/api/v2/**', (route) =>
-      route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthorized"}' })
-    );
 
     await page.goto('/invite#t=e2e-token');
 
@@ -77,11 +78,11 @@ test.describe('招待リンク（/invite）', () => {
   });
 
   test('使えない招待は理由を伏せた案内になる', async ({ page }) => {
-    await page.route('**/api/v2/kb/invitations/preview', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"unavailable"}' })
-    );
     await page.route('**/api/v2/**', (route) =>
       route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthorized"}' })
+    );
+    await page.route('**/api/v2/kb/invitations/preview', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"unavailable"}' })
     );
 
     await page.goto('/invite#t=dead');
