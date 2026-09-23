@@ -4284,8 +4284,14 @@ table "page_ticket_links" {
 # 期限切れの行も部分一意索引の上では「未決」のままなので、同じ宛先 × 場所への 2 回目は必ず
 # 既存行の UPDATE（再送 = トークン差し替え・期限延長）になる。INSERT ... ON CONFLICT ... DO UPDATE。
 #
-# users への FK は張らない。users の物理削除（CASCADE）と一緒に、未承諾の招待と「誰が招いたか」の
-# 記録が音もなく消えるのを避けるため（tickets / pages の created_by_user_id と同じ流派）。
+# *_by_user_id（招いた・届けた・承諾した・辞退した・取り消した人）はすべて users への FK を
+# RESTRICT で張る（membership_events / pages / tickets の *_by と同じ流派）。記録が残っている
+# users 行の物理削除は DB が拒む — 「誰が招いたか」が音もなく消えることも、存在しない id が
+# 記録されることも無い。退会は users.deleted_at（論理削除）なので、通常の運用で RESTRICT に
+# 当たることは無い。
+#
+# 「何回届けたか」は invitation_sends（追記専用の送信履歴）が持つ。この表の last_sent_* /
+# send_count は表示と再送の間隔判定のための要約で、上限（1 日の件数）はそちらを数える。
 # ---------------------------------------------------------------------------
 table "invitations" {
   schema = schema.public
@@ -4439,6 +4445,37 @@ table "invitations" {
     on_update   = NO_ACTION
     on_delete   = CASCADE
   }
+  # 人を指す 5 列。記録が残る users 行は消せない（RESTRICT）。
+  foreign_key "fk_invitations_invited_by" {
+    columns     = [column.invited_by_user_id]
+    ref_columns = [table.users.column.id]
+    on_update   = NO_ACTION
+    on_delete   = RESTRICT
+  }
+  foreign_key "fk_invitations_last_sent_by" {
+    columns     = [column.last_sent_by_user_id]
+    ref_columns = [table.users.column.id]
+    on_update   = NO_ACTION
+    on_delete   = RESTRICT
+  }
+  foreign_key "fk_invitations_accepted_by" {
+    columns     = [column.accepted_by_user_id]
+    ref_columns = [table.users.column.id]
+    on_update   = NO_ACTION
+    on_delete   = RESTRICT
+  }
+  foreign_key "fk_invitations_declined_by" {
+    columns     = [column.declined_by_user_id]
+    ref_columns = [table.users.column.id]
+    on_update   = NO_ACTION
+    on_delete   = RESTRICT
+  }
+  foreign_key "fk_invitations_revoked_by" {
+    columns     = [column.revoked_by_user_id]
+    ref_columns = [table.users.column.id]
+    on_update   = NO_ACTION
+    on_delete   = RESTRICT
+  }
   # 「未決の招待は宛先 × 場所ごとに 1 件」。space_id / page_id の NULL を同じ値として扱うため
   # COALESCE の式索引にする（uq_users_email_active と同じ式索引の形）。同じ宛先 × 場所への
   # 2 回目の INSERT は ON CONFLICT (同じ式) WHERE (同じ述語) DO UPDATE で再送にする。
@@ -4461,9 +4498,8 @@ table "invitations" {
     }
     where = "((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL))"
   }
-  # 「自分宛の招待」（email = ? ORDER BY created_at）と「同じ宛先へ 1 日に何件届けたか」
-  # （email で絞って last_sent_at を見る）を 1 本で引く。email で全ワークスペースを横断する
-  # 唯一の経路。
+  # 「自分宛の招待」（email = ? ORDER BY created_at）を引く。email で全ワークスペースを横断する
+  # 唯一の経路（届けた件数は invitation_sends 側の索引で数える）。
   index "idx_invitations_email_created" {
     on {
       column = column.email
@@ -4487,17 +4523,6 @@ table "invitations" {
   index "idx_invitations_open_inviter" {
     columns = [column.invited_by_user_id]
     where   = "((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL))"
-  }
-  # 「この人が 1 日に何件届けたか」（発行も再送も数える）。last_sent_* で数えるのは、
-  # created_at だと再送（既存行の UPDATE）が数に入らず、再送で送信数の上限を回れてしまうため。
-  index "idx_invitations_sender_sent" {
-    on {
-      column = column.last_sent_by_user_id
-    }
-    on {
-      column = column.last_sent_at
-      desc   = true
-    }
   }
   # 列挙値は varchar + CHECK（enum 型は値の追加・削除が移行になるので使わない）。
   check "ck_invitations_scope" {
@@ -4549,5 +4574,94 @@ table "invitations" {
   # 承諾は期限内にしか起きない。辞退・取消は期限後でも正当（残った行を止める操作）なので対象外。
   check "ck_invitations_accepted_in_time" {
     expr = "(accepted_at IS NULL) OR ((accepted_at >= created_at) AND (accepted_at <= expires_at))"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# 招待の送信履歴（invitation_sends）
+#
+# 「いつ・誰が・どの宛先へ届けたか」を 1 回の送信につき 1 行、追記だけで残す。
+# 1 日の件数の上限（招く側 50 件・宛先 5 件。数値は usecase の定数）はこの表を数える。
+# invitations の last_sent_* / send_count で数えると、同じ招待の再送が 1 行に畳まれて
+# 「再送を繰り返せば上限を回れる」穴になる（再送の間隔 10 分は別の守り）。
+# 発行・再送と同じトランザクションで書く（送ったのに履歴が無い / 履歴だけ残る、を作らない）。
+# 招待が消えれば（ワークスペースの削除）履歴も要らないので CASCADE。
+# ---------------------------------------------------------------------------
+table "invitation_sends" {
+  schema = schema.public
+  column "id" {
+    null = false
+    type = uuid
+  }
+  column "invitation_id" {
+    null = false
+    type = uuid
+  }
+  # invitations からも引けるが、ワークスペース単位で消す・数えるために持つ（非正規化）。
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  # 宛先（正規形）。招待行の email が再送で変わることは無いが、宛先ごとに数える索引の鍵として持つ。
+  column "email" {
+    null = false
+    type = text
+  }
+  column "sent_by_user_id" {
+    null = false
+    type = bigint
+  }
+  column "sent_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  foreign_key "fk_invitation_sends_invitation" {
+    columns     = [column.invitation_id]
+    ref_columns = [table.invitations.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  foreign_key "fk_invitation_sends_workspace" {
+    columns     = [column.workspace_id]
+    ref_columns = [table.workspaces.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  foreign_key "fk_invitation_sends_sent_by" {
+    columns     = [column.sent_by_user_id]
+    ref_columns = [table.users.column.id]
+    on_update   = NO_ACTION
+    on_delete   = RESTRICT
+  }
+  # 「この人が since 以降に何件届けたか」。
+  index "idx_invitation_sends_sender_sent" {
+    on {
+      column = column.sent_by_user_id
+    }
+    on {
+      column = column.sent_at
+      desc   = true
+    }
+  }
+  # 「この宛先へ since 以降に何件届けたか」（全ワークスペース横断）。
+  index "idx_invitation_sends_email_sent" {
+    on {
+      column = column.email
+    }
+    on {
+      column = column.sent_at
+      desc   = true
+    }
+  }
+  # 1 件の招待の送信履歴（画面の詳細・CASCADE の削除）。
+  index "idx_invitation_sends_invitation" {
+    columns = [column.invitation_id]
+  }
+  check "ck_invitation_sends_email_normalized" {
+    expr = "(email <> ''::text) AND (email = lower(btrim(email, '\t\n\u000b\u000c\r '::text)))"
   }
 }

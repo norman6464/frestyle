@@ -189,7 +189,12 @@ CREATE TABLE "invitations" (
   PRIMARY KEY ("id"),
   CONSTRAINT "uq_invitations_token_hash" UNIQUE ("token_hash"),
   CONSTRAINT "uq_invitations_workspace_id" UNIQUE ("workspace_id", "id"),
+  CONSTRAINT "fk_invitations_accepted_by" FOREIGN KEY ("accepted_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
+  CONSTRAINT "fk_invitations_declined_by" FOREIGN KEY ("declined_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
+  CONSTRAINT "fk_invitations_invited_by" FOREIGN KEY ("invited_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
+  CONSTRAINT "fk_invitations_last_sent_by" FOREIGN KEY ("last_sent_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
   CONSTRAINT "fk_invitations_page" FOREIGN KEY ("workspace_id", "page_id") REFERENCES "pages" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_invitations_revoked_by" FOREIGN KEY ("revoked_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
   CONSTRAINT "fk_invitations_space" FOREIGN KEY ("workspace_id", "space_id") REFERENCES "spaces" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT "fk_invitations_workspace" FOREIGN KEY ("workspace_id") REFERENCES "workspaces" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT "ck_invitations_accepted_in_time" CHECK ((accepted_at IS NULL) OR ((accepted_at >= created_at) AND (accepted_at <= expires_at))),
@@ -211,12 +216,31 @@ CREATE TABLE "invitations" (
 CREATE INDEX "idx_invitations_email_created" ON "invitations" ("email", "created_at" DESC);
 -- Create index "idx_invitations_open_inviter" to table: "invitations"
 CREATE INDEX "idx_invitations_open_inviter" ON "invitations" ("invited_by_user_id") WHERE ((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL));
--- Create index "idx_invitations_sender_sent" to table: "invitations"
-CREATE INDEX "idx_invitations_sender_sent" ON "invitations" ("last_sent_by_user_id", "last_sent_at" DESC);
 -- Create index "idx_invitations_workspace_created" to table: "invitations"
 CREATE INDEX "idx_invitations_workspace_created" ON "invitations" ("workspace_id", "created_at" DESC);
 -- Create index "uq_invitations_open_target" to table: "invitations"
 CREATE UNIQUE INDEX "uq_invitations_open_target" ON "invitations" ("workspace_id", "email", "scope", (COALESCE(space_id, '00000000-0000-0000-0000-000000000000'::uuid)), (COALESCE(page_id, '00000000-0000-0000-0000-000000000000'::uuid))) WHERE ((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL));
+-- Create "invitation_sends" table
+CREATE TABLE "invitation_sends" (
+  "id" uuid NOT NULL,
+  "invitation_id" uuid NOT NULL,
+  "workspace_id" uuid NOT NULL,
+  "email" text NOT NULL,
+  "sent_by_user_id" bigint NOT NULL,
+  "sent_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "fk_invitation_sends_invitation" FOREIGN KEY ("invitation_id") REFERENCES "invitations" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_invitation_sends_sent_by" FOREIGN KEY ("sent_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
+  CONSTRAINT "fk_invitation_sends_workspace" FOREIGN KEY ("workspace_id") REFERENCES "workspaces" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "ck_invitation_sends_email_normalized" CHECK ((email <> ''::text) AND (email = lower(btrim(email, '	
+ '::text))))
+);
+-- Create index "idx_invitation_sends_email_sent" to table: "invitation_sends"
+CREATE INDEX "idx_invitation_sends_email_sent" ON "invitation_sends" ("email", "sent_at" DESC);
+-- Create index "idx_invitation_sends_invitation" to table: "invitation_sends"
+CREATE INDEX "idx_invitation_sends_invitation" ON "invitation_sends" ("invitation_id");
+-- Create index "idx_invitation_sends_sender_sent" to table: "invitation_sends"
+CREATE INDEX "idx_invitation_sends_sender_sent" ON "invitation_sends" ("sent_by_user_id", "sent_at" DESC);
 -- Create "membership_events" table
 CREATE TABLE "membership_events" (
   "id" uuid NOT NULL,

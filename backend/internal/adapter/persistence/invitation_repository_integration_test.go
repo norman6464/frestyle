@@ -211,6 +211,21 @@ func TestInvitationRepository_Integration(t *testing.T) {
 		assert.Equal(t, "commenter", *events[0].NewLabel)
 	})
 
+	t.Run("居ない人は招けず承諾もできない（users への FK）", func(t *testing.T) {
+		f := setupKBPermission(t, sqlDB)
+		w := f.inviteWrite(t, f.bob, f.alice, domain.GrantRoleEditor, "tok-ghost")
+		w.ActorUserID = 999999999
+		_, err := f.invitations.Upsert(ctx, w)
+		assert.ErrorIs(t, err, repository.ErrUserNotFound, "invited_by / sent_by の FK 違反は「居ない人」")
+		var n int
+		require.NoError(t, sqlDB.QueryRow(`SELECT count(*) FROM invitation_sends WHERE workspace_id = $1`, f.ws).Scan(&n))
+		assert.Zero(t, n, "招待も履歴も残らない（同じトランザクション）")
+
+		inv := f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor)
+		require.NoError(t, sqlDB.QueryRow(`SELECT count(*) FROM invitation_sends WHERE invitation_id = $1`, inv.ID).Scan(&n))
+		assert.Equal(t, 1, n, "発行 1 回 = 履歴 1 行")
+	})
+
 	t.Run("承諾は宛先が違えば無いのと同じで何も書かない", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
 		inv := f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor)
@@ -284,6 +299,13 @@ func TestInvitationRepository_Integration(t *testing.T) {
 		assert.Equal(t, f.alice, resent.InvitedByUserID)
 		_, err = f.invitations.FindDetailByTokenHash(ctx, tokenHashOf("tok-r1"))
 		require.NoError(t, err)
+		// 再送も送信履歴に 1 行残る（発行 1 + 再送 1。1 日の上限はこれを数える）。
+		byCarol, err := f.invitations.CountSentBySince(ctx, f.carol, time.Now().Add(-time.Hour))
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), byCarol)
+		toBob, err := f.invitations.CountSentToEmailSince(ctx, f.emailOf(t, f.bob), time.Now().Add(-time.Hour))
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), toBob)
 
 		_, err = refresh("0198a000-0000-7000-8000-0000000000ff", "tok-r2")
 		assert.ErrorIs(t, err, repository.ErrInvitationNotFound)
@@ -371,7 +393,7 @@ func TestInvitationRepository_Integration(t *testing.T) {
 		assert.Equal(t, int64(1), n, "期限切れは未決の件数に入らない")
 		sent, err := f.invitations.CountSentBySince(ctx, f.alice, time.Now().Add(-time.Hour))
 		require.NoError(t, err)
-		assert.Equal(t, int64(2), sent, "期限切れの行は last_sent_at も 8 日前へ動かしたので数に入らない")
+		assert.Equal(t, int64(3), sent, "送信履歴（invitation_sends）を数える。招待行の last_sent_at を動かしても送った事実は残る")
 		toBob, err := f.invitations.CountSentToEmailSince(ctx, f.emailOf(t, f.bob), time.Now().Add(-time.Hour))
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), toBob, "全ワークスペース横断で数える")
@@ -434,6 +456,7 @@ func TestInvitationRepository_Integration(t *testing.T) {
 			{"承諾の時刻だけで人が無い", base + ", accepted_at", "$1,$2,'workspace','editor','a@example.test',$3,$4,$5,$4,now()", []any{newID(), f.ws, hash, int64(f.alice), expires}, "ck_invitations_accepted_pair"},
 			{"承諾と辞退が両方", base + ", accepted_at, accepted_by_user_id, declined_at, declined_by_user_id", "$1,$2,'workspace','editor','a@example.test',$3,$4,$5,$4,now(),$4,now(),$4", []any{newID(), f.ws, hash, int64(f.alice), expires}, "ck_invitations_single_outcome"},
 			{"send_countが0", base + ", send_count", "$1,$2,'workspace','editor','a@example.test',$3,$4,$5,$4,0", []any{newID(), f.ws, hash, int64(f.alice), expires}, "ck_invitations_send_count"},
+			{"居ない人が招いた", base, "$1,$2,'workspace','editor','a@example.test',$3,$4,$5,$4", []any{newID(), f.ws, hash, int64(999999999), expires}, "fk_invitations_invited_by"},
 		}
 		for _, c := range cases {
 			t.Run(c.name, func(t *testing.T) {
@@ -457,13 +480,20 @@ func TestInvitationRepository_Integration(t *testing.T) {
 		})
 	})
 
-	t.Run("ワークスペースが消えると招待も消える", func(t *testing.T) {
+	t.Run("ワークスペースが消えると招待も送信履歴も消え、記録の残る人は消せない", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
 		inv := f.invite(ctx, t, f.bob, f.alice, domain.GrantRoleEditor)
-		_, err := sqlDB.Exec(`DELETE FROM workspaces WHERE id = $1`, f.ws)
+		_, err := sqlDB.Exec(`DELETE FROM users WHERE id = $1`, f.alice)
+		require.Error(t, err, "招いた記録が残る users 行は RESTRICT で消せない")
+		assert.ErrorContains(t, err, "fk_invitation")
+
+		_, err = sqlDB.Exec(`DELETE FROM workspaces WHERE id = $1`, f.ws)
 		require.NoError(t, err)
 		_, err = f.invitations.FindByID(ctx, inv.ID)
 		assert.ErrorIs(t, err, repository.ErrInvitationNotFound)
+		var n int
+		require.NoError(t, sqlDB.QueryRow(`SELECT count(*) FROM invitation_sends WHERE invitation_id = $1`, inv.ID).Scan(&n))
+		assert.Zero(t, n)
 	})
 
 	t.Run("FindActiveIDByEmailは正規形で引き退会者は出ない", func(t *testing.T) {

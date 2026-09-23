@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -129,6 +130,35 @@ func invitationTargetNotFound(scope domain.InvitationScope) error {
 	}
 }
 
+// invitationWriteError は招待の書き込みで起きた FK 違反を「誰が無いのか」に翻訳する。
+// invitations は場所（workspace / space / page）と人（*_by_user_id、送信履歴の sent_by）の
+// 両方へ FK を持つので、制約名を見ないとどちらの入力の誤りか区別できない。
+func invitationWriteError(err error, scope domain.InvitationScope) error {
+	name, ok := foreignKeyViolationConstraint(err)
+	if !ok {
+		return err
+	}
+	if strings.HasSuffix(name, "_by") {
+		return repository.ErrUserNotFound
+	}
+	return invitationTargetNotFound(scope)
+}
+
+// recordInvitationSend は送信履歴を 1 行追記する（発行・再送と同じトランザクションで呼ぶ）。
+func recordInvitationSend(ctx context.Context, qtx *sqlcgen.Queries, inv sqlcgen.Invitation, sentBy int64) error {
+	id, err := kbNewID()
+	if err != nil {
+		return err
+	}
+	return qtx.InsertInvitationSend(ctx, sqlcgen.InsertInvitationSendParams{
+		ID:           id,
+		InvitationID: inv.ID,
+		WorkspaceID:  inv.WorkspaceID,
+		Email:        inv.Email,
+		SentByUserID: sentBy,
+	})
+}
+
 func (r *invitationRepository) Upsert(ctx context.Context, in repository.InvitationWrite) (*domain.Invitation, error) {
 	wsID, ok := kbParseID(in.WorkspaceID)
 	if !ok {
@@ -149,31 +179,37 @@ func (r *invitationRepository) Upsert(ctx context.Context, in repository.Invitat
 	if err != nil {
 		return nil, err
 	}
-	row, err := r.queries(ctx).UpsertOpenInvitation(ctx, sqlcgen.UpsertOpenInvitationParams{
-		ID:          id,
-		WorkspaceID: wsID,
-		Scope:       string(in.Scope),
-		SpaceID:     spaceID,
-		PageID:      pageID,
-		Role:        string(in.Role),
-		Email:       in.Email,
-		InviteeName: in.InviteeName,
-		TokenHash:   in.TokenHash,
-		ActorUserID: actor,
-		ExpiresAt:   in.ExpiresAt,
-		SentBefore:  in.SentBefore,
+	// 招待の行と送信履歴は同じトランザクションで書く（送ったのに履歴が無い、を作らない）。
+	var row sqlcgen.Invitation
+	err = r.runInTx(ctx, func(qtx *sqlcgen.Queries) error {
+		var err error
+		row, err = qtx.UpsertOpenInvitation(ctx, sqlcgen.UpsertOpenInvitationParams{
+			ID:          id,
+			WorkspaceID: wsID,
+			Scope:       string(in.Scope),
+			SpaceID:     spaceID,
+			PageID:      pageID,
+			Role:        string(in.Role),
+			Email:       in.Email,
+			InviteeName: in.InviteeName,
+			TokenHash:   in.TokenHash,
+			ActorUserID: actor,
+			ExpiresAt:   in.ExpiresAt,
+			SentBefore:  in.SentBefore,
+		})
+		if err != nil {
+			// 0 行は「同じ宛先 × 場所に未決の行があり、まだ再送の間隔が空いていない」
+			// （UpsertOpenInvitation の DO UPDATE ... WHERE が偽）。
+			if errors.Is(err, sql.ErrNoRows) {
+				return repository.ErrInvitationResendTooSoon
+			}
+			// 別テナントのスペース / ページ、消えたワークスペース、居ない実行者は FK で落ちる。
+			// 入力の誤りなので制約違反のまま上へ流さず「対象が無い」にする（500 にしない）。
+			return invitationWriteError(err, in.Scope)
+		}
+		return recordInvitationSend(ctx, qtx, row, actor)
 	})
 	if err != nil {
-		// 0 行は「同じ宛先 × 場所に未決の行があり、まだ再送の間隔が空いていない」
-		// （UpsertOpenInvitation の DO UPDATE ... WHERE が偽）。
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, repository.ErrInvitationResendTooSoon
-		}
-		// 別テナントのスペース / ページ、消えたワークスペースは複合 FK で落ちる。入力の誤りなので
-		// 制約違反のまま上へ流さず「対象が無い」にする（500 にしない）。
-		if isForeignKeyViolation(err) {
-			return nil, invitationTargetNotFound(in.Scope)
-		}
 		return nil, err
 	}
 	inv := toDomainInvitation(row)
@@ -190,14 +226,24 @@ func (r *invitationRepository) Refresh(ctx context.Context, in repository.Invita
 	if !aok {
 		return nil, repository.ErrUserNotFound
 	}
-	q := r.queries(ctx)
-	row, err := q.RefreshInvitationToken(ctx, sqlcgen.RefreshInvitationTokenParams{
-		TokenHash:   in.TokenHash,
-		ExpiresAt:   in.ExpiresAt,
-		ActorUserID: actor,
-		WorkspaceID: wsID,
-		ID:          invID,
-		SentBefore:  in.SentBefore,
+	var row sqlcgen.Invitation
+	err := r.runInTx(ctx, func(qtx *sqlcgen.Queries) error {
+		var err error
+		row, err = qtx.RefreshInvitationToken(ctx, sqlcgen.RefreshInvitationTokenParams{
+			TokenHash:   in.TokenHash,
+			ExpiresAt:   in.ExpiresAt,
+			ActorUserID: actor,
+			WorkspaceID: wsID,
+			ID:          invID,
+			SentBefore:  in.SentBefore,
+		})
+		if err != nil {
+			if isForeignKeyViolation(err) {
+				return repository.ErrUserNotFound
+			}
+			return err
+		}
+		return recordInvitationSend(ctx, qtx, row, actor)
 	})
 	if err == nil {
 		inv := toDomainInvitation(row)
@@ -207,8 +253,9 @@ func (r *invitationRepository) Refresh(ctx context.Context, in repository.Invita
 		return nil, err
 	}
 	// 0 行は「無い」「結果が出ている」「間隔が空いていない」の 3 つがあり得る。次に何をすべきか
-	// （取り直す・諦める・待つ）が違うので、読み直して切り分ける。
-	current, err := q.GetInvitation(ctx, sqlcgen.GetInvitationParams{WorkspaceID: wsID, ID: invID})
+	// （取り直す・諦める・待つ）が違うので、読み直して切り分ける（トランザクションは何も
+	// 書かずに終わっている）。
+	current, err := r.queries(ctx).GetInvitation(ctx, sqlcgen.GetInvitationParams{WorkspaceID: wsID, ID: invID})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, repository.ErrInvitationNotFound
@@ -350,6 +397,10 @@ func (r *invitationRepository) Accept(ctx context.Context, invitationID string, 
 		wsID, _ := kbParseID(inv.WorkspaceID)
 		n, err := qtx.AcceptInvitation(ctx, sqlcgen.AcceptInvitationParams{UserID: uid, ID: invID})
 		if err != nil {
+			// accepted_by_user_id は users への FK。居ないユーザー ID は入力の誤り。
+			if isForeignKeyViolation(err) {
+				return repository.ErrUserNotFound
+			}
 			return err
 		}
 		if n == 0 {
@@ -415,6 +466,9 @@ func (r *invitationRepository) Decline(ctx context.Context, invitationID string,
 		}
 		n, err := qtx.DeclineInvitation(ctx, sqlcgen.DeclineInvitationParams{UserID: uid, ID: invID})
 		if err != nil {
+			if isForeignKeyViolation(err) {
+				return repository.ErrUserNotFound
+			}
 			return err
 		}
 		if n == 0 {
@@ -445,6 +499,9 @@ func (r *invitationRepository) Revoke(ctx context.Context, workspaceID, invitati
 	q := r.queries(ctx)
 	n, err := q.RevokeInvitation(ctx, sqlcgen.RevokeInvitationParams{ActorUserID: actor, WorkspaceID: wsID, ID: invID})
 	if err != nil {
+		if isForeignKeyViolation(err) {
+			return repository.ErrUserNotFound
+		}
 		return err
 	}
 	if n > 0 {
@@ -477,9 +534,9 @@ func (r *invitationRepository) CountSentBySince(ctx context.Context, userID uint
 	if !ok {
 		return 0, nil
 	}
-	return r.queries(ctx).CountInvitationsSentBySince(ctx, sqlcgen.CountInvitationsSentBySinceParams{UserID: uid, Since: since})
+	return r.queries(ctx).CountInvitationSendsBySince(ctx, sqlcgen.CountInvitationSendsBySinceParams{UserID: uid, Since: since})
 }
 
 func (r *invitationRepository) CountSentToEmailSince(ctx context.Context, email string, since time.Time) (int64, error) {
-	return r.queries(ctx).CountInvitationsSentToEmailSince(ctx, sqlcgen.CountInvitationsSentToEmailSinceParams{Email: email, Since: since})
+	return r.queries(ctx).CountInvitationSendsToEmailSince(ctx, sqlcgen.CountInvitationSendsToEmailSinceParams{Email: email, Since: since})
 }

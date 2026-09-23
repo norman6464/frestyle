@@ -62,10 +62,10 @@ type InvitationRefresh struct {
 // 触らないため。その承諾（Accept）だけは所属・主体・付与・監査を 1 トランザクションで書く。
 type InvitationRepository interface {
 	// Upsert は招待を発行する。同じ宛先 × 場所に未決の行があれば、その行を再送として更新する
-	// （呼び出し側は新規か再送かを区別しなくてよい）。再送の間隔が空いていなければ
-	// ErrInvitationResendTooSoon。
+	// （呼び出し側は新規か再送かを区別しなくてよい）。送信履歴も同じトランザクションで 1 行足す。
+	// 再送の間隔が空いていなければ ErrInvitationResendTooSoon。
 	Upsert(ctx context.Context, in InvitationWrite) (*domain.Invitation, error)
-	// Refresh は未決の招待のトークンを差し替えて期限を延ばす（再送）。
+	// Refresh は未決の招待のトークンを差し替えて期限を延ばす（再送。送信履歴も 1 行足す）。
 	// 無い・別ワークスペースなら ErrInvitationNotFound、結果が出ていれば ErrInvitationNotOpen、
 	// 間隔が空いていなければ ErrInvitationResendTooSoon。
 	Refresh(ctx context.Context, in InvitationRefresh) (*domain.Invitation, error)
@@ -93,8 +93,8 @@ type InvitationRepository interface {
 	Revoke(ctx context.Context, workspaceID, invitationID string, actorUserID uint64) error
 	// CountOpenInWorkspace はワークスペースの未決かつ期限内の件数。
 	CountOpenInWorkspace(ctx context.Context, workspaceID string) (int64, error)
-	// CountSentBySince はその人が since 以降に届けた件数（発行も再送も）。
+	// CountSentBySince はその人が since 以降に届けた回数（発行も再送も 1 回ずつ。送信履歴を数える）。
 	CountSentBySince(ctx context.Context, userID uint64, since time.Time) (int64, error)
-	// CountSentToEmailSince はその宛先へ since 以降に届けた件数（全ワークスペース横断）。
+	// CountSentToEmailSince はその宛先へ since 以降に届けた回数（全ワークスペース横断。送信履歴を数える）。
 	CountSentToEmailSince(ctx context.Context, email string, since time.Time) (int64, error)
 }

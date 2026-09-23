@@ -186,6 +186,9 @@ func Test_email招待_上限に達したら断る(t *testing.T) {
 
 func Test_招待再送_トークンを差し替えて期限を延ばす(t *testing.T) {
 	inv := &mockInvitationRepo{}
+	inv.On("Find", mock.Anything, invWS, invID).Return(pendingInvitation(time.Now()), nil)
+	inv.On("CountSentBySince", mock.Anything, uint64(2), mock.Anything).Return(int64(0), nil)
+	inv.On("CountSentToEmailSince", mock.Anything, invEmail, mock.Anything).Return(int64(0), nil)
 	var refreshed repository.InvitationRefresh
 	inv.On("Refresh", mock.Anything, mock.MatchedBy(func(in repository.InvitationRefresh) bool {
 		refreshed = in
@@ -202,6 +205,34 @@ func Test_招待再送_トークンを差し替えて期限を延ばす(t *testi
 
 	_, err = uc.Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, ActorUserID: 2})
 	assert.ErrorIs(t, err, repository.ErrInvitationNotFound, "id 無しは not found")
+}
+
+func Test_招待再送_発行と同じ1日の上限を数える(t *testing.T) {
+	// 再送も 1 回の送信。ここを数えないと、再送を繰り返すだけで上限を回れる。
+	t.Run("招く側の上限", func(t *testing.T) {
+		inv := &mockInvitationRepo{}
+		inv.On("Find", mock.Anything, invWS, invID).Return(pendingInvitation(time.Now()), nil)
+		inv.On("CountSentBySince", mock.Anything, uint64(2), mock.Anything).Return(int64(kb.InvitationDailyLimitPerInviter), nil)
+		_, err := kb.NewResendInvitationUseCase(inv).Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, InvitationID: invID, ActorUserID: 2})
+		assert.ErrorIs(t, err, kb.ErrInvitationInviterLimit)
+		inv.AssertNotCalled(t, "Refresh", mock.Anything, mock.Anything)
+	})
+	t.Run("宛先の上限", func(t *testing.T) {
+		inv := &mockInvitationRepo{}
+		inv.On("Find", mock.Anything, invWS, invID).Return(pendingInvitation(time.Now()), nil)
+		inv.On("CountSentBySince", mock.Anything, uint64(2), mock.Anything).Return(int64(0), nil)
+		inv.On("CountSentToEmailSince", mock.Anything, invEmail, mock.Anything).Return(int64(kb.InvitationDailyLimitPerEmail), nil)
+		_, err := kb.NewResendInvitationUseCase(inv).Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, InvitationID: invID, ActorUserID: 2})
+		assert.ErrorIs(t, err, kb.ErrInvitationEmailLimit)
+		inv.AssertNotCalled(t, "Refresh", mock.Anything, mock.Anything)
+	})
+	t.Run("招待が無ければ上限を数える前に not found", func(t *testing.T) {
+		inv := &mockInvitationRepo{}
+		inv.On("Find", mock.Anything, invWS, invID).Return(nil, repository.ErrInvitationNotFound)
+		_, err := kb.NewResendInvitationUseCase(inv).Execute(context.Background(), kb.ResendInvitationInput{WorkspaceID: invWS, InvitationID: invID, ActorUserID: 2})
+		assert.ErrorIs(t, err, repository.ErrInvitationNotFound)
+		inv.AssertNotCalled(t, "CountSentBySince", mock.Anything, mock.Anything, mock.Anything)
+	})
 }
 
 func Test_招待取消_repositoryへそのまま渡す(t *testing.T) {

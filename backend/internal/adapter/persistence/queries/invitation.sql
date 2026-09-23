@@ -12,7 +12,7 @@
 -- （値は常にある。::int にしないのは vet の narrowing-cast-on-param が言うとおり）。
 
 -- name: UpsertOpenInvitation :one
--- 招待の発行。同じ宛先 × 場所に未決の行（期限切れも含む。結果の 3 列が全部 NULL）があれば、
+-- 招待の発行（送信履歴 InsertInvitationSend を同じトランザクションで足す）。同じ宛先 × 場所に未決の行（期限切れも含む。結果の 3 列が全部 NULL）があれば、
 -- 新しい行を作らず既存行を「再送」として更新する: トークン差し替え・期限延長・役割と表示名は
 -- 今回の値で上書き・send_count + 1。invited_by_user_id は最初に招いた人のまま保ち、
 -- last_sent_by_user_id だけ今回の実行者にする。
@@ -159,12 +159,18 @@ WHERE workspace_id = $1
   AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
   AND expires_at > now();
 
--- name: CountInvitationsSentBySince :one
--- この人が since 以降に届けた件数（発行も再送も。last_sent_* で数える）。1 日の上限判定用。
-SELECT count(*) FROM invitations
-WHERE last_sent_by_user_id = sqlc.arg(user_id) AND last_sent_at >= sqlc.arg(since);
+-- name: InsertInvitationSend :exec
+-- 送信履歴を 1 行追記する。発行（UpsertOpenInvitation）・再送（RefreshInvitationToken）と同じ
+-- トランザクションで呼ぶ。1 日の件数の上限はこの表を数える（invitation_sends のコメント参照）。
+INSERT INTO invitation_sends (id, invitation_id, workspace_id, email, sent_by_user_id)
+VALUES ($1, $2, $3, $4, $5);
 
--- name: CountInvitationsSentToEmailSince :one
--- この宛先へ since 以降に届けた件数（全ワークスペース横断）。同じ人へ送りすぎない上限判定用。
-SELECT count(*) FROM invitations
-WHERE email = sqlc.arg(email) AND last_sent_at >= sqlc.arg(since);
+-- name: CountInvitationSendsBySince :one
+-- この人が since 以降に届けた回数（発行も再送も 1 回ずつ数える）。1 日の上限判定用。
+SELECT count(*) FROM invitation_sends
+WHERE sent_by_user_id = sqlc.arg(user_id) AND sent_at >= sqlc.arg(since);
+
+-- name: CountInvitationSendsToEmailSince :one
+-- この宛先へ since 以降に届けた回数（全ワークスペース横断）。同じ人へ送りすぎない上限判定用。
+SELECT count(*) FROM invitation_sends
+WHERE email = sqlc.arg(email) AND sent_at >= sqlc.arg(since);

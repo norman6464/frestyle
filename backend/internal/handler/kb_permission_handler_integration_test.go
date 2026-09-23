@@ -205,6 +205,7 @@ func TestKnowledgeBasePermissionAPI_Integration(t *testing.T) {
 		w = e.do(t, http.MethodPost,
 			"/api/v2/kb/workspaces/"+env.slug+"/invitations", `{"email":"outsider@example.test","role":"viewer"}`)
 		assert.Equal(t, http.StatusNotFound, w.Code, "人を招く（ワークスペース全体の操作）にも届かない")
+		assert.Equal(t, kbDeniedBody, w.Body.String(), "拒否の本文は他の権限操作と同じ")
 	})
 
 	t.Run("別スペースのスペースadminは他スペースの権限を変えられない", func(t *testing.T) {

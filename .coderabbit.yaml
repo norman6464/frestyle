@@ -38,7 +38,7 @@ reviews:
         クリーンアーキテクチャの handler 層。次を必ず確認し違反を指摘すること。
         (1) handler は usecase 経由でのみ処理する。repository / infra / gorm.DB を handler から直接呼んでいたら指摘。
         (2) *gin.Context や net/http の型を usecase の引数に渡していないか。
-        (3) request / response 構造体は handler ファイル内 local 定義で、binding タグでバリデーションしているか。
+        (3) request / response の DTO は internal/handler/dto にドメインごとのファイルで置き（AGENTS.md §2.4。handler ファイル内に定義しない）、binding タグでバリデーションしているか。
         (4) 機密フィールド (パスワード hash / token / BlobData 等) が response に露出していないか (domain 側 json:"-" で除外)。
         (5) 【最重要・再発防止】response / request の json タグのキー名が、フロントの手書き repository (frontend/src/**/api/*.ts) が送受信するキーと一致しているか。displayName↔name のような不一致、フロントが叩くパスと router 登録パスの不一致 (未登録=404) を必ず指摘する。過去に本番障害になった箇所。
     - path: "backend/internal/usecase/**"
@@ -64,7 +64,7 @@ reviews:
         Slice の自己参照 (barrel 経由の import) をしていないか (カバレッジ分母が膨らむため深いパスで mock)。
     - path: "**/*_test.go"
       instructions: >-
-        Go のテスト。usecase は testify/mock、repository は sqlite メモリ、handler は httptest + gin.New()、
+        Go のテスト。usecase は testify/mock、repository は実 PostgreSQL の結合テスト（//go:build integration。sqlite は使わない）、handler は httptest + gin.New()、
         infra は境界で fake/stub。テーブル駆動で境界値・異常系を網羅しているか。assert が意味のある検証になっているか
         (常に true 等の空テストでないか)。新規コードにテストが伴っているか (カバレッジ目標 80%)。
     - path: "**/*.{test,spec}.{ts,tsx}"

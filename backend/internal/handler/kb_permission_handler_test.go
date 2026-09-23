@@ -773,8 +773,8 @@ func Test_ナレッジ権限API_email招待はユーザー単位で頭打ちに�
 	}
 
 	for i := 0; i < kbInviteByEmailBurst; i++ {
-		require.NotEqual(t, http.StatusTooManyRequests, call(i, "203.0.113."+strconv.Itoa(i)),
-			"burst 内は通る: %d 回目", i+1)
+		require.Equal(t, http.StatusCreated, call(i, "203.0.113."+strconv.Itoa(i)),
+			"burst 内は通る（招待が作られる）: %d 回目", i+1)
 	}
 	assert.Equal(t, http.StatusTooManyRequests, call(2000, "203.0.113.200"),
 		"IP を変えても同じユーザーなら頭打ちになる")

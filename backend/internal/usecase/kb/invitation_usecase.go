@@ -22,7 +22,8 @@ const (
 	// InvitationResendInterval は同じ宛先 × 場所へ続けて送れる最短の間隔（連打で相手の受信箱を
 	// 埋めない・送信基盤の評判を落とさない）。
 	InvitationResendInterval = 10 * time.Minute
-	// InvitationDailyLimitPerInviter は 1 人の admin が 24 時間に届けられる件数（発行 + 再送）。
+	// InvitationDailyLimitPerInviter は 1 人の admin が 24 時間に届けられる回数（発行 + 再送。
+	// 送信履歴 invitation_sends を数える）。
 	InvitationDailyLimitPerInviter = 50
 	// InvitationDailyLimitPerEmail は同じ宛先へ 24 時間に届けられる件数（全ワークスペース横断）。
 	// 招待を使った嫌がらせ（見知らぬ人へ大量に送る）の上限。
@@ -82,6 +83,29 @@ func normalizeInviteeName(raw string) (string, error) {
 		return "", ErrInvalidName
 	}
 	return name, nil
+}
+
+// checkInvitationSendLimits は「招く側が 1 日に届けた回数」と「その宛先へ 1 日に届いた回数」の
+// 上限を確かめる。発行と再送の両方が通る（どちらも 1 回の送信として送信履歴に残る）。
+func checkInvitationSendLimits(
+	ctx context.Context, invitations repository.InvitationRepository, actorUserID uint64, email string, now time.Time,
+) error {
+	dayAgo := now.Add(-24 * time.Hour)
+	sent, err := invitations.CountSentBySince(ctx, actorUserID, dayAgo)
+	if err != nil {
+		return err
+	}
+	if sent >= InvitationDailyLimitPerInviter {
+		return ErrInvitationInviterLimit
+	}
+	toEmail, err := invitations.CountSentToEmailSince(ctx, email, dayAgo)
+	if err != nil {
+		return err
+	}
+	if toEmail >= InvitationDailyLimitPerEmail {
+		return ErrInvitationEmailLimit
+	}
+	return nil
 }
 
 // InviteByEmailUseCase はワークスペースへ email で人を招く。
@@ -150,23 +174,10 @@ func (u *InviteByEmailUseCase) Execute(ctx context.Context, in InviteByEmailInpu
 		return nil, err
 	}
 	now := u.now()
-	dayAgo := now.Add(-24 * time.Hour)
-
 	// 上限は「招く側」「宛先」「ワークスペース」の 3 つ。どれも読んでから書くので、同時要求で
 	// 数件すり抜けることはある（上限の目的は嫌がらせと事故の抑制で、厳密な会計ではない）。
-	sent, err := u.invitations.CountSentBySince(ctx, in.ActorUserID, dayAgo)
-	if err != nil {
+	if err := checkInvitationSendLimits(ctx, u.invitations, in.ActorUserID, email, now); err != nil {
 		return nil, err
-	}
-	if sent >= InvitationDailyLimitPerInviter {
-		return nil, ErrInvitationInviterLimit
-	}
-	toEmail, err := u.invitations.CountSentToEmailSince(ctx, email, dayAgo)
-	if err != nil {
-		return nil, err
-	}
-	if toEmail >= InvitationDailyLimitPerEmail {
-		return nil, ErrInvitationEmailLimit
 	}
 	open, err := u.invitations.CountOpenInWorkspace(ctx, in.WorkspaceID)
 	if err != nil {
@@ -284,11 +295,20 @@ func (u *ResendInvitationUseCase) Execute(ctx context.Context, in ResendInvitati
 	if in.ActorUserID == 0 {
 		return nil, errors.New("actorUserID is required")
 	}
-	token, tokenHash, err := newInvitationToken()
+	// 再送も「届ける」なので、発行と同じ 1 日の上限（招く側・宛先）を数える。ここを数えないと、
+	// 再送を繰り返すだけで上限を回れる。宛先を知るために先に招待を引く（無ければここで NotFound）。
+	inv, err := u.invitations.Find(ctx, in.WorkspaceID, in.InvitationID)
 	if err != nil {
 		return nil, err
 	}
 	now := u.now()
+	if err := checkInvitationSendLimits(ctx, u.invitations, in.ActorUserID, inv.Email, now); err != nil {
+		return nil, err
+	}
+	token, tokenHash, err := newInvitationToken()
+	if err != nil {
+		return nil, err
+	}
 	if _, err := u.invitations.Refresh(ctx, repository.InvitationRefresh{
 		WorkspaceID:  in.WorkspaceID,
 		InvitationID: in.InvitationID,

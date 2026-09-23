@@ -75,6 +75,15 @@ type Invitation struct {
 	UpdatedAt        time.Time
 }
 
+type InvitationSend struct {
+	ID           uuid.UUID
+	InvitationID uuid.UUID
+	WorkspaceID  uuid.UUID
+	Email        string
+	SentByUserID int64
+	SentAt       time.Time
+}
+
 type Label struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID

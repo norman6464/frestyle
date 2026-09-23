@@ -35,37 +35,37 @@ func (q *Queries) AcceptInvitation(ctx context.Context, arg AcceptInvitationPara
 	return result.RowsAffected()
 }
 
-const countInvitationsSentBySince = `-- name: CountInvitationsSentBySince :one
-SELECT count(*) FROM invitations
-WHERE last_sent_by_user_id = $1 AND last_sent_at >= $2
+const countInvitationSendsBySince = `-- name: CountInvitationSendsBySince :one
+SELECT count(*) FROM invitation_sends
+WHERE sent_by_user_id = $1 AND sent_at >= $2
 `
 
-type CountInvitationsSentBySinceParams struct {
+type CountInvitationSendsBySinceParams struct {
 	UserID int64
 	Since  time.Time
 }
 
-// この人が since 以降に届けた件数（発行も再送も。last_sent_* で数える）。1 日の上限判定用。
-func (q *Queries) CountInvitationsSentBySince(ctx context.Context, arg CountInvitationsSentBySinceParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countInvitationsSentBySince, arg.UserID, arg.Since)
+// この人が since 以降に届けた回数（発行も再送も 1 回ずつ数える）。1 日の上限判定用。
+func (q *Queries) CountInvitationSendsBySince(ctx context.Context, arg CountInvitationSendsBySinceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countInvitationSendsBySince, arg.UserID, arg.Since)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
-const countInvitationsSentToEmailSince = `-- name: CountInvitationsSentToEmailSince :one
-SELECT count(*) FROM invitations
-WHERE email = $1 AND last_sent_at >= $2
+const countInvitationSendsToEmailSince = `-- name: CountInvitationSendsToEmailSince :one
+SELECT count(*) FROM invitation_sends
+WHERE email = $1 AND sent_at >= $2
 `
 
-type CountInvitationsSentToEmailSinceParams struct {
+type CountInvitationSendsToEmailSinceParams struct {
 	Email string
 	Since time.Time
 }
 
-// この宛先へ since 以降に届けた件数（全ワークスペース横断）。同じ人へ送りすぎない上限判定用。
-func (q *Queries) CountInvitationsSentToEmailSince(ctx context.Context, arg CountInvitationsSentToEmailSinceParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countInvitationsSentToEmailSince, arg.Email, arg.Since)
+// この宛先へ since 以降に届けた回数（全ワークスペース横断）。同じ人へ送りすぎない上限判定用。
+func (q *Queries) CountInvitationSendsToEmailSince(ctx context.Context, arg CountInvitationSendsToEmailSinceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countInvitationSendsToEmailSince, arg.Email, arg.Since)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -273,6 +273,32 @@ func (q *Queries) GetInvitationDetailByTokenHash(ctx context.Context, tokenHash 
 		&i.InviterName,
 	)
 	return i, err
+}
+
+const insertInvitationSend = `-- name: InsertInvitationSend :exec
+INSERT INTO invitation_sends (id, invitation_id, workspace_id, email, sent_by_user_id)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertInvitationSendParams struct {
+	ID           uuid.UUID
+	InvitationID uuid.UUID
+	WorkspaceID  uuid.UUID
+	Email        string
+	SentByUserID int64
+}
+
+// 送信履歴を 1 行追記する。発行（UpsertOpenInvitation）・再送（RefreshInvitationToken）と同じ
+// トランザクションで呼ぶ。1 日の件数の上限はこの表を数える（invitation_sends のコメント参照）。
+func (q *Queries) InsertInvitationSend(ctx context.Context, arg InsertInvitationSendParams) error {
+	_, err := q.db.ExecContext(ctx, insertInvitationSend,
+		arg.ID,
+		arg.InvitationID,
+		arg.WorkspaceID,
+		arg.Email,
+		arg.SentByUserID,
+	)
+	return err
 }
 
 const listOpenInvitationsByEmail = `-- name: ListOpenInvitationsByEmail :many
@@ -586,7 +612,7 @@ type UpsertOpenInvitationParams struct {
 // *_by_user_id（NULL 可の列）へ書くパラメータは ::bigint を付ける。付けないと sqlc が列の
 // NULL 可を見て sql.NullInt64 で生成し、呼び出し側が毎回 Valid: true で包むことになる
 // （値は常にある。::int にしないのは vet の narrowing-cast-on-param が言うとおり）。
-// 招待の発行。同じ宛先 × 場所に未決の行（期限切れも含む。結果の 3 列が全部 NULL）があれば、
+// 招待の発行（送信履歴 InsertInvitationSend を同じトランザクションで足す）。同じ宛先 × 場所に未決の行（期限切れも含む。結果の 3 列が全部 NULL）があれば、
 // 新しい行を作らず既存行を「再送」として更新する: トークン差し替え・期限延長・役割と表示名は
 // 今回の値で上書き・send_count + 1。invited_by_user_id は最初に招いた人のまま保ち、
 // last_sent_by_user_id だけ今回の実行者にする。
