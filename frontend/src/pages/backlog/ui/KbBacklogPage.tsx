@@ -27,6 +27,7 @@ import TicketStatusAdmin from './TicketStatusAdmin';
 import TicketTypeAdmin from './TicketTypeAdmin';
 import { formatPeriodShort } from '../lib/dueDate';
 import { sprintConfirmText } from '../lib/sprintConfirm';
+import { nextSprintName } from '../lib/nextSprintName';
 
 /**
  * 面ごとの見出し。小さな見出しは設計ボード ST08 の文言（バックログ）と、面の名前（ほか）。
@@ -217,7 +218,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
    * 押すたびに入力欄を挟むと、並べ替えの流れが止まる。名前はプロジェクトの「設定」で変えられる。
    */
   const handleCreateSprint = async () => {
-    const name = `スプリント ${sprints.sprints.length + 1}`;
+    const name = nextSprintName(sprints.sprints);
     try {
       await sprints.create({ name });
       showToast('success', `「${name}」を作りました。名前は「設定」で変えられます。`);

@@ -329,7 +329,9 @@ function KbSpaceSwitcherMenu({
           key={s.id}
           to={`/kb/spaces/${s.id}`}
           onClick={onClose}
-          aria-current={s.id === activeSpaceId ? 'page' : undefined}
+          // 今いるスペースの印。'page' にしないのは、同じスペースのメンバー画面などを開いていても
+          // このリンク（概要）が「今のページ」だと読まれてしまうため。
+          aria-current={s.id === activeSpaceId ? 'true' : undefined}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-sm ${
             s.id === activeSpaceId
               ? 'bg-[var(--color-nav-selected)] font-medium text-[var(--color-nav-selected-text)]'

@@ -275,7 +275,7 @@ export const バックログからはすぐスプリントを作る: Story = {
   },
 };
 
-/** 設定の面では名前の欄を開く。連番を入れておき、Esc で欄だけを閉じる。 */
+/** 設定の面では名前の欄を開く。連番を入れておき、Esc で欄だけを閉じて作成ボタンへ戻る。 */
 export const 設定ではスプリントの名前を決めて作る: Story = {
   decorators: [withApi(sprintApi())],
   render: () => <KbBacklogPage view="settings" />,
@@ -291,7 +291,10 @@ export const 設定ではスプリントの名前を決めて作る: Story = {
     await waitFor(async () => {
       await expect(canvas.queryByRole('textbox', { name: 'スプリントの名前' })).toBeNull();
     });
-    await expect(canvas.getByRole('button', { name: 'スプリントを作成' })).toBeInTheDocument();
+    // 欄が消えてもフォーカスを body に落とさず、開く前のボタンへ戻す。
+    await waitFor(async () => {
+      await expect(canvas.getByRole('button', { name: 'スプリントを作成' })).toHaveFocus();
+    });
   },
 };
 

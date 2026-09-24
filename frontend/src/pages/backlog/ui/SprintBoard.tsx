@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ConfirmModal, EmptyState, Loading, FsIcon, NameCreateForm, fsIcon } from '@/shared/ui';
 import type { Ticket } from '@/entities/ticket';
 import { useSprints } from '../model/useSprints';
 import { useSprintTickets } from '../model/useSprintTickets';
 import SprintCard from './SprintCard';
 import { sprintConfirmText, type SprintConfirmKind } from '../lib/sprintConfirm';
+import { nextSprintName } from '../lib/nextSprintName';
 
 export interface SprintBoardProps {
   /** ページが持つスプリントの状態（チケットの面の「入れ先」と同じものを使う）。 */
@@ -44,6 +45,19 @@ export default function SprintBoard({
   );
   const byId = new Map(tickets.map((t) => [t.id, t]));
   const [creating, setCreating] = useState(false);
+  // 名前の欄を閉じたら（やめる・Esc・作成）、開く前の「スプリントを作成」へフォーカスを戻す。
+  // 欄が消えると、そこにあったフォーカスは行き場を失い body に落ちる。
+  const createButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocusToCreate = useRef(false);
+  useEffect(() => {
+    if (creating || !returnFocusToCreate.current) return;
+    returnFocusToCreate.current = false;
+    createButtonRef.current?.focus();
+  }, [creating]);
+  const closeCreate = () => {
+    returnFocusToCreate.current = true;
+    setCreating(false);
+  };
   // 取り消せない操作（削除・完了）は確認を挟む。
   const [confirming, setConfirming] = useState<{ kind: SprintConfirmKind; sprintId: string; name: string; count: number } | null>(null);
   const [confirmPending, setConfirmPending] = useState(false);
@@ -56,7 +70,7 @@ export default function SprintBoard({
       onError('スプリントを作成できませんでした。');
       throw cause;
     }
-    setCreating(false);
+    closeCreate();
   };
 
   // 規則違反は backend が 409 で返す。どの規則に当たったかを文言で伝える。
@@ -108,13 +122,14 @@ export default function SprintBoard({
             <NameCreateForm
               what="スプリント"
               layout="inline"
-              initialName={`スプリント ${sprints.length + 1}`}
+              initialName={nextSprintName(sprints)}
               onCreate={handleCreate}
-              onCancel={() => setCreating(false)}
+              onCancel={closeCreate}
               autoFocus
             />
           ) : (
             <button
+              ref={createButtonRef}
               type="button"
               onClick={() => setCreating(true)}
               className="flex items-center gap-1.5 rounded-lg border border-surface-3 bg-surface-1 px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
