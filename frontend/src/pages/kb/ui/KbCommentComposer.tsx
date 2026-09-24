@@ -5,6 +5,10 @@ export interface KbCommentComposerProps {
   /** 送信。**失敗は投げてくる**前提（投げられたら入力を保つ。書き直させないため）。 */
   onSubmit: (body: unknown[]) => Promise<void>;
   placeholder?: string;
+  /** 渡すと「キャンセル」を出す。押して開いた返信欄のように、閉じる先がある場面で渡す。 */
+  onCancel?: () => void;
+  /** 押して開いた欄なら true。開いた直後に打ち始められるようにする。 */
+  autoFocus?: boolean;
 }
 
 /** プレーンテキストを、本文が持つのと同じ形（ProseMirror インラインノードの配列）に変換する。 */
@@ -22,7 +26,7 @@ function bodyFromText(text: string): unknown[] {
  * （KbPageTitle・KbPageIconPicker と同じ約束）。ここでは知らせを自分でも出す
  * （呼び出し側のトーストとは別に、この場で次にどうすればよいかを示す）。
  */
-export default function KbCommentComposer({ onSubmit, placeholder }: KbCommentComposerProps) {
+export default function KbCommentComposer({ onSubmit, placeholder, onCancel, autoFocus = false }: KbCommentComposerProps) {
   const [value, setValue] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +57,13 @@ export default function KbCommentComposer({ onSubmit, placeholder }: KbCommentCo
         aria-label={placeholder ?? 'コメント'}
         rows={2}
         disabled={submitting}
+        autoFocus={autoFocus}
+        onKeyDown={(event) => {
+          // 変換中の Esc は変換の取り消し。欄まで閉じると打ちかけの字が消える。
+          if (!onCancel || event.key !== 'Escape' || event.nativeEvent.isComposing || event.keyCode === 229) return;
+          event.preventDefault();
+          onCancel();
+        }}
         className="w-full resize-none rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-1 focus:ring-brand-600 disabled:opacity-60"
       />
       {error && (
@@ -60,7 +71,12 @@ export default function KbCommentComposer({ onSubmit, placeholder }: KbCommentCo
           {error}
         </p>
       )}
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-2">
+        {onCancel && (
+          <Button type="button" size="sm" variant="ghost" disabled={submitting} onClick={onCancel}>
+            キャンセル
+          </Button>
+        )}
         <Button type="button" size="sm" loading={submitting} disabled={!canSubmit} onClick={() => void handleSubmit()}>
           送信
         </Button>

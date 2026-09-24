@@ -205,6 +205,8 @@ export interface KbResolvedPage {
    * 旧応答（デプロイ順）では undefined。
    */
   viewCount?: number;
+  /** 自分がこのページをお気に入りに入れているか。旧応答（デプロイ順）では undefined（＝入れていない扱い）。 */
+  isFavorite?: boolean;
 }
 
 /**

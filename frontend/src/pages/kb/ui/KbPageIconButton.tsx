@@ -25,6 +25,10 @@ export interface KbPageIconButtonProps {
  *
  * ピッカーの開閉と外側クリック・Escape での消し方は KbRowActions と同じ形。
  */
+/** 「…」の中の 1 行。雛形・カバー画像の行と同じ見た目にそろえる。 */
+const ROW_CLASS =
+  'flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-[var(--color-text-primary)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50 [@media(pointer:coarse)]:min-h-11';
+
 export default function KbPageIconButton({ icon, canEdit, onChange }: KbPageIconButtonProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,8 +65,9 @@ export default function KbPageIconButton({ icon, canEdit, onChange }: KbPageIcon
     );
   }
 
+  // 「…」の中（画面の右端寄り）から開くので、右をそろえて左へ広げる（左そろえだと画面外へはみ出る）。
   const picker = open && (
-    <div className="absolute left-0 top-full z-20 mt-1">
+    <div className="absolute right-0 top-full z-20 mt-1">
       <KbPageIconPicker
         current={icon ?? null}
         onSelect={(next) => onChange(next)}
@@ -74,15 +79,15 @@ export default function KbPageIconButton({ icon, canEdit, onChange }: KbPageIcon
 
   if (!icon) {
     return (
-      <div ref={containerRef} className="relative mb-1 inline-block">
+      <div ref={containerRef} className="relative">
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
           aria-label="アイコンを追加"
           aria-expanded={open}
-          className="flex min-h-11 items-center gap-2 rounded-md px-2 py-2 text-sm text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+          className={ROW_CLASS}
         >
-          <FsIcon name="smile" className="h-4 w-4" />
+          <FsIcon name="smile" className="h-4 w-4 shrink-0" />
           アイコンを追加
         </button>
         {picker}
@@ -91,17 +96,18 @@ export default function KbPageIconButton({ icon, canEdit, onChange }: KbPageIcon
   }
 
   return (
-    <div ref={containerRef} className="relative mb-1 inline-block">
+    <div ref={containerRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-label="ページのアイコンを変更"
         aria-expanded={open}
-        className="min-h-12 min-w-12 rounded text-4xl leading-none hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+        className={ROW_CLASS}
       >
-        <span data-icon="emoji" aria-hidden="true">
+        <span data-icon="emoji" aria-hidden="true" className="flex h-4 w-4 items-center justify-center text-base leading-none">
           {icon.value}
         </span>
+        アイコンを変更
       </button>
       {picker}
     </div>

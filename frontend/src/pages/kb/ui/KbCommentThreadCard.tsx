@@ -15,6 +15,7 @@ export interface KbCommentThreadCardProps {
 
 /**
  * KbCommentThreadCard はスレッド 1 件（作成者・作成日時・コメントの列挙・解決状態）。
+ * 返信欄は「返信」を押したときだけ出す（見本 3a のカードの下の「返信 · 解決」）。
  *
  * 解決/再開の失敗は握り潰す — 知らせ（トースト）は呼び出し側（KbPage）が出す約束
  * （useKbComments の resolve/reopen は失敗を投げる。ここではボタンを押し直せる状態へ
@@ -28,6 +29,9 @@ export default function KbCommentThreadCard({
   onReopen,
 }: KbCommentThreadCardProps) {
   const [toggling, setToggling] = useState(false);
+  // 返信欄は「返信」を押してから開く。全スレッドに常に欄と送信ボタンを出すと、読むだけの
+  // 一覧が入力欄で埋まる（解決済みのスレッドにも出ていた）。
+  const [replying, setReplying] = useState(false);
   const resolved = thread.resolvedAt !== null;
 
   const handleToggle = async () => {
@@ -95,8 +99,27 @@ export default function KbCommentThreadCard({
         </p>
       )}
 
-      {canComment && (
-        <KbCommentComposer placeholder="返信を書く…" onSubmit={(body) => onReply(thread.id, body)} />
+      {canComment && !replying && (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setReplying(true)}
+            className="min-h-9 text-xs font-semibold text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+          >
+            返信
+          </button>
+        </div>
+      )}
+      {canComment && replying && (
+        <KbCommentComposer
+          placeholder="返信を書く…"
+          autoFocus
+          onCancel={() => setReplying(false)}
+          onSubmit={async (body) => {
+            await onReply(thread.id, body);
+            setReplying(false);
+          }}
+        />
       )}
     </article>
   );

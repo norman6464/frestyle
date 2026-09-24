@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useMobileDrawerFocus } from '@/shared/lib/hooks/useMobileDrawerFocus';
@@ -7,6 +7,7 @@ import { emitKbTreeEvent, type KbDropTarget } from '@/entities/kb';
 import { useKbTree } from '../model/useKbTree';
 import { toDropTarget, type KbDropZone } from '../model/dropZone';
 import { filterTreeByTitle, subtreeOf } from '../model/treeFilter';
+import { KbFrameContext, type KbFrameValue } from '../model/kbFrameContext';
 import KbContextBar from './KbContextBar';
 import KbPagePanelHeading from './KbPagePanelHeading';
 import KbTreeList from './KbTreeList';
@@ -112,6 +113,8 @@ export default function KbFrame({
 
   const space = spaces.find((s) => s.id === spaceId);
   const workspaceCanManage = workspaces.find((w) => w.slug === activeSlug)?.canManage ?? false;
+  // 本文（パンくず）へ今いるスペースを渡す。応答にはスペースの名前が無く、枠は木のために持っている。
+  const frameValue = useMemo<KbFrameValue>(() => ({ space: space ?? null }), [space]);
 
   // ワークスペース作成は入口が 2 つ（切替ポップアップ / 所属 0 件の常設フォーム）ある。
   // 作成 → 失敗の知らせ → /kb へ戻る、を 1 つに集約して入口ごとの差を作らない。
@@ -439,75 +442,77 @@ export default function KbFrame({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <KbContextBar
-        workspaces={workspaces}
-        activeSlug={activeSlug}
-        onSelectWorkspace={(slug) => {
-          selectWorkspace(slug);
-          navigate('/kb', { state: { workspaceSlug: slug } });
-        }}
-        onCreateWorkspace={handleCreateWorkspace}
-        onManageMembers={(slug) => navigate(`/kb/${slug}/members`)}
-        space={space}
-        onCreateSpace={createSpace}
-        archivedMode={archivedMode}
-        onToggleArchived={() => setArchivedMode(!archivedMode)}
-        onOpenPagePanel={hasPanel ? () => setPanelOpen(true) : undefined}
-        pagePanelOpen={panelOpen}
-      />
-
-      <div className="flex min-h-0 flex-1">
-        {hasPanel && (
-          <>
-            {/* 狭い画面: 引き出しの後ろの幕。触れると閉じる。下部ナビ（z-40）より上に敷く。 */}
-            {panelOpen && (
-              <div aria-hidden="true" className="fixed inset-0 z-[45] bg-black/40 md:hidden" onClick={() => setPanelOpen(false)} />
-            )}
-            <aside
-              ref={drawerRef}
-              tabIndex={-1}
-              aria-label="ページ"
-              // 狭い画面で引き出しとして開いている間は、本文の上に重なる窓として名乗る。
-              role={panelOpen ? 'dialog' : undefined}
-              aria-modal={panelOpen || undefined}
-              className={[
-                'fixed inset-y-0 left-0 z-50 flex w-72 max-w-full flex-col border-r border-surface-3 bg-[var(--color-nav)]',
-                panelOpen
-                  ? 'visible translate-x-0 transition-transform duration-base ease-out motion-reduce:transition-none'
-                  : 'invisible -translate-x-full transition-none',
-                'md:visible md:static md:z-auto md:translate-x-0 md:bg-surface',
-              ].join(' ')}
-            >
-              <div className="flex items-center justify-end px-2 pt-2 md:hidden">
-                <button
-                  type="button"
-                  onClick={() => setPanelOpen(false)}
-                  aria-label="ページの一覧を閉じる"
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-                >
-                  <FsIcon name="x" className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-2 pb-3 md:pt-3">
-                {panelContent}
-              </div>
-            </aside>
-          </>
-        )}
-
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
-      </div>
-
-      {searchOpen && activeSlug && (
-        <KbSearchDialog
-          workspaceSlug={activeSlug}
-          spaces={spaces}
-          initialQuery={titleQuery.trim()}
-          onClose={() => setSearchOpen(false)}
+    <KbFrameContext.Provider value={frameValue}>
+      <div className="flex h-full min-h-0 flex-col">
+        <KbContextBar
+          workspaces={workspaces}
+          activeSlug={activeSlug}
+          onSelectWorkspace={(slug) => {
+            selectWorkspace(slug);
+            navigate('/kb', { state: { workspaceSlug: slug } });
+          }}
+          onCreateWorkspace={handleCreateWorkspace}
+          onManageMembers={(slug) => navigate(`/kb/${slug}/members`)}
+          space={space}
+          onCreateSpace={createSpace}
+          archivedMode={archivedMode}
+          onToggleArchived={() => setArchivedMode(!archivedMode)}
+          onOpenPagePanel={hasPanel ? () => setPanelOpen(true) : undefined}
+          pagePanelOpen={panelOpen}
         />
-      )}
-    </div>
+
+        <div className="flex min-h-0 flex-1">
+          {hasPanel && (
+            <>
+              {/* 狭い画面: 引き出しの後ろの幕。触れると閉じる。下部ナビ（z-40）より上に敷く。 */}
+              {panelOpen && (
+                <div aria-hidden="true" className="fixed inset-0 z-[45] bg-black/40 md:hidden" onClick={() => setPanelOpen(false)} />
+              )}
+              <aside
+                ref={drawerRef}
+                tabIndex={-1}
+                aria-label="ページ"
+                // 狭い画面で引き出しとして開いている間は、本文の上に重なる窓として名乗る。
+                role={panelOpen ? 'dialog' : undefined}
+                aria-modal={panelOpen || undefined}
+                className={[
+                  'fixed inset-y-0 left-0 z-50 flex w-72 max-w-full flex-col border-r border-surface-3 bg-[var(--color-nav)]',
+                  panelOpen
+                    ? 'visible translate-x-0 transition-transform duration-base ease-out motion-reduce:transition-none'
+                    : 'invisible -translate-x-full transition-none',
+                  'md:visible md:static md:z-auto md:translate-x-0 md:bg-surface',
+                ].join(' ')}
+              >
+                <div className="flex items-center justify-end px-2 pt-2 md:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setPanelOpen(false)}
+                    aria-label="ページの一覧を閉じる"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                  >
+                    <FsIcon name="x" className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-2 pb-3 md:pt-3">
+                  {panelContent}
+                </div>
+              </aside>
+            </>
+          )}
+
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+        </div>
+
+        {searchOpen && activeSlug && (
+          <KbSearchDialog
+            workspaceSlug={activeSlug}
+            spaces={spaces}
+            initialQuery={titleQuery.trim()}
+            onClose={() => setSearchOpen(false)}
+          />
+        )}
+      </div>
+    </KbFrameContext.Provider>
   );
 }
 

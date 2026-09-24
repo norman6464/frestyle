@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { KbFrame, KbPageGlyph } from '@/widgets/kb-sidebar';
 import { Loading, fsIcon } from '@/shared/ui';
 import { KbRepository, KbSpaceHeading, NOTE_NEW_PAGE_TITLE, emitKbTreeEvent, useKbSpaceEntry } from '@/entities/kb';
@@ -125,19 +125,19 @@ function AllPagesList({
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-6 pt-3 sm:px-6">
       <p className="mb-5 text-sm leading-relaxed text-[var(--color-text-muted)]">ページの階層をたどって、必要な情報を見つけましょう。</p>
-    <ul className="divide-y divide-surface-2">
+    <ul className="divide-y divide-surface-3">
+      {/* 行はリンク（新しいタブで開ける）。字下げは木と同じ 1 段 20px で、親子の段が読めるようにする。 */}
       {pages.map(({ page, depth }) => (
         <li key={page.id}>
-          <button
-            type="button"
-            onClick={() => onOpen(page.id)}
-            style={{ paddingLeft: `${16 + Math.min(depth, 4) * 12}px` }}
+          <Link
+            to={`/kb/${page.id}`}
+            style={{ paddingLeft: `${16 + Math.min(depth, 4) * 20}px` }}
             className="flex min-h-14 w-full items-center gap-3 rounded-md px-4 py-3 text-left text-sm text-[var(--color-text-primary)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
             <KbPageGlyph page={page} className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
             <span className="min-w-0 [overflow-wrap:anywhere]">{page.title || '無題'}</span>
             {depth > 4 && <span className="ml-auto shrink-0 text-xs text-[var(--color-text-muted)]">{depth + 1}階層</span>}
-          </button>
+          </Link>
         </li>
       ))}
     </ul>
