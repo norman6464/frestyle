@@ -137,6 +137,9 @@ export const 題名で絞る: Story = {
     await expect(canvas.getByText('議事録')).toBeVisible();
     await expect(canvas.queryByText('はじめに')).toBeNull();
     await expect(canvas.getByRole('button', { name: '本文も含めて「9 月」を探す' })).toBeVisible();
+    // 一致の祖先は開いた形で出るが、閉じることもできる。
+    await userEvent.click(canvas.getByRole('button', { name: '議事録 を閉じる' }));
+    await expect(canvas.queryByText('9 月の議事録')).toBeNull();
   },
 };
 

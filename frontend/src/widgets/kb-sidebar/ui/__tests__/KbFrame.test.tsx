@@ -1794,6 +1794,37 @@ describe('左の列の絞り込み', () => {
     expect(await screen.findByText('議事録')).toBeInTheDocument();
   });
 
+  it('絞り込み中に子ページを作ったら絞り込みを解く（「無題」の新しいページが一致せず消えないように）', async () => {
+    renderSidebar();
+    await screen.findByText('設計メモ');
+    const search = screen.getByRole('searchbox', { name: 'このスペースで検索' });
+    fireEvent.change(search, { target: { value: '設計' } });
+    await waitFor(() => expect(screen.queryByText('議事録')).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: '設計メモ の下にページを追加' }));
+
+    await waitFor(() => expect(search).toHaveValue(''));
+    expect(await screen.findByText('議事録')).toBeInTheDocument();
+  });
+
+  it('絞り込み中も枝を閉じられ、絞り込みを解くと元の開閉に戻る', async () => {
+    renderSidebar();
+    await screen.findByText('設計メモ');
+    const search = screen.getByRole('searchbox', { name: 'このスペースで検索' });
+    fireEvent.change(search, { target: { value: '手順' } });
+    expect(await screen.findByText('手順書')).toBeInTheDocument();
+
+    // 一致の祖先は開いた形で出るが、利用者が閉じられる。
+    fireEvent.click(screen.getByRole('button', { name: '設計メモ を閉じる' }));
+    expect(screen.queryByText('手順書')).not.toBeInTheDocument();
+
+    // 絞り込みを解くと、絞る前の開閉（設計メモは閉じたまま）に戻る。
+    fireEvent.change(search, { target: { value: '' } });
+    expect(await screen.findByText('議事録')).toBeInTheDocument();
+    expect(screen.queryByText('手順書')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '設計メモ を開く' })).toBeInTheDocument();
+  });
+
   it('ページを開いていない画面では「この場所だけ」を出さない（絞る先が無い）', async () => {
     renderSidebar();
     await screen.findByText('設計メモ');

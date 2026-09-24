@@ -84,7 +84,15 @@ export default function KbFrame({
   // 本文まで探す検索（サーバー）。左の列の題名の絞り込みから、打った語を持ち越して開く。
   const [searchOpen, setSearchOpen] = useState(false);
   // 左の列の「このスペースで検索」。手元の木を題名で絞るだけ（問い合わせない）。
-  const [titleQuery, setTitleQuery] = useState('');
+  const [titleQuery, setTitleQueryRaw] = useState('');
+  // 絞っている間に開け閉めした枝。絞り込みの結果は祖先を開いた形で出すが、利用者が閉じることも
+  // できるように、開閉の反転だけをここに持つ。木そのものの開閉（expandedPageIds）には書き込まない
+  // —— 書き込むと、絞り込みを解いたあとに意図しない枝が開いたまま残る。語が変わったら捨てる。
+  const [filterToggled, setFilterToggled] = useState<ReadonlySet<string>>(new Set());
+  const setTitleQuery = (next: string) => {
+    setTitleQueryRaw(next);
+    setFilterToggled(new Set());
+  };
   // 「この場所のページだけを表示」。今開いているページとその子孫だけに木を絞る。
   const [focusHere, setFocusHere] = useState(false);
   // 狭い画面で左の列を引き出しとして開いているか。
@@ -121,6 +129,8 @@ export default function KbFrame({
   const createRootPage = async () => {
     try {
       const page = await createPage();
+      // 絞り込んだままだと「無題」の新しいページは一致せず、作ったページも題名の欄も見えない。
+      setTitleQuery('');
       setRenamingPageId(page.id);
       navigate(`/kb/${page.id}`);
     } catch {
@@ -131,6 +141,8 @@ export default function KbFrame({
   const createChildPage = async (parentId: string) => {
     try {
       const page = await createPage(parentId);
+      // 絞り込んだままだと「無題」の新しいページは一致せず、作ったページも題名の欄も見えない。
+      setTitleQuery('');
       setRenamingPageId(page.id);
     } catch {
       showToast('error', 'ページを作成できませんでした');
@@ -201,8 +213,15 @@ export default function KbFrame({
   const filtered = filtering ? filterTreeByTitle(baseNodes, titleQuery) : null;
   const shownNodes = filtered ? filtered.nodes : baseNodes;
   const shownExpanded = filtered
-    ? new Set([...expandedPageIds, ...filtered.expandedPageIds])
+    ? xorSet(new Set([...expandedPageIds, ...filtered.expandedPageIds]), filterToggled)
     : expandedPageIds;
+  const toggleShown = (pageId: string) => {
+    if (!filtering) {
+      togglePage(pageId);
+      return;
+    }
+    setFilterToggled((prev) => xorSet(prev, new Set([pageId])));
+  };
   // 最上段の「見えないページが在る」印は、全体をそのまま出しているときだけ意味がある。
   const shownHiddenAtRoot = !filtering && !focusRoot && (spaceState.tree?.hasHiddenChildren ?? false);
 
@@ -283,6 +302,7 @@ export default function KbFrame({
             onCreatePage={() => void createRootPage()}
             onCreatedFromTemplate={(page) => {
               emitKbTreeEvent({ type: 'page-created', page });
+              setTitleQuery('');
               navigate(`/kb/${page.id}`);
             }}
             onRenameSpace={(name) => renameSpace(space.id, name)}
@@ -374,7 +394,7 @@ export default function KbFrame({
                 dropAt={dropAt}
                 archivedMode={archivedMode}
                 label={`${space.name} のページ`}
-                onToggle={togglePage}
+                onToggle={toggleShown}
                 onStartRename={setRenamingPageId}
                 onCancelRename={() => setRenamingPageId(null)}
                 onCommitRename={commitRename}
@@ -489,4 +509,14 @@ export default function KbFrame({
       )}
     </div>
   );
+}
+
+/** a と b のどちらか一方にだけ含まれる要素（開閉の反転を重ねるのに使う）。 */
+function xorSet(a: ReadonlySet<string>, b: ReadonlySet<string>): Set<string> {
+  const out = new Set(a);
+  for (const id of b) {
+    if (out.has(id)) out.delete(id);
+    else out.add(id);
+  }
+  return out;
 }

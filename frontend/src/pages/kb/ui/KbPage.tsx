@@ -555,7 +555,7 @@ export default function KbPage() {
                 headingLevel={1}
                 icon={fsIcon('document-text')}
                 title="まだページがありません"
-                description="左のサイドバーで、スペース名の横の「＋」から最初のページを作れます。"
+                description="左の列（狭い画面では左上のボタン）の「ページを探す」の「＋」から、最初のページを作れます。"
               />
             )}
 
