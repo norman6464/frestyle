@@ -19,7 +19,7 @@ export default function KbSpaceFavoritesPage() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* 柱の中の「ナレッジの区画」。noSpaces でも常に差し込む（KbSidebar 自身が空の
+      {/* 左の列の「ナレッジの区画」。noSpaces でも常に差し込む（KbSidebar 自身が空の
           ワークスペース／空のスペース一覧を検知して作成フォームを出す）。 */}
       <SidebarSection>
         <KbSidebar workspaceSlug={workspaceSlug ?? undefined} spaceId={space?.id ?? ''} />

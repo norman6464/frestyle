@@ -11,8 +11,8 @@ export interface ResolvedKbSpace {
  * 決める。所属する最初のワークスペース → 自分がアクセスできる最初のスペース
  * （配列の順序=並び順）。どのワークスペースにもアクセスできるスペースが無ければ null。
  *
- * `preferredWorkspaceSlug` を渡すと、そのワークスペースを最初に見る（柱の「すべての
- * スペース」が対象ワークスペースを持ち越すため。FRESTYLE-596 の残り）。所属に無い slug
+ * `preferredWorkspaceSlug` を渡すと、そのワークスペースを最初に見る（スペース切替の
+ * 「すべてのスペース」が対象ワークスペースを持ち越すため）。所属に無い slug
  * （招待の取り消し等）は無視し、通常どおり先頭から見る。
  *
  * pages/backlog/model/resolveBacklogSpace.ts と同じ形だが、fetchSpaces（可視スペース

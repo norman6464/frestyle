@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project } from '@/entities/project';
-import BacklogSidebar from '../BacklogSidebar';
+import BacklogProjectSwitcher from '../BacklogProjectSwitcher';
 
 const hoisted = vi.hoisted(() => ({ fetchProjects: vi.fn() }));
 
@@ -24,16 +24,16 @@ const current = project('p1', 'FreStyle');
 function renderSidebar() {
   return render(
     <MemoryRouter>
-      <BacklogSidebar workspaceSlug="acme" project={current} />
+      <BacklogProjectSwitcher workspaceSlug="acme" project={current} />
     </MemoryRouter>,
   );
 }
 
 function openSwitcher() {
-  fireEvent.click(screen.getByRole('button', { name: 'プロジェクトを切り替える' }));
+  fireEvent.click(screen.getByRole('button', { name: 'プロジェクト P1 を切り替える' }));
 }
 
-describe('BacklogSidebar のプロジェクト切替', () => {
+describe('BacklogProjectSwitcher', () => {
   beforeEach(() => {
     hoisted.fetchProjects.mockReset();
   });
@@ -58,11 +58,16 @@ describe('BacklogSidebar のプロジェクト切替', () => {
     expect(hoisted.fetchProjects).toHaveBeenCalledTimes(2);
   });
 
-  it('今いるプロジェクトは選択中として名乗る', async () => {
+  it('見えている「プロジェクト P1」を読み上げ名に含める', () => {
+    renderSidebar();
+    expect(screen.getByRole('button', { name: /プロジェクト P1/ })).toHaveTextContent('プロジェクト P1');
+  });
+
+  it('今いるプロジェクトは選択中として名乗る（今のページとは名乗らない）', async () => {
     hoisted.fetchProjects.mockResolvedValue([current, project('p2', 'Design')]);
     renderSidebar();
     openSwitcher();
-    expect(await screen.findByRole('link', { name: 'FreStyle' })).toHaveAttribute('aria-current', 'page');
+    expect(await screen.findByRole('link', { name: 'FreStyle' })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByRole('link', { name: 'Design' })).not.toHaveAttribute('aria-current');
   });
 
@@ -90,6 +95,6 @@ describe('BacklogSidebar のプロジェクト切替', () => {
     link.focus();
     fireEvent.keyDown(link, { key: 'Escape' });
     expect(screen.queryByRole('link', { name: 'Design' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'プロジェクトを切り替える' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'プロジェクト P1 を切り替える' })).toHaveFocus();
   });
 });

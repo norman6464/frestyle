@@ -537,7 +537,7 @@ export default function KbPage() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* ページの木は柱の中の「ナレッジの区画」として出す（柱は 1 本だけ）。
+      {/* ページの木は本文の左の列に「ナレッジの区画」として出す（列の口は殻に 1 つだけ）。
           どのスペースの木かを知っているのはこの画面なので、中身はここから差し込む。 */}
       <SidebarSection>
         <KbSidebar

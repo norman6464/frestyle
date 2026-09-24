@@ -4,7 +4,7 @@ import { withRouter } from '../../../../.storybook/decorators';
 import HeaderUserMenu from './HeaderUserMenu';
 
 /**
- * ヘッダー右端の、自分の名前を押すと下に開くメニュー。
+ * ヘッダー右端の、自分の顔を押すと下に開くメニュー（設計ボード ST02）。名前は開いた先の先頭に出す。
  *
  * 中身は「設定」と「ログアウト」だけ。ここに項目を足しはじめると、ヘッダーが
  * 何でも入る引き出しになり、目的の物を探す場所として使えなくなる。
@@ -56,7 +56,7 @@ export const Escapeで閉じてフォーカスを戻す: Story = {
   },
 };
 
-/** 開いたところ。メールアドレスと 2 つの項目が出る。 */
+/** 開いたところ。先頭に名前とメールアドレス、その下に 2 つの項目が出る。 */
 export const 開いたところ: Story = {
   args: { email: 'takuma@example.com' },
   play: async ({ canvasElement }) => {
@@ -67,6 +67,7 @@ export const 開いたところ: Story = {
     await waitFor(async () => {
       await expect(portal.getByText('takuma@example.com')).toBeVisible();
     });
+    await expect(portal.getByText('川野 拓馬')).toBeVisible();
     await expect(portal.getByRole('menuitem', { name: '設定' })).toBeVisible();
     await expect(portal.getByRole('menuitem', { name: 'ログアウト' })).toBeVisible();
   },
@@ -101,16 +102,20 @@ export const 補足つき: Story = {
   },
 };
 
-/** 名前が長いとき。切り詰めてヘッダーを押し広げない。 */
+/** 名前が長いとき。引き金は顔だけなので帯は広がらず、開いた先で切り詰める。 */
 export const 長い名前: Story = {
   args: { displayName: '非常に長い表示名がここに入るユーザー', email: 'takuma@example.com' },
 };
 
-/** 名前が空のとき。「ユーザー」と出す（空欄にしない）。 */
+/** 名前が空のとき。「ユーザー」と名乗る（空欄にしない）。 */
 export const 名前が空: Story = {
   args: { displayName: '' },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByText('ユーザー')).toBeVisible();
+    const trigger = within(canvasElement).getByRole('button', { name: 'ユーザー のアカウント' });
+    await userEvent.click(trigger);
+    await waitFor(async () => {
+      await expect(within(canvasElement.ownerDocument.body).getByText('ユーザー')).toBeVisible();
+    });
   },
 };
 

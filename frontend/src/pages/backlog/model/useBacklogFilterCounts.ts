@@ -13,12 +13,12 @@ function targetOf(workspaceSlug: string | undefined, projectId: string | undefin
 }
 
 /**
- * useBacklogFilterCounts はバックログのサイドバー「保存した絞り込み」の件数バッジ
+ * useBacklogFilterCounts はバックログの見出しの「保存した絞り込み」の件数バッジ
  * （自分の担当・期限切れ・未割り当て）を読む。件数はワークスペース全チケットの走査と
  * 自分の principal 解決が要るため、backend の GetTicketCounts を叩くだけでフロントでは
  * 計算しない。
  *
- * 失敗しても壊れず null（0 件と同じ表示）にする。件数は柱の補助表示でしかなく、
+ * 失敗しても壊れず null（0 件と同じ表示）にする。件数は絞り込みの補助表示でしかなく、
  * ここでエラーを出しても行き止まりにしかならない（fail-open）。
  */
 export function useBacklogFilterCounts(

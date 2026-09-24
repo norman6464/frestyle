@@ -6,7 +6,7 @@ export interface CommandItem {
   id: string;
   label: string;
   description?: string;
-  /** 自作アイコンの名前（shared/ui/icons）。柱・下部ナビと同じ絵を出す。 */
+  /** 自作アイコンの名前（shared/ui/icons）。下部ナビと同じ絵を出す。 */
   icon: FsIconName;
   category: 'ページ移動';
   action: CommandAction;
@@ -16,10 +16,10 @@ export interface CommandItem {
 /**
  * ⌘K で開く「行き先を探す窓」の中身。
  *
- * アプリの常設の行き先をすべて載せる —— 柱・下部ナビの 4 つに加えて、ヘッダーからしか
- * 行けない通知と設定も。窓は「どこからでも 1 手で行ける」ための物なので、
- * 柱に無いからといって落とすと、通知と設定だけキーボードで辿れなくなる。
- * 並びは柱と同じ順、通知・設定はその後ろ。
+ * アプリの常設の行き先をすべて載せる —— 主な行き先の 4 つに加えて、ベルとアカウントの
+ * メニューからしか行けない通知と設定も。窓は「どこからでも 1 手で行ける」ための物なので、
+ * 主な行き先に無いからといって落とすと、通知と設定だけキーボードで辿れなくなる。
+ * 並びは主な行き先と同じ順、通知・設定はその後ろ。
  */
 export const COMMAND_ITEMS: CommandItem[] = [
   {

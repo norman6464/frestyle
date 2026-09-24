@@ -342,6 +342,17 @@ function KbSpaceSwitcherMenu({
           <span className="truncate">{s.name}</span>
         </Link>
       ))}
+      {/* 一覧にはこのワークスペースで自分が入っているスペースしか出ない。ほかのスペースを
+          探す・作る画面への入口をここに置く（ヘッダーから行ける場所は主な行き先だけのため）。
+          対象のワークスペースは ?workspace= で持ち越す。無いと全件画面が所属の先頭を開く。 */}
+      <Link
+        to={`/kb/spaces?workspace=${encodeURIComponent(workspaceSlug)}`}
+        onClick={onClose}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-surface-2"
+      >
+        <FsIcon name="grid" className="h-4 w-4 shrink-0" />
+        <span className="truncate">すべてのスペース</span>
+      </Link>
       <div className="mt-1 border-t border-surface-3 pt-1">
         {addingSpace ? (
           <div className="px-2 pb-1">

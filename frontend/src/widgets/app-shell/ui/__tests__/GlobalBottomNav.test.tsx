@@ -17,7 +17,7 @@ describe('GlobalBottomNav', () => {
     const nav = screen.getByRole('navigation', { name: '主な行き先' });
     const links = nav.querySelectorAll('a');
     expect(links).toHaveLength(4);
-    for (const label of ['ホーム', '自分の担当', 'ナレッジ', 'バックログ']) {
+    for (const label of ['ホーム', '担当', 'ナレッジ', 'バックログ']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
     // 絵は飾り。名前は文字が持つ。

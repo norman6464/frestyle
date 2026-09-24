@@ -6,15 +6,16 @@ import { SidebarSection } from '@/shared/ui';
 import AppShell from './AppShell';
 
 /**
- * ログイン後の画面ぜんぶを包む外枠（帯・柱・本文・上に戻る・行き先を探す窓）。
+ * ログイン後の画面ぜんぶを包む外枠（帯・本文・上に戻る・行き先を探す窓）。設計ボード ST02・ST03。
  *
- * 帯は常時表示で、本文とは縦に並べる（重ねない）。その下は横並びで、左に柱 1 本、
- * 右が本文。柱の中身のうち画面ごとの区画は、画面が差し込み口から入れる。
+ * 帯は常時表示で、主な行き先（ホーム・担当・ナレッジ・バックログ）・検索・通知・アカウントを持つ。
+ * 本文とは縦に並べる（重ねない）。画面が区画を差し込んだとき（ナレッジの木など）だけ、本文の左に
+ * 列が出る。それ以外の画面は本文が全幅。
  *
- * ⌘K（Windows は Ctrl+K）でどこからでも「行き先を探す窓」が開き、⌘\ で柱が開閉する。
+ * ⌘K（Windows は Ctrl+K）でどこからでも「行き先を探す窓」が開く。
  */
 /**
- * story の本文。`withSection` のときは柱への差し込み（画面ごとの区画）も一緒に出す。
+ * story の本文。`withSection` のときは左の列への差し込み（画面ごとの区画）も一緒に出す。
  */
 function Body({ withSection }: { withSection: boolean }) {
   return (
@@ -54,14 +55,6 @@ const meta = {
     withApi({
       '/profile/me': { displayName: '川野 拓馬', avatarUrl: null, email: 'takuma@example.com' },
       '/notifications/unread-count': 2,
-      // 宛先は前方一致で選ばれる。細かいほう（spaces）を先に書かないと、スペースの
-      // 問い合わせにワークスペースの配列が返り、柱が別物を並べてしまう。
-      '/kb/workspaces/w-3f2a9c/spaces': [
-        { id: 'sp-1', workspaceId: 'w-1', name: '設計スペース', createdAt: '', updatedAt: '' },
-      ],
-      '/kb/workspaces': [
-        { slug: 'w-3f2a9c', name: '開発チーム', createdAt: '2026-01-01T00:00:00Z', canManage: true },
-      ],
     }),
     // AppShell は「枠」なので、中身は Outlet に入る。router の入れ子まで作らないと描けない
     // （router は 1 つだけ。story ごとに足すと「Router の中に Router」で描けなくなる）。
@@ -80,33 +73,38 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** ふだんの見え方。 */
+/** ふだんの見え方。行き先は帯が持ち、区画の無い画面では本文が全幅になる。 */
 export const 既定: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // 行き先は左端の柱が持つ（ヘッダーには無い）。広い画面では下部ナビは出ない。
-    await expect(canvas.getByRole('navigation', { name: 'アプリのナビゲーション' })).toBeVisible();
-    await expect(canvas.queryByRole('navigation', { name: '主な行き先' })).toBeNull();
+    const nav = within(canvas.getByRole('banner')).getByRole('navigation', { name: '主な行き先' });
+    for (const label of ['ホーム', '担当', 'ナレッジ', 'バックログ']) {
+      await expect(within(nav).getByRole('link', { name: label })).toBeVisible();
+    }
+    await expect(within(nav).getByRole('link', { name: 'ホーム' })).toHaveAttribute('aria-current', 'page');
+    // 広い画面では下部ナビは出ない（同じ行き先を 2 系統並べない）。
+    await expect(canvas.getAllByRole('navigation', { name: '主な行き先' })).toHaveLength(1);
+    // 区画が無いので、狭い画面用の三本線も出ない。
+    await expect(canvas.queryByRole('button', { name: 'サイドメニューを開く' })).toBeNull();
     await expect(canvas.getByRole('heading', { name: 'ここが本文' })).toBeVisible();
   },
 };
 
 /**
- * 狭い画面では毎日使う行き先は下部ナビ（設計ボード ST12）が持つ。三本線の引き出しには
- * 今いる画面の区画とスペースの一覧だけが残り、同じ階層のナビが 2 系統並ばない。
+ * 狭い画面では毎日使う行き先は下部ナビ（設計ボード ST12）が持つ。帯には行き先を出さない。
  */
 export const モバイルは下部ナビ: Story = {
   globals: { viewport: { value: 'mobile1', isRotated: false } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const bottom = canvas.getByRole('navigation', { name: '主な行き先' });
+    // 帯の行き先は幅で隠れ、名前の同じナビは下部の 1 つだけが読める。
+    const [bottom] = canvas.getAllByRole('navigation', { name: '主な行き先' });
     await expect(bottom).toBeVisible();
-    for (const label of ['ホーム', '自分の担当', 'ナレッジ', 'バックログ']) {
+    await expect(canvas.getAllByRole('navigation', { name: '主な行き先' })).toHaveLength(1);
+    for (const label of ['ホーム', '担当', 'ナレッジ', 'バックログ']) {
       await expect(within(bottom).getByRole('link', { name: label })).toBeVisible();
     }
     await expect(within(bottom).getByRole('link', { name: 'ホーム' })).toHaveAttribute('aria-current', 'page');
-    // 柱の行き先は狭い画面では出さない（下部ナビと二重になる）。
-    await expect(canvas.queryByRole('navigation', { name: 'アプリのナビゲーション' })).toBeNull();
     // 画面の下端に張り付く。本文はその分だけ下に余白を取り、最後の行が隠れない。
     const rect = bottom.getBoundingClientRect();
     await expect(Math.round(rect.bottom)).toBe(Math.round(window.innerHeight));
@@ -115,7 +113,9 @@ export const モバイルは下部ナビ: Story = {
   },
 };
 
+/** 狭い画面で区画のある画面を開くと、三本線で区画を引き出しとして開ける。キーボードだけで開閉できる。 */
 export const モバイルのメニューをキーボードで操作: Story = {
+  parameters: { withSection: true },
   globals: { viewport: { value: 'mobile1', isRotated: false } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -123,12 +123,11 @@ export const モバイルのメニューをキーボードで操作: Story = {
     await userEvent.click(trigger);
     const close = await canvas.findByRole('button', { name: 'メニューを閉じる' });
     await waitFor(() => expect(close).toHaveFocus());
-    // 引き出しの中身はスペースの一覧だけ（行き先は下部ナビが持つ）。
-    await expect(canvas.queryByRole('navigation', { name: 'アプリのナビゲーション' })).toBeNull();
-    await expect(await canvas.findByRole('link', { name: '設計スペース' })).toBeVisible();
-    // Shift+Tab は引き出しの最後（すべてのスペース）へ回り、Tab で閉じるボタンへ戻る。
+    // 引き出しの中身は画面の区画だけ（行き先は下部ナビが持つ）。
+    await expect(within(canvas.getByRole('dialog', { name: 'サイドメニュー' })).getByRole('link', { name: '概要' })).toBeVisible();
+    // Shift+Tab は引き出しの最後の項目へ回り、Tab で閉じるボタンへ戻る。
     await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
-    await expect(canvas.getByRole('link', { name: 'すべてのスペース' })).toHaveFocus();
+    await expect(canvas.getByRole('link', { name: 'アーキテクチャ概要' })).toHaveFocus();
     await userEvent.keyboard('{Tab}');
     await expect(close).toHaveFocus();
     await userEvent.keyboard('{Escape}');
@@ -153,19 +152,19 @@ export const コマンドパレットを開く: Story = {
 };
 
 /**
- * 画面ごとの区画（ナレッジの木・バックログのプロジェクト）は、画面が差し込み口から
- * 柱の中へ入れる。柱は 1 本しか無く、その中に行き先と区画が縦に並ぶ。
- *
- * 差し込むと柱の既定の中身（スペースの一覧）は引っ込む —— 区画のほうが今いる場所を
- * 詳しく出しており、同じものが上下に二重になるため。
+ * 画面ごとの区画（ナレッジのスペースと木）は、画面が差し込み口から入れ、本文の左に列が出る
+ * （設計ボード ST03: ナレッジを読むときだけ左に木）。
  */
-export const 画面の区画が柱に入る: Story = {
+export const 画面の区画が左の列に入る: Story = {
   parameters: { withSection: true },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const rail = canvas.getByRole('navigation', { name: 'アプリのナビゲーション' }).closest('div')!.parentElement!;
-    // 差し込んだ中身が DOM 上も柱の中にある（本文の中に残っていない）。
-    await expect(rail.contains(canvas.getByRole('navigation', { name: 'ナレッジ' }))).toBe(true);
+    const section = canvas.getByRole('navigation', { name: 'ナレッジ' });
+    await expect(section).toBeVisible();
+    // 差し込んだ中身は本文（main）の外、その左に出る。
+    const main = canvasElement.querySelector('main')!;
+    await expect(main.contains(section)).toBe(false);
+    await expect(section.getBoundingClientRect().right).toBeLessThanOrEqual(main.getBoundingClientRect().left + 1);
     await expect(canvas.getByRole('heading', { name: 'ここが本文' })).toBeVisible();
   },
 };

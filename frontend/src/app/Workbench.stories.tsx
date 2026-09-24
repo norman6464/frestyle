@@ -5,7 +5,7 @@ import { MenuPage } from '@/pages/home';
 import { AppShell } from '@/widgets/app-shell';
 import { withApi, withStore, withToast } from '../../.storybook/decorators';
 
-// 単体の画面幅だけでなく、実際のヘッダー・サイドバーを含めて主従と折り返しを確認する。
+// 単体の画面幅だけでなく、実際のヘッダー・下部ナビを含めて主従と折り返しを確認する。
 const meta = {
   title: 'app/Workbench',
   component: AppShell,
@@ -38,7 +38,8 @@ export const ホーム: Story = {
     const canvas = within(canvasElement);
     await expect(await canvas.findByRole('list', { name: '取り組むチケット' })).toBeVisible();
     await expect(canvas.getByRole('button', { name: '移動先を探す' })).toBeVisible();
-    await expect(canvas.getByRole('navigation', { name: 'アプリのナビゲーション' })).toBeVisible();
+    // 広い画面では行き先はヘッダーにあり、下部ナビは出ない（名前の同じナビは 1 つだけ読める）。
+    await expect(canvas.getByRole('navigation', { name: '主な行き先' })).toBeVisible();
   },
 };
 
@@ -47,7 +48,9 @@ export const モバイル: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByRole('list', { name: '取り組むチケット' })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'サイドメニューを開く' })).toBeVisible();
+    // 行き先は下部ナビ。ホームは左の列を持たないので三本線は出ない。
+    await expect(canvas.getByRole('navigation', { name: '主な行き先' })).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'サイドメニューを開く' })).toBeNull();
     await expect(canvas.getByRole('link', { name: /APP-24/ })).toHaveAttribute('href', '/tickets/t1');
   },
 };
