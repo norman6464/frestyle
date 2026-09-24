@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import HomePage from '../ui/HomePage';
 import KbRepository from '@/entities/kb/api/kbRepository';
@@ -106,6 +107,26 @@ describe('HomePage', () => {
     expect(screen.queryByText('このページを参照しているチケット')).not.toBeInTheDocument();
   });
 
+  it('お気に入りのワークスペースを切り替えた直後に、前のワークスペースのお気に入りを出さない', async () => {
+    vi.mocked(KbRepository.fetchWorkspaces).mockResolvedValue([workspace, { ...workspace, slug: 'team-b', name: '営業チーム' }]);
+    vi.mocked(KbRepository.fetchFavorites).mockImplementation((slug) =>
+      slug === 'team-a'
+        ? Promise.resolve([{ pageId: 'fav-a', title: 'A のお気に入り', spaceId: 's', spaceName: '開発ノート', createdAt: '' }])
+        : new Promise(() => {}),
+    );
+    renderHome();
+
+    const favorites = await screen.findByRole('list', { name: 'お気に入りのページ' });
+    expect(within(favorites).getByText('A のお気に入り')).toBeInTheDocument();
+    // 読み込みが終わらない間も、前のワークスペースの行は 1 度も出さない。
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('combobox', { name: 'お気に入りを出すワークスペース' }));
+    // 候補は別の器（ポータル）へ後から描かれるので、出てくるまで待つ。
+    await user.click(await screen.findByRole('option', { name: '営業チーム' }));
+    expect(screen.queryByText('A のお気に入り')).not.toBeInTheDocument();
+    expect(screen.getByText('お気に入りを読み込んでいます')).toBeInTheDocument();
+  });
+
   it('画面を離れたら履歴の取得を中断する', () => {
     let signal: AbortSignal | undefined;
     vi.mocked(KbRepository.fetchRecentPages).mockImplementation((requestSignal) => {
@@ -149,9 +170,11 @@ describe('HomePage', () => {
       'href',
       '/tickets/t1',
     );
-    expect(within(list).getByText('APP-24')).toBeInTheDocument();
-    expect(within(list).getByText('開発チーム / FreStyle')).toBeInTheDocument();
-    expect(within(list).getByText('期限なし')).toBeInTheDocument();
+    // 行ごとに正しい値が出ていることを見る（2 行とも同じワークスペース / プロジェクトなので行で絞る）。
+    const [first, second] = within(list).getAllByRole('listitem');
+    expect(within(first).getByText('APP-24')).toBeInTheDocument();
+    expect(within(first).getByText('開発チーム / FreStyle')).toBeInTheDocument();
+    expect(within(second).getByText('期限なし')).toBeInTheDocument();
     expect(screen.getByText('2件を表示')).toBeInTheDocument();
   });
 });
