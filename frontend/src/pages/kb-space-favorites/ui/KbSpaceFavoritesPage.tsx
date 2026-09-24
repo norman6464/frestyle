@@ -101,10 +101,7 @@ function FavoritesList({ workspaceSlug, spaceId }: { workspaceSlug: string; spac
               to={`/kb/${favorite.pageId}`}
               className="flex min-h-14 w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
             >
-              <KbPageGlyph
-                page={{ id: favorite.pageId, spaceId: favorite.spaceId, title: favorite.title, icon: favorite.icon, createdByUserId: 0, createdAt: favorite.createdAt, updatedAt: favorite.createdAt }}
-                className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]"
-              />
+              <KbPageGlyph page={{ icon: favorite.icon }} className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
               <span className="min-w-0 text-sm font-medium text-[var(--color-text-primary)] [overflow-wrap:anywhere]">
                 {favorite.title || '無題'}
               </span>

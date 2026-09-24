@@ -2,7 +2,8 @@ import { KbPageGroupIcon, KbPageGroupOpenIcon, KbPageIcon } from '@/shared/ui/ic
 import type { KbPage } from '@/entities/kb';
 
 export interface KbPageGlyphProps {
-  page: KbPage;
+  /** 見るのは絵文字（icon）だけ。ページの形を丸ごと持たない一覧（お気に入り）からも使えるようにする。 */
+  page: Pick<KbPage, 'icon'>;
   className: string;
   /** 子を持つページか（フォルダ／紙の切り替えに使う。絵文字が有れば見ない）。 */
   hasChildren?: boolean;
