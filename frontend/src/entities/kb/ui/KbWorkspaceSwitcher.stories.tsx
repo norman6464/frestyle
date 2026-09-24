@@ -1,20 +1,19 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import KbWorkspaceSwitcher from './KbWorkspaceSwitcher';
 import type { KbWorkspace } from '../model/types';
 
 /**
- * ナレッジの最上段にある、ワークスペースの切り替え。
+ * ナレッジの文脈バーの先頭にある、ワークスペースの切り替え（設計ボード ST03 の「FreStyle ▾」）。
  *
  * **同時に見えるのは 1 つだけ**にしてある。ワークスペースは会社の境目なので、
  * 2 社ぶんを並べて見る場面が無く、並べると「いまどちらを触っているか」が曖昧になるため。
- * （その下のスペースは同時に見たいので、あちらは見出しとして並べてある。）
  *
  * 一覧は ARIA の役割を名乗らない素のボタンの並びにしてある。listbox や menu を名乗ると
  * 矢印キーでの移動を約束したことになるが、それを実装していない — 名乗りと実際が食い違うと、
  * 読み上げソフトを使う人だけが「動かない操作」を教えられることになる。
  *
- * 削除は戻せないので、必ず一度確かめる。捨てる入口は触れているあいだだけ出す。
+ * ワークスペース単位の入口（メンバーと招待・追加）もここに集める。削除はここには置かない。
  */
 const meta = {
   title: 'entities/kb/KbWorkspaceSwitcher',
@@ -23,8 +22,8 @@ const meta = {
   args: { onSelect: fn(), onCreate: fn(async () => {}) },
   decorators: [
     (Story) => (
-      // 実物のサイドバーと同じ幅・地色。開いた一覧が入る高さも確保する。
-      <div className="h-96 w-64 bg-surface-1 p-2">
+      // 実物は文脈バーの中。開いた一覧が入る高さを確保する。
+      <div className="h-96 w-80 bg-surface p-2">
         <Story />
       </div>
     ),
@@ -106,23 +105,27 @@ export const 空: Story = {
 };
 
 /**
- * 消せる形。管理できるものにだけ捨てる入口が出る（営業部には出ない）。
- * 押すと必ず一度確かめる。
+ * 今いるワークスペースを管理できるときは、一覧の下に「メンバーと招待」が出る。
+ * 削除はここには置かない（選ぶ操作の隣に戻せない操作を並べない。メンバーと招待の画面の下にある）。
  */
-export const 削除の確認: Story = {
-  args: { workspaces, activeSlug: 'w-3f2a9c', onDelete: fn(async () => {}) },
+export const メンバーと招待への入口: Story = {
+  args: { workspaces, activeSlug: 'w-3f2a9c', onManageMembers: fn() },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'ワークスペース「開発チーム」を切り替える' }));
+    await expect(canvas.queryByRole('button', { name: /を削除/ })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'メンバーと招待' }));
+    await expect(args.onManageMembers).toHaveBeenCalledWith('w-3f2a9c');
+  },
+};
+
+/** 管理できないワークスペース（営業部）にいるときは、メンバーと招待の入口を出さない。 */
+export const 管理できないときは入口を出さない: Story = {
+  args: { workspaces, activeSlug: 'w-88ab21', onManageMembers: fn() },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: /開発チーム/ }));
-    // 管理できないものには捨てる入口を出さない。
-    await expect(canvas.queryByRole('button', { name: '営業部 を削除' })).toBeNull();
-    await userEvent.click(canvas.getByRole('button', { name: '開発チーム を削除' }));
-    // 確認は portal で body の直下に出るので、story の枠の中からは引けない。
-    // ConfirmModal は CSS アニメーション（animate-scale-in）で現れるため、要素が DOM に
-    // 追加された直後に toBeVisible() を呼ぶと、アニメーション開始前の最初のフレームを
-    // 掴んで落ちることがある（CI の headless ブラウザでだけ再現し、ローカルでは再現しない
-    // ——同じコミットで CI のみ3回連続で失敗し特定）。1フレーム分の猶予を持たせて再試行する。
-    const message = await within(document.body).findByText(/元に戻せません/);
-    await waitFor(() => expect(message).toBeVisible());
+    await userEvent.click(canvas.getByRole('button', { name: 'ワークスペース「営業部」を切り替える' }));
+    await expect(canvas.getByRole('button', { name: '営業部' })).toHaveAttribute('aria-current', 'true');
+    await expect(canvas.queryByRole('button', { name: 'メンバーと招待' })).toBeNull();
   },
 };

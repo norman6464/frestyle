@@ -1,4 +1,5 @@
 import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
@@ -137,14 +138,20 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...actual, useNavigate: () => hoisted.navigate, useParams: () => hoisted.useParams() };
 });
 
-// サイドバーは自前のテストで検証済み。ここでは画面の配線だけを見る。
+// ナレッジの枠（文脈バーと左の木）は自前のテストで検証済み。ここでは画面の配線だけを見る。
+// 本文は枠の中身（children）なので、偽物もそれだけは描く。
 // KbPageGlyph は KbBacklinksSection が使う実物のまま残す（丸ごと偽物にすると、
 // KbBacklinksSection が展開したときに未定義のコンポーネントで落ちる）。
 vi.mock('@/widgets/kb-sidebar', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/widgets/kb-sidebar')>();
   return {
     ...actual,
-    KbSidebar: () => <nav aria-label="サイドバーの偽物" />,
+    KbFrame: ({ children }: { children?: ReactNode }) => (
+      <>
+        <nav aria-label="枠の偽物" />
+        {children}
+      </>
+    ),
   };
 });
 

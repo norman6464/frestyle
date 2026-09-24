@@ -93,10 +93,8 @@ test.describe('ナレッジ作成導線（POST モック）', () => {
     await page.goto('/kb');
     await expect(page).toHaveURL(/\/kb/);
 
-    // SecondaryPanel はモバイル用・デスクトップ用の DOM を両方持ち、CSS で表示を
-    // 切り替える（KbSidebar もその分だけ複製される）。Desktop Chrome では
-    // デスクトップ側だけが見えるが、ロケータ自体は両方に一致するため visible な
-    // 方だけに絞る（絞らないと strict mode 違反で落ちる）。
+    // 画面幅で出し分ける DOM（狭い画面の引き出しなど）はロケータが両方に一致することがある。
+    // 見えている方だけに絞る（絞らないと strict mode 違反で落ちる）。
     const visible = page.locator(':visible');
 
     // 行き止まりにしない: 作成フォームが出る。
@@ -141,7 +139,7 @@ test.describe('スペース追加導線（POST モック）', () => {
       }),
     );
 
-    // 段14: サイドバーは「今いる 1 スペース」だけを出す。切替と作成はこの自分のスペース
+    // 文脈バーのスペース切替は「今いる 1 スペース」の名前を出し、切替と作成は自分のスペース
     // 一覧（/me/spaces）から辿るので、経路を通すにはこちらのモックが要る。
     await page.route('**/api/v2/kb/workspaces/w-3f2a9c/me/spaces', (route) =>
       route.fulfill({
@@ -172,7 +170,7 @@ test.describe('スペース追加導線（POST モック）', () => {
       });
     });
 
-    // 同じ名前のものが柱と本文の両方に出ることがある（スペース名など）。画面幅で
+    // 同じ名前のものが文脈バーと本文の両方に出ることがある（スペース名など）。画面幅で
     // 隠れている方を掴まないよう、見えているものだけに絞る。
     const visible = page.locator(':visible');
 
@@ -180,7 +178,7 @@ test.describe('スペース追加導線（POST モック）', () => {
     // 今いるスペースの名前が出る（段14 で見出しはボタンではなくただの表示になった）。
     await expect(page.getByText('バックエンド定例').and(visible).first()).toBeVisible();
 
-    await page.getByRole('button', { name: 'スペースを切り替える' }).and(visible).first().click();
+    await page.getByRole('button', { name: 'スペース「バックエンド定例」を切り替える' }).and(visible).first().click();
     // 「プライベートスペースを作成」も部分一致で当たるので厳密一致にする。
     await page.getByRole('button', { name: 'スペースを作成', exact: true }).and(visible).first().click();
     await page.getByLabel('スペースの名前').and(visible).first().fill('営業定例');

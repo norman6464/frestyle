@@ -5,7 +5,6 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from '@/entities/user/model/authSlice';
 import AppShell from '../ui/AppShell';
-import { SidebarSection } from '@/shared/ui';
 import { ToastProvider } from '@/app/providers/ToastProvider';
 
 function createTestStore() {
@@ -47,33 +46,14 @@ describe('AppShell', () => {
     expect(navsWithKb).toEqual(['主な行き先', '主な行き先']);
   });
 
-  // 画面ごとの区画（ナレッジの木など）は画面が差し込み口から入れ、本文の外の左の列に入る。
-  it('画面が差し込んだ区画は本文の外の列に入る', () => {
-    renderAppShell({
-      body: (
-        <>
-          <SidebarSection>
-            <nav aria-label="ナレッジ" />
-          </SidebarSection>
-          <div>テストコンテンツ</div>
-        </>
-      ),
-    });
-    const section = screen.getByRole('navigation', { name: 'ナレッジ' });
-    expect(screen.getByRole('main').contains(section)).toBe(false);
-    expect(screen.getByText('テストコンテンツ')).toBeInTheDocument();
-    // 区画があるときだけ、狭い画面で列を開く三本線が出る。
-    expect(screen.getByRole('button', { name: 'サイドメニューを開く' })).toBeInTheDocument();
-  });
-
   it('子コンテンツを表示する', () => {
     renderAppShell();
     expect(screen.getByText('テストコンテンツ')).toBeDefined();
   });
 
-  it('区画の無い画面では三本線を出さない', () => {
+  it('三本線のメニューは持たない', () => {
     renderAppShell();
-    // 開く先（画面の左の列）が無いのにボタンだけ出すと、押しても何も起きない。
+    // 狭い画面の行き先は下部ナビ、ナレッジのページの一覧はナレッジの文脈バーが開く（ST02）。
     expect(screen.queryByRole('button', { name: 'サイドメニューを開く' })).toBeNull();
   });
 

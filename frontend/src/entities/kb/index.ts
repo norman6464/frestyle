@@ -1,8 +1,8 @@
 export { default as KbRepository } from './api/kbRepository';
 export { default as KbWorkspaceSwitcher } from './ui/KbWorkspaceSwitcher';
 export type { KbWorkspaceSwitcherProps } from './ui/KbWorkspaceSwitcher';
-export { default as KbSpaceTabs } from './ui/KbSpaceTabs';
-export type { KbSpaceTabsProps, KbSpaceTab } from './ui/KbSpaceTabs';
+export { default as KbSpaceHeading } from './ui/KbSpaceHeading';
+export type { KbSpaceHeadingProps } from './ui/KbSpaceHeading';
 export { default as KbWorkspaceTabs } from './ui/KbWorkspaceTabs';
 export type { KbWorkspaceTabsProps, KbWorkspaceTab } from './ui/KbWorkspaceTabs';
 export { useWorkspaceList } from './model/useWorkspaceList';

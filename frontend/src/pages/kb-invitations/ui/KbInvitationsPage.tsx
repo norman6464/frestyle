@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { KbWorkspaceTabs, useWorkspaceList, type KbInvitation, type KbIssuedInvitation } from '@/entities/kb';
 import { Button, ConfirmModal, FsIcon, fsIcon } from '@/shared/ui';
+import { KbFrame } from '@/widgets/kb-sidebar';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useKbInvitations } from '../model/useKbInvitations';
@@ -54,19 +55,27 @@ export default function KbInvitationsPage() {
     }
   };
 
+  // ナレッジの枠（文脈バーのワークスペース側）の中に出す。スペースを持たない画面なので
+  // 左の列（ページの木）は出さない。
+  const frame = (content: ReactNode) => (
+    <KbFrame workspaceSlug={workspaceSlug} showPagePanel={false}>
+      <div className="min-h-0 flex-1 overflow-y-auto">{content}</div>
+    </KbFrame>
+  );
+
   if (invitations.error === 'forbidden') {
-    return (
+    return frame(
       <EmptyState
         headingLevel={1}
         icon={fsIcon('lock')}
         title="この画面は admin だけが開けます"
         description="メンバーを招くこと、招待の再送と取り消しは、このワークスペースの admin だけが行えます。"
         action={{ label: 'ナレッジへ戻る', onClick: () => navigate('/kb') }}
-      />
+      />,
     );
   }
 
-  return (
+  return frame(
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:pt-12">
       <KbWorkspaceTabs workspaceSlug={workspaceSlug ?? ''} workspaceName={workspaceName} active="invitations" />
 
@@ -115,6 +124,6 @@ export default function KbInvitationsPage() {
         }}
         onCancel={() => setRevoking(null)}
       />
-    </div>
+    </div>,
   );
 }

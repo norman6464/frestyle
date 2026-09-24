@@ -244,25 +244,6 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   }, []);
 
   /**
-   * ワークスペースを配下ごと消す。**失敗は握り潰さず投げる。**
-   *
-   * 消したものを開いたままにしない。残っているワークスペースの先頭へ切り替える
-   * （1 つも残らなければ選択なしに戻し、一覧の空表示に任せる）。
-   */
-  const deleteWorkspace = useCallback(async (slug: string): Promise<void> => {
-    await KbRepository.deleteWorkspace(slug);
-    setWorkspaces((prev) => {
-      const rest = prev.filter((w) => w.slug !== slug);
-      // いま開いているものを消したときだけ移す。別のものを消したなら動かさない。
-      setActiveSlug((current) => (current === slug ? (rest[0]?.slug ?? null) : current));
-      return rest;
-    });
-    // 配下は FK CASCADE で全消去。他の一覧・開いたままの本文画面（KbPage）へ知らせる
-    // （page-deleted と同じ理由。知らせないと存在しない場所を開いたまま残る）。
-    emitKbTreeEvent({ type: 'workspace-deleted', workspaceSlug: slug });
-  }, []);
-
-  /**
    * スペースを作る。**失敗は握り潰さず投げる。**
    */
   const createSpace = useCallback(
@@ -529,7 +510,6 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
     unarchivePage,
     movePage,
     createWorkspace,
-    deleteWorkspace,
     createSpace,
     renameSpace,
     selectWorkspace: setActiveSlug,

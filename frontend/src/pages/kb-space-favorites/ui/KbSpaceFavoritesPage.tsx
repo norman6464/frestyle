@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { KbSidebar } from '@/widgets/kb-sidebar';
-import { Loading, SidebarSection, FsIcon, fsIcon } from '@/shared/ui';
-import { useKbSpaceEntry, KbSpaceTabs } from '@/entities/kb';
+import { KbFrame } from '@/widgets/kb-sidebar';
+import { Loading, FsIcon, fsIcon } from '@/shared/ui';
+import { useKbSpaceEntry, KbSpaceHeading } from '@/entities/kb';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useKbFavorites } from '../model/useKbFavorites';
 
@@ -18,13 +18,9 @@ export default function KbSpaceFavoritesPage() {
   );
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* 左の列の「ナレッジの区画」。noSpaces でも常に差し込む（KbSidebar 自身が空の
-          ワークスペース／空のスペース一覧を検知して作成フォームを出す）。 */}
-      <SidebarSection>
-        <KbSidebar workspaceSlug={workspaceSlug ?? undefined} spaceId={space?.id ?? ''} />
-      </SidebarSection>
-
+    // ナレッジの枠（文脈バー・左の木）。スペースが無い／決まらないときも枠は描く —— 左の列が
+    // 空のワークスペース・空のスペース一覧を検知して作成の欄を出す（そこが始める唯一の入口）。
+    <KbFrame workspaceSlug={workspaceSlug ?? undefined} spaceId={space?.id ?? ''}>
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {error && (
           <div role="alert" className="flex flex-1 items-center justify-center px-6 py-8 text-center text-sm text-[var(--color-text-muted)]">
@@ -39,7 +35,7 @@ export default function KbSpaceFavoritesPage() {
                 アクセスできるスペースがありません
               </h1>
               <p className="text-sm text-[var(--color-text-muted)]">
-                左のサイドバーから、最初のスペースを作れます。
+                左の列（狭い画面では左上のボタン）から、最初のスペースを作れます。
               </p>
             </div>
           </div>
@@ -53,14 +49,14 @@ export default function KbSpaceFavoritesPage() {
 
         {!error && !noSpaces && space && workspaceSlug && (
           <>
-            <KbSpaceTabs space={space} active="favorites" />
+            <KbSpaceHeading space={space} title="お気に入り" />
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
               <FavoritesList workspaceSlug={workspaceSlug} onOpen={(id) => navigate(`/kb/${id}`)} />
             </div>
           </>
         )}
       </main>
-    </div>
+    </KbFrame>
   );
 }
 
@@ -93,9 +89,8 @@ function FavoritesList({ workspaceSlug, onOpen }: { workspaceSlug: string; onOpe
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
-      <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">自分のお気に入り</h2>
-      <p className="mb-5 mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">このワークスペース内で保存したページです。スペースをまたいで表示しています。</p>
+    <div className="mx-auto w-full max-w-3xl px-4 pb-6 pt-3 sm:px-6">
+      <p className="mb-5 text-sm leading-relaxed text-[var(--color-text-muted)]">このワークスペース内で保存したページです。スペースをまたいで表示しています。</p>
     <ul className="divide-y divide-surface-2">
       {favorites.map((favorite) => (
         <li key={favorite.pageId}>

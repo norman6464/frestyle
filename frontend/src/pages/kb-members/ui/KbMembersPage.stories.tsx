@@ -259,3 +259,39 @@ export const 競合したら理由をトーストで知らせる: Story = {
     await expect(canvas.queryAllByText('停止中')).toHaveLength(0);
   },
 };
+
+/** 削除の見本で、削除の問い合わせが届いたかを見る記録。 */
+const deletedWorkspaces: string[] = [];
+
+/**
+ * ワークスペースの削除は画面の一番下（管理者だけ）。切替の一覧のように選ぶ操作の隣には置かない。
+ * 戻せないので確認を挟み、消したら知らせてナレッジの入口へ戻る。
+ */
+export const ワークスペースを削除する: Story = {
+  decorators: [
+    withApi(
+      baseApi({
+        // 削除の宛先。一覧（…/admin/members）は baseApi の先頭で先に拾われる。
+        '/kb/workspaces/acme': () => {
+          deletedWorkspaces.push('acme');
+        },
+      }),
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    deletedWorkspaces.length = 0;
+    const canvas = within(canvasElement);
+    await canvas.findByText('佐藤 花子');
+    await userEvent.click(await canvas.findByRole('button', { name: 'ワークスペースを削除' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'ワークスペースを削除しますか？' });
+    await expect(dialog).toHaveTextContent('「Acme 社」を中のスペース・ページごと削除します。元に戻せません。');
+    await userEvent.click(within(dialog).getByRole('button', { name: '削除する' }));
+
+    // 消したらナレッジの入口（/kb）へ移る。この見本の router は /kb を持たないので、
+    // 知らせ（トースト）も画面ごと外れる。ここでは削除が届いたことだけを確かめる。
+    await waitFor(async () => {
+      await expect(deletedWorkspaces).toEqual(['acme']);
+    });
+  },
+};

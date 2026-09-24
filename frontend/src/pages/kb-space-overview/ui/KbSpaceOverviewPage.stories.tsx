@@ -33,7 +33,7 @@ export const ふつう: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     // スペース名は見出しとして 1 回だけ出る（サイドバー内の表示はサイドバー自身の
-    // KbSidebar.stories.tsx が確かめる。ここは本文だけを見る）。
+    // KbFrame.stories.tsx が確かめる。ここは本文だけを見る）。
     await waitFor(async () => {
       await expect(canvas.getByRole('heading', { name: '開発部' })).toBeInTheDocument();
     });
