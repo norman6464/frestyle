@@ -86,12 +86,15 @@ const meta = {
     indented: false,
     // 期限超過の判定に使う「今日」。story は日付に依存しないよう固定する。
     today: '2026-09-22',
+    layout: 'table',
     onOpen: fn(),
     onChangeStatus: fn(),
   },
   decorators: [
-    (Story) => (
-      <div role="table" className="w-[860px] border border-surface-3">
+    // 行は表の中に置く（role="row" は table の子）。幅は story ごとに parameters.rowWidth で変える
+    // （カードは狭い領域の形なので狭く置く）。
+    (Story, { parameters }) => (
+      <div role="table" className="border border-surface-3" style={{ width: (parameters.rowWidth as number | undefined) ?? 860 }}>
         <Story />
       </div>
     ),
@@ -192,6 +195,49 @@ export const 優先度と状態の見え方: Story = {
     const status = canvas.getByLabelText(`${baseTicket.title} の状態`);
     await expect(status).toHaveAccessibleName(`${baseTicket.title} の状態`);
     await expect(status).toHaveTextContent('開発');
+  },
+};
+
+/**
+ * 行のどこを押しても開く（題名の文字だけだと高さ 20px しか押せない）。状態の選択の上の押下は
+ * 別の操作なので開かない。
+ */
+export const 行のどこを押しても開く: Story = {
+  play: async ({ canvasElement, args }) => {
+    const row = canvasElement.querySelector<HTMLElement>('[data-ticket-row="t-1"]');
+    await expect(row).not.toBeNull();
+    // 担当の升（押せる物ではない所）を押す。
+    await userEvent.click(within(canvasElement).getByText('未割当'));
+    await expect(args.onOpen).toHaveBeenCalledTimes(1);
+  },
+};
+
+/**
+ * 領域が狭いときのカード（設計ボード ST10・ST12）。キーと状態が上の行、題名を大きく、
+ * 担当・優先度・期限を 1 行の補足に畳む。列の見出しに頼れないので、補足は値だけで読める並びにする。
+ */
+export const カード: Story = {
+  args: { layout: 'card', ticket: { ...baseTicket, dueDate: '2026-09-24', assigneePrincipalId: 'p-nor' }, assigneeName: 'Takuma' },
+  parameters: { rowWidth: 360 },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Takuma')).toBeVisible();
+    await expect(canvas.getByText('9/24')).toBeVisible();
+    // 詳細をひらく は狭い画面の選択中にだけ出る。
+    await expect(canvas.queryByRole('button', { name: /詳細をひらく/ })).toBeNull();
+  },
+};
+
+/** 狭い画面で選んだカードには「詳細をひらく →」（ST12）。選んだだけでは全画面を開かない。 */
+export const カードで選択中なら詳細をひらける: Story = {
+  args: { layout: 'card', selected: true, onOpenDetail: fn() },
+  parameters: { rowWidth: 360 },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('選択中')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: /詳細をひらく/ }));
+    await expect(args.onOpenDetail).toHaveBeenCalledTimes(1);
+    await expect(args.onOpen).not.toHaveBeenCalled();
   },
 };
 

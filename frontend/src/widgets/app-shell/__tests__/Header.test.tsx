@@ -8,7 +8,7 @@ import { ToastProvider } from '@/app/providers/ToastProvider';
 import Header from '../ui/Header';
 
 // この環境の jsdom は localStorage を提供しないため、既存テストと同じ流儀でスタブする
-// （usePanelMode.test.ts 等と同様）。
+// （useResizablePanel.test.ts 等と同様）。
 function createMockStorage(): Storage {
   let store: Record<string, string> = {};
   return {

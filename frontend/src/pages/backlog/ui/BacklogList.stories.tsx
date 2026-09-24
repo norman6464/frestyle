@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import BacklogList, { BACKLOG_GROUP_ID, type BacklogGroupModel } from './BacklogList';
@@ -111,12 +112,13 @@ const meta = {
     onSelect: fn(),
     onCreate: fn(async () => {}),
     onChangeStatus: fn(),
-    onMove: fn(async () => {}),
     onRetry: fn(),
   },
   decorators: [
     (Story) => (
-      <div className="h-[520px] w-full max-w-[900px] bg-surface-1">
+      // 幅は固定する。表かカードかは一覧の置かれた幅で決まるので、見本を開く窓の幅で
+      // 見た目が変わらないようにする（狭い形は「狭い領域ではカード」で見る）。
+      <div className="h-[520px] w-[900px] bg-surface-1">
         <Story />
       </div>
     ),
@@ -177,9 +179,6 @@ export const スプリントの段: Story = {
       },
       ...backlogOnly(tickets),
     ],
-    onMoveInSprint: fn(async () => {}),
-    onMoveToSprint: fn(),
-    onRemoveFromSprint: fn(),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -211,6 +210,71 @@ export const 絞り込み中は全件数も出す: Story = {
   args: { filtered: true, totalCount: 12 },
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByText('2 件の課題を表示・全 12 件')).toBeInTheDocument();
+  },
+};
+
+/**
+ * 領域が狭いとカードに組み替える（設計ボード ST10）。画面幅ではなく一覧の置かれた幅で決めるので、
+ * 画面が広くても、右に詳細が開いて一覧が狭くなればカードになる。
+ */
+export const 狭い領域ではカード: Story = {
+  args: { selectedId: 't-1' },
+  decorators: [
+    (Story) => (
+      <div className="h-[520px] w-[520px] bg-surface-1">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(async () => {
+      await expect(canvas.getByRole('table', { name: 'チケット' })).toHaveAttribute('data-layout', 'card');
+    });
+    // 見出し行（列）は出さない。
+    await expect(canvas.queryAllByRole('columnheader')).toHaveLength(0);
+    await expect(canvas.getByText('選択中')).toBeVisible();
+  },
+};
+
+/**
+ * 読み込み中は一覧の器を描かない。読み込みが終わって器が後から付いても、狭い領域なら
+ * カードになる（器が付いた時点で幅を測り直す）。
+ */
+function LoadsThenShows(args: React.ComponentProps<typeof BacklogList>) {
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setLoaded(true), 50);
+    return () => clearTimeout(timer);
+  }, []);
+  return <BacklogList {...args} loading={!loaded} groups={loaded ? args.groups : backlogOnly([])} />;
+}
+
+export const 読み込んでからでも狭い領域ではカード: Story = {
+  decorators: [
+    (Story) => (
+      <div className="h-[520px] w-[520px] bg-surface-1">
+        <Story />
+      </div>
+    ),
+  ],
+  render: (args) => <LoadsThenShows {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(async () => {
+      await expect(canvas.getByRole('table', { name: 'チケット' })).toHaveAttribute('data-layout', 'card');
+    });
+  },
+};
+
+/** 広い領域では 6 列の表。 */
+export const 広い領域では表: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(async () => {
+      await expect(canvas.getByRole('table', { name: 'チケット' })).toHaveAttribute('data-layout', 'table');
+    });
+    await expect(canvas.getAllByRole('columnheader')).toHaveLength(6);
   },
 };
 
