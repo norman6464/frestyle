@@ -1,4 +1,5 @@
-export { default as KbSidebar } from './ui/KbSidebar';
+export { default as KbFrame } from './ui/KbFrame';
+export type { KbFrameProps } from './ui/KbFrame';
 export { default as KbPageGlyph } from './ui/KbPageGlyph';
 export type { KbPageGlyphProps } from './ui/KbPageGlyph';
 export { default as KbTemplatePickerModal } from './ui/KbTemplatePickerModal';

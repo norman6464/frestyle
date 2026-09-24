@@ -5,7 +5,6 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from '@/entities/user/model/authSlice';
 import { ToastProvider } from '@/app/providers/ToastProvider';
-import { SidebarSection, SidebarSlotProvider } from '@/shared/ui';
 import Header from '../ui/Header';
 
 // この環境の jsdom は localStorage を提供しないため、既存テストと同じ流儀でスタブする
@@ -41,16 +40,11 @@ vi.mock('@/entities/notification/api/notificationRepository', () => ({
 interface RenderOptions {
   onOpenSearch?: () => void;
   initialPath?: string;
-  onOpenMobileSidebar?: () => void;
-  /** 画面が左の列に区画を差し込んでいる状態で描く（ナレッジの画面など）。 */
-  withScreenSection?: boolean;
 }
 
 function renderHeader({
   onOpenSearch = vi.fn(),
   initialPath = '/',
-  onOpenMobileSidebar,
-  withScreenSection = false,
 }: RenderOptions = {}) {
   const store = configureStore({
     reducer: { auth: authReducer },
@@ -60,14 +54,7 @@ function renderHeader({
     <Provider store={store}>
       <ToastProvider>
         <MemoryRouter initialEntries={[initialPath]}>
-          <SidebarSlotProvider>
-            <Header onOpenSearch={onOpenSearch} onOpenMobileSidebar={onOpenMobileSidebar} />
-            {withScreenSection && (
-              <SidebarSection>
-                <nav aria-label="ナレッジ" />
-              </SidebarSection>
-            )}
-          </SidebarSlotProvider>
+          <Header onOpenSearch={onOpenSearch} />
         </MemoryRouter>
       </ToastProvider>
     </Provider>,
@@ -100,16 +87,10 @@ describe('Header', () => {
     expect(screen.getByRole('link', { name: 'ホーム' })).not.toHaveAttribute('aria-current');
   });
 
-  // 左の列（ナレッジの木など）は区画を持つ画面にしか無い。無い画面で三本線を出すと、押しても何も起きない。
-  it('三本線は画面が区画を持つときだけ出し、押すと onOpenMobileSidebar を呼ぶ', () => {
-    const onOpen = vi.fn();
-    const { unmount } = renderHeader({ onOpenMobileSidebar: onOpen });
+  // 狭い画面の行き先は下部ナビ、ナレッジのページの一覧はナレッジの文脈バーが開く（ST02）。
+  it('三本線のメニューは持たない', () => {
+    renderHeader();
     expect(screen.queryByRole('button', { name: 'サイドメニューを開く' })).toBeNull();
-    unmount();
-
-    renderHeader({ onOpenMobileSidebar: onOpen, withScreenSection: true });
-    fireEvent.click(screen.getByRole('button', { name: 'サイドメニューを開く' }));
-    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
   it('通知ベルを表示する', () => {

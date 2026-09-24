@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FsIcon } from '@/shared/ui';
 import { Link, useLocation } from 'react-router-dom';
-import { useSidebarSlotFilled } from '@/shared/lib/hooks/useSidebarSlot';
 import { GLOBAL_NAV_PRIMARY, navActive } from '../model/globalNav';
 
 import Loading from '@/shared/ui/Loading';
@@ -14,8 +13,6 @@ interface HeaderProps {
   /** 検索ボタン押下時に呼ぶ。AppShell が持つ既存の ⌘K パレットを開くだけで、
    *  ここでは検索の状態を持たない。 */
   onOpenSearch: () => void;
-  /** 画面の左の列を引き出しとして開く（狭い画面）。 */
-  onOpenMobileSidebar?: () => void;
 }
 
 /**
@@ -23,15 +20,12 @@ interface HeaderProps {
  *
  * 左: ロゴと主な行き先（ホーム・担当・ナレッジ・バックログ）／ 右: 検索・通知ベル・アカウント。
  * 主な行き先は広い画面だけ。狭い画面は下部ナビ（GlobalBottomNav）が同じ表を読んで持つ
- * —— 同じ階層のナビを 2 系統並べない。
- *
- * 狭い画面の三本線は、画面が左の列（ナレッジのスペースと木など）を差し込んだときだけ出す。
- * 開く先はその列で、行き先ではない。
+ * —— 同じ階層のナビを 2 系統並べない。三本線のメニューは持たない（ST02 の狭い画面の帯は
+ * ロゴ・検索・通知・アカウントだけ。ナレッジのページの一覧はナレッジの文脈バーから開く）。
  */
-export default function Header({ onOpenSearch, onOpenMobileSidebar }: HeaderProps) {
+export default function Header({ onOpenSearch }: HeaderProps) {
   const { handleLogout, loggingOut } = useSidebar();
   const { pathname } = useLocation();
-  const screenSidebarFilled = useSidebarSlotFilled();
 
   const [profile, setProfile] = useState<{ displayName: string; avatarUrl: string | null; email: string } | null>(null);
   const [unread, setUnread] = useState(0);
@@ -56,20 +50,6 @@ export default function Header({ onOpenSearch, onOpenMobileSidebar }: HeaderProp
       {loggingOut && <Loading fullscreen message="ログアウト中..." />}
       {/* 常時表示・不透明。本文とは縦に並ぶだけで重ねないので、半透明やぼかしは不要。 */}
       <header className="app-header-surface flex-shrink-0 h-14 md:h-16 flex items-center gap-1 md:gap-3 px-2 md:px-5 [&_button]:min-h-11 [&_button]:min-w-11 [&_a]:min-h-11 [&_a]:min-w-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600 [&_a]:focus-visible:outline [&_a]:focus-visible:outline-2 [&_a]:focus-visible:outline-brand-600">
-        {/* 狭い画面: 画面の左の列を引き出しとして開く。列を持たない画面では出さない。 */}
-        {onOpenMobileSidebar && screenSidebarFilled && (
-          <button
-            type="button"
-            onClick={onOpenMobileSidebar}
-            // 開く先はその画面の区画（ナレッジならスペースとページの木）。「メニュー」だけだと
-            // アカウントのメニューと区別が付かない。
-            aria-label="サイドメニューを開く"
-            className="inline-flex items-center justify-center md:hidden p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
-          >
-            <FsIcon name="menu" className="w-5 h-5" />
-          </button>
-        )}
-
         {/* ロゴは favicon と同じ画像（favicon.svg = 三角の飛翔マーク）に揃える。 */}
         <Link to="/" className="flex items-center gap-2 flex-shrink-0 px-1" aria-label="FreStyle ホーム">
           <img src="/favicon.svg" alt="" aria-hidden="true" className="w-7 h-7 flex-shrink-0" />

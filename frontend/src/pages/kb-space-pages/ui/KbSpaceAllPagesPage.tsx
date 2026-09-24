@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { KbSidebar, KbPageGlyph } from '@/widgets/kb-sidebar';
-import { Loading, SidebarSection, fsIcon } from '@/shared/ui';
-import { KbRepository, KbSpaceTabs, NOTE_NEW_PAGE_TITLE, emitKbTreeEvent, useKbSpaceEntry } from '@/entities/kb';
+import { KbFrame, KbPageGlyph } from '@/widgets/kb-sidebar';
+import { Loading, fsIcon } from '@/shared/ui';
+import { KbRepository, KbSpaceHeading, NOTE_NEW_PAGE_TITLE, emitKbTreeEvent, useKbSpaceEntry } from '@/entities/kb';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useKbSpaceAllPages } from '../model/useKbSpaceAllPages';
@@ -16,13 +16,9 @@ export default function KbSpaceAllPagesPage() {
   );
 
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* 左の列の「ナレッジの区画」。noSpaces でも常に差し込む（KbSidebar 自身が空の
-          ワークスペース／空のスペース一覧を検知して作成フォームを出す）。 */}
-      <SidebarSection>
-        <KbSidebar workspaceSlug={workspaceSlug ?? undefined} spaceId={space?.id ?? ''} />
-      </SidebarSection>
-
+    // ナレッジの枠（文脈バー・左の木）。スペースが無い／決まらないときも枠は描く —— 左の列が
+    // 空のワークスペース・空のスペース一覧を検知して作成の欄を出す（そこが始める唯一の入口）。
+    <KbFrame workspaceSlug={workspaceSlug ?? undefined} spaceId={space?.id ?? ''}>
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {error && (
           <div role="alert" className="flex flex-1 items-center justify-center px-6 py-8 text-center text-sm text-[var(--color-text-muted)]">
@@ -37,7 +33,7 @@ export default function KbSpaceAllPagesPage() {
                 アクセスできるスペースがありません
               </h1>
               <p className="text-sm text-[var(--color-text-muted)]">
-                左のサイドバーから、最初のスペースを作れます。
+                左の列（狭い画面では左上のボタン）から、最初のスペースを作れます。
               </p>
             </div>
           </div>
@@ -51,7 +47,7 @@ export default function KbSpaceAllPagesPage() {
 
         {!error && !noSpaces && space && workspaceSlug && (
           <>
-            <KbSpaceTabs space={space} active="pages" />
+            <KbSpaceHeading space={space} title="すべてのページ" />
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
               <AllPagesList
                 workspaceSlug={workspaceSlug}
@@ -63,7 +59,7 @@ export default function KbSpaceAllPagesPage() {
           </>
         )}
       </main>
-    </div>
+    </KbFrame>
   );
 }
 
@@ -127,9 +123,8 @@ function AllPagesList({
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
-      <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">すべてのページ</h2>
-      <p className="mb-5 mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">ページの階層をたどって、必要な情報を見つけましょう。</p>
+    <div className="mx-auto w-full max-w-3xl px-4 pb-6 pt-3 sm:px-6">
+      <p className="mb-5 text-sm leading-relaxed text-[var(--color-text-muted)]">ページの階層をたどって、必要な情報を見つけましょう。</p>
     <ul className="divide-y divide-surface-2">
       {pages.map(({ page, depth }) => (
         <li key={page.id}>

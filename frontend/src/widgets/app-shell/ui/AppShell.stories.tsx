@@ -2,46 +2,28 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { withApi, withStore, withToast } from '../../../../.storybook/decorators';
-import { SidebarSection } from '@/shared/ui';
 import AppShell from './AppShell';
 
 /**
  * ログイン後の画面ぜんぶを包む外枠（帯・本文・上に戻る・行き先を探す窓）。設計ボード ST02・ST03。
  *
  * 帯は常時表示で、主な行き先（ホーム・担当・ナレッジ・バックログ）・検索・通知・アカウントを持つ。
- * 本文とは縦に並べる（重ねない）。画面が区画を差し込んだとき（ナレッジの木など）だけ、本文の左に
- * 列が出る。それ以外の画面は本文が全幅。
+ * 本文とは縦に並べる（重ねない）。本文は全幅で、ナレッジの左の列（ページの木）はナレッジの画面が
+ * 自分の枠（KbFrame）の中に持つ。
  *
  * ⌘K（Windows は Ctrl+K）でどこからでも「行き先を探す窓」が開く。
  */
-/**
- * story の本文。`withSection` のときは左の列への差し込み（画面ごとの区画）も一緒に出す。
- */
-function Body({ withSection }: { withSection: boolean }) {
+/** story の本文。 */
+function Body() {
   return (
-    <>
-      {withSection && (
-        <SidebarSection>
-          <nav aria-label="ナレッジ" className="flex flex-col gap-0.5">
-            <p className="px-2 py-1.5 text-sm font-semibold text-[var(--color-text-primary)]">開発ナレッジ</p>
-            <a href="#a" className="rounded-md px-2 py-1.5 text-sm text-[var(--color-text-tertiary)]">
-              概要
-            </a>
-            <a href="#b" className="rounded-md px-2 py-1.5 text-sm text-[var(--color-text-tertiary)]">
-              アーキテクチャ概要
-            </a>
-          </nav>
-        </SidebarSection>
-      )}
-      <div className="mx-auto max-w-3xl p-6">
-        <h1 className="mb-4 text-2xl font-bold text-[var(--color-text-primary)]">ここが本文</h1>
-        {Array.from({ length: 30 }, (_, i) => (
-          <p key={i} className="py-2 text-sm text-[var(--color-text-secondary)]">
-            {i + 1} 行目
-          </p>
-        ))}
-      </div>
-    </>
+    <div className="mx-auto max-w-3xl p-6">
+      <h1 className="mb-4 text-2xl font-bold text-[var(--color-text-primary)]">ここが本文</h1>
+      {Array.from({ length: 30 }, (_, i) => (
+        <p key={i} className="py-2 text-sm text-[var(--color-text-secondary)]">
+          {i + 1} 行目
+        </p>
+      ))}
+    </div>
   );
 }
 
@@ -58,11 +40,11 @@ const meta = {
     }),
     // AppShell は「枠」なので、中身は Outlet に入る。router の入れ子まで作らないと描けない
     // （router は 1 つだけ。story ごとに足すと「Router の中に Router」で描けなくなる）。
-    (Story, context) => (
+    (Story) => (
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route element={<Story />}>
-            <Route index element={<Body withSection={context.parameters.withSection === true} />} />
+            <Route index element={<Body />} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -84,7 +66,7 @@ export const 既定: Story = {
     await expect(within(nav).getByRole('link', { name: 'ホーム' })).toHaveAttribute('aria-current', 'page');
     // 広い画面では下部ナビは出ない（同じ行き先を 2 系統並べない）。
     await expect(canvas.getAllByRole('navigation', { name: '主な行き先' })).toHaveLength(1);
-    // 区画が無いので、狭い画面用の三本線も出ない。
+    // 三本線のメニューは持たない（行き先は帯と下部ナビ）。
     await expect(canvas.queryByRole('button', { name: 'サイドメニューを開く' })).toBeNull();
     await expect(canvas.getByRole('heading', { name: 'ここが本文' })).toBeVisible();
   },
@@ -113,29 +95,6 @@ export const モバイルは下部ナビ: Story = {
   },
 };
 
-/** 狭い画面で区画のある画面を開くと、三本線で区画を引き出しとして開ける。キーボードだけで開閉できる。 */
-export const モバイルのメニューをキーボードで操作: Story = {
-  parameters: { withSection: true },
-  globals: { viewport: { value: 'mobile1', isRotated: false } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: 'サイドメニューを開く' });
-    await userEvent.click(trigger);
-    const close = await canvas.findByRole('button', { name: 'メニューを閉じる' });
-    await waitFor(() => expect(close).toHaveFocus());
-    // 引き出しの中身は画面の区画だけ（行き先は下部ナビが持つ）。
-    await expect(within(canvas.getByRole('dialog', { name: 'サイドメニュー' })).getByRole('link', { name: '概要' })).toBeVisible();
-    // Shift+Tab は引き出しの最後の項目へ回り、Tab で閉じるボタンへ戻る。
-    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
-    await expect(canvas.getByRole('link', { name: 'アーキテクチャ概要' })).toHaveFocus();
-    await userEvent.keyboard('{Tab}');
-    await expect(close).toHaveFocus();
-    await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(trigger).toHaveFocus());
-    await waitFor(() => expect(canvas.queryByRole('button', { name: 'メニューを閉じる' })).toBeNull());
-  },
-};
-
 /** ⌘K で「行き先を探す窓」が開く。 */
 export const コマンドパレットを開く: Story = {
   play: async () => {
@@ -148,24 +107,6 @@ export const コマンドパレットを開く: Story = {
     await waitFor(async () => {
       await expect(screen.getByRole('combobox', { name: '移動先を探す' })).toHaveFocus();
     });
-  },
-};
-
-/**
- * 画面ごとの区画（ナレッジのスペースと木）は、画面が差し込み口から入れ、本文の左に列が出る
- * （設計ボード ST03: ナレッジを読むときだけ左に木）。
- */
-export const 画面の区画が左の列に入る: Story = {
-  parameters: { withSection: true },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const section = canvas.getByRole('navigation', { name: 'ナレッジ' });
-    await expect(section).toBeVisible();
-    // 差し込んだ中身は本文（main）の外、その左に出る。
-    const main = canvasElement.querySelector('main')!;
-    await expect(main.contains(section)).toBe(false);
-    await expect(section.getBoundingClientRect().right).toBeLessThanOrEqual(main.getBoundingClientRect().left + 1);
-    await expect(canvas.getByRole('heading', { name: 'ここが本文' })).toBeVisible();
   },
 };
 

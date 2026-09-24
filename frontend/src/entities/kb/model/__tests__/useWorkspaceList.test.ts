@@ -75,7 +75,7 @@ describe('useWorkspaceList', () => {
   });
 
   // SecondaryPanel はモバイル用/デスクトップ用の DOM を常に両方マウントするため、
-  // KbSidebar 側（useKbTree）とこのフックは別インスタンスとして同時に走る。
+  // KbFrame 側（useKbTree）とこのフックは別インスタンスとして同時に走る。
   // 片方の操作をもう片方が知るのは kbTreeEvents 経由だけ。
   it('他インスタンスが作ったワークスペースを kbTreeEvents 経由で一覧へ足す', async () => {
     const { result } = renderHook(() => useWorkspaceList());

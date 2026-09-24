@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ConfirmModal, NameCreateForm, FsIcon } from '@/shared/ui';
+import { NameCreateForm, FsIcon } from '@/shared/ui';
 import { useDismissOnOutside } from '@/shared/lib/hooks/useDismissOnOutside';
 import type { KbWorkspace } from '../model/types';
 
@@ -10,37 +10,32 @@ export interface KbWorkspaceSwitcherProps {
   /** ワークスペースを作る。**失敗は投げてくる**（フォームが入力を保つ）。 */
   onCreate: (input: { name: string }) => Promise<void>;
   /**
-   * ワークスペースを配下ごと消す。**失敗は投げてくる**前提（知らせは呼び出し側）。
-   * 未指定なら削除の入口自体を出さない（押せない印を並べない）。
-   */
-  onDelete?: (slug: string) => Promise<void>;
-  /**
-   * メンバー管理画面（段 7）を開く。未指定なら入口自体を出さない（onDelete と同じ理由）。
-   * canManage を持つワークスペースにだけ出す（admin でなければ開いても弾かれるだけ）。
+   * ワークスペースの「メンバーと招待」を開く。未指定なら入口自体を出さない。
+   * 今いるワークスペースを canManage で持つときだけ出す（admin でなければ開いても弾かれるだけ）。
    */
   onManageMembers?: (slug: string) => void;
 }
 
 /**
- * KbWorkspaceSwitcher は最上段のワークスペース切替。
+ * KbWorkspaceSwitcher はナレッジの文脈バーの先頭「開発チーム ▾」（設計ボード ST03）。
  *
  * 切替（同時に 1 つ）にしてあるのは、ワークスペースが**会社の境界**だから。
  * 同時に 2 社ぶんを見る場面が無く、並べると「いまどちらを触っているか」が曖昧になる。
- * 逆にスペースは同時に見たいので、あちらは見出しとして並べてある。
+ *
+ * ワークスペース単位の入口（メンバーと招待・作成）もここに集める。スペース単位の入口
+ * （概要・メンバー）は同じ帯の右端にあり、段を分けて同じ見た目で並ばないようにする。
+ * 削除は選ぶ操作の隣に置かない（押し間違えると戻せない）。メンバーと招待の画面の下にある。
  */
 export default function KbWorkspaceSwitcher({
   workspaces,
   activeSlug,
   onSelect,
   onCreate,
-  onDelete,
   onManageMembers,
 }: KbWorkspaceSwitcherProps) {
   const [open, setOpen] = useState(false);
   // ポップアップ内の「ワークスペースを追加」フォームの開閉。閉じるたびに畳む。
   const [adding, setAdding] = useState(false);
-  // 消す対象。null は「確認していない」。戻せない操作なので必ず一度確かめる。
-  const [deleting, setDeleting] = useState<KbWorkspace | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -61,12 +56,14 @@ export default function KbWorkspaceSwitcher({
           setAdding(false);
         }}
         aria-expanded={open}
-        className="flex w-full items-center gap-1 rounded-md px-2 py-2 text-left hover:bg-surface-2"
+        // 見えている名前を読み上げ名に含め、押すと何が起きるかを足す。
+        aria-label={active ? `ワークスペース「${active.name}」を切り替える` : 'ワークスペースを選択'}
+        className="inline-flex min-h-9 max-w-[14rem] items-center gap-1 rounded-md px-1.5 text-left hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 [@media(pointer:coarse)]:min-h-11"
       >
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--color-text-primary)]">
+        <span className="min-w-0 truncate text-sm font-semibold text-[var(--color-text-primary)]">
           {active?.name ?? 'ワークスペースを選択'}
         </span>
-        <FsIcon name="chevron-up-down" className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
+        <FsIcon name="chevron-down" className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
       </button>
 
       {open && (
@@ -78,51 +75,43 @@ export default function KbWorkspaceSwitcher({
         // 素のボタンなら Tab で辿れて、名乗りと実際が一致する。
         <ul
           aria-label="ワークスペース"
-          className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-surface-3 bg-surface-1 py-1 shadow-lg"
+          className="absolute left-0 top-full z-30 mt-1 max-h-80 w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-surface-3 bg-surface-1 py-1 shadow-lg"
         >
           {workspaces.map((workspace) => (
-            // 触れている間だけ捨てる入口を出す。常に見えていると、選ぶ操作の隣に
-            // 戻せない操作が並び続けることになる。
-            <li key={workspace.slug} className="group flex items-center">
+            <li key={workspace.slug}>
               <button
                 type="button"
-                aria-current={workspace.slug === activeSlug}
+                // 今いるワークスペースの印。'page' ではない（押しても今の画面は変わらない）。
+                aria-current={workspace.slug === activeSlug ? 'true' : undefined}
                 onClick={() => {
                   onSelect(workspace.slug);
                   setOpen(false);
                 }}
-                className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-2"
+                className={`flex min-h-9 w-full min-w-0 items-center gap-2 px-3 text-left text-sm ${
+                  workspace.slug === activeSlug
+                    ? 'bg-[var(--color-nav-selected)] font-medium text-[var(--color-nav-selected-text)]'
+                    : 'text-[var(--color-text-primary)] hover:bg-surface-2'
+                }`}
               >
                 <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
-                {workspace.slug === activeSlug && (
-                  <FsIcon name="check" className="h-4 w-4 shrink-0 text-brand-500" />
-                )}
               </button>
-              {onManageMembers && workspace.canManage && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onManageMembers(workspace.slug);
-                    setOpen(false);
-                  }}
-                  aria-label={`${workspace.name} のメンバーを管理`}
-                  className="ui-hit mr-1 inline-flex shrink-0 items-center justify-center rounded p-1 text-[var(--color-text-tertiary)] opacity-0 transition-opacity hover:bg-surface-3 hover:text-[var(--color-text-primary)] focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-                >
-                  <FsIcon name="users" className="h-4 w-4" />
-                </button>
-              )}
-              {onDelete && workspace.canManage && (
-                <button
-                  type="button"
-                  onClick={() => setDeleting(workspace)}
-                  aria-label={`${workspace.name} を削除`}
-                  className="ui-hit mr-1 inline-flex shrink-0 items-center justify-center rounded p-1 text-[var(--color-text-tertiary)] opacity-0 transition-opacity hover:bg-surface-3 hover:text-danger-ink focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-                >
-                  <FsIcon name="trash" className="h-4 w-4" />
-                </button>
-              )}
             </li>
           ))}
+          {onManageMembers && active?.canManage && (
+            <li className="mt-1 border-t border-surface-3 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onManageMembers(active.slug);
+                  setOpen(false);
+                }}
+                className="flex min-h-9 w-full items-center gap-1.5 px-3 text-left text-sm text-[var(--color-text-secondary)] hover:bg-surface-2"
+              >
+                <FsIcon name="users" className="h-4 w-4 shrink-0" />
+                <span>メンバーと招待</span>
+              </button>
+            </li>
+          )}
           <li className="mt-1 border-t border-surface-3 pt-1">
             {/*
               追加の入口はここに置く。見本合わせ — ワークスペース水準の操作は
@@ -153,23 +142,6 @@ export default function KbWorkspaceSwitcher({
         </ul>
       )}
 
-      {onDelete && deleting && (
-        <ConfirmModal
-          isOpen
-          title="ワークスペースを削除"
-          message={`「${deleting.name}」を中のスペース・ページごと削除します。元に戻せません。`}
-          confirmText="削除"
-          isDanger
-          icon="trash"
-          onConfirm={() => {
-            const target = deleting;
-            setDeleting(null);
-            setOpen(false);
-            void onDelete(target.slug);
-          }}
-          onCancel={() => setDeleting(null)}
-        />
-      )}
     </div>
   );
 }

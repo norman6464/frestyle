@@ -9,7 +9,7 @@ import type { KbWorkspace } from './types';
  * widgets/kb-sidebar の useKbTree はスペース・ページの木まで抱える重い hook なので、
  * ヘッダーのようにワークスペースの出入りだけが要る場所ではこちらを使う。
  *
- * 作成・削除は kbTreeEvents で他インスタンスへ知らせ、他インスタンス（KbSidebar の
+ * 作成・削除は kbTreeEvents で他インスタンスへ知らせ、他インスタンス（KbFrame の
  * useKbTree・他画面の useWorkspaceList）からの通知も購読する。SecondaryPanel が
  * モバイル用/デスクトップ用の DOM を常に両方マウントするため、同じ画面内でも
  * ワークスペース一覧を持つインスタンスは複数存在し、片方の変更を他方が自動では知れない。

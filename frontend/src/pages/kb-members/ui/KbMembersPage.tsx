@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { KbWorkspaceTabs, useWorkspaceList, type KbAdminWorkspaceMember, type KbGrantRole } from '@/entities/kb';
-import { ConfirmModal, Loading, fsIcon } from '@/shared/ui';
+import { Button, ConfirmModal, Loading, fsIcon } from '@/shared/ui';
+import { KbFrame } from '@/widgets/kb-sidebar';
 import EmptyState from '@/shared/ui/EmptyState';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useToast } from '@/shared/lib/hooks/useToast';
@@ -38,20 +39,52 @@ function mutationErrorMessage(cause: unknown): string {
  *
  * 人を招くのは同じ見出しの「招待」タブ（pages/kb-invitations）。名簿を直すことと招くことは
  * 別の作業なので画面を分けてある。
+ *
+ * ワークスペースの削除もこの画面の一番下に置く。戻せない操作なので、切替の一覧のように
+ * 選ぶ操作の隣には置かず、名簿を扱う管理者が来る場所に離して置く。
  */
 export default function KbMembersPage() {
   const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const currentUserId = useCurrentUserId();
-  const { workspaces } = useWorkspaceList();
+  const { workspaces, deleteWorkspace } = useWorkspaceList();
+  const dangerHeadingId = useId();
+  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const { members, loading, error, busyUserId, retry, changeRole, suspend, restore, remove } =
     useKbAdminMembers(workspaceSlug);
   const [removing, setRemoving] = useState<KbAdminWorkspaceMember | null>(null);
   // 停止と「役割なし」は、相手がすぐに使えなくなる操作なので確認を挟む。
   const [confirming, setConfirming] = useState<{ kind: 'suspend' | 'revokeRole'; member: KbAdminWorkspaceMember } | null>(null);
 
-  const workspaceName = workspaces.find((w) => w.slug === workspaceSlug)?.name;
+  const workspace = workspaces.find((w) => w.slug === workspaceSlug);
+  const workspaceName = workspace?.name;
+
+  // ナレッジの枠（文脈バーのワークスペース側）の中に出す。スペースを持たない画面なので
+  // 左の列（ページの木）は出さない。
+  const frame = (content: ReactNode) => (
+    <KbFrame workspaceSlug={workspaceSlug} showPagePanel={false}>
+      <div className="min-h-0 flex-1 overflow-y-auto">{content}</div>
+    </KbFrame>
+  );
+
+  const confirmDeleteWorkspace = async () => {
+    if (!workspaceSlug) return;
+    setDeletePending(true);
+    try {
+      await deleteWorkspace(workspaceSlug);
+    } catch {
+      showToast('error', 'ワークスペースを削除できませんでした');
+      setDeletePending(false);
+      setDeletingWorkspace(false);
+      return;
+    }
+    setDeletePending(false);
+    setDeletingWorkspace(false);
+    showToast('success', `「${workspaceName ?? 'ワークスペース'}」を削除しました`);
+    navigate('/kb');
+  };
 
   const runOrToast = async (action: () => Promise<void>) => {
     try {
@@ -63,30 +96,30 @@ export default function KbMembersPage() {
   };
 
   if (error === 'forbidden') {
-    return (
+    return frame(
       <EmptyState
         headingLevel={1}
         icon={fsIcon('lock')}
         title="この画面は admin だけが開けます"
         description="メンバーの役割変更・停止・削除は、このワークスペースの admin だけが行えます。"
         action={{ label: 'ナレッジへ戻る', onClick: () => navigate('/kb') }}
-      />
+      />,
     );
   }
 
   if (error === 'unknown') {
-    return (
+    return frame(
       <EmptyState
         headingLevel={1}
         icon={fsIcon('alert-circle')}
         title="メンバー一覧を読み込めませんでした"
         description="通信が切れたか、一時的な不調です。"
         action={{ label: '再読み込み', onClick: retry }}
-      />
+      />,
     );
   }
 
-  return (
+  return frame(
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:pt-12">
       <KbWorkspaceTabs workspaceSlug={workspaceSlug ?? ''} workspaceName={workspaceName} active="members" />
 
@@ -180,6 +213,35 @@ export default function KbMembersPage() {
         }}
         onCancel={() => setRemoving(null)}
       />
-    </div>
+
+      {workspace?.canManage && (
+        <section
+          aria-labelledby={dangerHeadingId}
+          className="mt-12 rounded-xl border border-danger/40 p-5"
+        >
+          <h2 id={dangerHeadingId} className="text-base font-semibold text-[var(--color-text-primary)]">
+            ワークスペースの削除
+          </h2>
+          <p className="mt-1 max-w-xl text-sm leading-relaxed text-[var(--color-text-muted)]">
+            中のスペースとページごと削除します。元に戻せません。
+          </p>
+          <Button variant="danger" onClick={() => setDeletingWorkspace(true)} className="mt-4">
+            ワークスペースを削除
+          </Button>
+        </section>
+      )}
+
+      <ConfirmModal
+        isOpen={deletingWorkspace}
+        title="ワークスペースを削除しますか？"
+        message={`「${workspaceName ?? 'このワークスペース'}」を中のスペース・ページごと削除します。元に戻せません。`}
+        confirmText="削除する"
+        isDanger
+        icon="trash"
+        pending={deletePending}
+        onConfirm={() => void confirmDeleteWorkspace()}
+        onCancel={() => setDeletingWorkspace(false)}
+      />
+    </div>,
   );
 }

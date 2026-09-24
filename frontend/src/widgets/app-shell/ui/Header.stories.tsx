@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
 import { expect, userEvent, within } from 'storybook/test';
 import { withApi, withRouter, withStore, withToast } from '../../../../.storybook/decorators';
-import { SidebarSection, SidebarSlotProvider } from '@/shared/ui';
 import Header from './Header';
 
 /**
@@ -10,8 +9,7 @@ import Header from './Header';
  * （ホーム・担当・ナレッジ・バックログ）、右に検索・通知・アカウント。
  * 常時表示（本文の上には重ねない・自動的には隠れない）で、地は不透明。
  *
- * 狭い画面では主な行き先を下部ナビに譲り、検索は虫眼鏡だけになる。三本線は、画面が左の列
- * （ナレッジのスペースと木など）を持つときだけ出る。
+ * 狭い画面では主な行き先を下部ナビに譲り、検索は虫眼鏡だけになる。三本線のメニューは持たない。
  */
 const meta = {
   title: 'widgets/app-shell/Header',
@@ -19,7 +17,6 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   args: {
     onOpenSearch: fn(),
-    onOpenMobileSidebar: fn(),
   },
   decorators: [
     withRouter,
@@ -29,18 +26,10 @@ const meta = {
       '/profile/me': { displayName: '川野 拓馬', avatarUrl: null, email: 'takuma@example.com' },
       '/notifications/unread-count': 0,
     }),
-    (Story, context) => (
-      // 三本線は「画面が左の列を持つか」で出し分けるので、差し込み口ごと用意する。
-      <SidebarSlotProvider>
-        <div className="min-h-[320px] bg-surface">
-          <Story />
-        </div>
-        {context.parameters.withScreenSection === true && (
-          <SidebarSection>
-            <nav aria-label="ナレッジ" />
-          </SidebarSection>
-        )}
-      </SidebarSlotProvider>
+    (Story) => (
+      <div className="min-h-[320px] bg-surface">
+        <Story />
+      </div>
     ),
   ],
 } satisfies Meta<typeof Header>;
@@ -59,7 +48,7 @@ export const 既定: Story = {
     await expect(within(nav).getByRole('link', { name: 'ホーム' })).toHaveAttribute('aria-current', 'page');
     await expect(canvas.getByRole('button', { name: '移動先を探す' })).toBeVisible();
     await expect(await canvas.findByRole('button', { name: '川野 拓馬 のアカウント' })).toBeVisible();
-    // 左の列を持たない画面では三本線を出さない。
+    // 三本線のメニューは持たない。
     await expect(canvas.queryByRole('button', { name: 'サイドメニューを開く' })).toBeNull();
   },
 };
@@ -112,7 +101,7 @@ export const 情報が取れないとき: Story = {
   },
 };
 
-/** 狭い画面（左の列を持たない画面）。行き先は下部ナビにあるので帯には出ず、三本線も無い。 */
+/** 狭い画面。行き先は下部ナビにあるので帯には出ず、三本線も無い。 */
 export const 狭い画面: Story = {
   globals: { viewport: { value: 'mobile1', isRotated: false } },
   play: async ({ canvasElement }) => {
@@ -122,16 +111,5 @@ export const 狭い画面: Story = {
     await expect(canvas.getByRole('button', { name: '移動先を探す' })).toBeVisible();
     // アカウントのメニューは狭い画面でも出す —— ログアウトの入口がそこだけのため。
     await expect(await canvas.findByRole('button', { name: '川野 拓馬 のアカウント' })).toBeVisible();
-  },
-};
-
-/** 狭い画面で左の列を持つ画面（ナレッジなど）。三本線がその列を引き出す入口になる。 */
-export const 狭い画面で左の列を持つとき: Story = {
-  parameters: { withScreenSection: true },
-  globals: { viewport: { value: 'mobile1', isRotated: false } },
-  play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'サイドメニューを開く' }));
-    await expect(args.onOpenMobileSidebar).toHaveBeenCalledTimes(1);
   },
 };

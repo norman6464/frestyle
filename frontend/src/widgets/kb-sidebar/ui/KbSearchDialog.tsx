@@ -10,6 +10,8 @@ export interface KbSearchDialogProps {
   workspaceSlug: string;
   /** スペース名を引くための一覧（結果はスペースごとに見出しを付けて並べる）。 */
   spaces: KbSpace[];
+  /** 開いた時点で入っている語（左の列の「このスペースで検索」で打った語を本文検索へ持ち越す）。 */
+  initialQuery?: string;
   onClose: () => void;
 }
 
@@ -17,8 +19,8 @@ export interface KbSearchDialogProps {
 /**
  * KbSearchDialog はワークスペース全体の題名・本文検索のモーダル。
  *
- * サイドバー本体は場所（木）を示すことに徹し、検索は入口だけを置いてここで行う
- * （常設の入力欄が場所の面を圧迫し、木と結果が同じ狭い面で入れ替わる形をやめた）。
+ * 左の列の「このスペースで検索」は木を題名で絞るだけ。本文まで探すときはここを開く
+ * （「本文も含めて探す」から、打った語を持ち越して開く）。
  * 検索はサーバーが行い、返るのは木と同じ規則で閲覧できる現役ページだけ。
  * 入力から 250ms 待って問い合わせ、世代番号で古い応答を捨てる。
  * ↑↓ で選び Enter で開く。Esc・外側クリック・閉じるボタンで閉じる。
@@ -30,10 +32,10 @@ export interface KbSearchDialogProps {
  * 各結果は matchField で題名一致・本文一致を見分ける。本文一致の行は題名の下に
  * 抜粋（excerpt）を添え、一致箇所を強調する（行の描画そのものは KbSearchResultRow）。
  */
-export default function KbSearchDialog({ workspaceSlug, spaces, onClose }: KbSearchDialogProps) {
+export default function KbSearchDialog({ workspaceSlug, spaces, initialQuery = '', onClose }: KbSearchDialogProps) {
   const navigate = useNavigate();
   const listboxId = useId();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [pages, setPages] = useState<KbSearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
