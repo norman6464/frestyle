@@ -55,7 +55,11 @@ function api(over: ApiStubs = {}): ApiStubs {
     '/kb/workspaces/frestyle/favorites': favorites,
     '/kb/workspaces/devsync/favorites': [],
     '/kb/workspaces/frestyle/spaces': [],
+    '/kb/workspaces/frestyle/me/spaces': [{ id: 's1', name: 'プロダクト開発', role: 'editor' }],
+    '/kb/workspaces/frestyle/templates': [],
     '/kb/workspaces': workspaces,
+    '/projects/p1/ticket-statuses': { statuses: [{ id: 'st', workspaceId: 'w', projectId: 'p1', name: 'To Do', category: 'todo', color: '#66655f', position: 'a0', isInitial: true, createdAt: '', updatedAt: '' }] },
+    '/workspaces/frestyle/projects': { projects: [{ id: 'p1', workspaceId: 'w', key: 'FRE', name: 'Product', createdAt: '', updatedAt: '' }] },
     '/kb/me/recent-pages': recentPages,
     '/me/assigned-tickets': { tickets: assigned },
     '/notifications/unread-count': 3,
@@ -138,6 +142,29 @@ export const いつものホーム: Story = {
     );
     const favoritesList = await canvas.findByRole('list', { name: 'お気に入りのページ' });
     await expect(within(favoritesList).getAllByRole('listitem')).toHaveLength(wide ? 3 : 2);
+  },
+};
+
+/**
+ * 「＋ 新しくつくる」でダイアログ（DB03）を開く。初めの保存先は、お気に入りで選んでいるワークスペース。
+ * 閉じると押したボタンへ戻る。
+ */
+export const 新しくつくるを開く: Story = {
+  decorators: [withApi(api())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = await canvas.findByRole('button', { name: '新しくつくる' });
+    await userEvent.click(trigger);
+    const dialog = await within(document.body).findByRole('dialog', { name: '新しくつくる' });
+    await expect(within(dialog).getByRole('combobox', { name: 'ワークスペース' })).toHaveValue('frestyle');
+    await expect(await within(dialog).findByText('frestyle / プロダクト開発')).toBeVisible();
+    await userEvent.click(within(dialog).getByRole('button', { name: '閉じる' }));
+    await waitFor(async () => {
+      await expect(within(document.body).queryByRole('dialog')).toBeNull();
+    });
+    await waitFor(async () => {
+      await expect(trigger).toHaveFocus();
+    });
   },
 };
 

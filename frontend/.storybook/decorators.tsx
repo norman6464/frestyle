@@ -163,7 +163,8 @@ function stubAdapter(stubs: ApiStubs) {
       throw error;
     }
     const body = stubs[hit];
-    const data = typeof body === 'function' ? body(config) : body;
+    // 関数は Promise を返してもよい（応答を待たせる見本のため。返事が来ない Promise なら送信中のまま）。
+    const data = typeof body === 'function' ? await body(config) : body;
     return { data, status: 200, statusText: 'OK', headers: {}, config } as AxiosResponse;
   };
 }
