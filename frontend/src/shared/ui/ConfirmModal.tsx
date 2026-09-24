@@ -1,4 +1,4 @@
-import { useRef, type SyntheticEvent } from 'react';
+import { useRef, type ReactNode, type SyntheticEvent } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import FsIcon from './icons/FsIcon';
 import type { FsIconName } from './icons/fsIconParts';
@@ -20,6 +20,11 @@ interface ConfirmModalProps {
   icon?: FsIconName;
   /** 確定の処理中。ボタンを押せなくし、確定ボタンに「処理中」を出す（二重に送らない）。 */
   pending?: boolean;
+  /**
+   * 何に対する操作かを見せる小さな枠（例: 辞退する招待のワークスペース名）。説明文の上に置く。
+   * 文言だけだと、同じ見た目の確認が続いたときにどれへの操作か取り違える。
+   */
+  children?: ReactNode;
 }
 
 /**
@@ -39,6 +44,7 @@ export default function ConfirmModal({
   isDanger = false,
   icon,
   pending = false,
+  children,
 }: ConfirmModalProps) {
   const iconName: FsIconName = icon ?? (isDanger ? 'alert-triangle' : 'help-circle');
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -71,6 +77,7 @@ export default function ConfirmModal({
           <Dialog.Title className="mb-2 text-center text-xl font-semibold text-[var(--fs-text-strong)]">
             {title}
           </Dialog.Title>
+          {children && <div className="mb-4">{children}</div>}
           <Dialog.Description className="mb-6 text-center text-sm leading-relaxed text-[var(--fs-text-muted)]">
             {message}
           </Dialog.Description>

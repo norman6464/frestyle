@@ -17,6 +17,8 @@ export { useOidcLogin } from './model/useOidcLogin';
 export type { OidcLogin } from './model/useOidcLogin';
 export { useFirebaseAuth } from './model/useFirebaseAuth';
 export type { FirebaseAuthActions } from './model/useFirebaseAuth';
+export { useEmailVerification } from './model/useEmailVerification';
+export type { EmailVerification } from './model/useEmailVerification';
 export { default as AuthUnavailableNotice } from './ui/AuthUnavailableNotice';
 // トークン取得・発行者との通信そのもの（config 読み取り・Dex トークン交換・
 // Firebase App 初期化）は `shared/lib/auth` に置く。`shared/api/axios.ts`

@@ -192,7 +192,7 @@ test.describe('スペース追加導線（POST モック）', () => {
   });
 });
 
-test.describe('届いている招待（/invitations）', () => {
+test.describe('あなたへの招待（/invitations）', () => {
   const INVITATION = {
     id: 'inv-1',
     scope: 'workspace',
@@ -210,7 +210,7 @@ test.describe('届いている招待（/invitations）', () => {
     createdAt: '2026-09-23T00:00:00Z',
   };
 
-  test('一覧が出て、参加するとそのワークスペースのナレッジへ移る', async ({ page }) => {
+  test('一覧が出て、参加すると完了のカードから、そのワークスペースのナレッジへ移れる', async ({ page }) => {
     await mockAuthenticated(page, {
       '**/api/v2/kb/invitations': [INVITATION],
       '**/api/v2/kb/invitations/inv-1/accept': { workspaceSlug: 'acme', scope: 'workspace' },
@@ -218,10 +218,13 @@ test.describe('届いている招待（/invitations）', () => {
 
     await page.goto('/invitations');
 
-    await expect(page.getByRole('heading', { level: 1, name: '届いている招待' })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 2, name: 'Acme 社' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'あなたへの招待' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: 'Acme 社' })).toBeVisible();
 
     await page.getByRole('button', { name: '参加する' }).click();
+    // 参加しても自動では移らない。完了のカードから開く。
+    await expect(page.getByRole('heading', { level: 2, name: 'Acme 社 に参加しました' })).toBeVisible();
+    await page.getByRole('button', { name: 'ワークスペースを開く' }).click();
     await expect(page).toHaveURL(/\/kb\/spaces\?workspace=acme/);
   });
 
@@ -241,6 +244,6 @@ test.describe('届いている招待（/invitations）', () => {
     await page.goto('/invite#t=e2e-token');
     await page.getByRole('button', { name: '招待を確認して参加する' }).click();
     await expect(page).toHaveURL(/\/invitations$/);
-    await expect(page.getByText('届いている招待はありません')).toBeVisible();
+    await expect(page.getByText('新しい招待はありません')).toBeVisible();
   });
 });

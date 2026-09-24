@@ -14,11 +14,20 @@ export interface MyInvitationsState {
   busyId: string | null;
 }
 
-const EMPTY: MyInvitationsState = { invitations: [], loading: false, error: null, busyId: null };
+/**
+ * 最初の状態は「読み込み中」。読み込み前を「0 件」で始めると、一瞬「新しい招待はありません」が
+ * 出てから一覧に替わる（届いているのに無いと読める）。
+ */
+const INITIAL: MyInvitationsState = { invitations: [], loading: true, error: null, busyId: null };
 
-/** useMyInvitations は自分宛の招待の一覧と、承諾・辞退。書き込みの後は一覧を引き直す。 */
+/**
+ * useMyInvitations は自分宛の招待の一覧と、承諾・辞退。
+ *
+ * 承諾したものは手元の一覧から外す（参加完了のカードに替わり、その場に残す必要が無い）。
+ * 辞退したものも外す。どちらも失敗したら投げ返す（理由はカードの位置に出す）。
+ */
 export function useMyInvitations() {
-  const [state, setState] = useState<MyInvitationsState>(EMPTY);
+  const [state, setState] = useState<MyInvitationsState>(INITIAL);
   const seq = useRef(0);
 
   const load = useCallback(async () => {
@@ -31,7 +40,12 @@ export function useMyInvitations() {
     } catch (cause) {
       if (seq.current !== request) return;
       const { status, serverCode } = getApiError(cause);
-      setState({ ...EMPTY, error: status === 403 && serverCode === 'email_not_verified' ? 'notVerified' : 'unknown' });
+      setState({
+        invitations: [],
+        loading: false,
+        busyId: null,
+        error: status === 403 && serverCode === 'email_not_verified' ? 'notVerified' : 'unknown',
+      });
     }
   }, []);
 
@@ -42,31 +56,35 @@ export function useMyInvitations() {
     };
   }, [load]);
 
-  const mutate = useCallback(
-    async <T,>(busyId: string, run: () => Promise<T>): Promise<T> => {
-      setState((prev) => ({ ...prev, busyId }));
-      try {
-        return await run();
-      } finally {
-        setState((prev) => ({ ...prev, busyId: null }));
-      }
-    },
-    [],
-  );
+  const mutate = useCallback(async <T,>(busyId: string, run: () => Promise<T>): Promise<T> => {
+    setState((prev) => ({ ...prev, busyId }));
+    try {
+      return await run();
+    } finally {
+      setState((prev) => ({ ...prev, busyId: null }));
+    }
+  }, []);
 
-  /** 承諾する。成功したら入った先（workspaceSlug）を返す。一覧は呼び出し側が遷移するので引き直さない。 */
+  const drop = (invitationId: string) =>
+    setState((prev) => ({ ...prev, invitations: prev.invitations.filter((inv) => inv.id !== invitationId) }));
+
+  /** 承諾する。成功したら入った先を返し、一覧から外す。 */
   const accept = useCallback(
-    (invitationId: string): Promise<KbAcceptedInvitation> =>
-      mutate(invitationId, () => KbRepository.acceptInvitation(invitationId)),
+    async (invitationId: string): Promise<KbAcceptedInvitation> => {
+      const accepted = await mutate(invitationId, () => KbRepository.acceptInvitation(invitationId));
+      drop(invitationId);
+      return accepted;
+    },
     [mutate],
   );
 
+  /** 辞退する。成功したら一覧から外す。 */
   const decline = useCallback(
     async (invitationId: string): Promise<void> => {
       await mutate(invitationId, () => KbRepository.declineInvitation(invitationId));
-      await load();
+      drop(invitationId);
     },
-    [mutate, load],
+    [mutate],
   );
 
   return { ...state, retry: load, accept, decline };

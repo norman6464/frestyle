@@ -33,8 +33,9 @@ export default function InvitePage() {
 
   if (state.status === 'loading') {
     return (
-      <AuthLayout header={<PublicHeader />}>
-        <Loading className="py-12" message="招待を確認しています" />
+      // 確かめている間も見出しを出す（何の画面かが、読み込みの間から分かるように）。
+      <AuthLayout title="招待を確認しています" header={<PublicHeader />}>
+        <Loading className="py-12" message="少しお待ちください" />
       </AuthLayout>
     );
   }
