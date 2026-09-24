@@ -34,7 +34,7 @@ func Test_チケット移動_アンカーが兄弟でなければ拒否(t *testi
 	repo.On("FindTicket", mock.Anything, tkWS, tkTicket).
 		Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, Position: "a0"}, nil)
 	repo.On("ListTickets", mock.Anything, repository.ListTicketsInput{WorkspaceID: tkWS, ProjectID: tkProject}).
-		Return([]domain.Ticket{{ID: tkTicket, Position: "a0"}}, nil)
+		Return(repository.TicketList{Items: []repository.TicketWithAssignee{{Ticket: domain.Ticket{ID: tkTicket, Position: "a0"}}}}, nil)
 
 	anchor := "does-not-exist"
 	err := ticket.NewMoveTicketUseCase(repo).Execute(context.Background(), ticket.MoveTicketInput{
@@ -50,11 +50,11 @@ func Test_チケット移動_アンカーの直後に置く(t *testing.T) {
 		Return(&domain.Ticket{ID: tkTicket, WorkspaceID: tkWS, ProjectID: tkProject, Position: "a2"}, nil)
 	anchor := "t-anchor"
 	repo.On("ListTickets", mock.Anything, repository.ListTicketsInput{WorkspaceID: tkWS, ProjectID: tkProject}).
-		Return([]repository.TicketWithAssignee{
+		Return(repository.TicketList{Items: []repository.TicketWithAssignee{
 			{Ticket: domain.Ticket{ID: anchor, Position: "a0"}},
 			{Ticket: domain.Ticket{ID: "t-next", Position: "a1"}},
 			{Ticket: domain.Ticket{ID: tkTicket, Position: "a2"}},
-		}, nil)
+		}}, nil)
 	repo.On("MoveTicketRank", mock.Anything, tkWS, tkTicket, mock.MatchedBy(func(pos string) bool {
 		return pos > "a0" && pos < "a1"
 	})).Return(nil)

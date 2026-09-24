@@ -6,7 +6,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/norman6464/frestyle/backend/internal/domain"
@@ -20,6 +23,13 @@ import (
 // ticketDateQueryLayout は一覧の絞り込みクエリ（dueBefore / startAfter）の形。c.Query は
 // binding タグを通らないため手で検証する — 怠ると壊れた値が DB の ::date キャストで 500 になる。
 const ticketDateQueryLayout = "2006-01-02"
+
+// q の上限は KB の SearchPages と同じ
+const (
+	maxTicketQueryLength  = 100
+	defaultTicketPageSize = 50
+	maxTicketPageSize     = 200
+)
 
 func validTicketDateQuery(v string) bool {
 	_, err := time.Parse(ticketDateQueryLayout, v)
@@ -539,6 +549,55 @@ type ticketListResponse struct {
 	Tickets []ticketResponse `json:"tickets"`
 }
 
+// page / limit は要求値ではなく補正後の値（既定値・上限を反映済み）
+type ticketPageResponse struct {
+	Tickets    []ticketResponse `json:"tickets"`
+	Page       int              `json:"page"`
+	Limit      int              `json:"limit"`
+	Total      int              `json:"total"`
+	TotalPages int              `json:"totalPages"`
+}
+
+// 空白だけの q は指定なしとして扱う（ILIKE '%%' で全件一致になるため）
+func searchQueryParam(c *gin.Context) (string, bool) {
+	trimmed := strings.TrimSpace(c.Query("q"))
+	if utf8.RuneCountInString(trimmed) > maxTicketQueryLength {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "search_query_too_long"})
+		return "", false
+	}
+	return trimmed, true
+}
+
+// 数字でない値や 0 以下を黙って既定値に倒さないのは、呼び出し側の綴り間違いに気付けなくなるため
+func pageQuery(c *gin.Context, name string) (int, bool) {
+	raw := c.Query(name)
+	if raw == "" {
+		return 0, true
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_request"})
+		return 0, false
+	}
+	return n, true
+}
+
+// normalizePage は上限を超えた limit を拒否せず上限に抑える
+// フロントが上限を知らなくても壊れないようにするため
+func normalizePage(page, limit int) (int, int, int) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = defaultTicketPageSize
+	}
+	if limit > maxTicketPageSize {
+		limit = maxTicketPageSize
+	}
+	offset := (page - 1) * limit
+	return page, limit, offset
+}
+
 // respondTicket は変更系の応答を組み立てて返す。担当は usecase が触らないのでここで引いて
 // 詰める（引けなくても応答は止めない — fetchLabels 等と同じ fail-open）。
 func (h *TicketHandler) respondTicket(c *gin.Context, scope kbRequestScope, t *domain.Ticket, status int) {
@@ -590,9 +649,22 @@ func (h *TicketHandler) List(c *gin.Context) {
 		}
 		startAfter = &v
 	}
-	if v := c.Query("q"); v != "" {
-		q = &v
+	query, ok := searchQueryParam(c)
+	if !ok {
+		return
 	}
+	if query != "" {
+		q = &query
+	}
+	page, ok := pageQuery(c, "page")
+	if !ok {
+		return
+	}
+	limit, ok := pageQuery(c, "limit")
+	if !ok {
+		return
+	}
+	page, limit, offset := normalizePage(page, limit)
 	unassigned := c.Query("unassigned") == "true"
 	assignedToMe := c.Query("assignedToMe") == "true"
 	overdue := c.Query("overdue") == "true"
@@ -608,18 +680,19 @@ func (h *TicketHandler) List(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_request"})
 		return
 	}
-	tickets, err := h.list.Execute(c.Request.Context(), ticket.ListTicketsInput{
+	result, err := h.list.Execute(c.Request.Context(), ticket.ListTicketsInput{
 		WorkspaceID: scope.workspaceID, ProjectID: projectID,
 		IncludeArchived: c.Query("archived") == "true",
 		StatusID:        statusID, TypeID: typeID, AssigneePrincipalID: assigneeID,
 		LabelID: labelID, DueBefore: dueBefore, StartAfter: startAfter,
 		Unassigned: unassigned, AssignedToMe: assignedToMe, UserID: scope.userID,
-		Overdue: overdue, Q: q,
+		Overdue: overdue, Q: q, Limit: limit, Offset: offset,
 	})
 	if err != nil {
 		respondTicketErr(c, err)
 		return
 	}
+	tickets := result.Items
 	ticketIDs := make([]string, len(tickets))
 	for i := range tickets {
 		ticketIDs[i] = tickets[i].Ticket.ID
@@ -641,7 +714,10 @@ func (h *TicketHandler) List(c *gin.Context) {
 			Labels:              labels,
 		})
 	}
-	c.JSON(http.StatusOK, ticketListResponse{Tickets: out})
+	totalPages := (result.Total + limit - 1) / limit
+	c.JSON(http.StatusOK, ticketPageResponse{
+		Tickets: out, Page: page, Limit: limit, Total: result.Total, TotalPages: totalPages,
+	})
 }
 
 // ticketCountsResponse はサイドバー「保存した絞り込み」の件数バッジ。

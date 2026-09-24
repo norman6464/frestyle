@@ -40,39 +40,43 @@ type ListTicketsInput struct {
 	UserID       uint64
 	Overdue      bool
 	Q            *string
+	Limit        int
+	Offset       int
 }
 
-func (u *ListTicketsUseCase) Execute(ctx context.Context, in ListTicketsInput) ([]repository.TicketWithAssignee, error) {
-	if in.WorkspaceID == "" {
-		return nil, errors.New("workspaceID is required")
+func (u *ListTicketsUseCase) Execute(ctx context.Context, input ListTicketsInput) (repository.TicketList, error) {
+	if input.WorkspaceID == "" {
+		return repository.TicketList{}, errors.New("workspaceID is required")
 	}
-	if in.ProjectID == "" {
-		return nil, errors.New("projectID is required")
+	if input.ProjectID == "" {
+		return repository.TicketList{}, errors.New("projectID is required")
 	}
 	var assignedToMePrincipalID *string
-	if in.AssignedToMe {
-		if in.UserID == 0 {
-			return nil, errors.New("userID is required when assignedToMe is set")
+	if input.AssignedToMe {
+		if input.UserID == 0 {
+			return repository.TicketList{}, errors.New("userID is required when assignedToMe is set")
 		}
-		principal, err := u.perms.FindUserPrincipal(ctx, in.WorkspaceID, in.UserID)
+		principal, err := u.perms.FindUserPrincipal(ctx, input.WorkspaceID, input.UserID)
 		if err != nil {
-			return nil, err
+			return repository.TicketList{}, err
 		}
 		assignedToMePrincipalID = &principal.ID
 	}
 	return u.repo.ListTickets(ctx, repository.ListTicketsInput{
-		WorkspaceID:             in.WorkspaceID,
-		ProjectID:               in.ProjectID,
-		IncludeArchived:         in.IncludeArchived,
-		StatusID:                in.StatusID,
-		TypeID:                  in.TypeID,
-		AssigneePrincipalID:     in.AssigneePrincipalID,
-		LabelID:                 in.LabelID,
-		DueBefore:               in.DueBefore,
-		StartAfter:              in.StartAfter,
-		Unassigned:              in.Unassigned,
+		WorkspaceID:             input.WorkspaceID,
+		ProjectID:               input.ProjectID,
+		IncludeArchived:         input.IncludeArchived,
+		StatusID:                input.StatusID,
+		TypeID:                  input.TypeID,
+		AssigneePrincipalID:     input.AssigneePrincipalID,
+		LabelID:                 input.LabelID,
+		DueBefore:               input.DueBefore,
+		StartAfter:              input.StartAfter,
+		Unassigned:              input.Unassigned,
 		AssignedToMePrincipalID: assignedToMePrincipalID,
-		Overdue:                 in.Overdue,
-		Q:                       in.Q,
+		Overdue:                 input.Overdue,
+		Q:                       input.Q,
+		Limit:                   input.Limit,
+		Offset:                  input.Offset,
 	})
 }

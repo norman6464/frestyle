@@ -169,9 +169,9 @@ func (m *mockTicketRepo) ResolveTicketIDByKey(ctx context.Context, workspaceID, 
 	return args.String(0), args.Error(1)
 }
 
-func (m *mockTicketRepo) ListTickets(ctx context.Context, in repository.ListTicketsInput) ([]repository.TicketWithAssignee, error) {
+func (m *mockTicketRepo) ListTickets(ctx context.Context, in repository.ListTicketsInput) (repository.TicketList, error) {
 	args := m.Called(ctx, in)
-	t, _ := args.Get(0).([]repository.TicketWithAssignee)
+	t, _ := args.Get(0).(repository.TicketList)
 	return t, args.Error(1)
 }
 

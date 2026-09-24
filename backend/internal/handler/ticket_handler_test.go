@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -325,9 +326,9 @@ func Test_チケット一式_有効化から作成取得一覧更新状態変更
 
 	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets", "")
 	require.Equal(t, http.StatusOK, w.Code)
-	listed := decodeJSON[map[string][]map[string]any](t, w)
+	tickets := readTickets(t, w)
 	assignedInList := 0
-	for _, row := range listed["tickets"] {
+	for _, row := range tickets {
 		if row["assigneePrincipalId"] == "principal-1" {
 			assignedInList++
 		}
@@ -612,15 +613,15 @@ func Test_チケット一覧_期日での絞り込み(t *testing.T) {
 
 	w := f.do(t, http.MethodGet, ticketProjectBase+"/tickets?dueBefore=2026-02-01", "")
 	require.Equal(t, http.StatusOK, w.Code)
-	byDue := decodeJSON[map[string][]map[string]any](t, w)
-	require.Len(t, byDue["tickets"], 1)
-	assert.Equal(t, inRange.ID, byDue["tickets"][0]["id"])
+	byDue := readTickets(t, w)
+	require.Len(t, byDue, 1)
+	assert.Equal(t, inRange.ID, byDue[0]["id"])
 
 	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?startAfter=2026-02-01", "")
 	require.Equal(t, http.StatusOK, w.Code)
-	byStart := decodeJSON[map[string][]map[string]any](t, w)
-	require.Len(t, byStart["tickets"], 1)
-	assert.NotEqual(t, inRange.ID, byStart["tickets"][0]["id"])
+	byStart := readTickets(t, w)
+	require.Len(t, byStart, 1)
+	assert.NotEqual(t, inRange.ID, byStart[0]["id"])
 
 	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?dueBefore=not-a-date", "")
 	assert.Equal(t, http.StatusBadRequest, w.Code, "壊れた形式は400")
@@ -645,26 +646,91 @@ func Test_チケット一覧_保存した絞り込み(t *testing.T) {
 
 	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?unassigned=true", "")
 	require.Equal(t, http.StatusOK, w.Code)
-	got := decodeJSON[map[string][]map[string]any](t, w)
-	require.Len(t, got["tickets"], 1)
-	assert.Equal(t, unassigned.ID, got["tickets"][0]["id"])
+	got := readTickets(t, w)
+	require.Len(t, got, 1)
+	assert.Equal(t, unassigned.ID, got[0]["id"])
 
 	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?assignedToMe=true", "")
 	require.Equal(t, http.StatusOK, w.Code)
-	got = decodeJSON[map[string][]map[string]any](t, w)
-	require.Len(t, got["tickets"], 1)
-	assert.Equal(t, mine.ID, got["tickets"][0]["id"])
+	got = readTickets(t, w)
+	require.Len(t, got, 1)
+	assert.Equal(t, mine.ID, got[0]["id"])
 
 	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?q=担当", "")
 	require.Equal(t, http.StatusOK, w.Code)
-	got = decodeJSON[map[string][]map[string]any](t, w)
-	assert.Len(t, got["tickets"], 2, "「自分の担当」「他人の担当」の2件がタイトルで引っかかる")
+	got = readTickets(t, w)
+	assert.Len(t, got, 2, "「自分の担当」「他人の担当」の2件がタイトルで引っかかる")
 
 	// unassigned・assignedToMe・assigneePrincipalId は互いに排他。同時指定は400。
 	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?unassigned=true&assignedToMe=true", "")
 	assert.Equal(t, http.StatusBadRequest, w.Code, "unassignedとassignedToMeの同時指定は400")
 	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?unassigned=true&assigneePrincipalId="+me.ID, "")
 	assert.Equal(t, http.StatusBadRequest, w.Code, "unassignedとassigneePrincipalIdの同時指定も400")
+	// q が 100 文字を超えたら 400
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?q="+strings.Repeat("a", 101), "")
+	assert.Equal(t, http.StatusBadRequest, w.Code, "101 文字の q は 400")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?q="+strings.Repeat("a", 100), "")
+	assert.Equal(t, http.StatusOK, w.Code, "100 文字ちょうどは通る")
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?q=%20%20", "")
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Len(t, readTickets(t, w), 3, "空白だけの q は絞り込まない")
+}
+
+func Test_チケット一覧_連打をレート制限で断る(t *testing.T) {
+	// q の縛りを抜けた重い問い合わせが並んでも、1 人が接続プールを埋め尽くせないよう
+	// 経路側でも数を絞る
+	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
+
+	for i := range ticketListBurst {
+		w := f.do(t, http.MethodGet, ticketProjectBase+"/tickets", "")
+		require.Equal(t, http.StatusOK, w.Code, "burst の範囲内 (%d 回目): %s", i+1, w.Body.String())
+	}
+
+	over := f.do(t, http.MethodGet, ticketProjectBase+"/tickets", "")
+	assert.Equal(t, http.StatusTooManyRequests, over.Code, over.Body.String())
+	assert.Equal(t, "60", over.Header().Get("Retry-After"), "再試行の目安を返す")
+}
+
+func readTickets(t *testing.T, w *httptest.ResponseRecorder) []map[string]any {
+	t.Helper()
+	body := decodeJSON[map[string]any](t, w)
+	raw, _ := body["tickets"].([]any)
+	out := make([]map[string]any, 0, len(raw))
+	for _, r := range raw {
+		m, _ := r.(map[string]any)
+		out = append(out, m)
+	}
+	return out
+}
+
+func Test_チケット一覧_pageとlimitで範囲を切り総件数を返す(t *testing.T) {
+	f := newTicketFixture(kbUserID, domain.GrantRoleEditor)
+	for i, id := range []string{"pg-1", "pg-2", "pg-3"} {
+		f.tickets.addTicket(domain.Ticket{ID: id, WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Title: id, Position: "a" + strconv.Itoa(i)})
+	}
+
+	w := f.do(t, http.MethodGet, ticketProjectBase+"/tickets?limit=2&page=2", "")
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	got := decodeJSON[ticketPageResponse](t, w)
+	require.Len(t, got.Tickets, 1, "3 件を 2 件ずつなら 2 ページ目は 1 件")
+	assert.Equal(t, "pg-3", got.Tickets[0].ID)
+	assert.Equal(t, 2, got.Page)
+	assert.Equal(t, 2, got.Limit)
+	assert.Equal(t, 3, got.Total)
+	assert.Equal(t, 2, got.TotalPages)
+
+	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets", "")
+	require.Equal(t, http.StatusOK, w.Code)
+	got = decodeJSON[ticketPageResponse](t, w)
+	assert.Equal(t, 1, got.Page, "未指定は 1 ページ目")
+	assert.Equal(t, 50, got.Limit, "未指定は既定の 50")
+	assert.Equal(t, 1, got.TotalPages)
+
+	// 数字でない値や 0 以下は黙って既定値に倒さず 400
+	for _, q := range []string{"?limit=abc", "?page=0", "?limit=-1"} {
+		w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets"+q, "")
+		assert.Equal(t, http.StatusBadRequest, w.Code, q)
+	}
 }
 
 // Test_チケット件数 はサイドバー「保存した絞り込み」の件数バッジ（GET .../tickets/counts）を固定する。

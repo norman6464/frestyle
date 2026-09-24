@@ -227,7 +227,9 @@ WHERE t.workspace_id = sqlc.arg(workspace_id)
 -- （KB ページ検索の SearchPages と同じ考え方。schema.hcl 冒頭の「pg_trgm 拡張について」参照）。
 -- ticket_backlog_ranks を LEFT JOIN で並び順を rank_position として返す（GetTicket と同じ理由）。
 -- deleted_at IS NULL は常に付ける（include_archived の有無に関わらず、削除済みは一覧に出さない）。
-SELECT t.*, a.assignee_principal_id, COALESCE(r."position", '')::text AS rank_position FROM tickets t
+SELECT t.*, a.assignee_principal_id, COALESCE(r."position", '')::text AS rank_position,
+  COUNT(*) OVER()::bigint AS total_count
+FROM tickets t
 LEFT JOIN ticket_backlog_ranks r ON r.workspace_id = t.workspace_id AND r.ticket_id = t.id
 LEFT JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
 LEFT JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
@@ -257,12 +259,14 @@ WHERE t.workspace_id = sqlc.arg(workspace_id) AND t.project_id = sqlc.arg(projec
   AND (NOT sqlc.arg(overdue)::boolean OR (t.due_date < CURRENT_DATE AND s.category <> 'done'))
   AND (
     sqlc.narg(q)::text IS NULL
-    OR t.title ILIKE '%' || sqlc.narg(q)::text || '%'
-    OR t.plain_text ILIKE '%' || sqlc.narg(q)::text || '%'
+    OR t.title ILIKE '%' || sqlc.narg(q_like)::text || '%'
+    OR t.plain_text ILIKE '%' || sqlc.narg(q_like)::text || '%'
     OR word_similarity(sqlc.narg(q)::text, t.title) > 0.6
     OR word_similarity(sqlc.narg(q)::text, t.plain_text) > 0.6
   )
-ORDER BY r."position";
+ORDER BY r."position"
+LIMIT sqlc.narg(row_limit)
+OFFSET sqlc.arg(row_offset);
 
 -- name: CountTickets :one
 -- 利用者が保存した絞り込み（ticket_saved_filters）の件数バッジ用。ListTickets と同じ条件に
@@ -299,8 +303,8 @@ WHERE t.workspace_id = sqlc.arg(workspace_id) AND t.project_id = sqlc.arg(projec
   AND (NOT sqlc.arg(overdue)::boolean OR (t.due_date < CURRENT_DATE AND s.category <> 'done'))
   AND (
     sqlc.narg(q)::text IS NULL
-    OR t.title ILIKE '%' || sqlc.narg(q)::text || '%'
-    OR t.plain_text ILIKE '%' || sqlc.narg(q)::text || '%'
+    OR t.title ILIKE '%' || sqlc.narg(q_like)::text || '%'
+    OR t.plain_text ILIKE '%' || sqlc.narg(q_like)::text || '%'
     OR word_similarity(sqlc.narg(q)::text, t.title) > 0.6
     OR word_similarity(sqlc.narg(q)::text, t.plain_text) > 0.6
   );

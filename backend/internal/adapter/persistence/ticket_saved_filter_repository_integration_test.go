@@ -353,7 +353,8 @@ func TestTicketRepository_CountTickets_Integration(t *testing.T) {
 			n, err := repo.CountTickets(ctx, tc.in)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, n)
-			assert.Equal(t, int64(len(list)), n, "CountTickets は ListTickets の件数と一致する")
+			assert.Equal(t, int64(len(list.Items)), n, "CountTickets は ListTickets の件数と一致する")
+			assert.Equal(t, int64(list.Total), n, "ListTickets の total も CountTickets と一致する")
 		})
 	}
 }

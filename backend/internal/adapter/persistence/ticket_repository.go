@@ -886,43 +886,77 @@ func (r *ticketRepository) ResolveTicketIDByKey(ctx context.Context, workspaceID
 // （ListTickets は空、CountTickets は 0 件として扱う —— 形の壊れた ID に合う行は無い）。
 // ListTickets と CountTickets の WHERE は sqlc の都合で写し合っているが、Go 側の詰め替えは
 // ここ 1 か所にまとめ、条件を足すときに片方だけ直してずれる余地を無くす。
-func ticketFilterParams(in repository.ListTicketsInput) (sqlcgen.ListTicketsParams, bool) {
-	wsID, ok := kbParseID(in.WorkspaceID)
-	pjID, ok2 := kbParseID(in.ProjectID)
-	statusID, ok3 := kbNullID(in.StatusID)
-	typeID, ok4 := kbNullID(in.TypeID)
-	assigneeID, ok5 := kbNullID(in.AssigneePrincipalID)
-	labelID, ok6 := kbNullID(in.LabelID)
-	assignedToMeID, ok7 := kbNullID(in.AssignedToMePrincipalID)
+func ticketFilterParams(input repository.ListTicketsInput) (sqlcgen.CountTicketsParams, bool) {
+	wsID, ok := kbParseID(input.WorkspaceID)
+	pjID, ok2 := kbParseID(input.ProjectID)
+	statusID, ok3 := kbNullID(input.StatusID)
+	typeID, ok4 := kbNullID(input.TypeID)
+	assigneeID, ok5 := kbNullID(input.AssigneePrincipalID)
+	labelID, ok6 := kbNullID(input.LabelID)
+	assignedToMeID, ok7 := kbNullID(input.AssignedToMePrincipalID)
 	if !ok || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 || !ok7 {
-		return sqlcgen.ListTicketsParams{}, false
+		return sqlcgen.CountTicketsParams{}, false
 	}
-	return sqlcgen.ListTicketsParams{
-		WorkspaceID: wsID, ProjectID: pjID, IncludeArchived: in.IncludeArchived,
+	// word_similarity にエスケープ前の q を渡すのは、足したバックスラッシュがトライグラムに
+	// 混じると打ち間違い検索が鈍るため
+	var qLike *string
+	if input.Q != nil {
+		escaped := escapeLike(*input.Q)
+		qLike = &escaped
+	}
+	return sqlcgen.CountTicketsParams{
+		WorkspaceID: wsID, ProjectID: pjID, IncludeArchived: input.IncludeArchived,
 		StatusID: statusID, TypeID: typeID, AssigneePrincipalID: assigneeID,
-		Unassigned: in.Unassigned, AssignedToMePrincipalID: assignedToMeID,
-		LabelID: labelID, DueBefore: nullDate(in.DueBefore), StartAfter: nullDate(in.StartAfter),
-		Overdue: in.Overdue, Q: nullString(in.Q),
+		Unassigned: input.Unassigned, AssignedToMePrincipalID: assignedToMeID,
+		LabelID: labelID, DueBefore: nullDate(input.DueBefore), StartAfter: nullDate(input.StartAfter),
+		Overdue: input.Overdue, Q: nullString(input.Q), QLike: nullString(qLike),
 	}, true
 }
 
-func (r *ticketRepository) ListTickets(ctx context.Context, in repository.ListTicketsInput) ([]repository.TicketWithAssignee, error) {
-	params, ok := ticketFilterParams(in)
+// listTicketsParams は絞り込みの引数に LIMIT / OFFSET を足す
+// ListTickets だけ引数が多いので型変換では詰め替えられない
+// WHERE のずれは結合テスト（CountTickets は ListTickets の件数と一致する）が捕まえる
+func listTicketsParams(filter sqlcgen.CountTicketsParams, rowLimit sql.NullInt32, rowOffset int32) sqlcgen.ListTicketsParams {
+	return sqlcgen.ListTicketsParams{
+		WorkspaceID: filter.WorkspaceID, ProjectID: filter.ProjectID, IncludeArchived: filter.IncludeArchived,
+		StatusID: filter.StatusID, TypeID: filter.TypeID, AssigneePrincipalID: filter.AssigneePrincipalID,
+		Unassigned: filter.Unassigned, AssignedToMePrincipalID: filter.AssignedToMePrincipalID,
+		LabelID: filter.LabelID, DueBefore: filter.DueBefore, StartAfter: filter.StartAfter,
+		Overdue: filter.Overdue, Q: filter.Q, QLike: filter.QLike,
+		RowLimit: rowLimit, RowOffset: rowOffset,
+	}
+}
+
+func (r *ticketRepository) ListTickets(ctx context.Context, input repository.ListTicketsInput) (repository.TicketList, error) {
+	filter, ok := ticketFilterParams(input)
 	if !ok {
-		return nil, nil
+		return repository.TicketList{}, nil
 	}
-	rows, err := r.queries(ctx).ListTickets(ctx, params)
+	var rowLimit sql.NullInt32
+	if input.Limit > 0 {
+		limit32, ok := toInt32(input.Limit)
+		if !ok {
+			return repository.TicketList{}, outOfRangeInt32Error("limit", input.Limit)
+		}
+		rowLimit = sql.NullInt32{Int32: limit32, Valid: true}
+	}
+	offset32, ok := toInt32(max(input.Offset, 0))
+	if !ok {
+		return repository.TicketList{}, outOfRangeInt32Error("offset", input.Offset)
+	}
+	rows, err := r.queries(ctx).ListTickets(ctx, listTicketsParams(filter, rowLimit, offset32))
 	if err != nil {
-		return nil, err
+		return repository.TicketList{}, err
 	}
-	out := make([]repository.TicketWithAssignee, 0, len(rows))
+	list := repository.TicketList{Items: make([]repository.TicketWithAssignee, 0, len(rows))}
 	for _, row := range rows {
-		out = append(out, repository.TicketWithAssignee{
+		list.Total = int(row.TotalCount)
+		list.Items = append(list.Items, repository.TicketWithAssignee{
 			Ticket:              toDomainTicket(ticketOfListRow(row), row.RankPosition),
 			AssigneePrincipalID: nullUUIDString(row.AssigneePrincipalID),
 		})
 	}
-	return out, nil
+	return list, nil
 }
 
 func (r *ticketRepository) CountTickets(ctx context.Context, in repository.ListTicketsInput) (int64, error) {
@@ -930,10 +964,7 @@ func (r *ticketRepository) CountTickets(ctx context.Context, in repository.ListT
 	if !ok {
 		return 0, nil
 	}
-	// CountTicketsParams は ListTicketsParams と同じ引数を同じ順で持つ（WHERE が写しなので sqlc が
-	// 同じ構造体を起こす）。型変換で詰め替えることで、片方にだけ引数が増えたらここがコンパイル
-	// エラーになり、WHERE のずれに気づける。
-	return r.queries(ctx).CountTickets(ctx, sqlcgen.CountTicketsParams(params))
+	return r.queries(ctx).CountTickets(ctx, params)
 }
 
 func (r *ticketRepository) GetTicketCounts(
