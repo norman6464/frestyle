@@ -28,7 +28,7 @@ const GROUPS: { title: string; names: FsIconName[] }[] = [
       'plus', 'x', 'check', 'chevron-down', 'chevron-up', 'chevron-right', 'chevron-left', 'chevron-up-down',
       'chevron-double-down', 'chevron-double-right', 'chevron-double-left',
       'arrow-right', 'arrow-up', 'arrow-down', 'arrow-up-right', 'filter', 'more', 'trash', 'pencil', 'archive',
-      'archive-restore', 'sprint', 'calendar', 'clock', 'tag', 'paperclip', 'comment', 'chat', 'eye', 'eye-off',
+      'archive-restore', 'sprint', 'calendar', 'clock', 'tag', 'paperclip', 'link', 'comment', 'chat', 'eye', 'eye-off',
       'refresh', 'copy', 'clipboard', 'clipboard-check', 'clipboard-list', 'camera', 'grid', 'folder', 'lock', 'ban',
     ],
   },

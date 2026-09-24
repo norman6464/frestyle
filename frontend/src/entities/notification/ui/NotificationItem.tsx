@@ -43,14 +43,14 @@ export default memo(function NotificationItem({ notification, onMarkAsRead, disa
       className={`rounded-2xl border p-4 sm:p-5 ${
         notification.isRead
           ? 'bg-surface-1 border-surface-3'
-          : 'bg-surface-2 border-taupe-200'
+          : 'bg-brand-50 border-brand-200'
       }`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex-1 min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-relaxed text-[var(--color-text-secondary)] [overflow-wrap:anywhere]">
             <span className="inline-flex items-center gap-1.5 font-semibold">
-              {!notification.isRead && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-taupe-500" />}
+              {!notification.isRead && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-brand-600" />}
               {notification.isRead ? '既読' : '未読'}
             </span>
             <span>

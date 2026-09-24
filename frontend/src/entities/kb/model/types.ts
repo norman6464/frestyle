@@ -15,6 +15,11 @@ export interface KbWorkspace {
   createdAt: string;
   /** 自分がこのワークスペースの admin か。削除操作を出してよいかの判定に使う。 */
   canManage: boolean;
+  /**
+   * このワークスペースでチケットを作れるか（作成 API と同じ判定）。「新しくつくる」で作成先の
+   * 候補を絞るのに使う。プロジェクトでチケットが有効化済みかは含まない。
+   */
+  canCreateTickets: boolean;
 }
 
 /** スペース 1 件。key はワークスペース内で一意の短い識別子。 */
