@@ -11,9 +11,12 @@ export default function Loading({
   message,
   className = ''
 }: LoadingProps) {
+  // 枠の太さは Tailwind が生成するクラスだけを使う。既定の段は 0・2・4・8 で、3 は無い。
+  // `border-3` と書くと CSS が 1 行も出ず、枠 0px で輪が描かれない（大きさ未指定の
+  // 呼び出しすべてで読み込み中に何も見えなくなっていた）。3px は任意値で書く。
   const sizeClasses = {
     small: 'w-4 h-4 border-2',
-    medium: 'w-8 h-8 border-3',
+    medium: 'w-8 h-8 border-[3px]',
     large: 'w-10 h-10 border-4',
   };
 

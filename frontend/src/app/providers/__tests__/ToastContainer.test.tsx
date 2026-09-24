@@ -19,10 +19,12 @@ vi.mock('@/shared/ui/Toast', () => ({
 }));
 
 describe('ToastContainer', () => {
-  it('トーストがない場合は何も表示しない', () => {
+  it('トーストが無くても成功・お知らせ用の読み上げ領域は置いておく（後から差し込むと変化を拾われない）', () => {
     mockToasts.length = 0;
     const { container } = render(<ToastContainer />);
-    expect(container.firstChild).toBeNull();
+    const polite = container.querySelector('[aria-live="polite"]');
+    expect(polite).toBeInTheDocument();
+    expect(polite).toBeEmptyDOMElement();
   });
 
   it('トーストがある場合はメッセージが表示される', () => {
@@ -43,10 +45,16 @@ describe('ToastContainer', () => {
     expect(screen.getByText('エラー')).toBeInTheDocument();
   });
 
-  it('aria-live属性がある', () => {
+  it('成功・お知らせは polite の領域に入り、失敗は live region で包まない（Toast 自身の alert と二重に読ませない）', () => {
     mockToasts.length = 0;
-    mockToasts.push({ id: '1', type: 'info', message: 'テスト' });
+    mockToasts.push(
+      { id: '1', type: 'info', message: 'お知らせ' },
+      { id: '2', type: 'success', message: '保存しました' },
+      { id: '3', type: 'error', message: '保存できませんでした' },
+    );
     render(<ToastContainer />);
-    expect(screen.getByText('テスト').closest('[aria-live]')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('お知らせ').closest('[aria-live]')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('保存しました').closest('[aria-live]')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByText('保存できませんでした').closest('[aria-live]')).toBeNull();
   });
 });

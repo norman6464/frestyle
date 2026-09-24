@@ -30,7 +30,7 @@ describe('NotificationPage', () => {
     });
 
     render(<MemoryRouter><NotificationPage /></MemoryRouter>);
-    expect(screen.getByText('通知を読み込み中...')).toBeInTheDocument();
+    expect(screen.getByText('通知を読み込み中…')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: '通知' })).toBeInTheDocument();
   });
 

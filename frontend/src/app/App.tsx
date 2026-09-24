@@ -99,7 +99,7 @@ export default function App() {
   return (
     <ErrorBoundary>
     <ToastProvider>
-    <Suspense fallback={<Loading fullscreen message="読み込み中..." />}>
+    <Suspense fallback={<Loading fullscreen message="読み込み中…" />}>
     <Routes>
       {/* 誰でもアクセス可能 */}
       <Route path="/login" element={<LoginPage />} />

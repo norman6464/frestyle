@@ -12,7 +12,11 @@ import type { ToastType } from '@/shared/ui/Toast';
  * 置き場そのものは押せないようにしてある（`pointer-events-none`）。画面の上端に見えない板が
  * 敷かれていると、その下にあるものを押せなくなるため。知らせ 1 枚 1 枚だけが押せる。
  *
- * 1 枚も無いときは何も描かない。空の箱を残すと、そこだけ操作が効かない帯になる。
+ * 1 枚も無いときも、成功・お知らせを読み上げる領域（中身は空）だけは置いておく。後から領域ごと
+ * 差し込むと読み上げソフトが変化を拾わないことがあるため。押下は素通しするので、操作が効かない
+ * 帯にはならない。
+ *
+ * 失敗は閉じるまで残る（自動では消えない）。成功・お知らせは 4 秒で消える。
  *
  * 同時に出せるのは 3 枚まで。連続で操作しても画面が埋まらないよう、古いものから落ちる。
  */
@@ -52,9 +56,11 @@ function Stage({ items }: { items: Array<{ type: ToastType; message: string }> }
 export const 一枚: Story = {
   render: () => <Stage items={[{ type: 'success', message: 'ページを保存しました' }]} />,
   play: async ({ canvasElement }) => {
+    // 成功は role を持たず、常設の polite の領域の中に入る。
     await waitFor(async () => {
-      await expect(within(canvasElement).getByRole('alert')).toHaveTextContent(
-        'ページを保存しました',
+      await expect(within(canvasElement).getByText('ページを保存しました').closest('[aria-live]')).toHaveAttribute(
+        'aria-live',
+        'polite',
       );
     });
   },
@@ -73,8 +79,11 @@ export const 積み重なる: Story = {
   ),
   play: async ({ canvasElement }) => {
     await waitFor(async () => {
-      await expect(within(canvasElement).getAllByRole('alert')).toHaveLength(3);
+      await expect(canvasElement.querySelectorAll('[data-toast-type]')).toHaveLength(3);
     });
+    // 割り込んで読ませるのは失敗だけ。
+    await expect(within(canvasElement).getAllByRole('alert')).toHaveLength(1);
+    await expect(within(canvasElement).getByRole('alert')).toHaveTextContent('保存できませんでした');
   },
 };
 
@@ -94,7 +103,7 @@ export const 上限を超えたとき: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(async () => {
-      await expect(canvas.getAllByRole('alert')).toHaveLength(3);
+      await expect(canvasElement.querySelectorAll('[data-toast-type]')).toHaveLength(3);
     });
     await expect(canvas.queryByText('1 枚目（落ちる）')).toBeNull();
     // 知らせは 0.6 秒かけて上から落ちてくる。落ちきる前に見ると透明のままなので待つ。
@@ -122,10 +131,12 @@ export const 同じ知らせはまとめる: Story = {
   },
 };
 
-/** 1 枚も無いとき。何も描かない。 */
+/** 1 枚も無いとき。知らせは描かないが、読み上げの領域（空）は置いてある。 */
 export const 何も無いとき: Story = {
   render: () => <Stage items={[]} />,
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).queryByRole('alert')).toBeNull();
+    await expect(canvasElement.querySelectorAll('[data-toast-type]')).toHaveLength(0);
+    await expect(canvasElement.querySelector('[aria-live="polite"]')).toBeEmptyDOMElement();
   },
 };

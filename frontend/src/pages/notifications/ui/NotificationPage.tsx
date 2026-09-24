@@ -42,7 +42,7 @@ export default function NotificationPage() {
         </p>
       </div>
 
-      {initialLoading && <Loading message="通知を読み込み中..." className="py-16" />}
+      {initialLoading && <Loading message="通知を読み込み中…" className="py-16" />}
 
       {/* 取得に失敗したことは独立した帯で伝える。取得済みの通知は隠さない。 */}
       {!loading && error && (

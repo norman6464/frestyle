@@ -5,11 +5,12 @@ import Toast from './Toast';
 /**
  * 画面の上から落ちてくる短い知らせ。
  *
- * 4 秒で自分から消える。**消えても困らないこと**にだけ使う — 見逃すと進めなくなる情報は
- * その場（フォームの中）に出す。
+ * 成功とお知らせは 4 秒で自分から消える（マウスを乗せている間・閉じるボタンにフォーカスが
+ * ある間は止まる）。**失敗は自動では消えない** — 読み逃すと何が起きたか分からなくなるので、
+ * 閉じるまで残す。見逃すと進めなくなる情報は、トーストではなくその場（フォームの中）に出す。
  *
- * 置き場所（画面上部の中央）は ToastContainer 側の仕事で、この部品は見た目と自動で消える
- * ところだけを持つ。
+ * 置き場所（画面上部の中央）と成功・お知らせの読み上げは ToastContainer 側の仕事。失敗だけは
+ * この部品自身が `role="alert"` で読まれる。
  */
 const meta = {
   title: 'shared/Toast',
@@ -25,13 +26,18 @@ type Story = StoryObj<typeof meta>;
 export const 成功: Story = {
   args: { type: 'success', message: 'ページを保存しました' },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByRole('alert')).toHaveTextContent('ページを保存しました');
+    await expect(within(canvasElement).getByText('ページを保存しました')).toBeVisible();
+    // 成功は割り込んで読ませない（ToastContainer の polite の領域が読む）。
+    await expect(within(canvasElement).queryByRole('alert')).toBeNull();
   },
 };
 
 /** 失敗したとき。 */
 export const 失敗: Story = {
   args: { type: 'error', message: '保存できませんでした。通信を確認してください' },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('alert')).toHaveTextContent('保存できませんでした');
+  },
 };
 
 /** ただのお知らせ。 */

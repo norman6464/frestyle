@@ -74,4 +74,25 @@ describe('ErrorBoundary', () => {
     const button = screen.getByText('再試行');
     expect(button.tagName).toBe('BUTTON');
   });
+
+  it('再試行で直らないときのために、再読み込みとホームへの道も出す', () => {
+    render(
+      <ErrorBoundary>
+        <ThrowError shouldThrow={true} />
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByRole('button', { name: '再読み込み' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'ホームへ' })).toHaveAttribute('href', '/');
+  });
+
+  it('アプリ全体を置き換える画面なので、見出しは h1', () => {
+    render(
+      <ErrorBoundary>
+        <ThrowError shouldThrow={true} />
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByRole('heading', { level: 1, name: 'エラーが発生しました' })).toBeInTheDocument();
+  });
 });

@@ -33,6 +33,17 @@ describe('FormMessage', () => {
     expect(screen.getByText('成功').closest('div')?.querySelector('svg')).toBeInTheDocument();
   });
 
+  it('失敗は alert、成功は status として読ませる', () => {
+    const { unmount } = render(<FormMessage message={{ type: 'error', text: 'だめ' }} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('だめ');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    unmount();
+
+    render(<FormMessage message={{ type: 'success', text: 'できた' }} />);
+    expect(screen.getByRole('status')).toHaveTextContent('できた');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('長いメッセージテキストが正しく表示される', () => {
     const longText = 'エラー'.repeat(50);
     render(<FormMessage message={{ type: 'error', text: longText }} />);
@@ -71,15 +82,27 @@ describe('FormMessage', () => {
       vi.useRealTimers();
     });
 
-    it('5秒後にonDismissが呼ばれる', () => {
+    it('成功は5秒後にonDismissが呼ばれる', () => {
       const onDismiss = vi.fn();
-      render(<FormMessage message={{ type: 'error', text: 'エラー' }} onDismiss={onDismiss} />);
+      render(<FormMessage message={{ type: 'success', text: '保存しました' }} onDismiss={onDismiss} />);
 
       act(() => {
         vi.advanceTimersByTime(5000);
       });
 
       expect(onDismiss).toHaveBeenCalledOnce();
+    });
+
+    it('失敗は onDismiss があっても自動では消さない（閉じるボタンを押すまで残す）', () => {
+      const onDismiss = vi.fn();
+      render(<FormMessage message={{ type: 'error', text: 'エラー' }} onDismiss={onDismiss} />);
+
+      act(() => {
+        vi.advanceTimersByTime(60_000);
+      });
+
+      expect(onDismiss).not.toHaveBeenCalled();
+      expect(screen.getByText('エラー')).toBeInTheDocument();
     });
 
     it('onDismissが未指定の場合はタイマーが動作しない', () => {

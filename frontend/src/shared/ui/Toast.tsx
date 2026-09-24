@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import FsIcon from './icons/FsIcon';
 import { fsIcon } from './icons/fsIconFactory';
 
@@ -9,6 +9,9 @@ interface ToastProps {
   message: string;
   onClose: () => void;
 }
+
+/** 成功・お知らせが自動で消えるまでの時間。失敗は自動では消さない。 */
+export const TOAST_AUTO_CLOSE_MS = 4000;
 
 const ICON_MAP = {
   success: fsIcon('check-circle'),
@@ -25,22 +28,44 @@ const COLOR_MAP = {
 };
 
 /**
- * Toast — 画面上部から落ちてバウンドする通知。
+ * Toast — 画面上部から落ちてくる通知 1 件。
  *
- * 配置は ToastContainer 側（fixed top center）。 本コンポーネントは見た目と
- * 4 秒オートクローズ + アニメーションのみ責任を持つ。
+ * 読み上げの受け持ちは種類で分ける。失敗はこの要素自身が `role="alert"`（差し込まれた時点で
+ * 割り込んで読まれる）。成功・お知らせは role を持たず、ToastContainer が常に置いている
+ * polite の領域の中に入る（role="status" の要素を後から差し込んでも読まれないことがあるため）。
+ *
+ * - 成功・お知らせは {@link TOAST_AUTO_CLOSE_MS} で消える。マウスを乗せている間と、
+ *   中のボタンにフォーカスがある間は止める（読み終える前に消さない。WCAG 2.2.1）
+ * - 失敗は自動では消さない。読み逃すと何が起きたか分からなくなるので、閉じるまで残す
  */
 export default function Toast({ type, message, onClose }: ToastProps) {
+  const autoClose = type !== 'error';
+  const [paused, setPaused] = useState(false);
+  // 呼び出し側は描画のたびに新しい onClose を渡してくる。依存に入れるとタイマーが
+  // 描画ごとに巻き戻るので、最新の関数だけを参照で持つ。
+  const onCloseRef = useRef(onClose);
   useEffect(() => {
-    const timer = setTimeout(onClose, 4000);
+    onCloseRef.current = onClose;
+  });
+
+  useEffect(() => {
+    if (!autoClose || paused) return;
+    const timer = setTimeout(() => onCloseRef.current(), TOAST_AUTO_CLOSE_MS);
     return () => clearTimeout(timer);
-  }, [onClose]);
+  }, [autoClose, paused]);
 
   const Icon = ICON_MAP[type];
 
   return (
     <div
-      role="alert"
+      role={type === 'error' ? 'alert' : undefined}
+      data-toast-type={type}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPaused(false);
+      }}
       className={`pointer-events-auto flex items-start gap-3 px-5 py-3.5 rounded-lg shadow-xl min-w-[280px] max-w-md ${COLOR_MAP[type]} animate-toast-drop`}
     >
       <Icon className="w-6 h-6 flex-shrink-0 text-white" />
@@ -49,7 +74,8 @@ export default function Toast({ type, message, onClose }: ToastProps) {
         type="button"
         onClick={onClose}
         aria-label="閉じる"
-        className="-mr-1 -mt-0.5 p-1 rounded hover:bg-white/20 transition-colors"
+        // 既定のフォーカスの輪（青）は赤・緑の塗りの上でほとんど見えない。白にする。
+        className="-mr-1.5 -mt-1 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded transition-colors hover:bg-white/20 focus-visible:outline-white"
       >
         <FsIcon name="x" className="w-4 h-4" />
       </button>
