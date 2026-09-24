@@ -55,6 +55,10 @@ function api(rows: unknown[]): ApiStubs {
       remove('inv-1');
       return { workspaceSlug: 'frestyle', scope: 'workspace' };
     },
+    '/kb/invitations/inv-2/accept': () => {
+      remove('inv-2');
+      return { workspaceSlug: 'product-lab', scope: 'workspace' };
+    },
     '/kb/invitations/inv-2/decline': () => {
       remove('inv-2');
       return undefined;
@@ -111,6 +115,22 @@ export const 参加すると完了のカードが出る: Story = {
     // 残りの招待にはそのまま応答できる。
     await expect(within(list).getAllByRole('listitem')).toHaveLength(1);
     await expect(canvas.getByText('1件')).toBeVisible();
+  },
+};
+
+/** 続けてもう 1 件参加しても、押したボタンは消えるので、新しい完了カードの見出しへフォーカスが移る。 */
+export const 続けて参加しても見出しへ移る: Story = {
+  decorators: [withApi(api([invitation(), second]))],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const list = await canvas.findByRole('list', { name: '未対応の招待' });
+    await userEvent.click(within(within(list).getAllByRole('article')[0]).getByRole('button', { name: '参加する' }));
+    await canvas.findByRole('heading', { level: 2, name: 'FreStyle に参加しました' });
+    await userEvent.click(await canvas.findByRole('button', { name: '参加する' }));
+    const heading = await canvas.findByRole('heading', { level: 2, name: 'プロダクト研究室 に参加しました' });
+    await waitFor(async () => {
+      await expect(heading).toHaveFocus();
+    });
   },
 };
 

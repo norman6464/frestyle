@@ -141,6 +141,8 @@ export default function InvitationsPage() {
         <div className="flex min-w-0 flex-col gap-6">
           {joined && (
             <InvitationJoinedCard
+              // 続けて別の招待に参加したら作り直し、見出しへのフォーカス移動をもう一度走らせる。
+              key={joined.workspaceSlug}
               workspaceName={joined.workspaceName}
               roleLabel={joined.roleLabel}
               onOpen={() => navigate(`/kb/spaces?workspace=${encodeURIComponent(joined.workspaceSlug)}`)}
