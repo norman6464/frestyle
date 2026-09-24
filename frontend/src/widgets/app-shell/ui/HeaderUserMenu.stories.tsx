@@ -68,6 +68,8 @@ export const 開いたところ: Story = {
       await expect(portal.getByText('takuma@example.com')).toBeVisible();
     });
     await expect(portal.getByText('川野 拓馬')).toBeVisible();
+    // 自分宛の招待への入口。招待リンクを失くしても、ここから一覧へ戻れる。
+    await expect(portal.getByRole('menuitem', { name: 'あなたへの招待' })).toBeVisible();
     await expect(portal.getByRole('menuitem', { name: '設定' })).toBeVisible();
     await expect(portal.getByRole('menuitem', { name: 'ログアウト' })).toBeVisible();
   },
