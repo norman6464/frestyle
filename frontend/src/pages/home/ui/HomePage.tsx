@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
-import { FsIcon, PageFrame } from '@/shared/ui';
+import { Button, FsIcon, PageFrame } from '@/shared/ui';
 import { homeStrongLink } from '../lib/homeStyles';
 import { useFavoritesWorkspace } from '../model/useFavoritesWorkspace';
 import { useHomeWorkspaces } from '../model/useHomeWorkspaces';
@@ -11,6 +11,7 @@ import { useRecentPages } from '../model/useRecentPages';
 import { useUnreadCount } from '../model/useUnreadCount';
 import { useWorkspaceFavorites } from '../model/useWorkspaceFavorites';
 import HomeAssignedSection from './HomeAssignedSection';
+import HomeCreateDialog from './HomeCreateDialog';
 import HomeFavoritesSection from './HomeFavoritesSection';
 import HomeFirstRun from './HomeFirstRun';
 import { HomeLoadingRows } from './HomePanelState';
@@ -43,6 +44,7 @@ export default function HomePage() {
   const [favoritesSlug, selectFavoritesSlug] = useFavoritesWorkspace(workspaces.data);
   const favorites = useWorkspaceFavorites(workspaces.status === 'ready' ? favoritesSlug : null);
 
+  const [createOpen, setCreateOpen] = useState(false);
   const names = useMemo(() => new Map(workspaces.data.map((w) => [w.slug, w.name])), [workspaces.data]);
   // 表示名は所属一覧から引く。引けない間は slug のまま（名前を勝手に作らない）。
   const workspaceName = (slug: string) => names.get(slug) ?? slug;
@@ -59,6 +61,19 @@ export default function HomePage() {
           続きをひらく。知識を取り出す。{wide && '次の作業へ。'}
         </p>
       </div>
+      {workspaces.status === 'ready' && (
+        // 狭い画面は「＋ つくる」と短く見せる。読み上げは常に「新しくつくる」（見える文字を含む名前）。
+        <Button
+          variant="secondary"
+          size="lg"
+          aria-label="新しくつくる"
+          onClick={() => setCreateOpen(true)}
+          className="shrink-0 font-semibold"
+        >
+          <FsIcon name="plus" className="h-5 w-5" />
+          {wide ? '新しくつくる' : 'つくる'}
+        </Button>
+      )}
     </header>
   );
 
@@ -121,6 +136,13 @@ export default function HomePage() {
       <p className="mt-12 text-sm text-[var(--color-text-muted)]">
         最近のページと担当はワークスペース横断。お気に入りとページ検索は、選んだワークスペースの中。
       </p>
+      {createOpen && (
+        <HomeCreateDialog
+          workspaces={workspaces.data}
+          initialWorkspaceSlug={favoritesSlug}
+          onClose={() => setCreateOpen(false)}
+        />
+      )}
     </PageFrame>
   );
 }
