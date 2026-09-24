@@ -11,6 +11,7 @@ import { useWorkspaceMembers } from '../model/useWorkspaceMembers';
 import TicketParentPicker from './TicketParentPicker';
 import TicketLabelBar from './TicketLabelBar';
 import BlankableField from './BlankableField';
+import { formatDateLong } from '../lib/dueDate';
 
 const PRIORITY_LABEL: Record<TicketPriority, string> = { 1: '高', 2: '中', 3: '低' };
 
@@ -149,7 +150,7 @@ export default function TicketAttributePanel({
   if (parentTicket) summary.push(`親 ${formatTicketKey(projectKey, parentTicket.number)}`);
   if (sprint) summary.push(`Sprint ${sprint.name}`);
   if (storyPoints !== null) summary.push(`見積り ${storyPoints} pt`);
-  if (startDate) summary.push(`開始日 ${startDate}`);
+  if (startDate) summary.push(`開始日 ${formatDateLong(startDate)}`);
   if (teamName) summary.push(`Team ${teamName}`);
   if (fixVersions.length > 0) summary.push(`修正バージョン ${fixVersions.map((v) => v.name).join(', ')}`);
 

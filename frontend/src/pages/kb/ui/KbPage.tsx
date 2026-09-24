@@ -511,7 +511,8 @@ export default function KbPage() {
         id: 'page',
         label: 'ページ',
         group: 'insert',
-        glyph: '📄',
+        glyph: 'ページ',
+        icon: { set: 'fs', name: 'document' },
         keywords: ['page', 'subpage', 'child'],
         run: (editor) => {
           const ctx = subpageContext.current;
@@ -525,7 +526,8 @@ export default function KbPage() {
         id: 'template',
         label: 'テンプレート',
         group: 'insert',
-        glyph: '📑',
+        glyph: 'テンプレート',
+        icon: { set: 'fs', name: 'document-text' },
         keywords: ['template', 'wireframe'],
         run: () => setTemplatePickerOpen(true),
       },

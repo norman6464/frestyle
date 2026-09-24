@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import type { KbInvitation } from '@/entities/kb';
+import { kbRoleLabel, type KbInvitation } from '@/entities/kb';
 import { Button, EmptyState, Loading, fsIcon } from '@/shared/ui';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useToast } from '@/shared/lib/hooks/useToast';
@@ -107,7 +107,7 @@ export default function InvitationsPage() {
                     <h2 className="text-lg font-semibold text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{inv.workspaceName}</h2>
                     <p className="mt-0.5 text-sm text-[var(--color-text-muted)]">
                       {inv.inviterName ? `${inv.inviterName} さんから · ` : ''}
-                      <span className="font-medium text-[var(--color-text-secondary)]">{inv.role}</span> として · {formatDate(inv.expiresAt)}まで
+                      <span className="font-medium text-[var(--color-text-secondary)]">{kbRoleLabel(inv.role)}</span> として · {formatDate(inv.expiresAt)}まで
                     </p>
                   </div>
                 </div>

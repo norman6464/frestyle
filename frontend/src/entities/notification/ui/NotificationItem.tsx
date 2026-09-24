@@ -8,21 +8,20 @@ import { Button, FsIcon } from '@/shared/ui';
 /**
  * 通知種別のバッジ文言。キーは backend が実際に入れる値と一致させること。
  *
- * **いまは空。** backend の domain.Notification は Type が自由文字列で、通知を作る
- * usecase が 1 つも無い（repository に Create / CreateMany はあるが呼び出し元が無い）。
+ * backend の domain.Notification は Type が自由文字列。ここに「これから来そうな種別」を
+ * 先回りで書かないこと。この対応表は過去 2 回、実在しない種別で埋まっており、どちらも
+ * 実際に届く通知にラベルが当たらないまま残った。**通知を作る usecase があることを確かめた
+ * 種別だけを足す。** 対応が無い種別は、下のフォールバックで種別文字列がそのまま出る
+ * （空欄にして「何の知らせか」の手がかりを消さない）。
  *
- * ここに「これから来そうな種別」を先回りで書かないこと。この対応表は過去 2 回、
- * 実在しない種別で埋まっており、どちらも実際に届く通知にラベルが当たらないまま残った。
- * **作られるようになってから、実在を確かめた種別だけを足す。**
- *
- * 空のあいだは、下のフォールバックで種別文字列がそのまま出る。
- *
- * `ticket_mentioned` / `ticket_commented` は発言の作成 usecase から実際に発火することを
- * backend 側で確認して追加した（上の注意どおり、実在を確かめてから足す）。
+ * 確かめた種別:
+ * - `ticket_mentioned` / `ticket_commented` — チケットの発言の作成 usecase
+ * - `workspace_invitation` — ワークスペースへの招待の発行 usecase（既にアカウントがある宛先だけ）
  */
 const TYPE_LABELS: Record<string, string> = {
   ticket_mentioned: 'チケットで名指し',
   ticket_commented: '担当チケットにコメント',
+  workspace_invitation: 'ワークスペースへの招待',
 };
 
 interface NotificationItemProps {

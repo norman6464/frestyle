@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { type Editor, useEditorState } from '@tiptap/react';
 import { activeLinkHref, applyLink, removeLink } from './editorCommands';
 import { LINK_MARK_NAME } from './linkSafety';
+import FormatIcon from '../FormatIcon';
 
 /** 許可できない URL を打たれたときに出す説明。何が通るのかを具体的に書く。 */
 const INVALID_MESSAGE = 'http:// https:// mailto: tel: のいずれかで始まる URL を入力してください';
@@ -90,7 +91,7 @@ export default function LinkFormatControl({ editor }: { editor: Editor }) {
             : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]',
         ].join(' ')}
       >
-        <span aria-hidden="true">🔗</span>
+        <FormatIcon name="link" size={16} />
       </button>
 
       {open && (

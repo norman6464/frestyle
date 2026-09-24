@@ -1,14 +1,7 @@
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { KbSidebar } from '@/widgets/kb-sidebar';
 import { SidebarSection, FsIcon, type FsIconName } from '@/shared/ui';
-import { useKbSpaceEntry, KbSpaceTabs } from '@/entities/kb';
-
-const ROLE_LABEL: Record<string, string> = {
-  admin: '管理者',
-  editor: '編集者',
-  commenter: 'コメント可',
-  viewer: '閲覧者',
-};
+import { useKbSpaceEntry, KbSpaceTabs, kbRoleLabel } from '@/entities/kb';
 
 /**
  * KbSpaceOverviewPage はスペースの「概要」画面（段14）。
@@ -87,7 +80,7 @@ export default function KbSpaceOverviewPage() {
                   ))}
                 </div>
                 <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-surface-3 pt-4">
-                  <p className="text-sm text-[var(--color-text-tertiary)]">このスペースでの自分の役割: {ROLE_LABEL[space.role] ?? space.role}</p>
+                  <p className="text-sm text-[var(--color-text-tertiary)]">このスペースでの自分の役割: {kbRoleLabel(space.role)}</p>
                   <Link to={`/kb/spaces/${space.id}/members`} className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-brand-700 underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">メンバーを確認</Link>
                 </div>
               </div>

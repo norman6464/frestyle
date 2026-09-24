@@ -172,7 +172,7 @@ export const スプリントの段: Story = {
         kind: 'sprint',
         name: 'スプリント 1',
         sprintState: 'active',
-        note: '2026-09-01 – 2026-09-14',
+        note: '9/1 〜 9/14',
         tickets: [ticket({ id: 't-9', number: 401, title: '進行中の作業' })],
       },
       ...backlogOnly(tickets),

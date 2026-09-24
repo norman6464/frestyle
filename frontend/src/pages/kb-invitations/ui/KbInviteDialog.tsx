@@ -1,17 +1,24 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
-import { buildInviteUrl, type KbGrantRole, type KbInviteByEmailInput, type KbIssuedInvitation } from '@/entities/kb';
+import {
+  KB_ROLE_DESCRIPTION,
+  KB_ROLE_LABEL,
+  KB_ROLES_STRONGEST_FIRST,
+  buildInviteUrl,
+  type KbGrantRole,
+  type KbInviteByEmailInput,
+  type KbIssuedInvitation,
+} from '@/entities/kb';
 import { Button, FsIcon } from '@/shared/ui';
 import FormFieldError from '@/shared/ui/FormFieldError';
 import { useCopyToClipboard } from '@/shared/lib/hooks/useCopyToClipboard';
 import { inviteFailure } from '../lib/invitationMessages';
 
-const ROLE_OPTIONS: { value: KbGrantRole; label: string }[] = [
-  { value: 'admin', label: 'admin — メンバーと権限の管理もできる' },
-  { value: 'editor', label: 'editor — ページを作り、編集できる' },
-  { value: 'commenter', label: 'commenter — 閲覧とコメントができる' },
-  { value: 'viewer', label: 'viewer — 閲覧だけ' },
-];
+// 選択肢は「呼び名 — できること」。呼び名と説明は entities の 1 か所から引く。
+const ROLE_OPTIONS: { value: KbGrantRole; label: string }[] = KB_ROLES_STRONGEST_FIRST.map((role) => ({
+  value: role,
+  label: `${KB_ROLE_LABEL[role]} — ${KB_ROLE_DESCRIPTION[role]}`,
+}));
 
 export interface KbInviteDialogProps {
   isOpen: boolean;

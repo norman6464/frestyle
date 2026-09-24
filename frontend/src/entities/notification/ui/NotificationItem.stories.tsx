@@ -67,10 +67,9 @@ export const 既読: Story = {
 };
 
 /**
- * 種別の文字がそのまま出るところ。
+ * 対応表に無い種別の文字がそのまま出るところ。
  *
- * 対応表が空なので、いまはどの種別でもこうなる。空欄にしないのが要点で、
- * 「何の知らせなのか」の手がかりを消さないための落としどころ。
+ * 空欄にしないのが要点で、「何の知らせなのか」の手がかりを消さないための落としどころ。
  */
 export const 種別がそのまま出る: Story = {
   args: {
@@ -82,6 +81,21 @@ export const 種別がそのまま出る: Story = {
   },
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByText('another_sample_type')).toBeVisible();
+  },
+};
+
+/** ワークスペースへの招待。英語の種別名ではなく日本語で出す。 */
+export const ワークスペースへの招待: Story = {
+  args: {
+    notification: notification({
+      type: 'workspace_invitation',
+      title: '開発チーム への招待が届いています',
+      body: '田中 太郎 さんが招待しました。',
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('ワークスペースへの招待')).toBeVisible();
+    await expect(within(canvasElement).queryByText('workspace_invitation')).toBeNull();
   },
 };
 

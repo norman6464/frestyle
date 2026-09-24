@@ -1,4 +1,6 @@
 import type { Editor } from '@tiptap/react';
+import type { FormatIconName } from '../FormatIcon';
+import type { FsIconName } from '../icons/fsIconParts';
 import { LINK_MARK_NAME, normalizeLinkInput } from './linkSafety';
 
 /**
@@ -10,6 +12,12 @@ import { LINK_MARK_NAME, normalizeLinkInput } from './linkSafety';
  * - history: 取り消し/やり直し
  */
 export type EditorCommandGroup = 'mark' | 'turn' | 'insert' | 'history';
+
+/**
+ * EditorCommandIcon はコマンドを線のアイコンで出すときの指定。書式の記号（FormatIcon）か、
+ * 製品のアイコン（FsIcon）のどちらかから選ぶ。指定があれば glyph（字面）より優先する。
+ */
+export type EditorCommandIcon = { set: 'format'; name: FormatIconName } | { set: 'fs'; name: FsIconName };
 
 /**
  * EditorCommand はエディタの 1 操作を「データ」として表す記述子。
@@ -26,8 +34,10 @@ export interface EditorCommand {
   label: string;
   /** 分類。 */
   group: EditorCommandGroup;
-  /** ボタンに出す短い字面（B / I / H1 等）。アイコン化するまでの簡易表現。 */
+  /** ボタンに出す短い字面（B / I / H1 等）。icon が無いときに出す。絵文字は入れない。 */
   glyph: string;
+  /** 線のアイコンで出すときの指定。字面にならない操作（チェックリスト・画像・元に戻す等）に使う。 */
+  icon?: EditorCommandIcon;
   /** スラッシュ検索用キーワード（後続の '/' メニューで使う）。英単語のみ（日本語は入れない）。 */
   keywords?: string[];
   /** トグル状態（マーク・turn 系）。非トグル（insert/history）は未定義。 */
@@ -161,7 +171,8 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
     id: 'taskList',
     label: 'タスクリスト',
     group: 'turn',
-    glyph: '☑',
+    glyph: 'チェック',
+    icon: { set: 'fs', name: 'clipboard-check' },
     keywords: ['task', 'tasklist', 'todo', 'check', 'checkbox', 'checklist'],
     isActive: (editor) => editor.isActive('taskList'),
     run: (editor) => focused(editor).toggleTaskList().run(),
@@ -170,7 +181,8 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
     id: 'table',
     label: '表',
     group: 'insert',
-    glyph: '⊞',
+    glyph: '表',
+    icon: { set: 'fs', name: 'grid' },
     keywords: ['table', 'grid'],
     run: (editor) => focused(editor).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
   },
@@ -187,7 +199,8 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
     id: 'undo',
     label: '元に戻す',
     group: 'history',
-    glyph: '↺',
+    glyph: '戻す',
+    icon: { set: 'format', name: 'undo' },
     keywords: ['undo'],
     isEnabled: (editor) => editor.can().undo(),
     run: (editor) => focused(editor).undo().run(),
@@ -196,7 +209,8 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
     id: 'redo',
     label: 'やり直す',
     group: 'history',
-    glyph: '↻',
+    glyph: 'やり直す',
+    icon: { set: 'format', name: 'redo' },
     keywords: ['redo'],
     isEnabled: (editor) => editor.can().redo(),
     run: (editor) => focused(editor).redo().run(),

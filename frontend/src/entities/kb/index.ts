@@ -6,6 +6,13 @@ export type { KbSpaceTabsProps, KbSpaceTab } from './ui/KbSpaceTabs';
 export { default as KbWorkspaceTabs } from './ui/KbWorkspaceTabs';
 export type { KbWorkspaceTabsProps, KbWorkspaceTab } from './ui/KbWorkspaceTabs';
 export { useWorkspaceList } from './model/useWorkspaceList';
+export {
+  KB_ROLE_LABEL,
+  KB_ROLE_DESCRIPTION,
+  KB_ROLES_STRONGEST_FIRST,
+  kbRoleLabel,
+  kbRoleDescription,
+} from './model/roles';
 export { useKbSpaceEntry } from './model/useKbSpaceEntry';
 export type { KbSpaceEntryState } from './model/useKbSpaceEntry';
 export { NOTE_NEW_PAGE_TITLE } from './config/constants';

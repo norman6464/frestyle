@@ -53,7 +53,7 @@ export default function KbCommentComposer({ onSubmit, placeholder }: KbCommentCo
         aria-label={placeholder ?? 'コメント'}
         rows={2}
         disabled={submitting}
-        className="w-full resize-none rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-faint)] focus:outline-none focus:ring-1 focus:ring-brand-600 disabled:opacity-60"
+        className="w-full resize-none rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-1 focus:ring-brand-600 disabled:opacity-60"
       />
       {error && (
         <p role="alert" className="text-sm leading-relaxed text-danger-ink">

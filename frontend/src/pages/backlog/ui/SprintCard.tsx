@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { formatTicketKey, type Ticket } from '@/entities/ticket';
 import type { Sprint, SprintInput } from '@/entities/sprint';
 import { FsIcon } from '@/shared/ui';
+import { formatPeriodShort } from '../lib/dueDate';
 
 export interface SprintCardProps {
   sprint: Sprint;
@@ -194,17 +195,9 @@ export default function SprintCard({
   );
 }
 
-/** 'YYYY-MM-DD' を 'M/D' に縮めて「開始 〜 終了」にする。片方だけでも出す。 */
+/** 期間の見出し。書き方はバックログ全体で 1 つ（lib/dueDate）。 */
 function formatPeriod(sprint: Sprint): string {
-  const short = (date?: string) => {
-    if (!date) return '';
-    const parts = date.split('-');
-    return parts.length === 3 ? `${Number(parts[1])}/${Number(parts[2])}` : date;
-  };
-  const start = short(sprint.startDate);
-  const end = short(sprint.endDate);
-  if (!start && !end) return '';
-  return `${start || '未定'} 〜 ${end || '未定'}`;
+  return formatPeriodShort(sprint.startDate, sprint.endDate);
 }
 
 interface SprintEditFormProps {

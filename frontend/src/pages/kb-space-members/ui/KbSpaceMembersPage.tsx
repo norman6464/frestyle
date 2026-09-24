@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { KbSidebar } from '@/widgets/kb-sidebar';
 import { Loading, SidebarSection, fsIcon } from '@/shared/ui';
-import { useKbSpaceEntry, KbSpaceTabs } from '@/entities/kb';
+import { useKbSpaceEntry, KbSpaceTabs, kbRoleLabel } from '@/entities/kb';
 import Avatar from '@/shared/ui/Avatar';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useKbSpaceMembers } from '../model/useKbSpaceMembers';
@@ -10,13 +10,6 @@ const VIA_LABEL: Record<string, string> = {
   direct: '直接付与',
   group: 'グループ / スペース全員',
   workspace: 'ワークスペース全体',
-};
-
-const ROLE_LABEL: Record<string, string> = {
-  admin: '管理者',
-  editor: '編集者',
-  commenter: 'コメント可',
-  viewer: '閲覧者',
 };
 
 /**
@@ -116,7 +109,7 @@ function MembersList({ workspaceSlug, spaceId }: { workspaceSlug: string; spaceI
               </div>
             </div>
             <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-[var(--color-text-tertiary)]">
-              {ROLE_LABEL[member.role] ?? member.role}
+              {kbRoleLabel(member.role)}
             </span>
           </li>
         ))}

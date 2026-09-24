@@ -4,14 +4,8 @@ import PublicHeader from '@/shared/ui/PublicHeader';
 import { Button, FsIcon, Loading } from '@/shared/ui';
 import { useDocumentMeta } from '@/shared/lib/hooks/useDocumentMeta';
 import { rememberPostLoginPath } from '@/shared/lib/postLoginPath';
+import { kbRoleDescription, kbRoleLabel } from '@/entities/kb';
 import { useInvitePreview } from '../model/useInvitePreview';
-
-const ROLE_DESCRIPTION: Record<string, string> = {
-  admin: 'メンバーと権限の管理もできる',
-  editor: 'ページを作り、編集できる',
-  commenter: '閲覧とコメントができる',
-  viewer: '閲覧だけ',
-};
 
 function formatDate(iso: string): string {
   const date = new Date(iso);
@@ -75,15 +69,15 @@ export default function InvitePage() {
           <strong className="text-[var(--color-text-primary)]">{preview.inviterName || 'ワークスペースの管理者'}</strong> さんが、あなた（
           <strong className="text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{preview.email}</strong>）をワークスペース{' '}
           <strong className="text-[var(--color-text-primary)]">{preview.workspaceName}</strong> に{' '}
-          <strong className="text-[var(--color-text-primary)]">{role}</strong> として招待しています。
+          <strong className="text-[var(--color-text-primary)]">{kbRoleLabel(role)}</strong> として招待しています。
         </p>
         <dl className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-lg bg-surface-2 p-4 text-sm">
           <dt className="text-[var(--color-text-muted)]">ワークスペース</dt>
           <dd className="font-medium text-[var(--color-text-primary)]">{preview.workspaceName}</dd>
           <dt className="text-[var(--color-text-muted)]">役割</dt>
           <dd className="font-medium text-[var(--color-text-primary)]">
-            {role}
-            {ROLE_DESCRIPTION[role] ? `（${ROLE_DESCRIPTION[role]}）` : ''}
+            {kbRoleLabel(role)}
+            {kbRoleDescription(role) ? `（${kbRoleDescription(role)}）` : ''}
           </dd>
           {preview.expiresAt && (
             <>
