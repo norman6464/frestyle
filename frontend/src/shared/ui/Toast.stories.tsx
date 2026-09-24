@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import Toast from './Toast';
 
 /**
@@ -26,7 +26,10 @@ type Story = StoryObj<typeof meta>;
 export const 成功: Story = {
   args: { type: 'success', message: 'ページを保存しました' },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByText('ページを保存しました')).toBeVisible();
+    // 知らせは 0.6 秒かけて上から落ちてくる（出始めは透明）。落ちきるのを待ってから見る。
+    await waitFor(async () => {
+      await expect(within(canvasElement).getByText('ページを保存しました')).toBeVisible();
+    });
     // 成功は割り込んで読ませない（ToastContainer の polite の領域が読む）。
     await expect(within(canvasElement).queryByRole('alert')).toBeNull();
   },
