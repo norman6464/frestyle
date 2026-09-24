@@ -33,7 +33,7 @@ export default function HomeWorkSection() {
           <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">チームの次の作業はバックログから確認できます。</p>
         </div> : <ul aria-label="取り組むチケット" className="divide-y divide-surface-3">
           {tickets.slice(0, 5).map((ticket) => <li key={ticket.id}>
-            <Link to={`/tickets/${encodeURIComponent(ticket.id)}`} className="group grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-4 hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600 sm:px-5">
+            <Link to={`/tickets/${encodeURIComponent(ticket.id)}`} state={{ from: '/' }} className="group grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-4 hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600 sm:px-5">
               <span className="min-w-0">
                 <span className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-muted)]"><span className="font-mono">{formatTicketKey(ticket.projectKey, ticket.number)}</span><span>{ticket.projectName}</span></span>
                 <span className="block font-medium leading-relaxed [overflow-wrap:anywhere] group-hover:underline underline-offset-4">{ticket.title}</span>

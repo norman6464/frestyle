@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { formatTicketKey, type Ticket } from '@/entities/ticket';
+import { ticketLinkState } from '../lib/ticketLinkState';
 
 export interface TicketAncestorTrailProps {
   /** 根から順の祖先（自分自身は含まない）。 */
@@ -14,6 +15,7 @@ export interface TicketAncestorTrailProps {
  * 見出し帯の高さが親の数で変わってしまう。
  */
 export default function TicketAncestorTrail({ ancestors, projectKey }: TicketAncestorTrailProps) {
+  const location = useLocation();
   if (ancestors.length === 0) return null;
 
   return (
@@ -22,6 +24,7 @@ export default function TicketAncestorTrail({ ancestors, projectKey }: TicketAnc
         <span key={ancestor.id} className="flex items-center gap-1">
           <Link
             to={`/tickets/${ancestor.id}`}
+            state={ticketLinkState(location)}
             title={ancestor.title}
             className="hover:text-[var(--color-text-primary)] hover:underline"
           >

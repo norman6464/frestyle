@@ -1,6 +1,7 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { TicketKeyBadge, TicketStatusPill, type Ticket, type TicketStatus } from '@/entities/ticket';
 import Loading from '@/shared/ui/Loading';
+import { ticketLinkState } from '../lib/ticketLinkState';
 
 export interface TicketChildrenListProps {
   tickets: Ticket[];
@@ -15,6 +16,7 @@ export interface TicketChildrenListProps {
  * (useTicketChildren の doc 参照)。
  */
 export default function TicketChildrenList({ tickets, loading, error, projectKey, statuses }: TicketChildrenListProps) {
+  const location = useLocation();
   if (loading) return <Loading size="small" />;
   if (error) {
     return (
@@ -35,6 +37,7 @@ export default function TicketChildrenList({ tickets, loading, error, projectKey
           <li key={child.id}>
             <Link
               to={`/tickets/${child.id}`}
+              state={ticketLinkState(location)}
               className="flex items-center gap-1.5 rounded px-1 py-1 text-xs hover:bg-surface-2"
             >
               <TicketKeyBadge projectKey={projectKey} number={child.number} />

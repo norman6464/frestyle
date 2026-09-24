@@ -1,8 +1,8 @@
 /**
  * 全画面の票の「戻る」の行き先と文言（設計ボード PX03）。
  *
- * 票を開いた一覧は、開くときに `location.state.from` へ自分の場所（条件つきの URL）を載せる
- * （バックログの詳細の身元リンク・自分の担当の行）。それがあればそこへ戻り、無ければ
+ * 票を開いた画面は、開くときに `location.state.from` へ自分の場所（条件つきの URL）を載せる
+ * （ticketLinkState。ホーム・自分の担当・バックログ）。それがあればそこへ戻り、無ければ
  * そのチケットのプロジェクトのバックログへ、そのチケットを選んだ状態で戻る
  * （通知・本文中の参照・ブックマークから来た場合）。
  *
@@ -16,6 +16,7 @@ export interface TicketReturnPath {
 
 export function ticketReturnPath(from: unknown, projectId: string, ticketId: string): TicketReturnPath {
   if (typeof from === 'string' && from.startsWith('/') && !from.startsWith('//')) {
+    if (from === '/') return { to: from, label: 'ホームに戻る' };
     if (from === '/assigned' || from.startsWith('/assigned?')) return { to: from, label: '自分の担当に戻る' };
     if (from.startsWith('/backlog/')) return { to: from, label: 'バックログに戻る' };
   }

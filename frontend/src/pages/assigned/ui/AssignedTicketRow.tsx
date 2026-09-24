@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { STATUS_ICON, formatTicketKey, type AssignedTicket, type TicketStatusCategory } from '@/entities/ticket';
 import { dueDateLabel, dueState, localToday } from '../lib/dueDate';
 import { FsIcon } from '@/shared/ui';
@@ -23,6 +23,7 @@ const PRIORITY_LABEL: Record<number, string> = { 1: '高', 2: '中', 3: '低' };
  * （検索で飛んできた・スクロールで見出しが画面外にある）に迷子にならないため残す。
  */
 export default function AssignedTicketRow({ ticket, today = localToday() }: AssignedTicketRowProps) {
+  const location = useLocation();
   const deadline = dueState(ticket, today);
   const priority = PRIORITY_LABEL[ticket.priority];
 
@@ -30,7 +31,7 @@ export default function AssignedTicketRow({ ticket, today = localToday() }: Assi
     <Link
       to={`/tickets/${encodeURIComponent(ticket.id)}`}
       // 票の「戻る」をここ（自分の担当）へ向ける（PX03）。
-      state={{ from: '/assigned' }}
+      state={{ from: `${location.pathname}${location.search}` }}
       className="group grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 rounded-xl p-4 transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600 motion-reduce:transition-none sm:grid-cols-[minmax(0,1fr)_minmax(11rem,auto)_auto] sm:p-5"
     >
       <span className="min-w-0 [overflow-wrap:anywhere]">

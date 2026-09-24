@@ -11,6 +11,10 @@ describe('ticketReturnPath', () => {
     expect(ticketReturnPath(from, 'p-1', 't-1')).toEqual({ to: from, label: 'バックログに戻る' });
   });
 
+  it('ホームから来たら「ホームに戻る」', () => {
+    expect(ticketReturnPath('/', 'p-1', 't-1')).toEqual({ to: '/', label: 'ホームに戻る' });
+  });
+
   it('出どころが無ければ、そのプロジェクトのバックログへチケットを選んだ状態で戻る', () => {
     expect(ticketReturnPath(undefined, 'p-1', 't-1')).toEqual({ to: '/backlog/p-1?ticket=t-1', label: 'バックログ' });
   });

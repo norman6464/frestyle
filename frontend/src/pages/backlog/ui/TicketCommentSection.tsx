@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import Loading from '@/shared/ui/Loading';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
@@ -8,6 +8,7 @@ import { useTicketComments } from '../model/useTicketComments';
 import { useCurrentUserId } from '../model/useCurrentUserId';
 import { useWorkspaceMembers } from '../model/useWorkspaceMembers';
 import { buildCommentTree } from '../lib/buildCommentTree';
+import { ticketLinkState } from '../lib/ticketLinkState';
 import TicketCommentComposer from './TicketCommentComposer';
 import TicketCommentItem from './TicketCommentItem';
 import TicketCommentThread from './TicketCommentThread';
@@ -40,6 +41,23 @@ function withPermissionToast<T>(
  * なので、それぞれが自分の useTicketComments を持ってよい）。並びが違う:
  * 全画面はコンポーザが先頭、副パネルは最新 3 件の後にコンポーザを置く（見本のとおり）。
  */
+/**
+ * 詳細パネルの発言欄の下の「すべて見る」。全画面の票へ出発点（ticketLinkState）を持って移る。
+ * router の中でしか描かれない（発言があって compact のときだけ）ので、location はここで引く。
+ */
+function AllCommentsLink({ ticketId, count }: { ticketId: string; count: number }) {
+  const location = useLocation();
+  return (
+    <Link
+      to={`/tickets/${ticketId}`}
+      state={ticketLinkState(location)}
+      className="text-center text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+    >
+      すべて見る（{count}）
+    </Link>
+  );
+}
+
 export default function TicketCommentSection({ workspaceSlug, ticketId, compact = false }: TicketCommentSectionProps) {
   const { comments, loading, error, refresh, createComment, editComment, deleteComment, addReaction, removeReaction } =
     useTicketComments(workspaceSlug, ticketId);
@@ -134,14 +152,7 @@ export default function TicketCommentSection({ workspaceSlug, ticketId, compact 
             />
           ))}
         {composer}
-        {comments.length > 0 && (
-          <Link
-            to={`/tickets/${ticketId}`}
-            className="text-center text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-          >
-            すべて見る（{comments.length}）
-          </Link>
-        )}
+        {comments.length > 0 && <AllCommentsLink ticketId={ticketId} count={comments.length} />}
       </div>
     );
   }

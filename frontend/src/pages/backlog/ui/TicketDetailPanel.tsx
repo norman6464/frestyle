@@ -13,6 +13,7 @@ import type { KbGrantablePrincipal } from '@/entities/kb';
 import { emptyRichDoc, isRichDoc } from '@/shared/ui/RichTextEditor';
 import { useTicketEditor } from '../model/useTicketEditor';
 import { useTicketFieldWrites } from '../model/useTicketFieldWrites';
+import { ticketLinkState } from '../lib/ticketLinkState';
 import { buildAttributeFeedback } from './attributeFeedback';
 import FieldFeedback from './FieldFeedback';
 import TicketSaveBadge from './TicketSaveBadge';
@@ -123,7 +124,7 @@ export default function TicketDetailPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link
           to={`/tickets/${ticket.id}`}
-          state={{ from: `${location.pathname}${location.search}` }}
+          state={ticketLinkState(location)}
           className="inline-flex min-h-9 items-center gap-1.5 rounded-md font-mono text-xs font-semibold tracking-wide text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
         >
           <span>{key}</span>
