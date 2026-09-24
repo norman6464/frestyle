@@ -108,7 +108,7 @@ const meta = {
     onSetFixVersion: fn(),
     onChangeTeam: fn(),
     allLabels: [],
-    onToggleLabel: fn(),
+    onToggleLabel: fn(async () => {}),
     onCreateLabel: fn(),
     onChangeStoryPoints: fn(),
     onAssign: fn(),
@@ -137,13 +137,13 @@ export const 編集できる: Story = {
     await expect(canvas.queryByLabelText('状態')).toBeNull();
     // 担当・優先度はネイティブの `<select>` ではなく Base UI の選択欄なので、
     // 値ではなく起点のボタンが何を表示しているかで見る。
-    await expect(canvas.getByLabelText('担当')).toHaveTextContent('norman6464');
+    await expect(canvas.getByLabelText('担当者')).toHaveTextContent('norman6464');
     await expect(canvas.getByLabelText('優先度')).toHaveTextContent('高');
     // 期限は押すまで文字（見本と同じ）。押してはじめて日付の入力欄になる。
     await expect(canvas.queryByLabelText('期限')).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '2026-09-12' }));
     await expect(canvas.getByLabelText('期限')).toHaveValue('2026-09-12');
-    await expect(canvas.getByLabelText('親を変更')).toHaveTextContent('なし');
+    await expect(canvas.getByLabelText(/^親 .* を変更$/)).toHaveTextContent('なし');
   },
 };
 
@@ -167,7 +167,7 @@ export const 読むだけ: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.queryByLabelText('状態')).toBeNull();
-    await expect(canvas.queryByLabelText('親を変更')).toBeNull();
+    await expect(canvas.queryByLabelText(/^親 .* を変更$/)).toBeNull();
     // 「なし」は修正バージョンと親の 2 か所に出るので、件数で見る（どちらも空の状態）。
     await expect(canvas.getAllByText('なし')).toHaveLength(2);
   },
@@ -183,7 +183,7 @@ export const 親がある: Story = {
     // 畳んでいても、入っている値は見出しの下の要約で読める（親を単に隠さない）。
     await expect(canvas.getByText(/親 FRESTYLE-3/)).toBeVisible();
     await openSecondary(canvas);
-    await expect(canvas.getByLabelText('親を変更')).toHaveTextContent('FRESTYLE-3');
+    await expect(canvas.getByLabelText(/^親 .* を変更$/)).toHaveTextContent('FRESTYLE-3');
   },
 };
 
@@ -212,7 +212,7 @@ export const 何も無ければ要約も無い: Story = {
 export const アーカイブ済みは親を編集できない: Story = {
   args: { archived: true },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).queryByLabelText('親を変更')).toBeNull();
+    await expect(within(canvasElement).queryByLabelText(/^親 .* を変更$/)).toBeNull();
   },
 };
 
@@ -227,7 +227,7 @@ export const ピッカーを開いて候補から選ぶ: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     await openSecondary(canvas);
-    await userEvent.click(canvas.getByLabelText('親を変更'));
+    await userEvent.click(canvas.getByLabelText(/^親 .* を変更$/));
     await waitFor(async () => {
       await expect(canvas.getByText('検索の改善')).toBeInTheDocument();
     });
@@ -249,7 +249,7 @@ export const ピッカーで絞り込む: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await openSecondary(canvas);
-    await userEvent.click(canvas.getByLabelText('親を変更'));
+    await userEvent.click(canvas.getByLabelText(/^親 .* を変更$/));
     await waitFor(async () => {
       await expect(canvas.getByText('検索の改善')).toBeInTheDocument();
     });
@@ -268,7 +268,7 @@ export const 親を外す: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     await openSecondary(canvas);
-    await userEvent.click(canvas.getByLabelText('親を変更'));
+    await userEvent.click(canvas.getByLabelText(/^親 .* を変更$/));
     await waitFor(async () => {
       await expect(canvas.getByText('親を外す（トップレベルへ）')).toBeInTheDocument();
     });

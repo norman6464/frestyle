@@ -1,6 +1,6 @@
 import { FieldSelect } from '@/shared/ui';
 import { useId, useState, type FormEvent } from 'react';
-import type { TicketHierarchyLevel, TicketType, TicketTypeInput } from '@/entities/ticket';
+import { TicketTypeGlyph, type TicketHierarchyLevel, type TicketType, type TicketTypeInput } from '@/entities/ticket';
 import { getApiError } from '@/shared/lib/classifyApiError';
 
 export interface TicketTypeAdminProps {
@@ -76,12 +76,11 @@ export default function TicketTypeAdmin({ types, onCreate, onSetDefault, onArchi
           {types.map((type) => (
             <tr key={type.id} className="border-b border-surface-3">
               <td className="py-1.5 font-semibold">
-                <span
-                  className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
-                  style={{ backgroundColor: type.color }}
-                  aria-hidden="true"
-                />
-                {type.name}
+                {/* 一覧の行の先頭と同じ印で見せる（色を選んだ結果が読めるかをここで確かめられる）。 */}
+                <span className="inline-flex items-center gap-1.5">
+                  <TicketTypeGlyph type={type} />
+                  {type.name}
+                </span>
               </td>
               <td className="py-1.5 text-[var(--color-text-muted)]">{HIERARCHY_LABEL[type.hierarchyLevel]}</td>
               <td className="py-1.5">

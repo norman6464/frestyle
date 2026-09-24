@@ -7,6 +7,8 @@ import {
 } from '@/entities/ticket';
 import { FsIcon, type FsIconName } from '@/shared/ui';
 import { formatDueDateShort, isOverdue } from '../lib/dueDate';
+import type { WriteOutcome } from '../lib/writeOutcome';
+import FieldFeedback from './FieldFeedback';
 import TicketStatusSelect from './TicketStatusSelect';
 
 /**
@@ -42,6 +44,10 @@ export interface BacklogRowProps {
   onChangeStatus: (statusId: string) => void;
   /** 狭い画面で、選択中のカードから詳細を全画面で開く（設計ボード ST12 の「詳細をひらく →」）。 */
   onOpenDetail?: () => void;
+  /** 行で状態を変えた結果（PX04）。行のすぐ下に出す。 */
+  outcome?: WriteOutcome | null;
+  /** 結果が分からない失敗のあとの「最新を確認」。 */
+  onVerify?: () => void;
 }
 
 /**
@@ -94,6 +100,8 @@ export default function BacklogRow({
   onOpen,
   onChangeStatus,
   onOpenDetail,
+  outcome = null,
+  onVerify,
 }: BacklogRowProps) {
   const done = status?.category === 'done';
   const priority = PRIORITY_VIEW[ticket.priority] ?? PRIORITY_VIEW[2];
@@ -151,7 +159,9 @@ export default function BacklogRow({
             <FsIcon name={priority.icon} className="h-4 w-4 flex-none" />
             <span>{priority.label}</span>
           </div>
-          <div role="cell" className={`col-start-5 whitespace-nowrap py-3 tabular-nums ${overdue ? 'font-semibold text-danger-ink' : due ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)]'}`}>
+          <div role="cell" className={`col-start-5 flex items-center gap-1 whitespace-nowrap py-3 tabular-nums ${overdue ? 'font-semibold text-danger-ink' : due ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)]'}`}>
+            {/* 期限切れは色と太さだけにしない。印を添え、読み上げには言葉で伝える。 */}
+            {overdue && <FsIcon name="alert-triangle" className="h-3.5 w-3.5 flex-none" />}
             {due ?? '—'}
             {overdue && <span className="sr-only">（期限超過）</span>}
           </div>
@@ -179,9 +189,10 @@ export default function BacklogRow({
             {priority.label}
           </span>
           <span aria-hidden="true">・</span>
-          <span className={overdue ? 'font-semibold text-danger-ink' : undefined}>
+          <span className={overdue ? 'inline-flex items-center gap-1 font-semibold text-danger-ink' : undefined}>
+            {overdue && <FsIcon name="alert-triangle" className="h-3.5 w-3.5 flex-none" />}
             {due ?? '期限なし'}
-            {overdue && <span className="sr-only">（期限超過）</span>}
+            {overdue && <span>期限切れ</span>}
           </span>
           {selected && (
             <>
@@ -189,6 +200,12 @@ export default function BacklogRow({
               <span className="font-medium text-brand-700">選択中</span>
             </>
           )}
+        </div>
+      )}
+      {/* 行で状態を変えた結果。行の全幅に 1 行で出す（どの行の結果かが位置で分かる）。 */}
+      {outcome && (
+        <div role="cell" className={table ? 'col-span-6 pb-2' : 'col-span-2'}>
+          <FieldFeedback outcome={outcome} onVerify={onVerify} />
         </div>
       )}
       {!table && selected && onOpenDetail && (

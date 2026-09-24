@@ -65,36 +65,16 @@ export default function KbTicketPage() {
       busy={page.busy}
       allLabels={labels.labels}
       onUpdate={(input) => page.updateTicket(input)}
-      onChangeStatus={(statusId) =>
-        void withToastOnFailure(() => page.changeStatus({ statusId }), '状態を変更できませんでした。')
-      }
-      onAssign={(principalId) =>
-        void withToastOnFailure(() => page.assign(principalId), '担当を設定できませんでした。')
-      }
-      onUnassign={() => void withToastOnFailure(() => page.unassign(), '担当を外せませんでした。')}
+      // 状態・担当・ラベル・親の結果は票が項目のすぐ下に出す（PX04）。ここは失敗を投げ返すだけ。
+      onChangeStatus={(statusId) => page.changeStatus({ statusId })}
+      onAssign={(principalId) => page.assign(principalId)}
+      onUnassign={() => page.unassign()}
       onArchive={() => void withToastOnFailure(() => page.archive(), 'アーカイブできませんでした。')}
       onRestore={() => void withToastOnFailure(() => page.restore(), '現役に戻せませんでした。')}
-      onToggleLabel={(label) => {
-        const attached = page.ticket?.labels.some((l) => l.id === label.id) ?? false;
-        void withToastOnFailure(
-          () => (attached ? page.removeLabel(label.id) : page.addLabel(label)),
-          attached ? 'ラベルを外せませんでした。' : 'ラベルを付けられませんでした。',
-        );
-      }}
+      onToggleLabel={(label, attached) => (attached ? page.removeLabel(label.id) : page.addLabel(label))}
       onCreateLabel={(name, color) => labels.createLabel({ name, color })}
-      onChangeParent={(parentId) =>
-        page.changeParent(parentId).catch((cause) => {
-          const info = getApiError(cause);
-          showToast(
-            'error',
-            info.status === 403
-              ? 'この操作を行う権限がありません。'
-              : info.serverCode === 'ticket_hierarchy_rejected'
-                ? 'その親には移せません（循環になる、または階層の深さの上限を超えます）。'
-                : '親を変更できませんでした。',
-          );
-        })
-      }
+      onChangeParent={(parentId) => page.changeParent(parentId)}
+      onRefresh={page.refresh}
     />
   );
 }

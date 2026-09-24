@@ -124,6 +124,35 @@ export const ふつう: Story = {
   },
 };
 
+/** 出どころが無い（通知・ブックマークから来た）ときは、そのプロジェクトのバックログでこのチケットを選んだ状態へ。 */
+export const 戻り先は既定でバックログ: Story = {
+  decorators: [withApi(baseApi())],
+  play: async ({ canvasElement }) => {
+    const back = await within(canvasElement).findByRole('link', { name: 'バックログ' });
+    await expect(back.getAttribute('href')).toMatch(/^\/backlog\/[^?]+\?ticket=t-1$/);
+  },
+};
+
+/** 自分の担当から開いたら「自分の担当に戻る」（設計ボード PX03）。 */
+export const 自分の担当から開いたら自分の担当に戻る: Story = {
+  decorators: [withApi(baseApi())],
+  parameters: { routerState: { from: '/assigned' } },
+  play: async ({ canvasElement }) => {
+    const back = await within(canvasElement).findByRole('link', { name: '自分の担当に戻る' });
+    await expect(back).toHaveAttribute('href', '/assigned');
+  },
+};
+
+/** バックログから開いたら、絞り込みの条件ごと戻る。 */
+export const バックログから開いたら条件ごと戻る: Story = {
+  decorators: [withApi(baseApi())],
+  parameters: { routerState: { from: '/backlog/p-1?labelId=l-1&filter=f-1&ticket=t-1' } },
+  play: async ({ canvasElement }) => {
+    const back = await within(canvasElement).findByRole('link', { name: 'バックログに戻る' });
+    await expect(back).toHaveAttribute('href', '/backlog/p-1?labelId=l-1&filter=f-1&ticket=t-1');
+  },
+};
+
 export const 祖先あり: Story = {
   decorators: [
     withApi(

@@ -68,7 +68,9 @@ export default function TicketWatchButton({ workspaceSlug, ticketId }: TicketWat
       onClick={() => void toggle()}
       disabled={busy}
       aria-pressed={watching}
-      aria-label={watching ? '監視をやめる' : '監視する'}
+      // 見えているのは人数だけなので、読み上げの名前にも人数を含める（見た目の文字が名前に入って
+      // いないと、音声で「0 を押す」と言っても押せない）。
+      aria-label={`${watching ? '監視をやめる' : '監視する'}（監視 ${count} 人）`}
       title={watching ? '監視をやめる' : '監視する'}
       className={`inline-flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50 ${
         watching

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Button, EmptyState, Loading, FsIcon, fsIcon } from '@/shared/ui';
+import { STATUS_ICON, type TicketStatusCategory } from '@/entities/ticket';
 import { useAssignedTickets } from '../model/useAssignedTickets';
 import { dueState, localToday } from '../lib/dueDate';
 import AssignedTicketRow from './AssignedTicketRow';
@@ -80,7 +81,11 @@ export default function AssignedPage() {
         groups.map((group) => (
           <section key={group.name} className="mb-6">
             <h2 className="mb-3 flex flex-wrap items-center gap-2 text-base font-semibold text-[var(--color-text-primary)] [overflow-wrap:anywhere]">
-              <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
+              <FsIcon
+                name={STATUS_ICON[group.category as TicketStatusCategory] ?? STATUS_ICON.todo}
+                className="h-4 w-4 shrink-0"
+                style={{ color: group.color }}
+              />
               {group.name}
               <span className="text-sm font-normal tabular-nums text-[var(--color-text-muted)]">{group.tickets.length}件</span>
             </h2>

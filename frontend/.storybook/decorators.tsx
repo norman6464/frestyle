@@ -4,7 +4,7 @@ import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'a
 import axios from 'axios';
 import { configureStore } from '@reduxjs/toolkit';
 import { Provider } from 'react-redux';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, parsePath } from 'react-router-dom';
 import { authReducer } from '@/entities/user';
 import { ToastProvider } from '@/app/providers/ToastProvider';
 import ToastContainer from '@/app/providers/ToastContainer';
@@ -52,13 +52,18 @@ export function routerAt(initialPath: string): Decorator {
  * （`/kb/:pageId` のような形）に嵌めないと常に undefined になる。
  */
 export function routerWithParam(pattern: string, path: string): Decorator {
-  const Wrapped: Decorator = (Story) => (
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path={pattern} element={<Story />} />
-      </Routes>
-    </MemoryRouter>
-  );
+  // story ごとに `parameters.routerState` で、開いたときの location.state を差し込める
+  // （「どこから来たか」で振る舞いが変わる画面を、router を重ねずに描くため）。
+  const Wrapped: Decorator = (Story, { parameters }) => {
+    const state = (parameters as { routerState?: unknown }).routerState;
+    return (
+      <MemoryRouter initialEntries={[state === undefined ? path : { ...parsePath(path), state }]}>
+        <Routes>
+          <Route path={pattern} element={<Story />} />
+        </Routes>
+      </MemoryRouter>
+    );
+  };
   return Wrapped;
 }
 

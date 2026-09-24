@@ -36,7 +36,8 @@ export default function TicketLabelBar({ attached, allLabels, canEdit, onToggle,
             type="button"
             onClick={() => setPickerOpen((v) => !v)}
             aria-expanded={pickerOpen}
-            aria-label="ラベルを付ける"
+            // 見えている文字「ラベルを追加」と同じ名前にする（記号だけのときも同じ名前で読む）。
+            aria-label="ラベルを追加"
             className={`ui-hit inline-flex items-center gap-1 rounded border border-dashed border-surface-3 text-xs text-[var(--color-text-muted)] hover:bg-surface-2 ${
               attached.length === 0 ? 'min-h-6 px-2 py-0.5' : 'h-6 w-6 justify-center'
             }`}

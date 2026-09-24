@@ -1,3 +1,4 @@
+import { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import TicketDetailPanel from './TicketDetailPanel';
@@ -107,7 +108,7 @@ const meta = {
       { id: 'l-1', name: '不具合', color: '#1d4ed8', createdAt: '', updatedAt: '' },
       { id: 'l-2', name: '要調査', color: '#8b7355', createdAt: '', updatedAt: '' },
     ],
-    onToggleLabel: fn(),
+    onToggleLabel: fn(async () => {}),
     onCreateLabel: fn(async (name, color) => ({ id: 'l-new', projectId: 's-1', name, color, createdAt: '', updatedAt: '' })),
     onChangeParent: fn(async () => {}),
   },
@@ -152,16 +153,80 @@ export const 読むだけ: Story = {
   },
 };
 
-export const 状態変更が失敗しても表示は元のまま: Story = {
-  args: { onChangeStatus: fn(async () => Promise.reject(new Error('409'))) },
+/** サーバーの応答を持った失敗（断られた）。code は backend の機械可読コード。 */
+function rejected(status: number, code?: string): AxiosError {
+  const config = {} as InternalAxiosRequestConfig;
+  return new AxiosError('rejected', 'ERR_BAD_REQUEST', config, undefined, {
+    status,
+    data: code ? { error: code } : {},
+    statusText: '',
+    headers: {},
+    config,
+  } as AxiosResponse);
+}
+
+/** 応答の無い失敗（通信の切断）。変わったかどうか分からない。 */
+function networkFailure(): AxiosError {
+  return new AxiosError('Network Error', 'ERR_NETWORK', {} as InternalAxiosRequestConfig);
+}
+
+async function chooseStatus(canvasElement: HTMLElement, name: string) {
+  const select = within(canvasElement).getByRole('combobox', { name: '状態' });
+  if (select.getAttribute('aria-expanded') !== 'true') await userEvent.click(select);
+  await userEvent.click(await within(canvasElement.ownerDocument.body).findByRole('option', { name }));
+  return select;
+}
+
+/** 状態を変えた結果は選択欄のすぐ下に出す（設計ボード PX04）。成功は応答を受け取ってから。 */
+export const 状態を変えた結果をその場に出す: Story = {
+  play: async ({ args, canvasElement }) => {
+    await chooseStatus(canvasElement, 'To Do');
+    await waitFor(() => expect(args.onChangeStatus).toHaveBeenCalledWith('st-1'));
+    await expect(await within(canvasElement).findByText('状態を「To Do」にしました')).toBeVisible();
+  },
+};
+
+/** 断られたら理由を出し、表示は変更前のまま（楽観更新をしない）。 */
+export const 状態の変更を断られたら理由を出す: Story = {
+  args: { onChangeStatus: fn(async () => Promise.reject(rejected(404, 'status_not_found'))) },
+  play: async ({ args, canvasElement }) => {
+    const select = await chooseStatus(canvasElement, 'To Do');
+    await waitFor(() => expect(args.onChangeStatus).toHaveBeenCalledWith('st-1'));
+    await expect(await within(canvasElement).findByText('この状態は今は選べません。選択肢を更新してください。')).toBeVisible();
+    await expect(select).toHaveTextContent('開発');
+  },
+};
+
+/**
+ * 通信が切れたら「変更されていません」とは言い切らない。結果がまだ分からないと伝え、
+ * 自動で送り直さず、「最新を確認」で取り直させる。
+ */
+export const 結果が分からなければ最新を確認させる: Story = {
+  args: { onChangeStatus: fn(async () => Promise.reject(networkFailure())), onRefresh: fn() },
+  play: async ({ args, canvasElement }) => {
+    await chooseStatus(canvasElement, 'To Do');
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('通信が途切れました。変更の結果はまだ確認できていません。')).toBeVisible();
+    await expect(args.onChangeStatus).toHaveBeenCalledTimes(1);
+    await userEvent.click(canvas.getByRole('button', { name: '最新を確認' }));
+    await expect(args.onRefresh).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** 即時保存の項目（優先度）が断られたら、その項目の下に理由を出し、見た目を元の値へ戻す。 */
+export const 優先度の保存に失敗したら元に戻す: Story = {
+  args: { onUpdate: fn(async (_id, _input) => Promise.reject(rejected(400))) },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    const select = canvas.getByRole('combobox', { name: '状態' });
-    if (select.getAttribute('aria-expanded') !== 'true') await userEvent.click(select);
-    await userEvent.click(await within(canvasElement.ownerDocument.body).findByRole('option', { name: 'To Do' }));
-    await waitFor(() => expect(args.onChangeStatus).toHaveBeenCalledWith('st-1'));
-    // ticket prop 自体は変わっていないので、表示は選択中チケットの statusId のまま。
-    await expect(select).toHaveTextContent('開発');
+    await userEvent.click(canvas.getByLabelText('優先度'));
+    await userEvent.click(await within(canvasElement.ownerDocument.body).findByRole('option', { name: '低' }));
+    await waitFor(() => expect(args.onUpdate).toHaveBeenCalled());
+    await expect(await canvas.findByText('保存できませんでした。元の値に戻しました。')).toBeVisible();
+    await waitFor(async () => {
+      await expect(canvas.getByLabelText('優先度')).toHaveTextContent('高');
+    });
+    // 戻したので「未保存」は残さない。
+    await expect(canvas.getByRole('status', { name: '保存状態' })).not.toHaveTextContent('未保存');
   },
 };
 
@@ -182,7 +247,7 @@ export const ラベルつき: Story = {
   },
 };
 
-// パネルの見出し（「選択中 KEY」）と閉じるボタンは器（SecondaryPanel）が描く。
+// パネルの見出し（「選択中 KEY」）と選択解除は器（TicketDetailPane の帯・TicketDetailSheet）が描く。
 // ここで同じものを出すと二重になる。
 //
 // 「詳細」は節の見出しとして中にある（属性の一覧）ので、無いことを確かめる対象ではない。
