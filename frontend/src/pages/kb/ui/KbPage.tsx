@@ -666,7 +666,7 @@ export default function KbPage() {
                   <FsIcon name="chat" className="h-4 w-4" />
                   コメント
                   {unresolvedCommentCount > 0 && (
-                    <span className="absolute -right-1 -top-1 h-4 min-w-[16px] rounded-full bg-danger px-1 text-center text-[10px] leading-4 text-white">
+                    <span className="absolute -right-1 -top-1 h-4 min-w-[16px] rounded-full bg-danger px-1 text-center text-xs leading-4 text-white">
                       {unresolvedCommentCount > 99 ? '99+' : unresolvedCommentCount}
                     </span>
                   )}

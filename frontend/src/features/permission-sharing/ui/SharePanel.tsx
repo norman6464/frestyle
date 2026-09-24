@@ -2,7 +2,8 @@ import { useState } from 'react';
 import type { SharePrincipal, ShareRole, ShareRow as ShareRowData } from '../model/types';
 import ShareRow from './ShareRow';
 import { ROLES, displayName } from '../model/labels';
-import { FsIcon } from '@/shared/ui';
+import { Button, FsIcon } from '@/shared/ui';
+import { SHARE_SELECT_CLASS } from './selectClass';
 
 export interface SharePanelProps {
   /** いま開いている対象の名前（何を共有しているかの手がかり）。 */
@@ -117,7 +118,7 @@ export default function SharePanel({
 
       <div className="flex flex-col gap-3 px-4 pb-4 pt-3">
         <div>
-          <h3 className="text-[0.6875rem] font-bold tracking-wide text-[var(--color-text-muted)]">
+          <h3 className="text-xs font-bold tracking-wide text-[var(--color-text-muted)]">
             ここで足した権限
           </h3>
           {/*
@@ -175,7 +176,7 @@ export default function SharePanel({
         <div className="h-px bg-surface-3" />
 
         <div>
-          <h3 className="text-[0.6875rem] font-bold tracking-wide text-[var(--color-text-muted)]">
+          <h3 className="text-xs font-bold tracking-wide text-[var(--color-text-muted)]">
             相手を足す
           </h3>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -184,7 +185,7 @@ export default function SharePanel({
               value={pickedPrincipal}
               onChange={(e) => setPickedPrincipal(e.target.value)}
               disabled={saving || candidates.length === 0}
-              className="min-w-0 flex-1 basis-full rounded border border-surface-3 bg-surface-1 px-2 py-1.5 text-base text-[var(--color-text-secondary)] sm:basis-32 sm:text-sm"
+              className={`min-w-0 flex-1 basis-full sm:basis-32 ${SHARE_SELECT_CLASS}`}
             >
               <option value="">相手を選ぶ…</option>
               {candidates.map((candidate) => (
@@ -198,7 +199,7 @@ export default function SharePanel({
               value={pickedRole}
               onChange={(e) => setPickedRole(e.target.value as ShareRole)}
               disabled={saving}
-              className="rounded border border-surface-3 bg-surface-1 px-2 py-1.5 text-sm text-[var(--color-text-secondary)]"
+              className={SHARE_SELECT_CLASS}
             >
               {ROLES.map((role) => (
                 <option key={role.value} value={role.value}>
@@ -206,14 +207,9 @@ export default function SharePanel({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={handleAdd}
-              disabled={saving || !pickedPrincipal}
-              className="shrink-0 rounded bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-45"
-            >
+            <Button size="sm" onClick={handleAdd} disabled={saving || !pickedPrincipal} className="shrink-0">
               追加
-            </button>
+            </Button>
           </div>
         </div>
       </div>

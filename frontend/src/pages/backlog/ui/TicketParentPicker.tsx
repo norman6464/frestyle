@@ -73,7 +73,7 @@ export default function TicketParentPicker({
                   currentParentId === t.id ? 'bg-brand-50' : 'hover:bg-surface-2'
                 }`}
               >
-                <span className="flex-none font-mono text-[11px] text-[var(--color-text-muted)]">
+                <span className="flex-none font-mono text-xs text-[var(--color-text-muted)]">
                   {formatTicketKey(projectKey, t.number)}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-[var(--color-text-primary)]">{t.title}</span>

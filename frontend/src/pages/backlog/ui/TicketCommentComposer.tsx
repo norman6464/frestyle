@@ -3,7 +3,7 @@ import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import Link from '@tiptap/extension-link';
-import { isAllowedLinkHref, normalizeLinkInput } from '@/shared/ui/RichTextEditor';
+import { isAllowedLinkHref, LinkUrlForm } from '@/shared/ui/RichTextEditor';
 import { FormatIcon, type FormatIconName } from '@/shared/ui';
 import type { KbWorkspaceMember } from '@/entities/kb';
 import type { TicketCommentBlock } from '@/entities/ticket';
@@ -202,7 +202,7 @@ export default function TicketCommentComposer({
         <EditorContent editor={editor} />
         {members.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <span aria-hidden="true" className="mr-0.5 text-[11px] text-[var(--color-text-muted)]">
+            <span aria-hidden="true" className="mr-0.5 text-xs text-[var(--color-text-muted)]">
               @
             </span>
             {members.slice(0, MENTION_SUGGESTION_COUNT).map((member) => (
@@ -244,7 +244,7 @@ export default function TicketCommentComposer({
             キャンセル
           </button>
         )}
-        <span className="ml-auto text-[11px] text-[var(--color-text-muted)]">@ で名前を挙げると通知が届きます</span>
+        <span className="ml-auto text-xs text-[var(--color-text-muted)]">@ で名前を挙げると通知が届きます</span>
       </div>
     </div>
   );
@@ -306,62 +306,61 @@ function CommentFormatBar({ editor, disabled }: { editor: Editor; disabled: bool
     };
   }, [editor]);
 
-  const addLink = () => {
-    const current = editor.getAttributes('link').href as string | undefined;
-    const input = window.prompt('リンク先の URL', current ?? '');
-    if (input === null) return;
-    if (input.trim() === '') {
-      editor.chain().focus().unsetLink().run();
-      return;
-    }
-    const href = normalizeLinkInput(input);
-    if (!href) {
-      window.alert('この URL は開けません（http / https / mailto / tel のみ）');
-      return;
-    }
-    editor.chain().focus().setLink({ href }).run();
-  };
+  const [linkOpen, setLinkOpen] = useState(false);
+  const linkActive = editor.isActive('link');
 
   return (
-    <div
-      role="toolbar"
-      aria-label="発言の書式"
-      className="flex flex-wrap items-center gap-0.5 border-b border-surface-3 px-1.5 py-1"
-    >
-      {COMMENT_FORMAT_BUTTONS.map((button) => {
-        const active = button.isActive(editor);
-        return (
-          <button
-            key={button.id}
-            type="button"
-            onClick={() => button.run(editor)}
-            disabled={disabled}
-            aria-pressed={active}
-            aria-label={button.label}
-            title={button.label}
-            className={`grid h-7 w-7 place-items-center rounded-md text-[15px] transition-colors disabled:opacity-50 ${
-              active ? 'bg-brand-100 text-brand-700' : 'text-[var(--color-text-secondary)] hover:bg-surface-2'
-            }`}
-          >
-            <FormatIcon name={button.icon} />
-          </button>
-        );
-      })}
-      <button
-        type="button"
-        onClick={addLink}
-        disabled={disabled}
-        aria-pressed={editor.isActive('link')}
-        aria-label="リンク"
-        title="リンク"
-        className={`grid h-7 w-7 place-items-center rounded-md text-[15px] transition-colors disabled:opacity-50 ${
-          editor.isActive('link')
-            ? 'bg-brand-100 text-brand-700'
-            : 'text-[var(--color-text-secondary)] hover:bg-surface-2'
-        }`}
+    <>
+      <div
+        role="toolbar"
+        aria-label="発言の書式"
+        className="flex flex-wrap items-center gap-0.5 border-b border-surface-3 px-1.5 py-1"
       >
-        <FormatIcon name="link" />
-      </button>
-    </div>
+        {COMMENT_FORMAT_BUTTONS.map((button) => {
+          const active = button.isActive(editor);
+          return (
+            <button
+              key={button.id}
+              type="button"
+              onClick={() => button.run(editor)}
+              disabled={disabled}
+              aria-pressed={active}
+              aria-label={button.label}
+              title={button.label}
+              className={`grid h-7 w-7 place-items-center rounded-md text-[15px] transition-colors disabled:opacity-50 ${
+                active ? 'bg-brand-100 text-brand-700' : 'text-[var(--color-text-secondary)] hover:bg-surface-2'
+              }`}
+            >
+              <FormatIcon name={button.icon} />
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          // 押下で本文の選択が外れないようにする（外れるとどこにリンクを掛けるのか分からなくなる）。
+          onMouseDown={(mouseEvent) => mouseEvent.preventDefault()}
+          onClick={() => setLinkOpen((prev) => !prev)}
+          disabled={disabled}
+          aria-pressed={linkActive}
+          aria-expanded={linkOpen}
+          aria-label="リンク"
+          title="リンク"
+          className={`grid h-7 w-7 place-items-center rounded-md text-[15px] transition-colors disabled:opacity-50 ${
+            linkActive || linkOpen ? 'bg-brand-100 text-brand-700' : 'text-[var(--color-text-secondary)] hover:bg-surface-2'
+          }`}
+        >
+          <FormatIcon name="link" />
+        </button>
+      </div>
+      {linkOpen && (
+        <LinkUrlForm
+          editor={editor}
+          initialHref={(editor.getAttributes('link').href as string | undefined) ?? ''}
+          canRemove={linkActive}
+          onClose={() => setLinkOpen(false)}
+          className="border-b border-surface-3 px-1.5 py-1"
+        />
+      )}
+    </>
   );
 }

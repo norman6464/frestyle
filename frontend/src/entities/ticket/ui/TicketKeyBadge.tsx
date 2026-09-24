@@ -10,7 +10,7 @@ export interface TicketKeyBadgeProps {
 export default function TicketKeyBadge({ projectKey, number, className = '' }: TicketKeyBadgeProps) {
   return (
     <span
-      className={`font-mono text-[10.5px] font-bold tracking-wide text-[var(--color-text-muted)] ${className}`}
+      className={`font-mono text-xs font-bold tracking-wide text-[var(--color-text-muted)] ${className}`}
     >
       {formatTicketKey(projectKey, number)}
     </span>

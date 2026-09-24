@@ -62,7 +62,7 @@ export default function KbSectionHeading({
         divider ? 'mt-3 border-t border-surface-3 pt-2' : ''
       }`}
     >
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-tertiary)]">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-tertiary)]">
         {label}
       </h2>
 

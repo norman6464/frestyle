@@ -46,7 +46,7 @@ export default function KbVersionsPanel({
         <div className="rounded-lg border border-surface-3 bg-surface-1 p-3">
           {showSaveForm ? (
             <>
-              <h3 className="mb-1.5 text-[0.6875rem] font-bold tracking-wide text-[var(--color-text-muted)]">
+              <h3 className="mb-1.5 text-xs font-bold tracking-wide text-[var(--color-text-muted)]">
                 版を残す
               </h3>
               <KbVersionSaveForm

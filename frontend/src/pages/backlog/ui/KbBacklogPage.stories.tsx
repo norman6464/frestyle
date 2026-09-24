@@ -235,6 +235,66 @@ export const スプリントの削除は確認してから: Story = {
   },
 };
 
+/** スプリント 1 本を持つスタブ。鍵は `/workspaces/acme/projects` より先に置く（前から順の部分一致）。 */
+function sprintApi(): ApiStubs {
+  return {
+    '/workspaces/acme/projects/p-1/sprints': {
+      sprints: [
+        {
+          id: 's-1',
+          workspaceId: 'w-1',
+          projectId: 'p-1',
+          name: 'スプリント 1',
+          state: 'planned',
+          startDate: '2026-09-01',
+          endDate: '2026-09-14',
+          position: 'a0',
+          ticketCount: 0,
+          createdAt: '2026-09-01T00:00:00Z',
+          updatedAt: '2026-09-01T00:00:00Z',
+        },
+      ],
+    },
+    '/workspaces/acme/sprints/s-1/tickets': { ticketIds: [] },
+    ...baseApi(),
+  };
+}
+
+/**
+ * バックログの段からは名前を聞かずに連番で作る（Jira のバックログと同じ）。作ったことと、
+ * 名前を変えられる場所を知らせる。
+ */
+export const バックログからはすぐスプリントを作る: Story = {
+  decorators: [withApi(sprintApi())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'スプリントを作成' }));
+    await waitFor(async () => {
+      await expect(screen.getByText('「スプリント 2」を作りました。名前は「設定」で変えられます。')).toBeInTheDocument();
+    });
+  },
+};
+
+/** 設定の面では名前の欄を開く。連番を入れておき、Esc で欄だけを閉じる。 */
+export const 設定ではスプリントの名前を決めて作る: Story = {
+  decorators: [withApi(sprintApi())],
+  render: () => <KbBacklogPage view="settings" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: 'スプリントを作成' }));
+    const name = await canvas.findByRole('textbox', { name: 'スプリントの名前' });
+    await expect(name).toHaveValue('スプリント 2');
+    await expect(name).toHaveFocus();
+    await expect(canvas.getByRole('button', { name: 'スプリントを作る' })).toBeEnabled();
+
+    await userEvent.keyboard('{Escape}');
+    await waitFor(async () => {
+      await expect(canvas.queryByRole('textbox', { name: 'スプリントの名前' })).toBeNull();
+    });
+    await expect(canvas.getByRole('button', { name: 'スプリントを作成' })).toBeInTheDocument();
+  },
+};
+
 export const 設定の面: Story = {
   // 面は経路ではなく prop で決まる（経路 → prop の対応は app/App.tsx が持つ）。
   // ここで router を重ねると入れ子になるので、meta の router のまま prop だけ変える。

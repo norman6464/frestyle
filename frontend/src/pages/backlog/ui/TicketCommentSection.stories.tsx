@@ -290,6 +290,38 @@ export const 書式バーが出る: Story = {
   },
 };
 
+/**
+ * リンクの URL はその場の欄で受ける（ブラウザの prompt は使わない）。開けない URL は閉じずに
+ * 理由を出して打ち直させ、Esc で欄だけを閉じる（コメント欄は開いたまま）。
+ */
+export const リンクはその場の欄で掛ける: Story = {
+  decorators: [withApi(baseApi())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const composer = await openComposer(canvas);
+
+    const toolbar = within(canvas.getByRole('toolbar', { name: '発言の書式' }));
+    await userEvent.click(toolbar.getByRole('button', { name: 'リンク' }));
+    const url = await canvas.findByRole('textbox', { name: 'リンク先 URL' });
+    await waitFor(async () => {
+      await expect(url).toHaveFocus();
+    });
+
+    await userEvent.type(url, 'javascript:alert(1){Enter}');
+    await expect(
+      await canvas.findByText('http:// https:// mailto: tel: のいずれかで始まる URL を入力してください'),
+    ).toBeVisible();
+    // 弾かれても入力は残る。
+    await expect(url).toHaveValue('javascript:alert(1)');
+
+    await userEvent.keyboard('{Escape}');
+    await waitFor(async () => {
+      await expect(canvas.queryByRole('textbox', { name: 'リンク先 URL' })).toBeNull();
+    });
+    await expect(composer).toBeInTheDocument();
+  },
+};
+
 /** 送った本文をそのまま返す stub（書いた形が表示側でどう出るかを見る story 用）。 */
 function echoComments(): ApiStubs {
   return baseApi({

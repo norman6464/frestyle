@@ -124,7 +124,7 @@ export default function BacklogSidebar({ workspaceSlug, project, onOpenSearch }:
                   onClick={() => setSwitcherOpen(false)}
                   className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
                     p.id === project.id
-                      ? 'bg-brand-500/10 font-medium text-brand-700'
+                      ? 'bg-[var(--color-nav-selected)] font-medium text-[var(--color-nav-selected-text)]'
                       : 'text-[var(--color-text-tertiary)] hover:bg-surface-2'
                   }`}
                 >

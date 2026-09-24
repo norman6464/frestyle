@@ -253,13 +253,14 @@ export default function GlobalSidebar({
                   {spaceRows()}
                   {/* 対象ワークスペースを ?workspace= で持ち越す。無いと全件画面が所属の
                       先頭ワークスペースを解決してしまい、いま見ているのと別のワークスペースの
-                      スペースが開く（FRESTYLE-596 の残り）。 */}
+                      スペースが開く。 */}
                   <Link
                     to={`/kb/spaces?workspace=${encodeURIComponent(target.slug)}`}
                     onClick={onMobileClose}
                     className={rowClass(location.pathname === '/kb/spaces')}
                   >
-                    <FsIcon name="archive" className="h-4 w-4 shrink-0" />
+                    {/* アーカイブの箱だと「しまった物」に読める。全件を並べる画面なので格子にする。 */}
+                    <FsIcon name="grid" className="h-4 w-4 shrink-0" />
                     <span className="truncate">すべてのスペース</span>
                     {hiddenCount > 0 && (
                       <span className="ml-auto shrink-0 text-xs tabular-nums text-[var(--color-text-muted)]">

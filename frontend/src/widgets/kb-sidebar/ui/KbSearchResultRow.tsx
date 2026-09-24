@@ -38,7 +38,7 @@ export default function KbSearchResultRow({ page, id, selected, onSelect }: KbSe
       onClick={onSelect}
       className={`flex w-full min-w-0 cursor-pointer items-start gap-1.5 rounded-md px-2 py-1.5 text-left text-sm ${
         selected
-          ? 'bg-brand-500/10 font-medium text-[var(--color-text-primary)]'
+          ? 'bg-[var(--color-nav-selected)] text-[var(--color-nav-selected-text)] shadow-[inset_3px_0_0_var(--color-nav-selected-rule)]'
           : 'text-[var(--color-text-primary)] hover:bg-surface-2'
       }`}
     >

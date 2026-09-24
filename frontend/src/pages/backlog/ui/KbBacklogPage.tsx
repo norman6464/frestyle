@@ -212,12 +212,15 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
       'チケットを作成できませんでした。',
     );
 
-  /** 段の見出しから作る。名前は連番の既定を置くだけにして、変更は「状態と種別」側へ寄せない。 */
+  /**
+   * 段の見出しから作る。名前は聞かずに連番で作る（Jira のバックログと同じ）。
+   * 押すたびに入力欄を挟むと、並べ替えの流れが止まる。名前はプロジェクトの「設定」で変えられる。
+   */
   const handleCreateSprint = async () => {
-    const name = window.prompt('スプリントの名前', `スプリント ${sprints.sprints.length + 1}`);
-    if (name === null || name.trim() === '') return;
+    const name = `スプリント ${sprints.sprints.length + 1}`;
     try {
-      await sprints.create({ name: name.trim() });
+      await sprints.create({ name });
+      showToast('success', `「${name}」を作りました。名前は「設定」で変えられます。`);
     } catch {
       showToast('error', 'スプリントを作成できませんでした。');
     }
@@ -301,7 +304,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                 <div className="flex min-w-0 items-center gap-2 text-sm">
                   <span
                     aria-hidden="true"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-taupe-600 text-[11px] font-bold text-white"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-taupe-600 text-xs font-bold text-white"
                   >
                     {project.key.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || project.key.slice(0, 2).toUpperCase()}
                   </span>
@@ -312,7 +315,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                 <BacklogTabs projectId={project.id} current={view} />
               </div>
 
-              <p className="mt-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-brand-700" aria-hidden="true">
+              <p className="mt-4 font-mono text-xs font-medium uppercase tracking-[0.14em] text-brand-700" aria-hidden="true">
                 {HEADING[view].eyebrow}
               </p>
               <h1 className="mt-1 text-3xl font-bold leading-tight tracking-tight text-[var(--color-text-primary)] sm:text-4xl">

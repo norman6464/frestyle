@@ -26,7 +26,8 @@ export default function HeaderUserMenu({
   return (
     <Menu.Root>
       <Menu.Trigger
-        aria-label={displayName || 'ユーザー'}
+        // 名前だけだと、押すと何が開くのか読み上げでは分からない。
+        aria-label={`${displayName || 'ユーザー'} のアカウント`}
         className="flex min-h-11 items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-[var(--color-nav-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
       >
         <span aria-hidden="true">
@@ -59,7 +60,8 @@ export default function HeaderUserMenu({
             <Menu.Separator className="my-1 h-px bg-[var(--fs-menu-border)]" />
             <Menu.Item
               onClick={onLogout}
-              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-danger-ink outline-none data-[highlighted]:bg-danger-soft data-[highlighted]:shadow-[inset_3px_0_0_var(--color-nav-selected-rule)]"
+              // ログアウトは何も失わない（入り直せば戻る）ので、削除と同じ赤にはしない。
+              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-[var(--color-text-primary)] outline-none data-[highlighted]:bg-surface-2 data-[highlighted]:shadow-[inset_3px_0_0_var(--color-nav-selected-rule)]"
             >
               <FsIcon name="logout" className="h-4 w-4 shrink-0" />
               ログアウト

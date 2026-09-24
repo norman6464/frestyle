@@ -6,8 +6,9 @@
  * **色と大きさを呼び出し側の文字に合わせたい**ため —— `currentColor` と `em` で効くので、
  * 押下状態の色替えや濃淡がボタン側の className だけで完結する。png に焼くとこれができない。
  *
- * 形は lucide の作法（24×24・線幅 2・端は丸）に合わせてある。名前も lucide に揃えて、
- * 将来ライブラリを入れたときにそのまま差し替えられるようにしてある。
+ * 形は lucide の作法（24×24・端は丸）に合わせてある。線幅だけは lucide の 2 ではなく FsIcon の
+ * 1.75 にそろえる（書式バーで隣に並ぶ）。名前も lucide に揃えて、将来ライブラリを入れたときに
+ * そのまま差し替えられるようにしてある。
  */
 export type FormatIconName =
   | 'bold'
@@ -58,7 +59,7 @@ export default function FormatIcon({ name, size = '1em', className = '' }: Forma
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
+      strokeWidth={1.75}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"

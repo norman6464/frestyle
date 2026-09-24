@@ -18,7 +18,7 @@ export default function LabelChip({ name, color }: LabelChipProps) {
   if (paint.kind === 'solid') {
     return (
       <span
-        className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold leading-relaxed"
+        className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold leading-relaxed"
         style={{ backgroundColor: paint.background, color: paint.color }}
       >
         {name}
@@ -28,7 +28,7 @@ export default function LabelChip({ name, color }: LabelChipProps) {
 
   return (
     <span
-      className="inline-flex items-center gap-1 rounded border bg-surface-1 px-1.5 py-0.5 text-[11px] font-semibold leading-relaxed text-[var(--color-text-primary)]"
+      className="inline-flex items-center gap-1 rounded border bg-surface-1 px-1.5 py-0.5 text-xs font-semibold leading-relaxed text-[var(--color-text-primary)]"
       style={{ borderColor: paint.borderColor }}
     >
       <span

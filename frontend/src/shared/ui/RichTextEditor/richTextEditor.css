@@ -215,52 +215,15 @@
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
+  /* 欄の中身（入力・適用・解除）は LinkUrlForm が並べる。ここは浮かせる位置と幅だけ。 */
+  width: 20rem;
+  max-width: calc(100vw - 2rem);
   padding: 6px;
   background: var(--color-surface-1);
   border: 1px solid var(--color-surface-3);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
   z-index: 51;
-}
-
-.rte-link-input {
-  width: 15rem;
-  padding: 4px 8px;
-  font-size: 0.8125rem;
-  color: var(--color-text-primary);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-surface-3);
-  border-radius: 6px;
-}
-
-.rte-link-input:focus {
-  outline: 2px solid var(--color-brand, #3b82f6);
-  outline-offset: -1px;
-}
-
-.rte-link-action {
-  padding: 4px 8px;
-  font-size: 0.8125rem;
-  color: var(--color-text-secondary);
-  border-radius: 6px;
-  white-space: nowrap;
-}
-
-.rte-link-action:hover {
-  background: var(--color-surface-2);
-  color: var(--color-text-primary);
-}
-
-/* エラー文言は入力欄の下へ回り込ませる（flex-basis 100% で改行）。 */
-.rte-link-error {
-  flex-basis: 100%;
-  margin: 0;
-  font-size: 0.75rem;
-  color: #dc2626;
 }
 
 /*

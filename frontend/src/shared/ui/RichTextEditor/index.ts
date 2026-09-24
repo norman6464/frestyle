@@ -13,3 +13,6 @@ export type { CommentBadgeCounts } from './commentBadges';
 // リンクの安全確認は業務を知らない純関数。ナレッジ用エディタ（RichTextEditor）と
 // バックログ用エディタ（pages/backlog の TicketDescriptionEditor）の両方が同じ判定を使う。
 export { isAllowedLinkHref, normalizeLinkInput, sanitizeDocLinks } from './linkSafety';
+// リンクの URL 入力欄。バックログ用エディタの書式バーもナレッジと同じ欄を使う。
+export { default as LinkUrlForm } from './LinkUrlForm';
+export type { LinkUrlFormProps } from './LinkUrlForm';
