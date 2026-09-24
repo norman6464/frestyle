@@ -1,6 +1,7 @@
 import { type Editor, useEditorState } from '@tiptap/react';
 import { getEditorCommands, type EditorCommand } from './editorCommands';
 import LinkFormatControl from './LinkFormatControl';
+import EditorCommandGlyph from './EditorCommandGlyph';
 import CommentFormatControl from './CommentFormatControl';
 import type { CommentAnchor } from './commentAnchor';
 
@@ -51,7 +52,7 @@ function MenuButton({
           : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]',
       ].join(' ')}
     >
-      <span className={GLYPH_CLASS[command.id] ?? ''}>{command.glyph}</span>
+      <EditorCommandGlyph command={command} glyphClassName={GLYPH_CLASS[command.id] ?? ''} />
     </button>
   );
 }

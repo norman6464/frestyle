@@ -190,13 +190,6 @@ export default function TicketCommentComposer({
             {placeholder}
           </button>
         </div>
-        <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">
-          <span className="font-semibold">プロのヒント:</span>{' '}
-          <kbd className="rounded border border-surface-3 bg-surface-2 px-1.5 py-px font-sans text-[10px] font-semibold text-[var(--color-text-secondary)]">
-            M
-          </kbd>{' '}
-          を押すとコメントできます
-        </p>
       </div>
     );
   }

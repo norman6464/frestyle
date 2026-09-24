@@ -58,7 +58,7 @@ export const 未ログインで開いた: Story = {
     await expect(await canvas.findByRole('heading', { name: 'ワークスペースへの招待が届いています' })).toBeVisible();
     await expect(canvas.getByText('鈴木 花子')).toBeVisible();
     await expect(canvas.getAllByText('taro@example.com').length).toBeGreaterThan(0);
-    await expect(canvas.getByText('editor（ページを作り、編集できる）')).toBeVisible();
+    await expect(canvas.getByText('編集者（ページを作り、編集できる）')).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'ログインして参加する' })).toBeVisible();
     await expect(canvas.getByRole('button', { name: 'アカウントを作る' })).toBeVisible();
     // トークンは読んだあと URL から消えている。

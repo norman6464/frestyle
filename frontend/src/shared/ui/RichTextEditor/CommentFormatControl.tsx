@@ -1,5 +1,6 @@
 import { type Editor, useEditorState } from '@tiptap/react';
 import { resolveCommentAnchor, type CommentAnchor } from './commentAnchor';
+import FsIcon from '../icons/FsIcon';
 
 export interface CommentFormatControlProps {
   editor: Editor;
@@ -51,7 +52,7 @@ export default function CommentFormatControl({ editor, onRequestComment }: Comme
         'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]',
       ].join(' ')}
     >
-      <span aria-hidden="true">💬</span>
+      <FsIcon name="comment" className="h-4 w-4" />
     </button>
   );
 }

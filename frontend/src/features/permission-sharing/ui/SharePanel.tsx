@@ -73,7 +73,7 @@ export default function SharePanel({
   return (
     <section
       aria-label="共有"
-      className="w-full max-w-md rounded-lg border border-surface-3 bg-surface-1 shadow-inkwell-8 [&_button]:min-h-11 [&_button]:min-w-11 [&_select]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600"
+      className="w-full max-w-md rounded-lg border border-surface-3 bg-surface-1 shadow-lg [&_button]:min-h-11 [&_button]:min-w-11 [&_select]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600"
     >
       <header className="flex items-center gap-3 border-b border-surface-3 px-4 py-3">
         <h2 className="text-sm font-bold text-[var(--color-text-primary)]">共有</h2>

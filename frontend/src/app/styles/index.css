@@ -378,6 +378,8 @@
      tertiary: 白 9.01 / surface-2 8.26 / surface-3 7.18 */
   --color-text-tertiary: #4A4945;
   --color-text-muted: var(--fs-text-muted);
+  /* faint は白地で約 1.5:1。読ませる文字（placeholder を含む）には使わない。区切りの「・」や
+     「/」のような飾り（aria-hidden）と、色の無い印の代わりの塗りにだけ使う。 */
   --color-text-faint: #D3D3D0;
   --color-text-subtle: #E8E8E6;
   --color-border-hover: #D3D3D0;
@@ -584,6 +586,6 @@
   }
 
   .input-primary {
-    @apply w-full border border-surface-3 rounded-lg px-4 py-2.5 bg-surface-2 text-[var(--color-text-primary)] focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none transition-colors duration-fast placeholder:text-[var(--color-text-faint)];
+    @apply w-full border border-surface-3 rounded-lg px-4 py-2.5 bg-surface-2 text-[var(--color-text-primary)] focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none transition-colors duration-fast placeholder:text-[var(--color-text-muted)];
   }
 }

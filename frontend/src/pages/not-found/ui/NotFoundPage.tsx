@@ -24,7 +24,7 @@ export default function NotFoundPage() {
   const signedIn = hasAuthHint();
 
   return (
-    <div className="h-full overflow-y-auto bg-surface-0">
+    <div className="h-full overflow-y-auto bg-surface">
     <div className="flex min-h-full flex-col [&_a]:min-h-11 [&_a]:focus-visible:outline [&_a]:focus-visible:outline-2 [&_a]:focus-visible:outline-brand-600">
       <header className="flex-shrink-0 h-16 border-b border-surface-3 flex items-center px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2" aria-label="FreStyle ホーム">

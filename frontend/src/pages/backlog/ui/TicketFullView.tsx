@@ -22,6 +22,7 @@ import TicketCommentSection from './TicketCommentSection';
 import TicketSection from './TicketSection';
 import { useTicketVocabulary } from '../model/useTicketVocabulary';
 import TicketStatusSelect from './TicketStatusSelect';
+import { formatDateLong } from '../lib/dueDate';
 
 export interface TicketFullViewProps {
   ticket: Ticket;
@@ -118,7 +119,7 @@ export default function TicketFullView({
 
             <dl className="mb-6 grid grid-cols-2 gap-4 rounded-xl border border-surface-3 bg-surface-2 p-4 text-sm xl:hidden">
               <div><dt className="text-xs text-[var(--color-text-muted)]">担当者</dt><dd className="mt-1 font-medium [overflow-wrap:anywhere]">{principals.find((p) => p.id === ticket.assigneePrincipalId)?.name || '未割り当て'}</dd></div>
-              <div><dt className="text-xs text-[var(--color-text-muted)]">期限</dt><dd className="mt-1 font-medium">{editor.dueDate || '未設定'}</dd></div>
+              <div><dt className="text-xs text-[var(--color-text-muted)]">期限</dt><dd className="mt-1 font-medium">{editor.dueDate ? formatDateLong(editor.dueDate) : '未設定'}</dd></div>
             </dl>
             <TicketSection title="説明" headingLevel={2}>
               <TicketDescriptionEditor value={docValue} editable={canEdit && !archived} onSave={editor.saveDoc} />

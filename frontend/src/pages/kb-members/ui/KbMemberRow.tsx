@@ -1,13 +1,6 @@
-import type { KbAdminWorkspaceMember, KbGrantRole } from '@/entities/kb';
+import { KB_ROLE_LABEL, KB_ROLES_STRONGEST_FIRST, type KbAdminWorkspaceMember, type KbGrantRole } from '@/entities/kb';
 import Avatar from '@/shared/ui/Avatar';
 import { FsIcon } from '@/shared/ui';
-
-const ROLE_OPTIONS: { value: KbGrantRole; label: string }[] = [
-  { value: 'admin', label: 'admin' },
-  { value: 'editor', label: 'editor' },
-  { value: 'commenter', label: 'commenter' },
-  { value: 'viewer', label: 'viewer' },
-];
 
 export interface KbMemberRowProps {
   member: KbAdminWorkspaceMember;
@@ -64,9 +57,9 @@ export default function KbMemberRow({
             className="min-h-11 w-full rounded-md border border-surface-3 bg-surface-1 px-2 py-2 text-base font-medium text-[var(--color-text-secondary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50 md:w-auto md:text-sm"
           >
             <option value="">役割なし</option>
-            {ROLE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
+            {KB_ROLES_STRONGEST_FIRST.map((role) => (
+              <option key={role} value={role}>
+                {KB_ROLE_LABEL[role]}
               </option>
             ))}
           </select>

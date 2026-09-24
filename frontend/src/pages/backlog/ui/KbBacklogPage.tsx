@@ -24,6 +24,7 @@ import { useSprintTickets } from '../model/useSprintTickets';
 import TicketDetailPanel from './TicketDetailPanel';
 import TicketStatusAdmin from './TicketStatusAdmin';
 import TicketTypeAdmin from './TicketTypeAdmin';
+import { formatPeriodShort } from '../lib/dueDate';
 
 /**
  * 面ごとの見出し。小さな見出しは設計ボード ST08 の文言（バックログ）と、面の名前（ほか）。
@@ -143,7 +144,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
         .map((id) => byId.get(id))
         .filter((ticket): ticket is NonNullable<typeof ticket> => ticket !== undefined);
       for (const ticket of tickets) taken.add(ticket.id);
-      const period = [sprint.startDate, sprint.endDate].filter(Boolean).join(' – ');
+      const period = formatPeriodShort(sprint.startDate, sprint.endDate);
       return {
         id: sprint.id,
         kind: 'sprint' as const,

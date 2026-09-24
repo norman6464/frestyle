@@ -108,8 +108,9 @@ export default function App() {
       <Route path="/password-reset" element={<PasswordResetPage />} />
       {/* 招待リンク（/invite#t=…）の案内。ログイン前に見られる。参加はログイン後の /invitations で行う。 */}
       <Route path="/invite" element={<InvitePage />} />
-      {/* inkwell UI カタログ（見た目確認用・認証不要） */}
-      <Route path="/dev/inkwell" element={<InkwellShowcasePage />} />
+      {/* inkwell UI カタログ（見た目確認用・認証不要）。開発環境だけで開く。本番でログイン無しに
+          開ける見本ページを置かない（製品と違う配色の画面が公開の URL で見えてしまう）。 */}
+      {import.meta.env.DEV && <Route path="/dev/inkwell" element={<InkwellShowcasePage />} />}
 
       {/* 認証が必要（AppShell レイアウト内） */}
       <Route

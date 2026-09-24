@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import type { EditorCommand } from './editorCommands';
+import EditorCommandGlyph from './EditorCommandGlyph';
 
 export interface SlashMenuListProps {
   items: EditorCommand[];
@@ -89,7 +90,7 @@ const SlashMenuList = forwardRef<SlashMenuListHandle, SlashMenuListProps>(
             onMouseEnter={() => setSelectedIndex(index)}
           >
             <span className="rte-slash-glyph" aria-hidden="true">
-              {item.glyph}
+              <EditorCommandGlyph command={item} />
             </span>
             <span className="rte-slash-label">{item.label}</span>
             <span className="rte-slash-trigger">/{item.id.toLowerCase()}</span>
