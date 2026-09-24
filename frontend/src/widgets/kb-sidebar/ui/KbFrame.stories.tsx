@@ -107,7 +107,7 @@ export const 既定: Story = {
     const tabs = canvas.getByRole('navigation', { name: 'バックエンド定例 の画面' });
     await expect(within(tabs).getByRole('link', { name: '概要' })).toBeVisible();
     await expect(within(tabs).getByRole('link', { name: 'メンバー' })).toBeVisible();
-    await expect(within(tabs).getByRole('button', { name: 'アーカイブ' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(within(tabs).getByRole('button', { name: 'アーカイブしたページを表示' })).toHaveAttribute('aria-pressed', 'false');
     await expect(canvas.getByRole('heading', { name: 'ページを探す' })).toBeVisible();
     await expect(canvas.getByRole('link', { name: 'お気に入り' })).toBeVisible();
     await expect(canvas.getByRole('link', { name: 'すべてのページ' })).toBeVisible();
@@ -162,7 +162,7 @@ export const アーカイブの切替: Story = {
   args: { workspaceSlug: 'w-3f2a9c', spaceId: 's-1' },
   play: async ({ canvasElement }) => {
     const canvas = await waitForTree(canvasElement);
-    const archive = canvas.getByRole('button', { name: 'アーカイブ' });
+    const archive = canvas.getByRole('button', { name: 'アーカイブしたページを表示' });
     await userEvent.click(archive);
     await expect(archive).toHaveAttribute('aria-pressed', 'true');
     await expect(await canvas.findByRole('heading', { name: 'アーカイブしたページ' })).toBeVisible();

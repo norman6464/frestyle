@@ -109,8 +109,11 @@ export default function KbContextBar({
               type="button"
               onClick={onToggleArchived}
               aria-pressed={archivedMode}
-              // 押している間は左の木がアーカイブしたページになる（画面は移らない）。
-              title={archivedMode ? '現役のページに戻る' : 'アーカイブしたページを木に出す'}
+              // 押している間は左の木がアーカイブしたページになる（画面は移らない）。読み上げ名は
+              // 見えている「アーカイブ」を含めて何をするかを足す。木の行の操作メニューの
+              // 「アーカイブ」（ページをしまう操作）と同じ名前で並ばないようにするため。
+              aria-label="アーカイブしたページを表示"
+              title={archivedMode ? '現役のページに戻る' : 'アーカイブしたページを表示'}
               className={tabClass(archivedMode)}
             >
               アーカイブ

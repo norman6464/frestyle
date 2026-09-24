@@ -567,7 +567,7 @@ describe('KbFrame', () => {
 
   describe('アーカイブ', () => {
     const openArchive = () =>
-      fireEvent.click(screen.getByRole('button', { name: 'アーカイブ' }));
+      fireEvent.click(screen.getByRole('button', { name: 'アーカイブしたページを表示' }));
 
     it('切り替えると、同じスペースをアーカイブ済みで取り直す', async () => {
       // 別の口ではなく同じ口のスコープ。権限の見方は現役とまったく同じ。
@@ -602,7 +602,7 @@ describe('KbFrame', () => {
       expect(screen.queryByRole('button', { name: '開発部 にページを追加' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '設計メモ の操作' })).not.toBeInTheDocument();
       // 切り替え（文脈バーのアーカイブ）は押された状態で残り、もう一度押すと現役へ戻る。
-      expect(screen.getByRole('button', { name: 'アーカイブ' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'アーカイブしたページを表示' })).toHaveAttribute('aria-pressed', 'true');
     });
 
     it('復帰は、アーカイブの根にだけ出す', async () => {
@@ -788,7 +788,7 @@ describe('KbFrame', () => {
     it('アーカイブ済みでは移動の項目を出さない', async () => {
       renderSidebar();
       await screen.findByText('1番目');
-      fireEvent.click(screen.getByRole('button', { name: 'アーカイブ' }));
+      fireEvent.click(screen.getByRole('button', { name: 'アーカイブしたページを表示' }));
       await screen.findByText('1番目');
 
       expect(screen.queryByRole('button', { name: '1番目 の操作' })).not.toBeInTheDocument();
@@ -929,7 +929,7 @@ describe('KbFrame', () => {
       await waitFor(() => expect(hoisted.movePage).toHaveBeenCalled());
 
       // 移動の返事を待っている間に、アーカイブへ切り替える（新しい木が入る）。
-      fireEvent.click(screen.getByRole('button', { name: 'アーカイブ' }));
+      fireEvent.click(screen.getByRole('button', { name: 'アーカイブしたページを表示' }));
       await waitFor(() =>
         expect(hoisted.fetchPageTree).toHaveBeenCalledWith('acme', 'space-1', { archived: true }),
       );
@@ -945,7 +945,7 @@ describe('KbFrame', () => {
     it('アーカイブ済みでは並べ替えを受け付けない', async () => {
       renderSidebar();
       await screen.findByText('1番目');
-      fireEvent.click(screen.getByRole('button', { name: 'アーカイブ' }));
+      fireEvent.click(screen.getByRole('button', { name: 'アーカイブしたページを表示' }));
       await screen.findByText('1番目');
 
       dragRowOnto('1番目', '2番目', 50);
