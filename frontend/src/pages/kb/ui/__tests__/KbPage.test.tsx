@@ -336,8 +336,10 @@ describe('KbPage の配線', () => {
     renderPage();
     const nav = await screen.findByRole('navigation', { name: 'ページの場所' });
 
-    expect(within(nav).getByText('開発チーム')).toBeInTheDocument();
-    expect(within(nav).queryByRole('link')).not.toBeInTheDocument();
+    // 先頭（ワークスペース）は常にリンク。祖先が無ければ、リンクはそれだけ。
+    expect(within(nav).getByRole('link', { name: '開発チーム' })).toBeInTheDocument();
+    expect(within(nav).getAllByRole('link')).toHaveLength(1);
+    expect(within(nav).getByText('親ページ')).toHaveAttribute('aria-current', 'page');
   });
 
   it('自分か祖先が削除されたら一覧へ戻る（サーバー応答の祖先で判定する）', async () => {
@@ -1068,7 +1070,8 @@ describe('KbPage の履歴', () => {
       type: 'doc',
       content: [{ type: 'paragraph', content: [{ type: 'text', text: '戻した内容' }] }],
     });
-    expect(await screen.findByText(/最終編集 鈴木 花子/)).toBeInTheDocument();
+    expect(await screen.findByText('鈴木 花子')).toBeInTheDocument();
+    expect(screen.getByText(/が最終編集/)).toBeInTheDocument();
     expect(screen.queryByText(/の版を表示中/)).not.toBeInTheDocument();
   });
 
@@ -1141,7 +1144,8 @@ describe('KbPage の履歴', () => {
       type: 'doc',
       content: [{ type: 'paragraph', content: [{ type: 'text', text: '戻した内容' }] }],
     });
-    expect(await screen.findByText(/最終編集 鈴木 花子/)).toBeInTheDocument();
+    expect(await screen.findByText('鈴木 花子')).toBeInTheDocument();
+    expect(screen.getByText(/が最終編集/)).toBeInTheDocument();
   });
 
   it('復元に失敗したら知らせを出す。プレビューは終えない', async () => {
