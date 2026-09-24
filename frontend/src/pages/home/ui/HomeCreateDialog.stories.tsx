@@ -260,7 +260,33 @@ export const 作れたか分からない: Story = {
     await expect(await d.findByRole('alert')).toHaveTextContent('作成できたか確認できません');
     await expect(createPage).toHaveBeenCalledTimes(1);
     await expect(d.getByRole('button', { name: /ページを作成してひらく/ })).toBeEnabled();
-    await expect(body$().getByRole('status', { name: 'いまの場所', hidden: true })).toHaveTextContent('/');
+    await expect(body$().getByRole('status', { name: 'いまの場所', hidden: true })).toHaveTextContent(/^\/$/);
+  },
+};
+
+/** 作成を送っている間は閉じない（Escape・閉じるボタン）。閉じた後に応答が来て画面が勝手に移るのを防ぐ。 */
+export const 作成中は閉じない: Story = {
+  args: { onClose: fn() },
+  decorators: [
+    withApi(
+      api({
+        '/spaces/s-product/pages': () => {
+          createPage();
+          return new Promise(() => {});
+        },
+      }),
+    ),
+  ],
+  play: async ({ args }) => {
+    const d = within(await body$().findByRole('dialog', { name: '新しくつくる' }));
+    await d.findByRole('combobox', { name: '保存先のスペース' });
+    await userEvent.type(d.getByRole('textbox', { name: 'ページのタイトル' }), '週報');
+    await userEvent.click(d.getByRole('button', { name: /ページを作成してひらく/ }));
+    await expect(await d.findByRole('button', { name: /作成しています/ })).toBeDisabled();
+    await expect(d.getByRole('button', { name: '閉じる' })).toBeDisabled();
+    await userEvent.keyboard('{Escape}');
+    await expect(args.onClose).not.toHaveBeenCalled();
+    await expect(body$().getByRole('dialog', { name: '新しくつくる' })).toBeVisible();
   },
 };
 

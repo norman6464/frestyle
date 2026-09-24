@@ -38,9 +38,14 @@ export interface HomeCreateDialogProps {
 export default function HomeCreateDialog({ workspaces, initialWorkspaceSlug, onClose }: HomeCreateDialogProps) {
   const titleId = useId();
   const [kind, setKind] = useState<CreateKind>('page');
+  // 作成を送っている間は閉じさせない（閉じた後に応答が来て、画面が勝手に移るのを防ぐ）。
+  // 2 つの種別で同時に送ることもあり得るので、送っている数で持つ。
+  const [pendingCount, setPendingCount] = useState(0);
+  const busy = pendingCount > 0;
+  const onPendingChange = (pending: boolean) => setPendingCount((n) => Math.max(0, n + (pending ? 1 : -1)));
 
   return (
-    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog.Root open onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/50" />
         <Dialog.Popup
@@ -52,6 +57,7 @@ export default function HomeCreateDialog({ workspaces, initialWorkspaceSlug, onC
               新しくつくる
             </Dialog.Title>
             <Dialog.Close
+              disabled={busy}
               aria-label="閉じる"
               className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-surface-2 hover:text-[var(--color-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
             >
@@ -72,10 +78,10 @@ export default function HomeCreateDialog({ workspaces, initialWorkspaceSlug, onC
             </Tabs.List>
             {/* 切り替えても入力と選んだ保存先を保つ（種別を替えただけで選び直しにしない）。 */}
             <Tabs.Panel value="page" keepMounted className="focus:outline-none data-[hidden]:hidden">
-              <PageForm workspaces={workspaces} initialWorkspaceSlug={initialWorkspaceSlug} />
+              <PageForm workspaces={workspaces} initialWorkspaceSlug={initialWorkspaceSlug} onPendingChange={onPendingChange} />
             </Tabs.Panel>
             <Tabs.Panel value="ticket" keepMounted className="focus:outline-none data-[hidden]:hidden">
-              <TicketForm workspaces={workspaces} initialWorkspaceSlug={initialWorkspaceSlug} />
+              <TicketForm workspaces={workspaces} initialWorkspaceSlug={initialWorkspaceSlug} onPendingChange={onPendingChange} />
             </Tabs.Panel>
           </Tabs.Root>
         </Dialog.Popup>
@@ -219,7 +225,14 @@ function TitleField({
   );
 }
 
-function PageForm({ workspaces, initialWorkspaceSlug }: { workspaces: KbWorkspace[]; initialWorkspaceSlug: string | null }) {
+interface PageFormProps {
+  workspaces: KbWorkspace[];
+  initialWorkspaceSlug: string | null;
+  /** 送信を始めた（true）・失敗で終えた（false）ことを親へ知らせる。成功したら画面が移るので戻さない。 */
+  onPendingChange: (pending: boolean) => void;
+}
+
+function PageForm({ workspaces, initialWorkspaceSlug, onPendingChange }: PageFormProps) {
   const navigate = useNavigate();
   const ids = { ws: useId(), space: useId(), title: useId(), template: useId() };
   const [workspaceSlug, setWorkspaceSlug] = useState(initialWorkspaceSlug ?? workspaces[0]?.slug ?? '');
@@ -258,6 +271,7 @@ function PageForm({ workspaces, initialWorkspaceSlug }: { workspaces: KbWorkspac
       return;
     }
     setPending(true);
+    onPendingChange(true);
     setFailure(null);
     try {
       const page = templateId
@@ -267,6 +281,7 @@ function PageForm({ workspaces, initialWorkspaceSlug }: { workspaces: KbWorkspac
     } catch (cause) {
       setFailure(createFailureMessage(cause, 'page'));
       setPending(false);
+      onPendingChange(false);
     }
   };
 
@@ -375,7 +390,14 @@ function PageForm({ workspaces, initialWorkspaceSlug }: { workspaces: KbWorkspac
   );
 }
 
-function TicketForm({ workspaces, initialWorkspaceSlug }: { workspaces: KbWorkspace[]; initialWorkspaceSlug: string | null }) {
+interface TicketFormProps {
+  workspaces: KbWorkspace[];
+  initialWorkspaceSlug: string | null;
+  /** 送信を始めた（true）・失敗で終えた（false）ことを親へ知らせる。成功したら画面が移るので戻さない。 */
+  onPendingChange: (pending: boolean) => void;
+}
+
+function TicketForm({ workspaces, initialWorkspaceSlug, onPendingChange }: TicketFormProps) {
   const navigate = useNavigate();
   const ids = { ws: useId(), project: useId(), title: useId() };
   const creatable = workspaces.filter((w) => w.canCreateTickets);
@@ -413,6 +435,7 @@ function TicketForm({ workspaces, initialWorkspaceSlug }: { workspaces: KbWorksp
       return;
     }
     setPending(true);
+    onPendingChange(true);
     setFailure(null);
     try {
       const ticket = await TicketRepository.createTicket(workspace.slug, project.id, { title: title.trim() });
@@ -420,6 +443,7 @@ function TicketForm({ workspaces, initialWorkspaceSlug }: { workspaces: KbWorksp
     } catch (cause) {
       setFailure(createFailureMessage(cause, 'ticket'));
       setPending(false);
+      onPendingChange(false);
     }
   };
 
