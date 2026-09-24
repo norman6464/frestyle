@@ -41,7 +41,7 @@ export default function TicketParentPicker({
         onChange={(e) => setFilter(e.target.value)}
         placeholder="親を絞り込む"
         aria-label="親を絞り込む"
-        className="mb-1 w-full rounded border border-surface-3 bg-surface-1 px-2 py-1 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+        className="mb-1 w-full rounded border border-surface-3 bg-surface-1 px-2 py-1 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
       />
 
       {currentParentId !== null && (

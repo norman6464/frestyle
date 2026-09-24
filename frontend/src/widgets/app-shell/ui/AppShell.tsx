@@ -68,7 +68,8 @@ export default function AppShell() {
             id="main-content"
             tabIndex={0}
             // 狭い画面では下部ナビの分だけ下に余白を取る（最後の行が隠れない）。広い画面は無し。
-            className="min-w-0 flex-1 overflow-auto pb-[calc(var(--app-bottom-nav-h)+env(safe-area-inset-bottom,0px))] outline-none md:pb-0"
+            // 「本文へスキップ」で飛んだ先が見えるよう、キーボードで来たときだけ内側に輪を出す。
+            className="min-w-0 flex-1 overflow-auto pb-[calc(var(--app-bottom-nav-h)+env(safe-area-inset-bottom,0px))] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600 md:pb-0"
           >
             <Outlet />
           </main>

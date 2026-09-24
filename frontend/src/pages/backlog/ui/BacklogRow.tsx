@@ -98,28 +98,20 @@ export default function BacklogRow({
         selected ? 'border-l-brand-600 bg-action-soft' : 'border-l-transparent hover:bg-surface-2'
       }`}
     >
+      {/*
+        升の DOM の順は見出しの順（課題・やること・担当・優先度・期限・状態）と同じにする。
+        読み上げは表として DOM の順に列を辿り、Tab も DOM の順に進むので、見た目の位置だけを
+        CSS で動かすと「2 列目の見出しはやること、中身は状態」の食い違いになる。
+        狭い画面のカードの配置は、行と列の指定（row-start / col-start）で組む。
+      */}
       {/* 課題: 種別の印とキー。 */}
-      <div role="cell" className="flex min-w-0 items-center gap-2 md:col-start-1 md:row-start-1 md:py-3">
+      <div role="cell" className="col-start-1 row-start-1 flex min-w-0 items-center gap-2 md:col-start-1 md:row-start-1 md:py-3">
         <TicketTypeGlyph type={type} />
         <TicketKeyBadge projectKey={projectKey} number={ticket.number} className="shrink-0 tabular-nums" />
       </div>
 
-      {/* 状態: 狭い画面では 1 行目の右端、広い画面では末尾の列。 */}
-      <div role="cell" className="min-w-0 justify-self-end md:col-start-6 md:row-start-1 md:justify-self-stretch md:py-3">
-        <TicketStatusSelect
-          statuses={statuses}
-          statusId={ticket.statusId}
-          canEdit={canEdit}
-          busy={busy}
-          onChange={onChangeStatus}
-          size="compact"
-          label={`${ticket.title} の状態`}
-          className="w-full"
-        />
-      </div>
-
       {/* やること: 題名。押すと開く。 */}
-      <div role="cell" className="col-span-2 min-w-0 md:col-span-1 md:col-start-2 md:row-start-1 md:py-3">
+      <div role="cell" className="col-span-2 row-start-2 min-w-0 md:col-span-1 md:col-start-2 md:row-start-1 md:py-3">
         <button
           type="button"
           onClick={onOpen}
@@ -149,7 +141,20 @@ export default function BacklogRow({
         {due ?? '—'}
         {overdue && <span className="sr-only">（期限超過）</span>}
       </div>
-      <div role="cell" className="col-span-2 flex flex-wrap items-center gap-x-1 text-xs text-[var(--color-text-muted)] md:hidden">
+      {/* 状態: 狭い画面では 1 行目の右端、広い画面では末尾の列。 */}
+      <div role="cell" className="col-start-2 row-start-1 min-w-0 justify-self-end md:col-start-6 md:row-start-1 md:justify-self-stretch md:py-3">
+        <TicketStatusSelect
+          statuses={statuses}
+          statusId={ticket.statusId}
+          canEdit={canEdit}
+          busy={busy}
+          onChange={onChangeStatus}
+          size="compact"
+          label={`${ticket.title} の状態`}
+          className="w-full"
+        />
+      </div>
+      <div role="cell" className="col-span-2 row-start-3 flex flex-wrap items-center gap-x-1 text-xs text-[var(--color-text-muted)] md:hidden">
         <span className={`inline-flex items-center gap-1 ${priority.className}`}>
           <FsIcon name={priority.icon} className="h-3.5 w-3.5 flex-none" />
           優先度 {priority.label}

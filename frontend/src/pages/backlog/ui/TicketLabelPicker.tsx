@@ -56,7 +56,7 @@ export default function TicketLabelPicker({ labels, attachedIds, onToggle, onCre
         onChange={(e) => setFilter(e.target.value)}
         placeholder="ラベルを絞り込む"
         aria-label="ラベルを絞り込む"
-        className="mb-1 w-full rounded border border-surface-3 bg-surface-1 px-2 py-1 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+        className="mb-1 w-full rounded border border-surface-3 bg-surface-1 px-2 py-1 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
       />
 
       <ul className="max-h-48 overflow-y-auto">
@@ -109,7 +109,7 @@ export default function TicketLabelPicker({ labels, attachedIds, onToggle, onCre
           }}
           placeholder="新しいラベルの名前"
           aria-label="新しいラベルの名前"
-          className="min-w-0 flex-1 rounded border border-surface-3 bg-surface-1 px-2 py-1 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+          className="min-w-0 flex-1 rounded border border-surface-3 bg-surface-1 px-2 py-1 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
         />
         <button
           type="button"

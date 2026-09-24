@@ -130,7 +130,7 @@ describe('Header', () => {
   it('三本線を押すと onOpenMobileSidebar を呼ぶ', () => {
     const onOpen = vi.fn();
     renderHeader({ onOpenMobileSidebar: onOpen });
-    fireEvent.click(screen.getByRole('button', { name: 'メニュー' }));
+    fireEvent.click(screen.getByRole('button', { name: 'サイドメニューを開く' }));
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 

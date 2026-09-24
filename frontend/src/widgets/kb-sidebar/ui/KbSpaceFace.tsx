@@ -70,8 +70,10 @@ export default function KbSpaceFace({
   const switcherMenuRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLUListElement>(null);
-  useDismissOnOutside(switcherOpen, [switcherTriggerRef, switcherMenuRef], () => setSwitcherOpen(false));
-  useDismissOnOutside(menuOpen, [menuTriggerRef, menuRef], () => setMenuOpen(false));
+  useDismissOnOutside(switcherOpen, [switcherTriggerRef, switcherMenuRef], () => setSwitcherOpen(false), {
+    returnFocus: switcherTriggerRef,
+  });
+  useDismissOnOutside(menuOpen, [menuTriggerRef, menuRef], () => setMenuOpen(false), { returnFocus: menuTriggerRef });
 
   const commitRename = async (name: string) => {
     try {

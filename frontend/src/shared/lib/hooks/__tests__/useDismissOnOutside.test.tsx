@@ -4,14 +4,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { useDismissOnOutside } from '../useDismissOnOutside';
 
 /** 引き金とポップアップが兄弟で、1 つの枠に包まれていない形（実際のメニューと同じ）。 */
-function Example({ onDismiss }: { onDismiss: () => void }) {
+function Example({ onDismiss, returnFocus = false }: { onDismiss: () => void; returnFocus?: boolean }) {
   const [open, setOpen] = useState(true);
   const trigger = useRef<HTMLButtonElement>(null);
   const popup = useRef<HTMLDivElement>(null);
-  useDismissOnOutside(open, [trigger, popup], () => {
-    setOpen(false);
-    onDismiss();
-  });
+  useDismissOnOutside(
+    open,
+    [trigger, popup],
+    () => {
+      setOpen(false);
+      onDismiss();
+    },
+    returnFocus ? { returnFocus: trigger } : {},
+  );
   return (
     <>
       <button ref={trigger} type="button" onClick={() => setOpen((prev) => !prev)}>
@@ -81,5 +86,40 @@ describe('useDismissOnOutside', () => {
     fireEvent.mouseDown(document.body);
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(onDismiss).toHaveBeenCalledTimes(2);
+  });
+
+  describe('閉じたあとのフォーカス', () => {
+    it('中にフォーカスがあるまま Escape で閉じたら、引き金へ戻す（行き先が消えて body に落ちない）', () => {
+      render(<Example onDismiss={vi.fn()} returnFocus />);
+      const input = screen.getByRole('textbox', { name: '名前' });
+      input.focus();
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(screen.getByRole('button', { name: '引き金' })).toHaveFocus();
+    });
+
+    it('外を押して閉じたときは戻さない（押した先へ移るのが自然）', () => {
+      render(<Example onDismiss={vi.fn()} returnFocus />);
+      screen.getByRole('textbox', { name: '名前' }).focus();
+      const outside = screen.getByRole('button', { name: '外のボタン' });
+      fireEvent.mouseDown(outside);
+      outside.focus();
+      expect(outside).toHaveFocus();
+    });
+
+    it('フォーカスがポップアップの外の別の場所にあるときの Escape では奪わない', () => {
+      render(<Example onDismiss={vi.fn()} returnFocus />);
+      const outside = screen.getByRole('button', { name: '外のボタン' });
+      outside.focus();
+      fireEvent.keyDown(outside, { key: 'Escape' });
+      expect(outside).toHaveFocus();
+    });
+
+    it('returnFocus を渡さなければ動かさない', () => {
+      render(<Example onDismiss={vi.fn()} />);
+      const input = screen.getByRole('textbox', { name: '名前' });
+      input.focus();
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(screen.getByRole('button', { name: '引き金' })).not.toHaveFocus();
+    });
   });
 });

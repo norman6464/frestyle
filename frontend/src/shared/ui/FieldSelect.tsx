@@ -54,7 +54,7 @@ export default function FieldSelect({ label, value, options, onChange, disabled,
                 <Select.Item
                   key={option.value}
                   value={option.value}
-                  className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-[var(--fs-text-strong)] outline-none data-[highlighted]:bg-surface-2"
+                  className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-[var(--fs-text-strong)] outline-none data-[highlighted]:bg-surface-2 data-[highlighted]:shadow-[inset_3px_0_0_var(--color-nav-selected-rule)]"
                 >
                   <Select.ItemIndicator className="w-4 shrink-0 text-brand-700">
                     <FsIcon name="check" className="h-4 w-4" />

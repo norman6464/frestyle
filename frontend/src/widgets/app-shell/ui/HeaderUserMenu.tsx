@@ -51,7 +51,7 @@ export default function HeaderUserMenu({
             {(email || subText) && <Menu.Separator className="my-1 h-px bg-[var(--fs-menu-border)]" />}
             <Menu.Item
               onClick={() => { onNavigate?.(); navigate('/settings'); }}
-              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-[var(--color-text-primary)] outline-none data-[highlighted]:bg-surface-2"
+              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-[var(--color-text-primary)] outline-none data-[highlighted]:bg-surface-2 data-[highlighted]:shadow-[inset_3px_0_0_var(--color-nav-selected-rule)]"
             >
               <FsIcon name="settings" className="h-4 w-4 shrink-0" />
               設定
@@ -59,7 +59,7 @@ export default function HeaderUserMenu({
             <Menu.Separator className="my-1 h-px bg-[var(--fs-menu-border)]" />
             <Menu.Item
               onClick={onLogout}
-              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-danger-ink outline-none data-[highlighted]:bg-danger-soft"
+              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-danger-ink outline-none data-[highlighted]:bg-danger-soft data-[highlighted]:shadow-[inset_3px_0_0_var(--color-nav-selected-rule)]"
             >
               <FsIcon name="logout" className="h-4 w-4 shrink-0" />
               ログアウト

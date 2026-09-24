@@ -119,7 +119,7 @@ export const モバイルのメニューをキーボードで操作: Story = {
   globals: { viewport: { value: 'mobile1', isRotated: false } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: 'メニュー' });
+    const trigger = canvas.getByRole('button', { name: 'サイドメニューを開く' });
     await userEvent.click(trigger);
     const close = await canvas.findByRole('button', { name: 'メニューを閉じる' });
     await waitFor(() => expect(close).toHaveFocus());

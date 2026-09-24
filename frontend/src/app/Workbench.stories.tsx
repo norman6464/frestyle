@@ -47,7 +47,7 @@ export const モバイル: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByRole('list', { name: '取り組むチケット' })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'メニュー' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'サイドメニューを開く' })).toBeVisible();
     await expect(canvas.getByRole('link', { name: /APP-24/ })).toHaveAttribute('href', '/tickets/t1');
   },
 };

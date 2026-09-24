@@ -126,4 +126,50 @@ describe('CommandPalette', () => {
     expect(screen.getByText('該当するコマンドがありません')).toBeInTheDocument();
   });
 
+  it('窓として名乗り、入力欄は候補一覧を操る combobox として名乗る', () => {
+    renderPalette();
+    expect(screen.getByRole('dialog', { name: '移動先を探す' })).toBeInTheDocument();
+    const input = screen.getByRole('combobox', { name: '移動先を探す' });
+    const listbox = screen.getByRole('listbox', { name: '移動先' });
+    expect(input).toHaveAttribute('aria-controls', listbox.id);
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('上下キーで選んだ候補を aria-activedescendant で伝える（フォーカスは入力欄のまま）', () => {
+    renderPalette();
+    const input = screen.getByRole('combobox', { name: '移動先を探す' });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    const selected = screen.getAllByRole('option')[1];
+    expect(input).toHaveAttribute('aria-activedescendant', selected.id);
+  });
+
+  it('一致が無いと combobox は閉じた状態を名乗り、activedescendant を持たない', () => {
+    renderPalette();
+    const input = screen.getByRole('combobox', { name: '移動先を探す' });
+    fireEvent.change(input, { target: { value: 'xxxxxxxxx' } });
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(input).not.toHaveAttribute('aria-activedescendant');
+  });
+
+  it('日本語入力の変換キャンセルの Escape では閉じない（打ちかけの検索語を守る）', () => {
+    renderPalette();
+    const input = screen.getByRole('combobox', { name: '移動先を探す' });
+    fireEvent.keyDown(input, { key: 'Escape', isComposing: true });
+    fireEvent.keyDown(input, { key: 'Escape', keyCode: 229 });
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
+  });
+
+  it('マウスを乗せた候補に選択が合う', () => {
+    renderPalette();
+    const options = screen.getAllByRole('option');
+    fireEvent.mouseMove(options[2]);
+    expect(options[2]).toHaveAttribute('aria-selected', 'true');
+    expect(options[0]).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('閉じるボタンで閉じる（狭い画面には Esc キーが無い）', () => {
+    renderPalette();
+    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    expect(defaultProps.onClose).toHaveBeenCalled();
+  });
 });

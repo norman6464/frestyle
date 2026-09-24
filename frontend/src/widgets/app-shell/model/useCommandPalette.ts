@@ -48,6 +48,11 @@ export function useCommandPalette() {
     });
   }, [query]);
 
+  /** 選択をその位置へ動かす（マウスを乗せた行に選択を合わせる。乗せた行と選択の行を別々に塗らない）。 */
+  const select = useCallback((index: number) => {
+    setSelectedIndex(index);
+  }, []);
+
   return {
     isOpen,
     query,
@@ -58,5 +63,6 @@ export function useCommandPalette() {
     setQuery,
     selectNext,
     selectPrev,
+    select,
   };
 }
