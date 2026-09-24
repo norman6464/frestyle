@@ -4,18 +4,27 @@ import { useContainerWidth } from '../useContainerWidth';
 
 type Callback = (entries: { contentRect: { width: number } }[]) => void;
 
+interface FakeObserver {
+  callback: Callback;
+  observed: Element[];
+  disconnect: ReturnType<typeof vi.fn>;
+}
+
 function stubResizeObserver() {
-  const observers: { callback: Callback; disconnect: ReturnType<typeof vi.fn> }[] = [];
+  const observers: FakeObserver[] = [];
   vi.stubGlobal(
     'ResizeObserver',
     class {
       callback: Callback;
+      observed: Element[] = [];
       disconnect = vi.fn();
       constructor(callback: Callback) {
         this.callback = callback;
         observers.push(this);
       }
-      observe() {}
+      observe(element: Element) {
+        this.observed.push(element);
+      }
     },
   );
   return observers;
@@ -32,30 +41,45 @@ afterEach(() => {
 });
 
 describe('useContainerWidth', () => {
-  it('要素が無ければ null（呼び出し側は広い方の既定として扱う）', () => {
+  it('要素が付くまでは null（呼び出し側は広い方の既定として扱う）', () => {
     stubResizeObserver();
-    const { result } = renderHook(() => useContainerWidth({ current: null }));
-    expect(result.current).toBeNull();
+    const { result } = renderHook(() => useContainerWidth<HTMLDivElement>());
+    expect(result.current[1]).toBeNull();
   });
 
   it('ResizeObserver が無い環境では null', () => {
     vi.stubGlobal('ResizeObserver', undefined);
-    const { result } = renderHook(() => useContainerWidth({ current: elementOfWidth(500) }));
-    expect(result.current).toBeNull();
+    const { result } = renderHook(() => useContainerWidth<HTMLDivElement>());
+    act(() => result.current[0](elementOfWidth(500)));
+    expect(result.current[1]).toBeNull();
   });
 
-  it('最初の幅を測り、変わるたびに追いかけ、外れたら観測をやめる', () => {
+  it('要素が付いたら幅を測り、変わるたびに追いかけ、外れたら観測をやめる', () => {
     const observers = stubResizeObserver();
-    // ref は描画をまたいで同じ物を渡す（呼び出し側の useRef と同じ）。毎回作り直すと、
-    // 描画のたびに観測を張り直して最初の幅を測り直してしまう。
-    const ref = { current: elementOfWidth(900) };
-    const { result, unmount } = renderHook(() => useContainerWidth(ref));
-    expect(result.current).toBe(900);
+    const { result, unmount } = renderHook(() => useContainerWidth<HTMLDivElement>());
+    act(() => result.current[0](elementOfWidth(900)));
+    expect(result.current[1]).toBe(900);
 
     act(() => observers[0].callback([{ contentRect: { width: 520 } }]));
-    expect(result.current).toBe(520);
+    expect(result.current[1]).toBe(520);
 
     unmount();
     expect(observers[0].disconnect).toHaveBeenCalled();
+  });
+
+  it('要素が作り直されたら、古い要素の観測をやめて新しい要素を測り直す', () => {
+    const observers = stubResizeObserver();
+    const { result } = renderHook(() => useContainerWidth<HTMLDivElement>());
+    const first = elementOfWidth(900);
+    act(() => result.current[0](first));
+    expect(observers[0].observed).toEqual([first]);
+
+    // 一覧が 0 件の表示に替わって要素が外れ、また一覧へ戻って別の要素が付く。
+    act(() => result.current[0](null));
+    expect(observers[0].disconnect).toHaveBeenCalled();
+    const second = elementOfWidth(520);
+    act(() => result.current[0](second));
+    expect(result.current[1]).toBe(520);
+    expect(observers[1].observed).toEqual([second]);
   });
 });

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import type { Ticket, TicketStatus, TicketType } from '@/entities/ticket';
 import type { SprintState } from '@/entities/sprint';
 import EmptyState from '@/shared/ui/EmptyState';
@@ -98,8 +98,9 @@ export default function BacklogList({
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   // 期限超過の判定に使う「今日」。行ごとに Date を作らず、描画 1 回につき 1 回だけ求める。
   const today = localTodayISO();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const width = useContainerWidth(containerRef);
+  // 読み込み中・0 件・失敗のときは一覧の器を描かないので、器が付いた・作り直されたときに
+  // 測り直せるよう callback ref で受ける。
+  const [containerRef, width] = useContainerWidth<HTMLDivElement>();
   const layout: BacklogRowLayout = width !== null && width < BACKLOG_TABLE_MIN_WIDTH ? 'card' : 'table';
 
   if (error) {

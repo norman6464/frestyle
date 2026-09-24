@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import BacklogList, { BACKLOG_GROUP_ID, type BacklogGroupModel } from './BacklogList';
@@ -233,6 +234,36 @@ export const 狭い領域ではカード: Story = {
     // 見出し行（列）は出さない。
     await expect(canvas.queryAllByRole('columnheader')).toHaveLength(0);
     await expect(canvas.getByText('選択中')).toBeVisible();
+  },
+};
+
+/**
+ * 読み込み中は一覧の器を描かない。読み込みが終わって器が後から付いても、狭い領域なら
+ * カードになる（器が付いた時点で幅を測り直す）。
+ */
+function LoadsThenShows(args: React.ComponentProps<typeof BacklogList>) {
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setLoaded(true), 50);
+    return () => clearTimeout(timer);
+  }, []);
+  return <BacklogList {...args} loading={!loaded} groups={loaded ? args.groups : backlogOnly([])} />;
+}
+
+export const 読み込んでからでも狭い領域ではカード: Story = {
+  decorators: [
+    (Story) => (
+      <div className="h-[520px] w-[520px] bg-surface-1">
+        <Story />
+      </div>
+    ),
+  ],
+  render: (args) => <LoadsThenShows {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(async () => {
+      await expect(canvas.getByRole('table', { name: 'チケット' })).toHaveAttribute('data-layout', 'card');
+    });
   },
 };
 

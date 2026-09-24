@@ -405,6 +405,10 @@ export const 狭い画面で選んで開いて戻る: Story = {
     await waitFor(async () => {
       await expect(canvas.queryByRole('region', { name: '選択中 FRESTYLE-457' })).toBeNull();
     });
+    // 戻ったら開いた行へ（一覧の inert が外れてからフォーカスが移る）。
+    await waitFor(async () => {
+      await expect(canvas.getByRole('button', { name: TITLE })).toHaveFocus();
+    });
     await expect(canvas.getByRole('button', { name: '選択した課題をひらく' })).toBeVisible();
   },
 };
