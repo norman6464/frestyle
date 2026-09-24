@@ -11,8 +11,8 @@ import { useKbSpaceEntry, KbSpaceTabs, kbRoleLabel } from '@/entities/kb';
 export default function KbSpaceOverviewPage() {
   const { spaceId } = useParams<{ spaceId?: string }>();
   const navigate = useNavigate();
-  // 柱の「すべてのスペース」が対象ワークスペースを ?workspace= で持ち越す（FRESTYLE-596 の
-  // 残り）。spaceId が既にあるとき（/kb/spaces/:spaceId）は無視してよい —— spaceId から
+  // スペース切替の「すべてのスペース」が対象ワークスペースを ?workspace= で持ち越す。
+  // spaceId が既にあるとき（/kb/spaces/:spaceId）は無視してよい —— spaceId から
   // ワークスペースが一意に決まる。解決後の遷移先 URL にはこのクエリを持ち越さない
   // （スペースが決まれば対象は URL の中に無くても一意）。
   const [searchParams] = useSearchParams();

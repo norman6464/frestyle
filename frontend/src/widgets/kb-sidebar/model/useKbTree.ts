@@ -238,7 +238,7 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
     const workspace = await KbRepository.createWorkspace({ name: input.name });
     setWorkspaces((prev) => [...prev, workspace]);
     setActiveSlug(workspace.slug);
-    // 柱の一覧（useWorkspaceList）は別インスタンスなので、この setState だけでは知れない。
+    // 他画面の一覧（useWorkspaceList）は別インスタンスなので、この setState だけでは知れない。
     emitKbTreeEvent({ type: 'workspace-created', workspace });
     return workspace;
   }, []);
@@ -400,7 +400,7 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   // （親子関係の差し込み位置をこちらで計算しない — サーバーの並び順が正）、
   // 更新は値が変わっただけなので 1 枚差し替えで足りる。
   //
-  // ワークスペースの作成・削除も同じ購読で映す。柱の一覧（useWorkspaceList）のような
+  // ワークスペースの作成・削除も同じ購読で映す。他画面の一覧（useWorkspaceList）のような
   // 別インスタンスも、自分自身が発行したイベントも等しく受け取るため、どちらも冪等な
   // 更新にしてある（無ければ足す・無ければ何もしない）。
   useEffect(() => {

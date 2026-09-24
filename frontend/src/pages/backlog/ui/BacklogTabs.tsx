@@ -9,7 +9,7 @@ export interface BacklogTabsProps {
 /**
  * プロジェクトの行の右端に並ぶ面の切替（設計ボード ST08）。下線ではなく文字色で今いる面を示す。
  *
- * 押すと経路が変わる。柱には置かない —— 同じ行き先が 2 か所にあると、どちらが正か
+ * 押すと経路が変わる。ほかの場所には置かない —— 同じ行き先が 2 か所にあると、どちらが正か
  * 分からなくなるため。ここは `Link` なので、中クリックで別タブにも開ける。
  */
 export default function BacklogTabs({ projectId, current }: BacklogTabsProps) {

@@ -5,6 +5,7 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from '@/entities/user/model/authSlice';
 import { ToastProvider } from '@/app/providers/ToastProvider';
+import { SidebarSection, SidebarSlotProvider } from '@/shared/ui';
 import Header from '../ui/Header';
 
 // この環境の jsdom は localStorage を提供しないため、既存テストと同じ流儀でスタブする
@@ -40,17 +41,16 @@ vi.mock('@/entities/notification/api/notificationRepository', () => ({
 interface RenderOptions {
   onOpenSearch?: () => void;
   initialPath?: string;
-  onToggleGlobalSidebar?: () => void;
   onOpenMobileSidebar?: () => void;
-  globalSidebarOpen?: boolean;
+  /** 画面が左の列に区画を差し込んでいる状態で描く（ナレッジの画面など）。 */
+  withScreenSection?: boolean;
 }
 
 function renderHeader({
   onOpenSearch = vi.fn(),
   initialPath = '/',
-  onToggleGlobalSidebar,
   onOpenMobileSidebar,
-  globalSidebarOpen,
+  withScreenSection = false,
 }: RenderOptions = {}) {
   const store = configureStore({
     reducer: { auth: authReducer },
@@ -60,12 +60,14 @@ function renderHeader({
     <Provider store={store}>
       <ToastProvider>
         <MemoryRouter initialEntries={[initialPath]}>
-          <Header
-            onOpenSearch={onOpenSearch}
-            onToggleGlobalSidebar={onToggleGlobalSidebar}
-            onOpenMobileSidebar={onOpenMobileSidebar}
-            globalSidebarOpen={globalSidebarOpen}
-          />
+          <SidebarSlotProvider>
+            <Header onOpenSearch={onOpenSearch} onOpenMobileSidebar={onOpenMobileSidebar} />
+            {withScreenSection && (
+              <SidebarSection>
+                <nav aria-label="ナレッジ" />
+              </SidebarSection>
+            )}
+          </SidebarSlotProvider>
         </MemoryRouter>
       </ToastProvider>
     </Provider>,
@@ -85,59 +87,34 @@ describe('Header', () => {
   it('検索ボタンを押すと onOpenSearch を呼ぶ', () => {
     const onOpenSearch = vi.fn();
     renderHeader({ onOpenSearch });
-    const [searchButton] = screen.getAllByRole('button', { name: '移動先を探す' });
-    fireEvent.click(searchButton);
+    fireEvent.click(screen.getByRole('button', { name: '移動先を探す' }));
     expect(onOpenSearch).toHaveBeenCalledTimes(1);
   });
 
-  // 行き先は柱（GlobalSidebar）が持つ。ヘッダーに置くと同じ行き先が 2 か所に出る。
-  it('行き先はヘッダーに置かない', () => {
-    renderHeader();
-    expect(screen.queryByText('ナレッジ')).not.toBeInTheDocument();
-    expect(screen.queryByText('ホーム')).not.toBeInTheDocument();
+  // 主な行き先はヘッダーが持つ（設計ボード ST02・ST03）。狭い画面では下部ナビが同じ表を読む。
+  it('主な行き先を並べ、今いる所に aria-current を付ける', () => {
+    renderHeader({ initialPath: '/kb/p-1' });
+    const nav = screen.getByRole('navigation', { name: '主な行き先' });
+    expect(nav).toHaveTextContent('ホーム担当ナレッジバックログ');
+    expect(screen.getByRole('link', { name: 'ナレッジ' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'ホーム' })).not.toHaveAttribute('aria-current');
   });
 
-  describe('柱の開閉ボタン', () => {
-    // 柱は 1 本しか無いので、開け閉めするボタンもこの 1 つだけ。以前は「アプリの柱」と
-    // 「画面の柱」で 2 つ並び、ほぼ同じ絵でどちらが何を閉じるのか見分けが付かなかった。
-    it('ボタンは 1 つだけ（同じ役目の似た絵を並べない）', () => {
-      renderHeader({ onToggleGlobalSidebar: vi.fn(), onOpenMobileSidebar: vi.fn(), initialPath: '/kb' });
-      expect(screen.getAllByRole('button', { name: /サイドバーを/ })).toHaveLength(1);
-    });
-
-    it('押すと onToggleGlobalSidebar を呼ぶ', () => {
-      const onToggle = vi.fn();
-      renderHeader({ onToggleGlobalSidebar: onToggle });
-      fireEvent.click(screen.getByRole('button', { name: 'サイドバーを閉じる' }));
-      expect(onToggle).toHaveBeenCalledTimes(1);
-    });
-
-    // 開いている / 閉じているでラベル（＝絵）が変わる。押すとどちらになるかが分かるように。
-    it('閉じているときは「開く」になる', () => {
-      renderHeader({ onToggleGlobalSidebar: vi.fn(), globalSidebarOpen: false });
-      expect(screen.getByRole('button', { name: 'サイドバーを開く' })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'サイドバーを閉じる' })).not.toBeInTheDocument();
-    });
-
-    // 渡されなければ出さない（柱を持たない画面でボタンだけが浮かないように）。
-    it('onToggleGlobalSidebar が無ければ出さない', () => {
-      renderHeader();
-      expect(screen.queryByRole('button', { name: /サイドバーを/ })).not.toBeInTheDocument();
-    });
-  });
-
-  // 狭い画面では柱が引き出しになる。開ける手段はこの三本線だけ。
-  it('三本線を押すと onOpenMobileSidebar を呼ぶ', () => {
+  // 左の列（ナレッジの木など）は区画を持つ画面にしか無い。無い画面で三本線を出すと、押しても何も起きない。
+  it('三本線は画面が区画を持つときだけ出し、押すと onOpenMobileSidebar を呼ぶ', () => {
     const onOpen = vi.fn();
-    renderHeader({ onOpenMobileSidebar: onOpen });
+    const { unmount } = renderHeader({ onOpenMobileSidebar: onOpen });
+    expect(screen.queryByRole('button', { name: 'サイドメニューを開く' })).toBeNull();
+    unmount();
+
+    renderHeader({ onOpenMobileSidebar: onOpen, withScreenSection: true });
     fireEvent.click(screen.getByRole('button', { name: 'サイドメニューを開く' }));
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it('通知ベルとハンバーガー(メニュー)を表示する', () => {
-    renderHeader({ onOpenMobileSidebar: vi.fn() });
+  it('通知ベルを表示する', () => {
+    renderHeader();
     expect(screen.getByRole('link', { name: /通知/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /メニュー/ })).toBeInTheDocument();
   });
 
   it('未読件数のバッジを表示する', async () => {
@@ -151,12 +128,13 @@ describe('Header', () => {
     expect(screen.queryByRole('link', { name: 'AI' })).not.toBeInTheDocument();
   });
 
-  // 狭い画面でもユーザーメニューは出す。ログアウトの入口がここしか無いため
-  // （以前は三本線の縦メニューが持っていたが、そこは柱の引き出しになった）。
-  it('ユーザーメニューを開くと設定/ログアウトが出る', async () => {
+  // 狭い画面でもアカウントのメニューは出す。ログアウトの入口がここしか無いため。
+  it('アカウントのメニューを開くと名前と設定/ログアウトが出る', async () => {
     renderHeader();
-    const userButton = await screen.findByText('テスト太郎');
+    // 引き金は顔だけ。読み上げ名に名前と「アカウント」を持たせる。
+    const userButton = await screen.findByRole('button', { name: 'テスト太郎 のアカウント' });
     fireEvent.click(userButton);
+    expect(screen.getByText('テスト太郎')).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: '設定' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'ログアウト' })).toBeInTheDocument();
   });

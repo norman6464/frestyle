@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { BacklogSidebar, useBacklogFilterCounts } from '@/widgets/backlog-sidebar';
 import { SecondaryPanel } from '@/widgets/secondary-panel';
-import { ConfirmModal, EmptyState, FsIcon, FsIllustration, Loading, NameCreateForm, SidebarSection } from '@/shared/ui';
+import { ConfirmModal, EmptyState, FsIcon, FsIllustration, Loading, NameCreateForm } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { TicketRepository, formatTicketKey } from '@/entities/ticket';
@@ -28,6 +27,9 @@ import TicketTypeAdmin from './TicketTypeAdmin';
 import { formatPeriodShort } from '../lib/dueDate';
 import { sprintConfirmText } from '../lib/sprintConfirm';
 import { nextSprintName } from '../lib/nextSprintName';
+import { projectInitials } from '../lib/projectInitials';
+import { useBacklogFilterCounts } from '../model/useBacklogFilterCounts';
+import BacklogProjectSwitcher from './BacklogProjectSwitcher';
 
 /**
  * 面ごとの見出し。小さな見出しは設計ボード ST08 の文言（バックログ）と、面の名前（ほか）。
@@ -134,7 +136,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     void reloadSprintTickets();
   };
   const { principals, nameOf } = usePrincipalNames(workspaceSlug ?? undefined);
-  // 「保存した絞り込み」の件数と全件数。柱ではなく一覧の真上に出す（設計ボード ST08）。
+  // 「保存した絞り込み」の件数と全件数。一覧の真上に出す（設計ボード ST08）。
   const counts = useBacklogFilterCounts(workspaceSlug ?? undefined, project?.id);
 
   /**
@@ -256,13 +258,9 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   };
 
   return (
+    // 左の列は持たない（設計ボード ST08: バックログは全幅）。プロジェクトの切替は見出しの上の
+    // 文脈の行に置く。
     <div className="flex h-full overflow-hidden">
-      {/* 柱の中の「バックログの区画」。プロジェクトの切替と絞り込みだけを持つ
-          （面の切替とスプリントは本文のタブ列と段が持つ）。柱そのものは AppShell が描く。 */}
-      <SidebarSection>
-        <BacklogSidebar workspaceSlug={workspaceSlug ?? undefined} project={project} />
-      </SidebarSection>
-
       <main className="mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col overflow-hidden">
         {projectError ? (
           <div role="alert" className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
@@ -297,8 +295,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
         ) : (
           <>
             {/*
-              見出しの塊（設計ボード ST08）。プロジェクトの行 → 小さな見出し → 大きな面の名前 → 一文 →
-              保存した絞り込み。面のタブはプロジェクトの行の右端。柱に同じ行き先を置かない。
+              見出しの塊（設計ボード ST08）。文脈の行（印・プロジェクト名 / プロジェクト KEY ▾ と、右端に
+              面のタブ）→ 小さな見出し → 大きな面の名前 → 一文 → 保存した絞り込み。
             */}
             <div className="shrink-0 border-b border-surface-3 px-4 pb-3 pt-4 sm:px-6">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
@@ -307,11 +305,11 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                     aria-hidden="true"
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-taupe-600 text-xs font-bold text-white"
                   >
-                    {project.key.replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || project.key.slice(0, 2).toUpperCase()}
+                    {projectInitials(project.key)}
                   </span>
                   <span className="min-w-0 truncate font-semibold text-[var(--color-text-primary)]">{project.name}</span>
                   <span aria-hidden="true" className="text-[var(--color-text-faint)]">/</span>
-                  <span className="shrink-0 text-[var(--color-text-muted)]">プロジェクト {project.key.toUpperCase()}</span>
+                  <BacklogProjectSwitcher workspaceSlug={workspaceSlug ?? undefined} project={project} />
                 </div>
                 <BacklogTabs projectId={project.id} current={view} />
               </div>

@@ -19,8 +19,8 @@ const EMPTY: KbSpaceEntryState = { workspaceSlug: null, space: null, noSpaces: f
  * pages/backlog/model/useBacklogSpace.ts と同じ形（前者は最初に見つかったスペースへ
  * 移す・後者は spaceId からワークスペースを引く）。
  *
- * `preferredWorkspaceSlug` は spaceId 無し（/kb/spaces）のときだけ効く。柱の
- * 「すべてのスペース」が対象ワークスペースを持ち越すために渡す（FRESTYLE-596 の残り）。
+ * `preferredWorkspaceSlug` は spaceId 無し（/kb/spaces）のときだけ効く。スペース切替の
+ * 「すべてのスペース」が対象ワークスペースを持ち越すために渡す。
  * spaceId が既にあれば、その ID から一意にワークスペースが決まるので使わない。
  */
 export function useKbSpaceEntry(

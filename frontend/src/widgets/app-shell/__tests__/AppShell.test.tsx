@@ -32,25 +32,23 @@ function renderAppShell({ initialEntry = '/', body = <div>テストコンテン�
 }
 
 describe('AppShell', () => {
-  it('行き先は柱が持つ（ヘッダーには置かない）', () => {
+  it('行き先はヘッダーが持つ（狭い画面は下部ナビ）', () => {
     renderAppShell();
-    const rail = screen.getByRole('navigation', { name: 'アプリのナビゲーション' });
-    for (const label of ['ホーム', '自分の担当', 'ナレッジ', 'バックログ']) {
-      expect(within(rail).getByRole('link', { name: label })).toBeInTheDocument();
+    const header = within(screen.getByRole('banner'));
+    const nav = header.getByRole('navigation', { name: '主な行き先' });
+    for (const label of ['ホーム', '担当', 'ナレッジ', 'バックログ']) {
+      expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument();
     }
-    // ヘッダーには行き先を置かない（以前は横並びで置いていた）。
-    expect(within(screen.getByRole('banner')).queryByRole('link', { name: 'ナレッジ' })).toBeNull();
-    // 行き先を持つ nav は柱と下部ナビの 2 つだけ。どちらが見えるかは幅で決まり（CSS）、
-    // jsdom はそれを見られないので、ここでは「他に持つ場所が無い」ことだけを見る。
+    // 行き先を持つ nav はヘッダーと下部ナビの 2 つだけで、名前も揃える。どちらが見えるかは
+    // 幅で決まり（CSS）、jsdom はそれを見られないので、ここでは「他に持つ場所が無い」ことを見る。
     const navsWithKb = screen
       .getAllByRole('link', { name: 'ナレッジ' })
       .map((a) => a.closest('nav')?.getAttribute('aria-label'));
-    expect(navsWithKb.sort()).toEqual(['アプリのナビゲーション', '主な行き先']);
+    expect(navsWithKb).toEqual(['主な行き先', '主な行き先']);
   });
 
-  // 柱は 1 本だけ。画面ごとの区画（ナレッジの木・バックログのプロジェクト）は
-  // 画面が差し込み口から入れ、DOM 上も柱の中に入る。
-  it('画面が差し込んだ区画が柱の中に入る', () => {
+  // 画面ごとの区画（ナレッジの木など）は画面が差し込み口から入れ、本文の外の左の列に入る。
+  it('画面が差し込んだ区画は本文の外の列に入る', () => {
     renderAppShell({
       body: (
         <>
@@ -62,10 +60,10 @@ describe('AppShell', () => {
       ),
     });
     const section = screen.getByRole('navigation', { name: 'ナレッジ' });
-    const rail = screen.getByRole('navigation', { name: 'アプリのナビゲーション' });
-    // 柱（行き先の nav）と区画が同じ入れ物の中にいる。
-    expect(rail.closest('div')?.parentElement?.contains(section)).toBe(true);
+    expect(screen.getByRole('main').contains(section)).toBe(false);
     expect(screen.getByText('テストコンテンツ')).toBeInTheDocument();
+    // 区画があるときだけ、狭い画面で列を開く三本線が出る。
+    expect(screen.getByRole('button', { name: 'サイドメニューを開く' })).toBeInTheDocument();
   });
 
   it('子コンテンツを表示する', () => {
@@ -73,11 +71,10 @@ describe('AppShell', () => {
     expect(screen.getByText('テストコンテンツ')).toBeDefined();
   });
 
-  it('トップバーを表示する', () => {
+  it('区画の無い画面では三本線を出さない', () => {
     renderAppShell();
-    // 「メニュー」はヘッダーの三本線（柱の引き出しを開く）。柱の中の「メニューを閉じる」
-    // とは別物なので、名前を完全一致で取る。
-    expect(screen.getByRole('button', { name: 'サイドメニューを開く' })).toBeDefined();
+    // 開く先（画面の左の列）が無いのにボタンだけ出すと、押しても何も起きない。
+    expect(screen.queryByRole('button', { name: 'サイドメニューを開く' })).toBeNull();
   });
 
   it('Cmd+Kでコマンドパレットが開く', () => {
@@ -96,10 +93,7 @@ describe('AppShell', () => {
   it('ヘッダーの検索ボタンを押してもコマンドパレットが開く', () => {
     renderAppShell();
     expect(screen.queryByPlaceholderText('移動先を探す...')).not.toBeInTheDocument();
-    // デスクトップ用・モバイル用の 2 つが DOM 上にある（CSS の hidden で出し分けるため、
-    // CSS を適用しない単体テストではどちらも「見える」扱いになる）。どちらを押しても開く。
-    const [searchButton] = screen.getAllByRole('button', { name: '移動先を探す' });
-    fireEvent.click(searchButton);
+    fireEvent.click(screen.getByRole('button', { name: '移動先を探す' }));
     expect(screen.getByPlaceholderText('移動先を探す...')).toBeInTheDocument();
   });
 });

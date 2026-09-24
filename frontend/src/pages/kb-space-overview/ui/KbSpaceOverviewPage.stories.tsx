@@ -42,7 +42,7 @@ export const ふつう: Story = {
 };
 
 /**
- * 柱の「すべてのスペース」が ?workspace= で対象を持ち越したとき（FRESTYLE-596 の残り）。
+ * スペース切替の「すべてのスペース」が ?workspace= で対象を持ち越したとき。
  * 所属順では acme が先だが、workspace=beta を指定しているので beta のスペースが開く。
  */
 export const 対象ワークスペースを引き継ぐ: Story = {

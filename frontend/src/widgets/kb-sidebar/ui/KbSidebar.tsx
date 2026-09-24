@@ -22,8 +22,8 @@ export interface KbSidebarProps {
 }
 
 /**
- * KbSidebar はナレッジの「場所を示す面」。柱（GlobalSidebar）の中へ差し込まれる区画で、
- * 単体では柱にならない —— 柱はアプリに 1 本だけあり、行き先や通知はそちらが持つ。
+ * KbSidebar はナレッジの「場所を示す面」。本文の左の列（ScreenSidebar）へ差し込まれる区画で、
+ * アプリ全体の行き先や通知は持たない —— それはヘッダーが持つ。
  *
  * 上から ワークスペースの切替 → 今いるスペースの顔（KbSpaceFace）→ ページの木。
  * 常に 1 つの spaceId（今いるスペース）だけを表示する。他のスペースへ移るのは
@@ -170,7 +170,7 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
   };
 
   return (
-    // 柱（GlobalSidebar）の中に差し込まれる区画。余白とスクロールは柱が持つので
+    // 本文の左の列（ScreenSidebar）に差し込まれる区画。余白とスクロールは列が持つので
     // ここでは持たない（入れ子のスクロール領域を作らない）。
     <nav aria-label="ナレッジ" className="flex min-h-0 flex-col">
       <KbWorkspaceSwitcher
