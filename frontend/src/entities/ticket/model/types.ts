@@ -371,6 +371,60 @@ export interface TicketCounts {
   unassigned: number;
 }
 
+/**
+ * 利用者が名前を付けて保存した絞り込み 1 件（本人 × プロジェクト）。応答の形は
+ * `dto.TicketSavedFilterResponse`。条件の項目は一覧の絞り込み（TicketListFilter）と同じ語彙で、
+ * 指定していない項目は null。count はいまその条件に合う現役チケットの件数。
+ */
+export interface TicketSavedFilter {
+  id: string;
+  name: string;
+  statusId: string | null;
+  typeId: string | null;
+  labelId: string | null;
+  assigneePrincipalId: string | null;
+  unassigned: boolean;
+  assignedToMe: boolean;
+  overdue: boolean;
+  q: string | null;
+  count: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** backend の wire 形。null の項目は `omitempty` でキーごと消えるので normalize で `null` に畳む。 */
+export interface TicketSavedFilterWire {
+  id: string;
+  name: string;
+  statusId?: string;
+  typeId?: string;
+  labelId?: string;
+  assigneePrincipalId?: string;
+  unassigned: boolean;
+  assignedToMe: boolean;
+  overdue: boolean;
+  q?: string;
+  count: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * 保存・更新の入力（名前と条件）。条件が 1 つも無いものは保存できない（backend が 400）。
+ * 担当の条件（assigneePrincipalId / unassigned / assignedToMe）は高々 1 つ。
+ */
+export interface TicketSavedFilterInput {
+  name: string;
+  statusId?: string | null;
+  typeId?: string | null;
+  labelId?: string | null;
+  assigneePrincipalId?: string | null;
+  unassigned?: boolean;
+  assignedToMe?: boolean;
+  overdue?: boolean;
+  q?: string | null;
+}
+
 /** POST .../tickets/enable の応答。 */
 export interface EnableTicketsResult {
   statusCount: number;

@@ -52,6 +52,8 @@ export interface BacklogListProps {
   onRemoveFromSprint?: (ticketId: string) => void;
   /** 段の見出しの右に出す操作（スプリントを開始 / 完了 / 作成）。段ごとに作る。 */
   renderGroupAction?: (group: BacklogGroupModel) => React.ReactNode;
+  /** 件数の行の右端に置く操作（「この絞り込みを保存 ＋」）。無ければ件数だけ。 */
+  footerAction?: React.ReactNode;
   onRetry: () => void;
 }
 
@@ -87,6 +89,7 @@ export default function BacklogList({
   onMoveToSprint,
   onRemoveFromSprint,
   renderGroupAction,
+  footerAction,
   onRetry,
 }: BacklogListProps) {
   // 畳んだ段だけを覚える。既定は開いた状態なので、スプリントが増えても勝手に隠れない。
@@ -167,7 +170,7 @@ export default function BacklogList({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div role="table" aria-label="チケット" aria-rowcount={total}>
+        <div role="table" aria-label="チケット" aria-rowcount={total} aria-busy={loading || undefined}>
           {/* 見出し行。狭い画面は列を捨ててカードにするので出さない（各カードが項目名を持つ）。 */}
           <div
             role="row"
@@ -223,9 +226,18 @@ export default function BacklogList({
           ))}
         </div>
 
-        <p className="px-3 py-3 text-xs tabular-nums text-[var(--color-text-muted)] sm:px-4">
-          {total} 件の課題を表示{showTotal && <>・全 {totalCount} 件</>}
-        </p>
+        {/*
+          件数は status で読み上げに通知する（条件を変えたら「何件になったか」が耳でも分かる）。
+          取り直し中は古い一覧を出したまま「更新中」を添える —— 消して読み込み表示にすると、
+          押した行がその瞬間だけ消えて選び直すことになる。
+        */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:px-4">
+          <p role="status" aria-live="polite" className="text-xs tabular-nums text-[var(--color-text-muted)]">
+            {total} 件の課題を表示{showTotal && <>・全 {totalCount} 件</>}
+            {loading && <span className="ml-2">更新中…</span>}
+          </p>
+          {footerAction}
+        </div>
       </div>
 
       {canEdit && !archived && (

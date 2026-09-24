@@ -126,4 +126,95 @@ describe('useBacklogUrlState', () => {
     const { result } = renderAt('/backlog/s-1?overdue=1&unassigned=1');
     expect(result.current.state.quickFilter).toBe('overdue');
   });
+
+  it('条件が 1 つでも付いていれば filtered', () => {
+    expect(renderAt('/backlog/s-1').result.current.state.filtered).toBe(false);
+    expect(renderAt('/backlog/s-1?ticket=t-9').result.current.state.filtered).toBe(false);
+    expect(renderAt('/backlog/s-1?labelId=l-1').result.current.state.filtered).toBe(true);
+    expect(renderAt('/backlog/s-1?q=x').result.current.state.filtered).toBe(true);
+  });
+
+  it('担当の絞り込みは 4 通りを 1 つの値で読み書きする', () => {
+    const { result } = renderAt('/backlog/s-1');
+    expect(result.current.state.assignee).toEqual({ kind: 'any' });
+
+    act(() => result.current.state.setAssignee({ kind: 'me' }));
+    expect(result.current.state.assignee).toEqual({ kind: 'me' });
+    expect(result.current.search).toBe('?assignedToMe=1');
+
+    act(() => result.current.state.setAssignee({ kind: 'principal', id: 'p-1' }));
+    expect(result.current.state.assignee).toEqual({ kind: 'principal', id: 'p-1' });
+    expect(result.current.search).toBe('?assigneePrincipalId=p-1');
+
+    act(() => result.current.state.setAssignee({ kind: 'none' }));
+    expect(result.current.search).toBe('?unassigned=1');
+
+    act(() => result.current.state.setAssignee({ kind: 'any' }));
+    expect(result.current.search).toBe('');
+  });
+
+  describe('保存した絞り込み', () => {
+    const saved = {
+      id: 'f-1',
+      name: '自分の不具合',
+      statusId: 'st-1',
+      typeId: null,
+      labelId: 'l-1',
+      assigneePrincipalId: null,
+      unassigned: false,
+      assignedToMe: true,
+      overdue: false,
+      q: '検索',
+      count: 2,
+      createdAt: '',
+      updatedAt: '',
+    };
+
+    it('選ぶと条件をすべて書き出し、filter に id を載せる。書いていない条件は外す', () => {
+      const { result } = renderAt('/backlog/s-1?typeId=ty-9&overdue=1&unassigned=1&ticket=t-9');
+      act(() => result.current.state.applySavedFilter(saved));
+      expect(result.current.state).toMatchObject({
+        savedFilterId: 'f-1',
+        statusId: 'st-1',
+        typeId: null,
+        labelId: 'l-1',
+        assignedToMe: true,
+        unassigned: false,
+        overdue: false,
+        q: '検索',
+        selectedId: 't-9',
+      });
+    });
+
+    it('条件のどれかを手で変えると選択が外れる（保存したものと違う条件を同じ名前で見せない）', () => {
+      const { result } = renderAt('/backlog/s-1?filter=f-1&statusId=st-1&assignedToMe=1');
+      expect(result.current.state.savedFilterId).toBe('f-1');
+      act(() => result.current.state.setStatusId(null));
+      expect(result.current.state.savedFilterId).toBeNull();
+      expect(result.current.state.assignedToMe).toBe(true);
+    });
+
+    it('固定のタブを押しても選択が外れる', () => {
+      const { result } = renderAt('/backlog/s-1?filter=f-1&assignedToMe=1');
+      act(() => result.current.state.setQuickFilter('overdue'));
+      expect(result.current.state.savedFilterId).toBeNull();
+      expect(result.current.state.quickFilter).toBe('overdue');
+    });
+
+    it('チケットの選択は条件ではないので選択が外れない', () => {
+      const { result } = renderAt('/backlog/s-1?filter=f-1&assignedToMe=1');
+      act(() => result.current.state.selectTicket('t-9'));
+      expect(result.current.state.savedFilterId).toBe('f-1');
+    });
+
+    it('すべて解除・プロジェクトの切替で filter も消える', () => {
+      const a = renderAt('/backlog/s-1?filter=f-1&assignedToMe=1&ticket=t-9');
+      act(() => a.result.current.state.clearFilters());
+      expect(a.result.current.search).toBe('?ticket=t-9');
+
+      const b = renderAt('/backlog/s-1?filter=f-1&assignedToMe=1&ticket=t-9');
+      act(() => b.result.current.state.reset());
+      expect(b.result.current.search).toBe('');
+    });
+  });
 });

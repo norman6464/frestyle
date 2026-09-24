@@ -16,6 +16,8 @@ export interface NameCreateFormProps {
    * inline は 1 行に並べる（一覧の上の操作の帯）。見出しは読み上げにだけ残す。
    */
   layout?: 'stacked' | 'inline';
+  /** 確定ボタンの文言。省略時は「〈what〉を作る」。改名など「作る」でない用途で差し替える。 */
+  submitLabel?: string;
 }
 
 /**
@@ -33,6 +35,7 @@ export default function NameCreateForm({
   initialName = '',
   autoFocus = false,
   layout = 'stacked',
+  submitLabel,
 }: NameCreateFormProps) {
   const nameId = useId();
   const [name, setName] = useState(initialName);
@@ -93,7 +96,7 @@ export default function NameCreateForm({
             inline ? '' : 'w-full'
           }`}
         >
-          {saving ? '作成中…' : `${what}を作る`}
+          {saving ? (submitLabel ? '送信中…' : '作成中…') : submitLabel ?? `${what}を作る`}
         </button>
         {onCancel && (
           <button
