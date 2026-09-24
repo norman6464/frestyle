@@ -66,7 +66,10 @@ export const 開いた直後: Story = {
   args: { spaces },
   play: async () => {
     const input = screen.getByRole('combobox');
-    await expect(input).toHaveFocus();
+    // フォーカスは Dialog が中身を描いたあとに入力欄へ移す。
+    await waitFor(async () => {
+      await expect(input).toHaveFocus();
+    });
   },
 };
 

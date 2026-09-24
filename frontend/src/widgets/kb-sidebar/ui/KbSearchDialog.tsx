@@ -44,10 +44,6 @@ export default function KbSearchDialog({ workspaceSlug, spaces, onClose }: KbSea
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
     // 空入力に戻したときも世代を進める。進めないと、消す前に飛ばした検索の応答が
     // まだ有効な世代のまま届き、空の入力に古い結果が再表示される。
     const token = ++generation.current;

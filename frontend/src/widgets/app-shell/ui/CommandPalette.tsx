@@ -32,12 +32,10 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
   const listId = `${baseId}-list`;
   const optionId = (index: number) => `${baseId}-option-${index}`;
 
+  // 開くたびに検索語を空にする。入力欄へのフォーカスは Dialog の initialFocus が移す
+  // （中身は Portal で一拍遅れて描かれるので、ここで ref を触っても間に合わない）。
   useEffect(() => {
-    if (!isOpen) return;
-    setQuery('');
-    // Dialog の initialFocus も入力欄を指すが、描画直後に確実に置いておく
-    // （開いた直後に打ち始めた文字を取りこぼさない）。
-    inputRef.current?.focus();
+    if (isOpen) setQuery('');
   }, [isOpen, setQuery]);
 
   const closeAll = useCallback(() => {

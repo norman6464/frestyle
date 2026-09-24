@@ -1040,7 +1040,8 @@ describe('題名で検索（モーダル）', () => {
     const input = await openSearch();
 
     expect(screen.getByRole('dialog', { name: 'ページを検索' })).toBeInTheDocument();
-    expect(input).toHaveFocus();
+    // 窓の中身は Portal で一拍遅れて描かれ、フォーカスはそのあと Dialog が入力欄へ移す。
+    await waitFor(() => expect(input).toHaveFocus());
     // サイドバーの木はそのまま（検索が場所の面を奪わない）。
     expect(screen.getByRole('link', { name: /設計メモ/ })).toBeInTheDocument();
   });

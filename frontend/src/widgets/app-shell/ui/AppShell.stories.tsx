@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { withApi, withStore, withToast } from '../../../../.storybook/decorators';
 import { SidebarSection } from '@/shared/ui';
 import AppShell from './AppShell';
@@ -139,11 +139,15 @@ export const モバイルのメニューをキーボードで操作: Story = {
 
 /** ⌘K で「行き先を探す窓」が開く。 */
 export const コマンドパレットを開く: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
     await userEvent.keyboard('{Meta>}k{/Meta}');
+    // 窓は Base UI の Dialog で body 直下（Portal）に描かれるので、描画枠の中ではなく画面全体から探す。
     await waitFor(async () => {
-      await expect(canvas.getByPlaceholderText('移動先を探す...')).toBeVisible();
+      await expect(screen.getByPlaceholderText('移動先を探す...')).toBeVisible();
+    });
+    // 開いたら入力欄にフォーカスが移る（すぐ打ち始められる）。
+    await waitFor(async () => {
+      await expect(screen.getByRole('combobox', { name: '移動先を探す' })).toHaveFocus();
     });
   },
 };

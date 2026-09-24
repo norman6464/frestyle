@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, screen, userEvent } from 'storybook/test';
+import { expect, fn, screen, userEvent, waitFor } from 'storybook/test';
 import { withRouter } from '../../../../.storybook/decorators';
 import CommandPalette from './CommandPalette';
 
@@ -110,7 +110,10 @@ export const 窓と候補の名乗り: Story = {
   play: async () => {
     await expect(screen.getByRole('dialog', { name: '移動先を探す' })).toBeVisible();
     const input = screen.getByRole('combobox', { name: '移動先を探す' });
-    await expect(input).toHaveFocus();
+    // フォーカスは Dialog が中身を描いたあとに入力欄へ移す。
+    await waitFor(async () => {
+      await expect(input).toHaveFocus();
+    });
     const listbox = screen.getByRole('listbox', { name: '移動先' });
     await expect(input).toHaveAttribute('aria-controls', listbox.id);
     await userEvent.keyboard('{ArrowDown}');
