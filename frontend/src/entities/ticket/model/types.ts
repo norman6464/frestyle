@@ -452,6 +452,23 @@ export interface AssignedTicket {
   dueDate: string | null;
 }
 
+/**
+ * 全ワークスペース横断の「自分の担当」1 行（ホーム）。AssignedTicket に、どのワークスペースの
+ * 仕事かを見分けるための slug と名前を足したもの。並びはサーバーが決めた順（期限の近い順）。
+ */
+export interface MyAssignedTicket extends AssignedTicket {
+  workspaceSlug: string;
+  workspaceName: string;
+}
+
+/** ページを本文で参照しているチケット 1 件（逆参照）。題名と表示キーの材料だけ。 */
+export interface TicketReference {
+  id: string;
+  projectKey: string;
+  number: number;
+  title: string;
+}
+
 /** 監視の状態（自分が監視しているか・全体で何人か）。 */
 export interface TicketWatchState {
   watching: boolean;

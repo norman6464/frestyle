@@ -21,7 +21,7 @@ const PasswordResetPage = lazyWithReload(() => import('@/pages/password-reset').
 const InvitePage = lazyWithReload(() => import('@/pages/invite').then((m) => ({ default: m.InvitePage })), 'InvitePage');
 
 // 認証必要ページ
-const MenuPage = lazyWithReload(() => import('@/pages/home').then((m) => ({ default: m.MenuPage })), 'MenuPage');
+const HomePage = lazyWithReload(() => import('@/pages/home').then((m) => ({ default: m.HomePage })), 'HomePage');
 const SettingsPage = lazyWithReload(() => import('@/pages/settings').then((m) => ({ default: m.SettingsPage })), 'SettingsPage');
 const KbPage = lazyWithReload(() => import('@/pages/kb').then((m) => ({ default: m.KbPage })), 'KbPage');
 const AssignedPage = lazyWithReload(
@@ -123,7 +123,7 @@ export default function App() {
         }
       >
         {/* ホーム（ログイン後の入口）。 */}
-        <Route path="/" element={<MenuPage />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/settings" element={<SettingsPage />} />
         {/* 旧 /profile/me は /settings に統合（後方互換のため redirect 相当として SettingsPage を出す） */}
         <Route path="/profile/me" element={<SettingsPage />} />

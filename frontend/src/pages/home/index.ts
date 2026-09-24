@@ -1,1 +1,1 @@
-export { default as MenuPage } from './ui/MenuPage';
+export { default as HomePage } from './ui/HomePage';

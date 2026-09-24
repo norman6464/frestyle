@@ -30,13 +30,16 @@ test.describe('認証ガード', () => {
   });
 
   test('認証済みなら保護ルートはログインに飛ばされない', async ({ page }) => {
-    await mockAuthenticated(page);
+    // 所属が 1 つあればいつものホーム（マイホーム）。
+    await mockAuthenticated(page, {
+      '**/api/v2/kb/workspaces': [{ slug: 'team-a', name: '開発チーム', createdAt: '', canManage: false, canCreateTickets: true }],
+    });
 
     // "/" 自体がログイン必須のホーム。公開ランディングは廃止した。
     await page.goto('/');
 
     // URL だけ見ると、ホームが描画に失敗して ErrorBoundary が出ていても通ってしまう。
-    await expect(page.getByRole('heading', { level: 1, name: 'ホーム', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'マイホーム', exact: true })).toBeVisible();
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page).toHaveURL('/');
   });

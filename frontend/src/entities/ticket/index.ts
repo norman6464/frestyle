@@ -24,6 +24,8 @@ export { readCommentBody, buildCommentBody } from './lib/commentBody';
 
 export type {
   AssignedTicket,
+  MyAssignedTicket,
+  TicketReference,
   TicketWatchState,
   Ticket,
   Label,

@@ -7,8 +7,8 @@ import EmptyState from '@/shared/ui/EmptyState';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useKbAdminMembers } from '../model/useKbAdminMembers';
-import { useCurrentUserId } from '../model/useCurrentUserId';
 import KbMemberRow from './KbMemberRow';
+import { useCurrentUserId } from '@/entities/user';
 
 const GENERIC_FAILED = '操作に失敗しました。もう一度お試しください。';
 

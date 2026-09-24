@@ -419,6 +419,21 @@ export const TICKET_API = {
    */
   assignedTickets: (workspaceSlug: string) =>
     `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/assigned`,
+  /**
+   * GET — /api/v2/me/assigned-tickets?limit=3
+   *
+   * ホームの「自分の担当」。全ワークスペースを横断し、未完了のものを期限の近い順（期限なしは最後）に
+   * 上限まで返す。見てよいワークスペースの判定と上限はサーバーが行う（limit は 1〜20）。
+   */
+  myAssignedTickets: (limit: number) => `${API_V2}/me/assigned-tickets?limit=${limit}`,
+  /**
+   * GET — /api/v2/kb/workspaces/:slug/pages/:pageId/ticket-backlinks?limit=2
+   *
+   * そのページを本文で参照しているチケット（逆参照）。更新の新しい順に上限まで。アーカイブは除く。
+   * バックログを見られない人には空で返る（limit は 1〜50）。
+   */
+  pageTicketReferences: (workspaceSlug: string, pageId: string, limit: number) =>
+    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/pages/${encodeURIComponent(pageId)}/ticket-backlinks?limit=${limit}`,
   /** POST — /api/v2/workspaces/:slug/projects/:projectId/tickets/enable。body は省略可 */
   enable: (workspaceSlug: string, projectId: string) =>
     `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/tickets/enable`,

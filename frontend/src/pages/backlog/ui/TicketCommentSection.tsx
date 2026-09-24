@@ -5,13 +5,13 @@ import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import type { TicketCommentBlock } from '@/entities/ticket';
 import { useTicketComments } from '../model/useTicketComments';
-import { useCurrentUserId } from '../model/useCurrentUserId';
 import { useWorkspaceMembers } from '../model/useWorkspaceMembers';
 import { buildCommentTree } from '../lib/buildCommentTree';
 import { ticketLinkState } from '../lib/ticketLinkState';
 import TicketCommentComposer from './TicketCommentComposer';
 import TicketCommentItem from './TicketCommentItem';
 import TicketCommentThread from './TicketCommentThread';
+import { useCurrentUserId } from '@/entities/user';
 
 export interface TicketCommentSectionProps {
   workspaceSlug: string;

@@ -31,9 +31,10 @@ test.describe('トップ（/）', () => {
     await mockAuthenticated(page);
     await page.goto('/');
 
-    // ホームが実際に描画されるまで待つ。URL だけを見ると、MenuPage の遅延ロードが
+    // ホームが実際に描画されるまで待つ。URL だけを見ると、ホームの遅延ロードが
     // 失敗して ErrorBoundary が出ていても "/" のままなので通ってしまう。
-    await expect(page.getByRole('heading', { level: 1, name: 'ホーム', exact: true })).toBeVisible();
+    // 既定の mock は所属 0 件なので、初回ホームが出る。
+    await expect(page.getByRole('heading', { level: 1, name: 'FreStyle へようこそ。', exact: true })).toBeVisible();
     await expect(page).toHaveURL('/');
     await expect(page).not.toHaveURL(/\/login/);
   });

@@ -5,6 +5,8 @@ import { toArray } from '@/shared/lib/toArray';
 import { readCommentBody, buildCommentBody } from '../lib/commentBody';
 import type {
   AssignedTicket,
+  MyAssignedTicket,
+  TicketReference,
   TicketWatchState,
   EnableTicketsResult,
   Label,
@@ -271,6 +273,26 @@ const TicketRepository = {
   async fetchAssignedTickets(workspaceSlug: string): Promise<AssignedTicket[]> {
     const res = await apiClient.get<{ tickets: AssignedTicket[] }>(TICKET_API.assignedTickets(workspaceSlug));
     return toArray<AssignedTicket>(res.data?.tickets);
+  },
+
+  /** GET — 全ワークスペース横断の自分の担当（未完了・期限の近い順・上限つき）。 */
+  async fetchMyAssignedTickets(limit: number, signal?: AbortSignal): Promise<MyAssignedTicket[]> {
+    const res = await apiClient.get<{ tickets: MyAssignedTicket[] }>(TICKET_API.myAssignedTickets(limit), { signal });
+    return toArray<MyAssignedTicket>(res.data?.tickets);
+  },
+
+  /** GET — そのページを本文で参照しているチケット（更新の新しい順・上限つき）。 */
+  async fetchPageTicketReferences(
+    workspaceSlug: string,
+    pageId: string,
+    limit: number,
+    signal?: AbortSignal,
+  ): Promise<TicketReference[]> {
+    const res = await apiClient.get<{ tickets: TicketReference[] }>(
+      TICKET_API.pageTicketReferences(workspaceSlug, pageId, limit),
+      { signal },
+    );
+    return toArray<TicketReference>(res.data?.tickets);
   },
 
   /** GET — 監視の状態（自分が監視しているか・何人が監視しているか）。 */

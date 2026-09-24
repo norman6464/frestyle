@@ -12,6 +12,7 @@ export type { UpdateProfileRequest } from './api/profileRepository';
 export { default as ImageUploadRepository } from './api/imageUploadRepository';
 
 export type { Profile, User, AuthState } from './model/types';
+export { useCurrentUserId } from './model/useCurrentUserId';
 
 // 認証状態の Redux slice。reducer は app 側の configureStore が組み立てる。
 export { default as authReducer } from './model/authSlice';
