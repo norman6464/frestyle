@@ -36,4 +36,15 @@ describe('Loading', () => {
     render(<Loading />);
     expect(screen.getByRole('status').className).toContain('animate-spin');
   });
+
+  it.each([
+    ['small', 'border-2'],
+    ['medium', 'border-[3px]'],
+    ['large', 'border-4'],
+  ] as const)('%s の輪は Tailwind が生成する太さのクラスで描く（存在しない border-3 だと枠 0px で何も見えない）', (size, border) => {
+    render(<Loading size={size} />);
+    const spinner = screen.getByRole('status');
+    expect(spinner.className.split(/\s+/)).toContain(border);
+    expect(spinner.className.split(/\s+/)).not.toContain('border-3');
+  });
 });

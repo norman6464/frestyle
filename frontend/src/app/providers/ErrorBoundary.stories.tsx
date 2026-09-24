@@ -60,8 +60,11 @@ export const 失敗を受け止めたところ: Story = {
   args: { children: <AlwaysFails /> },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('heading', { name: 'エラーが発生しました' })).toBeVisible();
+    await expect(canvas.getByRole('heading', { level: 1, name: 'エラーが発生しました' })).toBeVisible();
     await expect(canvas.getByRole('button', { name: '再試行' })).toBeVisible();
+    // 再試行で直らないときの逃げ道。
+    await expect(canvas.getByRole('button', { name: '再読み込み' })).toBeVisible();
+    await expect(canvas.getByRole('link', { name: 'ホームへ' })).toHaveAttribute('href', '/');
   },
 };
 

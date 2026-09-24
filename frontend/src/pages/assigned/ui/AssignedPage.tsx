@@ -36,7 +36,7 @@ export default function AssignedPage() {
         </Link>
       </header>
 
-      {loading && <Loading className="py-16" message="担当チケットを読み込み中..." />}
+      {loading && <Loading className="py-16" message="担当チケットを読み込み中…" />}
 
       {!loading && error && (
         <div role="alert" className="flex flex-wrap items-center gap-4 rounded-2xl border border-surface-3 bg-surface-1 p-5">
