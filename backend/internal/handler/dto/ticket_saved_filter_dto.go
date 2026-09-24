@@ -7,9 +7,12 @@ import (
 )
 
 // TicketSavedFilterRequest は POST / PUT /workspaces/:workspaceSlug/projects/:projectId/saved-filters の
-// 入力。条件の項目名は一覧 API（GET .../tickets）のクエリと同じ語彙にそろえる（画面が URL の
-// 状態をそのまま送れるように）。長さ・組み合わせの検証は domain.TicketSavedFilter.Normalize が
-// 行い、ここでは名前の有無だけを binding で見る。
+// 入力。条件の項目名は応答（TicketSavedFilterResponse）と、画面が URL に持つ絞り込みの状態
+// （statusId / typeId / labelId / assigneePrincipalId / unassigned / assignedToMe / overdue / q）に
+// そろえる。一覧 API（GET .../tickets）のクエリともほぼ同じだが、ラベルだけは一覧が `label` で
+// 受ける（先にできた口の名残）。ここは応答と同じ `labelId` にそろえ、画面は一覧のクエリでは
+// なく URL の状態から組み立てて送る。長さ・組み合わせの検証は domain.TicketSavedFilter.Normalize
+// が行い、ここでは名前の有無だけを binding で見る。
 type TicketSavedFilterRequest struct {
 	// Name は絞り込みの名前（1〜60 文字。前後の空白は落とす）。
 	Name string `json:"name" binding:"required" example:"自分の不具合"`

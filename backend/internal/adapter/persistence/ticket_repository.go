@@ -882,27 +882,36 @@ func (r *ticketRepository) ResolveTicketIDByKey(ctx context.Context, workspaceID
 	return row.ID.String(), nil
 }
 
-func (r *ticketRepository) ListTickets(ctx context.Context, in repository.ListTicketsInput) ([]repository.TicketWithAssignee, error) {
+// ticketFilterParams は ListTicketsInput を sqlc の引数へ解く。ID の形が壊れていれば ok=false
+// （ListTickets は空、CountTickets は 0 件として扱う —— 形の壊れた ID に合う行は無い）。
+// ListTickets と CountTickets の WHERE は sqlc の都合で写し合っているが、Go 側の詰め替えは
+// ここ 1 か所にまとめ、条件を足すときに片方だけ直してずれる余地を無くす。
+func ticketFilterParams(in repository.ListTicketsInput) (sqlcgen.ListTicketsParams, bool) {
 	wsID, ok := kbParseID(in.WorkspaceID)
 	pjID, ok2 := kbParseID(in.ProjectID)
-	if !ok || !ok2 {
-		return nil, nil
-	}
 	statusID, ok3 := kbNullID(in.StatusID)
 	typeID, ok4 := kbNullID(in.TypeID)
 	assigneeID, ok5 := kbNullID(in.AssigneePrincipalID)
 	labelID, ok6 := kbNullID(in.LabelID)
 	assignedToMeID, ok7 := kbNullID(in.AssignedToMePrincipalID)
-	if !ok3 || !ok4 || !ok5 || !ok6 || !ok7 {
-		return nil, nil
+	if !ok || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 || !ok7 {
+		return sqlcgen.ListTicketsParams{}, false
 	}
-	rows, err := r.queries(ctx).ListTickets(ctx, sqlcgen.ListTicketsParams{
+	return sqlcgen.ListTicketsParams{
 		WorkspaceID: wsID, ProjectID: pjID, IncludeArchived: in.IncludeArchived,
 		StatusID: statusID, TypeID: typeID, AssigneePrincipalID: assigneeID,
 		Unassigned: in.Unassigned, AssignedToMePrincipalID: assignedToMeID,
 		LabelID: labelID, DueBefore: nullDate(in.DueBefore), StartAfter: nullDate(in.StartAfter),
 		Overdue: in.Overdue, Q: nullString(in.Q),
-	})
+	}, true
+}
+
+func (r *ticketRepository) ListTickets(ctx context.Context, in repository.ListTicketsInput) ([]repository.TicketWithAssignee, error) {
+	params, ok := ticketFilterParams(in)
+	if !ok {
+		return nil, nil
+	}
+	rows, err := r.queries(ctx).ListTickets(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -917,27 +926,14 @@ func (r *ticketRepository) ListTickets(ctx context.Context, in repository.ListTi
 }
 
 func (r *ticketRepository) CountTickets(ctx context.Context, in repository.ListTicketsInput) (int64, error) {
-	wsID, ok := kbParseID(in.WorkspaceID)
-	pjID, ok2 := kbParseID(in.ProjectID)
-	if !ok || !ok2 {
+	params, ok := ticketFilterParams(in)
+	if !ok {
 		return 0, nil
 	}
-	statusID, ok3 := kbNullID(in.StatusID)
-	typeID, ok4 := kbNullID(in.TypeID)
-	assigneeID, ok5 := kbNullID(in.AssigneePrincipalID)
-	labelID, ok6 := kbNullID(in.LabelID)
-	assignedToMeID, ok7 := kbNullID(in.AssignedToMePrincipalID)
-	if !ok3 || !ok4 || !ok5 || !ok6 || !ok7 {
-		// 形の壊れた ID は ListTickets が空を返すのと同じで、0 件。
-		return 0, nil
-	}
-	return r.queries(ctx).CountTickets(ctx, sqlcgen.CountTicketsParams{
-		WorkspaceID: wsID, ProjectID: pjID, IncludeArchived: in.IncludeArchived,
-		StatusID: statusID, TypeID: typeID, AssigneePrincipalID: assigneeID,
-		Unassigned: in.Unassigned, AssignedToMePrincipalID: assignedToMeID,
-		LabelID: labelID, DueBefore: nullDate(in.DueBefore), StartAfter: nullDate(in.StartAfter),
-		Overdue: in.Overdue, Q: nullString(in.Q),
-	})
+	// CountTicketsParams は ListTicketsParams と同じ引数を同じ順で持つ（WHERE が写しなので sqlc が
+	// 同じ構造体を起こす）。型変換で詰め替えることで、片方にだけ引数が増えたらここがコンパイル
+	// エラーになり、WHERE のずれに気づける。
+	return r.queries(ctx).CountTickets(ctx, sqlcgen.CountTicketsParams(params))
 }
 
 func (r *ticketRepository) GetTicketCounts(
