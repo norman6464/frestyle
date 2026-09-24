@@ -143,7 +143,7 @@ export const 狭い画面: Story = {
   globals: { viewport: { value: 'mobile1', isRotated: false } },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'メニュー' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'サイドメニューを開く' }));
     await expect(args.onOpenMobileSidebar).toHaveBeenCalledTimes(1);
     await expect(canvas.queryByRole('navigation')).toBeNull();
     await expect(await canvas.findByRole('button', { name: '川野 拓馬' })).toBeVisible();

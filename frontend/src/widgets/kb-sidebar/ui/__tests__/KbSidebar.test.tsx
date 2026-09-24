@@ -1040,9 +1040,11 @@ describe('題名で検索（モーダル）', () => {
     const input = await openSearch();
 
     expect(screen.getByRole('dialog', { name: 'ページを検索' })).toBeInTheDocument();
-    expect(input).toHaveFocus();
-    // サイドバーの木はそのまま（検索が場所の面を奪わない）。
-    expect(screen.getByRole('link', { name: /設計メモ/ })).toBeInTheDocument();
+    // 窓の中身は Portal で一拍遅れて描かれ、フォーカスはそのあと Dialog が入力欄へ移す。
+    await waitFor(() => expect(input).toHaveFocus());
+    // サイドバーの木はそのまま（検索が場所の面を奪わない）。窓はモーダルなので、開いている間は
+    // 背面が読み上げから外れる（それで正しい）。木が消えていないことは hidden も含めて確かめる。
+    expect(screen.getByRole('link', { name: /設計メモ/, hidden: true })).toBeInTheDocument();
   });
 
   it('入力すると少し待ってからサーバーに問い合わせ、結果がスペースの見出し付きで出る', async () => {

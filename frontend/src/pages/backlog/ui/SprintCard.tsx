@@ -229,7 +229,7 @@ function SprintEditForm({ sprint, busy, onCancel, onSubmit }: SprintEditFormProp
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-600 focus:outline-none"
+          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-600"
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
@@ -238,7 +238,7 @@ function SprintEditForm({ sprint, busy, onCancel, onSubmit }: SprintEditFormProp
           type="date"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
-          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-600 focus:outline-none"
+          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-600"
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
@@ -247,7 +247,7 @@ function SprintEditForm({ sprint, busy, onCancel, onSubmit }: SprintEditFormProp
           type="date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
-          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-600 focus:outline-none"
+          className="rounded-md border border-surface-3 px-2 py-1 text-sm text-[var(--color-text-primary)] focus:border-brand-600"
         />
       </label>
       <button

@@ -13,11 +13,21 @@ import { useEffect, useEffectEvent, type RefObject } from 'react';
  * - `open` が false のあいだは document にリスナーを付けない。
  * - `inside` と `onDismiss` は毎描画で作り直して構わない。effect の依存は open だけで、
  *   最新の値は useEffectEvent 経由で読む（描画ごとにリスナーを付け外ししない）。
+ * - `returnFocus` を渡すと、**Escape で閉じたとき**フォーカスをその要素（ふつうは引き金の
+ *   ボタン）へ戻す。ポップアップの中にフォーカスがあったまま閉じると、フォーカスの行き先が
+ *   消えて body に落ち、キーボードの人は位置を見失う。外を押して閉じたときは戻さない
+ *   （押した先へフォーカスが移るのが自然なので）。フォーカスがポップアップの外の別の場所に
+ *   あるときも奪わない。
  */
+export interface DismissOnOutsideOptions {
+  returnFocus?: RefObject<HTMLElement | null>;
+}
+
 export function useDismissOnOutside(
   open: boolean,
   inside: ReadonlyArray<RefObject<HTMLElement | null>>,
   onDismiss: () => void,
+  options: DismissOnOutsideOptions = {},
 ): void {
   const onDocumentMouseDown = useEffectEvent((event: MouseEvent) => {
     const target = event.target;
@@ -27,7 +37,14 @@ export function useDismissOnOutside(
   });
   const onDocumentKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (event.isComposing || event.keyCode === 229) return;
-    if (event.key === 'Escape') onDismiss();
+    if (event.key !== 'Escape') return;
+    const active = document.activeElement;
+    const focusWasInside =
+      active === null ||
+      active === document.body ||
+      inside.some((ref) => ref.current?.contains(active));
+    onDismiss();
+    if (focusWasInside) options.returnFocus?.current?.focus();
   });
 
   useEffect(() => {

@@ -94,7 +94,7 @@ export default function SprintBoard({
                 placeholder="スプリントの名前"
                 aria-label="スプリントの名前"
                 autoFocus
-                className="rounded-md border border-surface-3 px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-brand-600 focus:outline-none"
+                className="rounded-md border border-surface-3 px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-brand-600"
               />
               <button
                 type="button"

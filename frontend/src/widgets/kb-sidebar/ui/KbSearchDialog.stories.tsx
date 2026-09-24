@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, screen, userEvent, waitFor } from 'storybook/test';
 import type { KbSpace } from '@/entities/kb';
 import { withApi, withRouter } from '../../../../.storybook/decorators';
 import KbSearchDialog from './KbSearchDialog';
@@ -64,9 +64,12 @@ const page = (id: string, spaceId: string, title: string) => ({
 export const 開いた直後: Story = {
   decorators: [withApi({ '/search': [] })],
   args: { spaces },
-  play: async ({ canvasElement }) => {
-    const input = within(canvasElement).getByRole('combobox');
-    await expect(input).toHaveFocus();
+  play: async () => {
+    const input = screen.getByRole('combobox');
+    // フォーカスは Dialog が中身を描いたあとに入力欄へ移す。
+    await waitFor(async () => {
+      await expect(input).toHaveFocus();
+    });
   },
 };
 
@@ -78,8 +81,8 @@ export const 見つかった: Story = {
     }),
   ],
   args: { spaces },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = screen;
     await userEvent.type(canvas.getByRole('combobox'), '設計');
     await waitFor(
       async () => {
@@ -107,8 +110,8 @@ export const 本文一致の抜粋と強調: Story = {
     }),
   ],
   args: { spaces },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = screen;
     await userEvent.type(canvas.getByRole('combobox'), 'docker');
     await waitFor(
       async () => {
@@ -117,7 +120,7 @@ export const 本文一致の抜粋と強調: Story = {
       { timeout: 5000 },
     );
     // 一致箇所（"docker"）が <mark> で強調されている。
-    const mark = canvasElement.querySelector('mark');
+    const mark = document.body.querySelector('mark');
     await expect(mark).not.toBeNull();
     await expect(mark).toHaveTextContent('docker');
     // 抜粋の残りの文字列も（強調の前後に分かれて）そのまま読める。
@@ -146,8 +149,8 @@ export const 抜粋にHTMLとして解釈され得る文字を含む: Story = {
     }),
   ],
   args: { spaces },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = screen;
     await userEvent.type(canvas.getByRole('combobox'), '条件分岐');
     await waitFor(
       async () => {
@@ -155,11 +158,11 @@ export const 抜粋にHTMLとして解釈され得る文字を含む: Story = {
       },
       { timeout: 5000 },
     );
-    const mark = canvasElement.querySelector('mark');
+    const mark = document.body.querySelector('mark');
     await expect(mark).toHaveTextContent('a < b');
     // 実際の HTML タグとしては解釈されていない（余計な要素が生成されていない）。
-    await expect(canvasElement.querySelector('script')).toBeNull();
-    await expect(canvasElement.querySelectorAll('mark').length).toBe(1);
+    await expect(document.body.querySelector('script')).toBeNull();
+    await expect(document.body.querySelectorAll('mark').length).toBe(1);
     await expect(canvas.getByText(/&& c > d/)).toBeVisible();
   },
 };
@@ -172,8 +175,8 @@ export const 題名一致では抜粋を出さない: Story = {
     }),
   ],
   args: { spaces },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = screen;
     await userEvent.type(canvas.getByRole('combobox'), '設計');
     await waitFor(
       async () => {
@@ -181,7 +184,7 @@ export const 題名一致では抜粋を出さない: Story = {
       },
       { timeout: 5000 },
     );
-    await expect(canvasElement.querySelector('mark')).toBeNull();
+    await expect(document.body.querySelector('mark')).toBeNull();
   },
 };
 
@@ -193,8 +196,8 @@ export const 結果に絵文字: Story = {
     }),
   ],
   args: { spaces },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = screen;
     await userEvent.type(canvas.getByRole('combobox'), '設計');
     await waitFor(
       async () => {
@@ -202,7 +205,7 @@ export const 結果に絵文字: Story = {
       },
       { timeout: 5000 },
     );
-    const glyph = canvasElement.querySelector('[data-icon="emoji"]');
+    const glyph = document.body.querySelector('[data-icon="emoji"]');
     await expect(glyph).not.toBeNull();
     await expect(glyph).toHaveTextContent('📘');
   },
@@ -212,8 +215,8 @@ export const 結果に絵文字: Story = {
 export const 見つからない: Story = {
   decorators: [withApi({ '/search': [] })],
   args: { spaces },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = screen;
     await userEvent.type(canvas.getByRole('combobox'), 'みつからない語');
     await waitFor(
       async () => {
@@ -229,8 +232,8 @@ export const 失敗したとき: Story = {
   // 見本に無い宛先は 404 を返すので、失敗の道筋がそのまま通る。
   decorators: [withApi({})],
   args: { spaces },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+  play: async () => {
+    const canvas = screen;
     await userEvent.type(canvas.getByRole('combobox'), '設計');
     await waitFor(
       async () => {
@@ -246,8 +249,37 @@ export const 失敗したとき: Story = {
 export const Escapeで閉じる: Story = {
   decorators: [withApi({ '/search': [] })],
   args: { spaces },
-  play: async ({ args, canvasElement }) => {
-    await userEvent.type(within(canvasElement).getByRole('combobox'), '{Escape}');
+  play: async ({ args }) => {
+    await userEvent.type(screen.getByRole('combobox'), '{Escape}');
     await expect(args.onClose).toHaveBeenCalled();
+  },
+};
+
+/** 閉じるボタンでも閉じられる（狭い画面には Esc キーが無い）。 */
+export const 閉じるボタンで閉じる: Story = {
+  decorators: [withApi({ '/search': [] })],
+  args: { spaces },
+  play: async ({ args }) => {
+    await userEvent.click(screen.getByRole('button', { name: '閉じる' }));
+    await expect(args.onClose).toHaveBeenCalled();
+  },
+};
+
+/** 見つかった件数を読み上げに伝える。 */
+export const 件数を読み上げる: Story = {
+  decorators: [
+    withApi({
+      '/search': [page('p1', 's-1', '設計メモ')],
+    }),
+  ],
+  args: { spaces },
+  play: async () => {
+    await userEvent.type(screen.getByRole('combobox'), '設計');
+    await waitFor(
+      async () => {
+        await expect(screen.getByRole('status')).toHaveTextContent('1 件のページが見つかりました');
+      },
+      { timeout: 5000 },
+    );
   },
 };

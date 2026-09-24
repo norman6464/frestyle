@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ConfirmModal, NameCreateForm, FsIcon } from '@/shared/ui';
+import { useDismissOnOutside } from '@/shared/lib/hooks/useDismissOnOutside';
 import type { KbWorkspace } from '../model/types';
 
 export interface KbWorkspaceSwitcherProps {
@@ -41,42 +42,19 @@ export default function KbWorkspaceSwitcher({
   // 消す対象。null は「確認していない」。戻せない操作なので必ず一度確かめる。
   const [deleting, setDeleting] = useState<KbWorkspace | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const active = workspaces.find((w) => w.slug === activeSlug) ?? null;
 
-  // 外を押したら閉じる。
-  useEffect(() => {
-    if (!open) return;
-    const onDocumentMouseDown = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        event.target instanceof Node &&
-        containerRef.current.contains(event.target)
-      ) {
-        return;
-      }
-      setOpen(false);
-    };
-    // Escape で閉じる。開いたものを閉じる手段がキーボードから無いのは、
-    // 役割を名乗る名乗らないに関わらず困る。
-    const onKeyDown = (event: KeyboardEvent) => {
-      // 日本語入力の変換キャンセルの Escape で閉じない。閉じるとポップアップ内の
-      // 作成フォームごと消え、打ちかけのワークスペース名が失われる（keyCode 229 は
-      // Safari の変換中の値）。
-      if (event.isComposing || event.keyCode === 229) return;
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDocumentMouseDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onDocumentMouseDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  // 外を押したら・Escape で閉じる（日本語入力の変換キャンセルの Escape では閉じない。
+  // 閉じるとポップアップ内の作成フォームごと消え、打ちかけのワークスペース名が失われる）。
+  // Escape のときは引き金のボタンへフォーカスを戻す。
+  useDismissOnOutside(open, [containerRef], () => setOpen(false), { returnFocus: triggerRef });
 
   return (
     <div ref={containerRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
           setOpen((prev) => !prev);

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Dialog } from '@base-ui/react/dialog';
 import { KbRepository, type KbSearchResult, type KbSpace } from '@/entities/kb';
 import { buildSearchView } from '../model/searchView';
 import KbSearchResultRow from './KbSearchResultRow';
@@ -20,7 +21,11 @@ export interface KbSearchDialogProps {
  * （常設の入力欄が場所の面を圧迫し、木と結果が同じ狭い面で入れ替わる形をやめた）。
  * 検索はサーバーが行い、返るのは木と同じ規則で閲覧できる現役ページだけ。
  * 入力から 250ms 待って問い合わせ、世代番号で古い応答を捨てる。
- * ↑↓ で選び Enter で開く。Esc・外側クリックで閉じる。
+ * ↑↓ で選び Enter で開く。Esc・外側クリック・閉じるボタンで閉じる。
+ *
+ * 枠は Base UI の Dialog。開いている間は Tab が窓の中だけを回り、閉じたら入口のボタンへ
+ * フォーカスが戻る。検索中・件数・一致なし・失敗は読み上げ用の status にも出す（目で見て
+ * いる人と同じことが、画面を見ない人にも伝わるように）。
  *
  * 各結果は matchField で題名一致・本文一致を見分ける。本文一致の行は題名の下に
  * 抜粋（excerpt）を添え、一致箇所を強調する（行の描画そのものは KbSearchResultRow）。
@@ -37,10 +42,6 @@ export default function KbSearchDialog({ workspaceSlug, spaces, onClose }: KbSea
   // 再試行の引き金（値そのものに意味は無い。増えたら同じ問い合わせをもう一度投げる）。
   const [attempt, setAttempt] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
 
   useEffect(() => {
     // 空入力に戻したときも世代を進める。進めないと、消す前に飛ばした検索の応答が
@@ -78,7 +79,11 @@ export default function KbSearchDialog({ workspaceSlug, spaces, onClose }: KbSea
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     // 日本語入力の変換キャンセル・確定はモーダルの操作にしない（打ちかけの検索語を守る）。
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    // Dialog は Escape を文書全体で拾って閉じるので、変換中の Escape はここで止める。
+    if (event.nativeEvent.isComposing || event.keyCode === 229) {
+      if (event.key === 'Escape') event.stopPropagation();
+      return;
+    }
     if (event.key === 'Escape') {
       event.preventDefault();
       onClose();
@@ -121,20 +126,35 @@ export default function KbSearchDialog({ workspaceSlug, spaces, onClose }: KbSea
     />
   );
 
+  // 読み上げ用の知らせ。目で見えている「検索中」「N 件」「無い」「失敗」を、画面を見ない人にも。
+  // 画面の文字（「検索中…」「検索に失敗しました」「一致するページがありません」）とは言い回しを
+  // 変える。同じ文字が 2 か所にあると、読み上げの領域と見える文字の区別が付かない。
+  const announcement =
+    status === 'loading'
+      ? '検索しています'
+      : status === 'error'
+        ? '検索できませんでした。再試行できます'
+        : status === 'done'
+          ? view.flat.length > 0
+            ? `${view.flat.length} 件のページが見つかりました`
+            : '一致は 0 件です'
+          : '';
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[18vh]">
-      <div
-        data-testid="note-search-overlay"
-        className="absolute inset-0 bg-black/50"
-        onClick={onClose}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="ページを検索"
-        className="relative flex max-h-[60vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-surface-3 bg-surface-1 shadow-2xl"
-      >
-        <div className="flex items-center gap-3 border-b border-surface-3 px-4 py-3">
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Backdrop
+          data-testid="note-search-overlay"
+          className="fixed inset-0 z-[100] bg-black/50"
+          onClick={onClose}
+        />
+        <Dialog.Popup
+          aria-modal="true"
+          initialFocus={inputRef}
+          className="fixed left-1/2 top-[12vh] z-[100] flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-surface-3 bg-surface-1 shadow-2xl focus:outline-none sm:top-[18vh] sm:max-h-[60vh]"
+        >
+        <Dialog.Title className="sr-only">ページを検索</Dialog.Title>
+        <div className="flex items-center gap-3 border-b border-surface-3 py-2 pl-4 pr-2">
           <FsIcon name="search" className="h-5 w-5 shrink-0 text-[var(--color-text-muted)]" />
           <input
             ref={inputRef}
@@ -147,13 +167,24 @@ export default function KbSearchDialog({ workspaceSlug, spaces, onClose }: KbSea
             role="combobox"
             aria-expanded={view.flat.length > 0}
             aria-controls={listboxId}
+            aria-autocomplete="list"
             aria-activedescendant={selectedPage ? optionId(selectedPage) : undefined}
-            className="flex-1 bg-transparent text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)]"
+            className="min-h-10 flex-1 bg-transparent text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)]"
           />
-          <kbd className="hidden shrink-0 rounded border border-surface-3 bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-text-muted)] sm:inline-flex">
+          <kbd className="hidden shrink-0 rounded border border-surface-3 bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-[var(--color-text-muted)] [@media(hover:hover)_and_(pointer:fine)]:inline-flex">
             ESC
           </kbd>
+          <Dialog.Close
+            aria-label="閉じる"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-surface-2 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11"
+          >
+            <FsIcon name="x" className="h-4 w-4" />
+          </Dialog.Close>
         </div>
+
+        <p role="status" className="sr-only">
+          {announcement}
+        </p>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {status === 'idle' && (
@@ -189,7 +220,7 @@ export default function KbSearchDialog({ workspaceSlug, spaces, onClose }: KbSea
               「li に group は不可」の両方を同時には満たせないので、一覧の意味は role だけで
               表し、要素は div にする。
             */
-            <div id={listboxId} role="listbox" aria-label="検索結果">
+            <div id={listboxId} role="listbox" aria-label="検索結果" tabIndex={-1}>
               {view.groups.map(({ space, pages: groupPages }) => (
                 <div key={space.id} role="group" aria-label={space.name}>
                   {/*
@@ -217,7 +248,8 @@ export default function KbSearchDialog({ workspaceSlug, spaces, onClose }: KbSea
             </div>
           )}
         </div>
-      </div>
-    </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

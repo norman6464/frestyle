@@ -11,6 +11,8 @@ describe('getFieldBorderClass', () => {
   it('エラーなしの場合はbrand系のクラスを返す', () => {
     const result = getFieldBorderClass(false);
     expect(result).toContain('border-surface-3');
-    expect(result).toContain('focus:border-brand-400');
+    expect(result).toContain('focus:border-brand-600');
+    // 白地 2.33:1 で見えなかった brand-400 には戻さない。
+    expect(result).not.toContain('brand-400');
   });
 });

@@ -77,7 +77,7 @@ describe('AppShell', () => {
     renderAppShell();
     // 「メニュー」はヘッダーの三本線（柱の引き出しを開く）。柱の中の「メニューを閉じる」
     // とは別物なので、名前を完全一致で取る。
-    expect(screen.getByRole('button', { name: 'メニュー' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'サイドメニューを開く' })).toBeDefined();
   });
 
   it('Cmd+Kでコマンドパレットが開く', () => {

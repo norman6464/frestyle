@@ -68,7 +68,9 @@ export default function Header({
           <button
             type="button"
             onClick={onOpenMobileSidebar}
-            aria-label="メニュー"
+            // 開く先はスペース一覧とその画面の区画を持つ横の引き出し。「メニュー」だけだと
+            // アカウントのメニューと区別が付かない。
+            aria-label="サイドメニューを開く"
             className="inline-flex items-center justify-center md:hidden p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
           >
             <FsIcon name="menu" className="w-5 h-5" />

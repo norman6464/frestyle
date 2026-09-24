@@ -164,6 +164,11 @@ export default function GlobalSidebar({
       <div
         ref={drawerRef}
         tabIndex={-1}
+        // 狭い画面で引き出しとして開いている間は、本文の上に重なる窓として名乗る（中で Tab が
+        // 回り、Escape で閉じる作りとも一致させる）。広い画面では常設の柱なので名乗らない。
+        role={mobileOpen ? 'dialog' : undefined}
+        aria-modal={mobileOpen || undefined}
+        aria-label={mobileOpen ? 'サイドメニュー' : undefined}
         onMouseEnter={collapsed ? panel.openPeek : undefined}
         onMouseLeave={collapsed ? panel.closePeek : undefined}
         className={[

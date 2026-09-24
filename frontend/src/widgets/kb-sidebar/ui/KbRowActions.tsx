@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ConfirmModal, FsIcon } from '@/shared/ui';
+import { useDismissOnOutside } from '@/shared/lib/hooks/useDismissOnOutside';
 import type { KbDropTarget, KbMoveActions } from '@/entities/kb';
 
 export interface KbRowActionsProps {
@@ -40,6 +41,7 @@ export default function KbRowActions({
   // （見た目が周りと揃い、文言・ボタンの並びをこちらで統べられる）。
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
   // 右クリック（コンテキストメニュー）からも同じメニューを開く。別のメニューを
   // 作らないのは、項目と失敗の扱いを 2 つ持たないため。
@@ -53,28 +55,8 @@ export default function KbRowActions({
     seenSignal.current = openSignal;
   }, [openSignal]);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDocumentMouseDown = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        event.target instanceof Node &&
-        containerRef.current.contains(event.target)
-      ) {
-        return;
-      }
-      setMenuOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDocumentMouseDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onDocumentMouseDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [menuOpen]);
+  // 外を押したら・Escape で閉じる。Escape のときは「…」へフォーカスを戻す。
+  useDismissOnOutside(menuOpen, [containerRef], () => setMenuOpen(false), { returnFocus: menuTriggerRef });
 
   return (
     <div
@@ -86,6 +68,7 @@ export default function KbRowActions({
       {onRename && (
         <>
           <button
+            ref={menuTriggerRef}
             type="button"
             onClick={() => setMenuOpen((prev) => !prev)}
             aria-expanded={menuOpen}
