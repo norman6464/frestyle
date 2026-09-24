@@ -344,6 +344,85 @@ func (q *Queries) CountTicketWatchers(ctx context.Context, arg CountTicketWatche
 	return count, err
 }
 
+const countTickets = `-- name: CountTickets :one
+SELECT COUNT(*) FROM tickets t
+LEFT JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
+LEFT JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
+WHERE t.workspace_id = $1 AND t.project_id = $2
+  AND t.deleted_at IS NULL
+  AND (t.archived_at IS NOT NULL) = $3::boolean
+  AND ($4::uuid IS NULL OR t.status_id = $4::uuid)
+  AND ($5::uuid IS NULL OR t.type_id = $5::uuid)
+  AND (
+    $6::uuid IS NULL
+    OR a.assignee_principal_id = $6::uuid
+  )
+  AND (NOT $7::boolean OR a.assignee_principal_id IS NULL)
+  AND (
+    $8::uuid IS NULL
+    OR a.assignee_principal_id = $8::uuid
+  )
+  AND (
+    $9::uuid IS NULL
+    OR EXISTS (
+      SELECT 1 FROM ticket_labels tl
+      WHERE tl.workspace_id = t.workspace_id AND tl.ticket_id = t.id AND tl.label_id = $9::uuid
+    )
+  )
+  AND ($10::date IS NULL OR t.due_date <= $10::date)
+  AND ($11::date IS NULL OR t.start_date >= $11::date)
+  AND (NOT $12::boolean OR (t.due_date < CURRENT_DATE AND s.category <> 'done'))
+  AND (
+    $13::text IS NULL
+    OR t.title ILIKE '%' || $13::text || '%'
+    OR t.plain_text ILIKE '%' || $13::text || '%'
+    OR word_similarity($13::text, t.title) > 0.6
+    OR word_similarity($13::text, t.plain_text) > 0.6
+  )
+`
+
+type CountTicketsParams struct {
+	WorkspaceID             uuid.UUID
+	ProjectID               uuid.UUID
+	IncludeArchived         bool
+	StatusID                uuid.NullUUID
+	TypeID                  uuid.NullUUID
+	AssigneePrincipalID     uuid.NullUUID
+	Unassigned              bool
+	AssignedToMePrincipalID uuid.NullUUID
+	LabelID                 uuid.NullUUID
+	DueBefore               pgtext.NullDate
+	StartAfter              pgtext.NullDate
+	Overdue                 bool
+	Q                       sql.NullString
+}
+
+// 利用者が保存した絞り込み（ticket_saved_filters）の件数バッジ用。ListTickets と同じ条件に
+// 合う行を数える。sqlc は SQL の断片を共有できないので WHERE は ListTickets をそのまま写して
+// ある — ListTickets の条件を変えるときはここも同じに保つこと。ずれは結合テスト
+// （TestTicketRepository_CountTickets_Integration: CountTickets は ListTickets の件数と一致する）
+// が捕まえる。並び順の JOIN（ticket_backlog_ranks）は数えるだけなので要らない。
+func (q *Queries) CountTickets(ctx context.Context, arg CountTicketsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTickets,
+		arg.WorkspaceID,
+		arg.ProjectID,
+		arg.IncludeArchived,
+		arg.StatusID,
+		arg.TypeID,
+		arg.AssigneePrincipalID,
+		arg.Unassigned,
+		arg.AssignedToMePrincipalID,
+		arg.LabelID,
+		arg.DueBefore,
+		arg.StartAfter,
+		arg.Overdue,
+		arg.Q,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createTicket = `-- name: CreateTicket :one
 
 WITH n AS (

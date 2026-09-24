@@ -491,6 +491,26 @@ type TicketPath struct {
 	Depth       int32
 }
 
+type TicketSavedFilter struct {
+	ID                  uuid.UUID
+	WorkspaceID         uuid.UUID
+	ProjectID           uuid.UUID
+	UserID              int64
+	Name                string
+	NameLower           sql.NullString
+	StatusID            uuid.NullUUID
+	TypeID              uuid.NullUUID
+	LabelID             uuid.NullUUID
+	AssigneePrincipalID uuid.NullUUID
+	AssigneeKind        sql.NullString
+	Unassigned          bool
+	AssignedToMe        bool
+	Overdue             bool
+	Q                   sql.NullString
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
 type TicketSprintRank struct {
 	WorkspaceID uuid.UUID
 	SprintID    uuid.UUID

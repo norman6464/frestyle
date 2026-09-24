@@ -854,3 +854,41 @@ func (m *mockTicketAttachmentPresigner) PresignDownload(ctx context.Context, key
 	args := m.Called(ctx, key)
 	return args.String(0), args.Int(1), args.Error(2)
 }
+
+func (m *mockTicketRepo) CountTickets(ctx context.Context, in repository.ListTicketsInput) (int64, error) {
+	args := m.Called(ctx, in)
+	n, _ := args.Get(0).(int64)
+	return n, args.Error(1)
+}
+
+// mockTicketSavedFilterRepo は repository.TicketSavedFilterRepository の testify/mock 実装。
+type mockTicketSavedFilterRepo struct{ mock.Mock }
+
+var _ repository.TicketSavedFilterRepository = (*mockTicketSavedFilterRepo)(nil)
+
+func (m *mockTicketSavedFilterRepo) InsertTicketSavedFilter(ctx context.Context, f *domain.TicketSavedFilter) error {
+	args := m.Called(ctx, f)
+	return args.Error(0)
+}
+
+func (m *mockTicketSavedFilterRepo) UpdateTicketSavedFilter(ctx context.Context, f *domain.TicketSavedFilter) error {
+	args := m.Called(ctx, f)
+	return args.Error(0)
+}
+
+func (m *mockTicketSavedFilterRepo) DeleteTicketSavedFilter(ctx context.Context, workspaceID, projectID string, userID uint64, filterID string) error {
+	args := m.Called(ctx, workspaceID, projectID, userID, filterID)
+	return args.Error(0)
+}
+
+func (m *mockTicketSavedFilterRepo) ListTicketSavedFilters(ctx context.Context, workspaceID, projectID string, userID uint64) ([]domain.TicketSavedFilter, error) {
+	args := m.Called(ctx, workspaceID, projectID, userID)
+	l, _ := args.Get(0).([]domain.TicketSavedFilter)
+	return l, args.Error(1)
+}
+
+func (m *mockTicketSavedFilterRepo) CountTicketSavedFilters(ctx context.Context, workspaceID, projectID string, userID uint64) (int64, error) {
+	args := m.Called(ctx, workspaceID, projectID, userID)
+	n, _ := args.Get(0).(int64)
+	return n, args.Error(1)
+}

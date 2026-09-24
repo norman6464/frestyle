@@ -45,6 +45,9 @@ type ticketFakeRepo struct {
 	// 段13: ページへのラベル付け外し（labels の語彙を共有する page_labels 側。
 	// LabelRepository のページ版メソッドもこの同じ struct に実装する — ticketLabels と同じ判断）。
 	pageLabels map[string][]string // pageID -> labelID（追加順）
+
+	// 利用者が保存した絞り込み（TicketSavedFilterRepository もこの同じ struct に実装する）。
+	savedFilters map[string]*domain.TicketSavedFilter
 }
 
 func newTicketFakeRepo() *ticketFakeRepo {
@@ -64,6 +67,7 @@ func newTicketFakeRepo() *ticketFakeRepo {
 		ticketLabels:     map[string][]string{},
 		attachments:      map[string]*domain.TicketAttachment{},
 		pageLabels:       map[string][]string{},
+		savedFilters:     map[string]*domain.TicketSavedFilter{},
 	}
 }
 
@@ -1280,3 +1284,127 @@ func (ticketAttachmentFakePresigner) PresignDownload(_ context.Context, key stri
 }
 
 var _ repository.TicketAttachmentPresigner = ticketAttachmentFakePresigner{}
+
+// --- 利用者が保存した絞り込み（repository.TicketSavedFilterRepository も同じ struct に実装する） ---
+
+var _ repository.TicketSavedFilterRepository = (*ticketFakeRepo)(nil)
+
+// addSavedFilter はテストの下ごしらえ用（他人の分を置く等。採番・一意性検査を経由しない直接投入）。
+func (f *ticketFakeRepo) addSavedFilter(sf domain.TicketSavedFilter) *domain.TicketSavedFilter {
+	stored := sf
+	f.savedFilters[sf.ID] = &stored
+	return &stored
+}
+
+// savedFilterRefsExist は本番の複合 FK の代わり（状態・種別は同じプロジェクト、ラベルは同じ
+// ワークスペースに実在すること）。担当の主体は kbFakePerms 側にあってここからは見えないので
+// 確かめない。
+func (f *ticketFakeRepo) savedFilterRefsExist(sf *domain.TicketSavedFilter) error {
+	if sf.StatusID != nil {
+		s, ok := f.statuses[*sf.StatusID]
+		if !ok || s.WorkspaceID != sf.WorkspaceID || s.ProjectID != sf.ProjectID {
+			return repository.ErrTicketStatusNotFound
+		}
+	}
+	if sf.TypeID != nil {
+		ty, ok := f.types[*sf.TypeID]
+		if !ok || ty.WorkspaceID != sf.WorkspaceID || ty.ProjectID != sf.ProjectID {
+			return repository.ErrTicketTypeNotFound
+		}
+	}
+	if sf.LabelID != nil {
+		l, ok := f.labels[*sf.LabelID]
+		if !ok || l.WorkspaceID != sf.WorkspaceID {
+			return repository.ErrLabelNotFound
+		}
+	}
+	return nil
+}
+
+// savedFilterNameTaken は uq_ticket_saved_filters_owner_name の代わり（同じ本人・同じプロジェクトで
+// 大文字小文字を区別しない同名）。
+func (f *ticketFakeRepo) savedFilterNameTaken(sf *domain.TicketSavedFilter) bool {
+	for _, other := range f.savedFilters {
+		if other.ID != sf.ID && other.ProjectID == sf.ProjectID && other.UserID == sf.UserID &&
+			strings.EqualFold(other.Name, sf.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *ticketFakeRepo) findOwnSavedFilter(workspaceID, projectID string, userID uint64, filterID string) (*domain.TicketSavedFilter, bool) {
+	sf, ok := f.savedFilters[filterID]
+	if !ok || sf.WorkspaceID != workspaceID || sf.ProjectID != projectID || sf.UserID != userID {
+		return nil, false
+	}
+	return sf, true
+}
+
+func (f *ticketFakeRepo) InsertTicketSavedFilter(_ context.Context, sf *domain.TicketSavedFilter) error {
+	if f.savedFilterNameTaken(sf) {
+		return repository.ErrTicketSavedFilterNameTaken
+	}
+	if err := f.savedFilterRefsExist(sf); err != nil {
+		return err
+	}
+	sf.ID = f.newID("filter")
+	sf.CreatedAt, sf.UpdatedAt = time.Now(), time.Now()
+	stored := *sf
+	f.savedFilters[sf.ID] = &stored
+	return nil
+}
+
+func (f *ticketFakeRepo) UpdateTicketSavedFilter(_ context.Context, sf *domain.TicketSavedFilter) error {
+	stored, ok := f.findOwnSavedFilter(sf.WorkspaceID, sf.ProjectID, sf.UserID, sf.ID)
+	if !ok {
+		return repository.ErrTicketSavedFilterNotFound
+	}
+	if f.savedFilterNameTaken(sf) {
+		return repository.ErrTicketSavedFilterNameTaken
+	}
+	if err := f.savedFilterRefsExist(sf); err != nil {
+		return err
+	}
+	sf.CreatedAt = stored.CreatedAt
+	sf.UpdatedAt = time.Now()
+	*stored = *sf
+	return nil
+}
+
+func (f *ticketFakeRepo) DeleteTicketSavedFilter(_ context.Context, workspaceID, projectID string, userID uint64, filterID string) error {
+	if _, ok := f.findOwnSavedFilter(workspaceID, projectID, userID, filterID); !ok {
+		return repository.ErrTicketSavedFilterNotFound
+	}
+	delete(f.savedFilters, filterID)
+	return nil
+}
+
+func (f *ticketFakeRepo) ListTicketSavedFilters(_ context.Context, workspaceID, projectID string, userID uint64) ([]domain.TicketSavedFilter, error) {
+	out := []domain.TicketSavedFilter{}
+	for _, sf := range f.savedFilters {
+		if sf.WorkspaceID == workspaceID && sf.ProjectID == projectID && sf.UserID == userID {
+			out = append(out, *sf)
+		}
+	}
+	// 本番の ORDER BY created_at, id と同じ並び（fake の ID は採番順なので ID で足りる）。
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+func (f *ticketFakeRepo) CountTicketSavedFilters(ctx context.Context, workspaceID, projectID string, userID uint64) (int64, error) {
+	list, err := f.ListTicketSavedFilters(ctx, workspaceID, projectID, userID)
+	if err != nil {
+		return 0, err
+	}
+	return int64(len(list)), nil
+}
+
+// CountTickets は本番と同じく ListTickets と同じ条件で数える（fake では一覧を取って数えるだけ）。
+func (f *ticketFakeRepo) CountTickets(ctx context.Context, in repository.ListTicketsInput) (int64, error) {
+	list, err := f.ListTickets(ctx, in)
+	if err != nil {
+		return 0, err
+	}
+	return int64(len(list)), nil
+}

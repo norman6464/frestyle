@@ -264,6 +264,47 @@ WHERE t.workspace_id = sqlc.arg(workspace_id) AND t.project_id = sqlc.arg(projec
   )
 ORDER BY r."position";
 
+-- name: CountTickets :one
+-- 利用者が保存した絞り込み（ticket_saved_filters）の件数バッジ用。ListTickets と同じ条件に
+-- 合う行を数える。sqlc は SQL の断片を共有できないので WHERE は ListTickets をそのまま写して
+-- ある — ListTickets の条件を変えるときはここも同じに保つこと。ずれは結合テスト
+-- （TestTicketRepository_CountTickets_Integration: CountTickets は ListTickets の件数と一致する）
+-- が捕まえる。並び順の JOIN（ticket_backlog_ranks）は数えるだけなので要らない。
+SELECT COUNT(*) FROM tickets t
+LEFT JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
+LEFT JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
+WHERE t.workspace_id = sqlc.arg(workspace_id) AND t.project_id = sqlc.arg(project_id)
+  AND t.deleted_at IS NULL
+  AND (t.archived_at IS NOT NULL) = sqlc.arg(include_archived)::boolean
+  AND (sqlc.narg(status_id)::uuid IS NULL OR t.status_id = sqlc.narg(status_id)::uuid)
+  AND (sqlc.narg(type_id)::uuid IS NULL OR t.type_id = sqlc.narg(type_id)::uuid)
+  AND (
+    sqlc.narg(assignee_principal_id)::uuid IS NULL
+    OR a.assignee_principal_id = sqlc.narg(assignee_principal_id)::uuid
+  )
+  AND (NOT sqlc.arg(unassigned)::boolean OR a.assignee_principal_id IS NULL)
+  AND (
+    sqlc.narg(assigned_to_me_principal_id)::uuid IS NULL
+    OR a.assignee_principal_id = sqlc.narg(assigned_to_me_principal_id)::uuid
+  )
+  AND (
+    sqlc.narg(label_id)::uuid IS NULL
+    OR EXISTS (
+      SELECT 1 FROM ticket_labels tl
+      WHERE tl.workspace_id = t.workspace_id AND tl.ticket_id = t.id AND tl.label_id = sqlc.narg(label_id)::uuid
+    )
+  )
+  AND (sqlc.narg(due_before)::date IS NULL OR t.due_date <= sqlc.narg(due_before)::date)
+  AND (sqlc.narg(start_after)::date IS NULL OR t.start_date >= sqlc.narg(start_after)::date)
+  AND (NOT sqlc.arg(overdue)::boolean OR (t.due_date < CURRENT_DATE AND s.category <> 'done'))
+  AND (
+    sqlc.narg(q)::text IS NULL
+    OR t.title ILIKE '%' || sqlc.narg(q)::text || '%'
+    OR t.plain_text ILIKE '%' || sqlc.narg(q)::text || '%'
+    OR word_similarity(sqlc.narg(q)::text, t.title) > 0.6
+    OR word_similarity(sqlc.narg(q)::text, t.plain_text) > 0.6
+  );
+
 -- name: GetTicketCounts :one
 -- バックログのサイドバー「保存した絞り込み」が使う件数の集計（段 5）。1 クエリの
 -- FILTER で 4 通りをまとめて数える（4 回に分けて問い合わせると往復が増えるだけで

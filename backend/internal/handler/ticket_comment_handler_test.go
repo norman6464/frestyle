@@ -30,7 +30,7 @@ func ticketFixtureSameRepo(t *testing.T, base ticketFixture, uid uint64, role do
 		c.Set(middleware.ContextKeyCurrentUser, &domain.User{ID: uid})
 		c.Next()
 	})
-	registerTicketRoutesWith(g, base.tickets, base.tickets, base.tickets, base.tickets, base.perms, base.pages, users, &fakeNotifRepo{}, fakeTxManager{}, ticketAttachmentFakePresigner{})
+	registerTicketRoutesWith(g, base.tickets, base.tickets, base.tickets, base.tickets, base.tickets, base.perms, base.pages, users, &fakeNotifRepo{}, fakeTxManager{}, ticketAttachmentFakePresigner{})
 	return ticketFixture{tickets: base.tickets, pages: base.pages, perms: base.perms, router: r}
 }
 

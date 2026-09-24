@@ -982,6 +982,39 @@ CREATE TABLE "ticket_paths" (
 CREATE INDEX "idx_ticket_paths_ancestor_id" ON "ticket_paths" ("ancestor_id");
 -- Create index "idx_ticket_paths_workspace_id" to table: "ticket_paths"
 CREATE INDEX "idx_ticket_paths_workspace_id" ON "ticket_paths" ("workspace_id");
+-- Create "ticket_saved_filters" table
+CREATE TABLE "ticket_saved_filters" (
+  "id" uuid NOT NULL,
+  "workspace_id" uuid NOT NULL,
+  "project_id" uuid NOT NULL,
+  "user_id" bigint NOT NULL,
+  "name" character varying(60) NOT NULL,
+  "name_lower" character varying(60) NULL GENERATED ALWAYS AS (lower((name)::text)) STORED,
+  "status_id" uuid NULL,
+  "type_id" uuid NULL,
+  "label_id" uuid NULL,
+  "assignee_principal_id" uuid NULL,
+  "assignee_kind" character varying(16) NULL GENERATED ALWAYS AS ('user'::character varying) STORED,
+  "unassigned" boolean NOT NULL DEFAULT false,
+  "assigned_to_me" boolean NOT NULL DEFAULT false,
+  "overdue" boolean NOT NULL DEFAULT false,
+  "q" character varying(200) NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "fk_ticket_saved_filters_assignee" FOREIGN KEY ("workspace_id", "assignee_kind", "assignee_principal_id") REFERENCES "principals" ("workspace_id", "kind", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_ticket_saved_filters_label" FOREIGN KEY ("workspace_id", "label_id") REFERENCES "labels" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_ticket_saved_filters_project" FOREIGN KEY ("workspace_id", "project_id") REFERENCES "projects" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_ticket_saved_filters_status" FOREIGN KEY ("workspace_id", "project_id", "status_id") REFERENCES "ticket_statuses" ("workspace_id", "project_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_ticket_saved_filters_type" FOREIGN KEY ("workspace_id", "project_id", "type_id") REFERENCES "ticket_types" ("workspace_id", "project_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_ticket_saved_filters_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "ck_ticket_saved_filters_assignee_mode" CHECK (((((assignee_principal_id IS NOT NULL))::integer + (unassigned)::integer) + (assigned_to_me)::integer) <= 1),
+  CONSTRAINT "ck_ticket_saved_filters_has_condition" CHECK ((status_id IS NOT NULL) OR (type_id IS NOT NULL) OR (label_id IS NOT NULL) OR (assignee_principal_id IS NOT NULL) OR unassigned OR assigned_to_me OR overdue OR (q IS NOT NULL)),
+  CONSTRAINT "ck_ticket_saved_filters_name_trimmed" CHECK (((name)::text = btrim((name)::text)) AND ((name)::text <> ''::text)),
+  CONSTRAINT "ck_ticket_saved_filters_q_not_blank" CHECK ((q IS NULL) OR (btrim((q)::text) <> ''::text))
+);
+-- Create index "uq_ticket_saved_filters_owner_name" to table: "ticket_saved_filters"
+CREATE UNIQUE INDEX "uq_ticket_saved_filters_owner_name" ON "ticket_saved_filters" ("project_id", "user_id", "name_lower");
 -- Create "ticket_sprint_ranks" table
 CREATE TABLE "ticket_sprint_ranks" (
   "workspace_id" uuid NOT NULL,

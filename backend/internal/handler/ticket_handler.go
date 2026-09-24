@@ -140,6 +140,7 @@ func respondTicketErr(c *gin.Context, err error) {
 		errors.Is(err, repository.ErrTicketCommentNotFound),
 		errors.Is(err, repository.ErrLabelNotFound),
 		errors.Is(err, repository.ErrTicketAttachmentNotFound),
+		errors.Is(err, repository.ErrTicketSavedFilterNotFound),
 		errors.Is(err, repository.ErrProjectNotFound),
 		errors.Is(err, repository.ErrWorkspaceNotFound),
 		errors.Is(err, repository.ErrPrincipalNotFound):
@@ -157,6 +158,20 @@ func respondTicketErr(c *gin.Context, err error) {
 		c.JSON(http.StatusConflict, errorResponse{Error: "type_name_taken"})
 	case errors.Is(err, repository.ErrLabelNameTaken):
 		c.JSON(http.StatusConflict, errorResponse{Error: "label_name_taken"})
+	case errors.Is(err, repository.ErrTicketSavedFilterNameTaken):
+		c.JSON(http.StatusConflict, errorResponse{Error: "saved_filter_name_taken"})
+	case errors.Is(err, ticket.ErrTicketSavedFilterLimitReached):
+		c.JSON(http.StatusConflict, errorResponse{Error: "saved_filter_limit_reached"})
+	// 保存した絞り込みの入力の誤りは、画面がその場で直せるよう理由ごとに分ける
+	// （名前・検索語の長さ・担当の条件の重なり・条件なし）。
+	case errors.Is(err, domain.ErrInvalidTicketSavedFilterName):
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_filter_name"})
+	case errors.Is(err, domain.ErrInvalidTicketSavedFilterQuery):
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_filter_query"})
+	case errors.Is(err, domain.ErrTicketSavedFilterAssigneeConflict):
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "assignee_mode_conflict"})
+	case errors.Is(err, domain.ErrTicketSavedFilterNoCondition):
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "filter_has_no_condition"})
 	case errors.Is(err, domain.ErrUnsupportedAttachmentContentType):
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "unsupported_content_type"})
 	case errors.Is(err, domain.ErrAttachmentTooLarge):
