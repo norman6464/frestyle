@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Ticket, TicketStatus, TicketType } from '@/entities/ticket';
 import type { SprintState } from '@/entities/sprint';
 import EmptyState from '@/shared/ui/EmptyState';
 import Loading from '@/shared/ui/Loading';
 import FsIllustration from '@/shared/ui/icons/FsIllustration';
+import { useContainerWidth } from '@/shared/lib/hooks/useContainerWidth';
 import { localTodayISO } from '../lib/dueDate';
-import BacklogRow, { BACKLOG_COLS_MD } from './BacklogRow';
+import BacklogRow, { BACKLOG_TABLE_GRID, type BacklogRowLayout } from './BacklogRow';
 import BacklogGroup from './BacklogGroup';
-import BacklogReorderBar from './BacklogReorderBar';
 import TicketCreateRow from './TicketCreateRow';
 
 /** 一覧を区切る段 1 つ。スプリント 1 件か、どのスプリントにも入っていない「バックログ」。 */
@@ -23,6 +23,14 @@ export interface BacklogGroupModel {
 }
 
 export const BACKLOG_GROUP_ID = '__backlog__';
+
+/**
+ * 表（6 列）を保てる領域の幅。これより狭いとカードに組み替える（設計ボード ST10）。
+ * 画面幅ではなく領域の幅で見る —— 画面は広くても、右に詳細が開けば一覧は狭い。
+ * 題名以外の 5 列と余白で約 570px を使うので、題名に 290px ほど残る幅を境にする
+ * （これより狭いと、題名が 1 文字ずつ縦に折れ始める）。
+ */
+export const BACKLOG_TABLE_MIN_WIDTH = 860;
 
 export interface BacklogListProps {
   groups: BacklogGroupModel[];
@@ -40,16 +48,10 @@ export interface BacklogListProps {
   busyId: string | null;
   nameOf: (principalId: string | null) => string;
   onSelect: (ticketId: string) => void;
+  /** 狭い画面で、選択中のカードから詳細を全画面で開く。渡さなければカードに「詳細をひらく」は出ない。 */
+  onOpenDetail?: (ticketId: string) => void;
   onCreate: (title: string) => Promise<void>;
   onChangeStatus: (ticketId: string, statusId: string) => void;
-  /** バックログの段の中で 1 つ動かす。 */
-  onMove: (ticketId: string, input: { anchorTicketId?: string; anchorAfter?: boolean }) => Promise<void>;
-  /** スプリントの段の中で 1 つ動かす（並びはスプリントごとに別に持つ）。 */
-  onMoveInSprint?: (ticketId: string, anchorTicketId: string, anchorAfter: boolean) => Promise<void>;
-  /** 選択中のチケットをスプリントへ入れる。 */
-  onMoveToSprint?: (ticketId: string, sprintId: string) => void;
-  /** 選択中のチケットをスプリントから出す（バックログへ戻る）。 */
-  onRemoveFromSprint?: (ticketId: string) => void;
   /** 段の見出しの右に出す操作（スプリントを開始 / 完了 / 作成）。段ごとに作る。 */
   renderGroupAction?: (group: BacklogGroupModel) => React.ReactNode;
   /** 件数の行の右端に置く操作（「この絞り込みを保存 ＋」）。無ければ件数だけ。 */
@@ -61,11 +63,14 @@ const COLUMNS = ['課題', 'やること', '担当', '優先度', '期限', '状
 
 /**
  * バックログの本文。見出し行を持つ表に、スプリントの段 → バックログの段を積み、
- * 下に並び替えの帯（選択中だけ）と件数を置く（設計ボード ST08）。
+ * 下に件数を置く（設計ボード ST08）。並び替えは選択中の帯（BacklogSelectionBand）が持つ。
  *
- * 表は CSS グリッドで組む。`<table>` にしないのは、狭い画面で列を捨ててカードに
+ * 表は CSS グリッドで組む。`<table>` にしないのは、領域が狭いときに列を捨ててカードに
  * 組み替えるため（表の要素は列の構造を捨てられない）。役割（table / row / cell）は
  * 付けておき、読み上げでは表として辿れるようにする。
+ *
+ * 表かカードかは一覧の領域の幅で決める（useContainerWidth）。チケットを選んで右に詳細が
+ * 開くと領域が狭くなり、自動でカードに変わる（ST10）。測れない環境では表。
  */
 export default function BacklogList({
   groups,
@@ -82,12 +87,9 @@ export default function BacklogList({
   busyId,
   nameOf,
   onSelect,
+  onOpenDetail,
   onCreate,
   onChangeStatus,
-  onMove,
-  onMoveInSprint,
-  onMoveToSprint,
-  onRemoveFromSprint,
   renderGroupAction,
   footerAction,
   onRetry,
@@ -96,6 +98,9 @@ export default function BacklogList({
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   // 期限超過の判定に使う「今日」。行ごとに Date を作らず、描画 1 回につき 1 回だけ求める。
   const today = localTodayISO();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const width = useContainerWidth(containerRef);
+  const layout: BacklogRowLayout = width !== null && width < BACKLOG_TABLE_MIN_WIDTH ? 'card' : 'table';
 
   if (error) {
     return (
@@ -130,58 +135,25 @@ export default function BacklogList({
 
   const statusOf = (id: string) => statuses.find((s) => s.id === id);
   const typeOf = (id: string) => types.find((t) => t.id === id);
-
-  // 並び替えは「選んだ行が入っている段の中」で行う。段をまたぐ移動は別の操作
-  // （スプリントへ入れる／から出す）なので、上下のボタンには載せない。
-  const ownerGroup = selectedId ? groups.find((g) => g.tickets.some((t) => t.id === selectedId)) ?? null : null;
-  const siblings = ownerGroup?.tickets ?? [];
-  const selectedIndex = selectedId ? siblings.findIndex((t) => t.id === selectedId) : -1;
-  const selected = selectedIndex >= 0 ? siblings[selectedIndex] : null;
-
-  const moveWithin = (anchor: Ticket, after: boolean) => {
-    if (!selected || !ownerGroup) return;
-    if (ownerGroup.kind === 'sprint') {
-      void onMoveInSprint?.(selected.id, anchor.id, after);
-      return;
-    }
-    void onMove(selected.id, { anchorTicketId: anchor.id, anchorAfter: after });
-  };
-
-  const handleMoveUp = () => {
-    if (selectedIndex <= 0) return;
-    moveWithin(siblings[selectedIndex - 1], false);
-  };
-  const handleMoveDown = () => {
-    if (selectedIndex < 0 || selectedIndex >= siblings.length - 1) return;
-    moveWithin(siblings[selectedIndex + 1], true);
-  };
-  const handleMoveLast = () => {
-    if (!selected || !ownerGroup) return;
-    if (ownerGroup.kind === 'sprint') {
-      if (siblings.length < 2) return;
-      void onMoveInSprint?.(selected.id, siblings[siblings.length - 1].id, true);
-      return;
-    }
-    void onMove(selected.id, {});
-  };
-
   const showTotal = filtered && totalCount !== null && totalCount !== total;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={containerRef} className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div role="table" aria-label="チケット" aria-rowcount={total} aria-busy={loading || undefined}>
-          {/* 見出し行。狭い画面は列を捨ててカードにするので出さない（各カードが項目名を持つ）。 */}
-          <div
-            role="row"
-            className={`sticky top-0 z-10 hidden border-b border-surface-3 bg-surface-2 px-3 text-xs text-[var(--color-text-muted)] md:grid sm:px-4 ${BACKLOG_COLS_MD}`}
-          >
-            {COLUMNS.map((label) => (
-              <div key={label} role="columnheader" className="whitespace-nowrap py-2.5">
-                {label}
-              </div>
-            ))}
-          </div>
+        <div role="table" aria-label="チケット" aria-rowcount={total} aria-busy={loading || undefined} data-layout={layout}>
+          {/* 見出し行。カードのときは列を捨てるので出さない（各カードが項目名を持つ）。 */}
+          {layout === 'table' && (
+            <div
+              role="row"
+              className={`sticky top-0 z-10 border-b border-surface-3 bg-surface-2 px-3 text-xs text-[var(--color-text-muted)] sm:px-4 ${BACKLOG_TABLE_GRID}`}
+            >
+              {COLUMNS.map((label) => (
+                <div key={label} role="columnheader" className="whitespace-nowrap py-2.5">
+                  {label}
+                </div>
+              ))}
+            </div>
+          )}
 
           {groups.map((group) => (
             <BacklogGroup
@@ -216,7 +188,9 @@ export default function BacklogList({
                     canEdit={canEdit && !archived}
                     indented={ticket.parentId !== null}
                     today={today}
+                    layout={layout}
                     onOpen={() => onSelect(ticket.id)}
+                    onOpenDetail={onOpenDetail ? () => onOpenDetail(ticket.id) : undefined}
                     onChangeStatus={(statusId) => onChangeStatus(ticket.id, statusId)}
                   />
                 ))
@@ -239,27 +213,6 @@ export default function BacklogList({
           {footerAction}
         </div>
       </div>
-
-      {canEdit && !archived && (
-        <BacklogReorderBar
-          selectedKey={selected ? `${projectKey.toUpperCase()}-${selected.number}` : null}
-          groupName={ownerGroup?.name ?? null}
-          isFirst={selectedIndex <= 0}
-          isLast={selectedIndex < 0 || selectedIndex >= siblings.length - 1}
-          onMoveUp={handleMoveUp}
-          onMoveDown={handleMoveDown}
-          onMoveLast={handleMoveLast}
-          sprints={groups
-            .filter((g) => g.kind === 'sprint' && g.id !== ownerGroup?.id)
-            .map((g) => ({ id: g.id, name: g.name }))}
-          onMoveToSprint={selected && onMoveToSprint ? (sprintId) => onMoveToSprint(selected.id, sprintId) : undefined}
-          onRemoveFromSprint={
-            selected && ownerGroup?.kind === 'sprint' && onRemoveFromSprint
-              ? () => onRemoveFromSprint(selected.id)
-              : undefined
-          }
-        />
-      )}
     </div>
   );
 }

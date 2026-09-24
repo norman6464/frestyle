@@ -51,8 +51,10 @@ export interface TicketDetailPanelProps {
  * 上から順に、身元（キーと種別）→ 題名 → 状態と所属 → 説明 → 基本の 4 項目 → その他 7 項目 →
  * 添付・サブタスク → コメント。読む順と、直す頻度の順を揃えてある。
  *
- * 見出し（「選択中 KEY」）と閉じるボタンは器（SecondaryPanel）が描く。ここで同じ見出しを
- * もう 1 行出すと二重になるので持たない。
+ * 見出し（「選択中 KEY」）と選択解除は器（広い画面は TicketDetailPane の帯、狭い画面は
+ * TicketDetailSheet）が描く。ここで同じ見出しをもう 1 行出すと二重になるので持たない。
+ * スクロールもフォーカスの止まり先も器が持つので、この根の要素は tabIndex を持たない
+ * （名前の無い入れ物が Tab で止まると、読み上げには何なのか分からない）。
  */
 export default function TicketDetailPanel({
   ticket,
@@ -89,10 +91,10 @@ export default function TicketDetailPanel({
   const key = formatTicketKey(projectKey, ticket.number);
 
   return (
-    // スクロールは器（SecondaryPanel の中身ラッパー）が持つ。ここに overflow-y-auto を
-    // 付けると「スクロール範囲ゼロの空の容器」になり、overscroll-contain と相まって
-    // ホイール操作を飲み込んで器までスクロールが届かなくなる（実測で確認）。
-    <div className="px-4 py-5 sm:px-5" tabIndex={0}>
+    // スクロールは器（TicketDetailPane / TicketDetailSheet の中身ラッパー）が持つ。ここに
+    // overflow-y-auto を付けると「スクロール範囲ゼロの空の容器」になり、overscroll-contain と
+    // 相まってホイール操作を飲み込んで器までスクロールが届かなくなる（実測で確認）。
+    <div className="px-4 py-5 sm:px-5">
       {/* 身元。キーと種別を 1 行に。押すと全画面で開く（同じ物を大きく見る操作なので、身元そのものを入口にする）。 */}
       <Link
         to={`/tickets/${ticket.id}`}

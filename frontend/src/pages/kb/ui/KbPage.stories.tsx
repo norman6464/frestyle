@@ -316,8 +316,7 @@ export const 提案を採用する: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: '提案' }));
-    // SecondaryPanel はモバイル版（隠れている）・デスクトップ版の両方に同じ中身を描くため
-    // 常に2つ出る。片方は非表示なので toBeVisible ではなく件数だけ見る。
+    // 名前が複数か所（一覧と差分の見出しなど）に出ても通るよう、件数で見る。
     await expect((await canvas.findAllByText('鈴木 花子')).length).toBeGreaterThan(0);
 
     await userEvent.click(canvas.getAllByRole('button', { name: '採用' })[0]);

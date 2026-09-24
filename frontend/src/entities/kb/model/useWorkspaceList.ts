@@ -10,9 +10,9 @@ import type { KbWorkspace } from './types';
  * ヘッダーのようにワークスペースの出入りだけが要る場所ではこちらを使う。
  *
  * 作成・削除は kbTreeEvents で他インスタンスへ知らせ、他インスタンス（KbFrame の
- * useKbTree・他画面の useWorkspaceList）からの通知も購読する。SecondaryPanel が
- * モバイル用/デスクトップ用の DOM を常に両方マウントするため、同じ画面内でも
- * ワークスペース一覧を持つインスタンスは複数存在し、片方の変更を他方が自動では知れない。
+ * useKbTree・他画面の useWorkspaceList）からの通知も購読する。ヘッダーと本文のように、
+ * 同じ画面内でもワークスペース一覧を持つインスタンスは複数存在し、片方の変更を他方が
+ * 自動では知れない。
  */
 export function useWorkspaceList() {
   const [workspaces, setWorkspaces] = useState<KbWorkspace[]>([]);

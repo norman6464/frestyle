@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { SecondaryPanel } from '@/widgets/secondary-panel';
-import { ConfirmModal, EmptyState, FsIcon, FsIllustration, Loading, NameCreateForm } from '@/shared/ui';
+import { ConfirmModal, EmptyState, FsIllustration, Loading, NameCreateForm } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
+import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { TicketRepository, formatTicketKey, type TicketSavedFilter } from '@/entities/ticket';
 import { ProjectRepository } from '@/entities/project';
@@ -30,9 +30,14 @@ import { nextSprintName } from '../lib/nextSprintName';
 import { projectInitials } from '../lib/projectInitials';
 import { useBacklogFilterCounts } from '../model/useBacklogFilterCounts';
 import { useSavedFilters } from '../model/useSavedFilters';
+import { useBacklogReorder } from '../model/useBacklogReorder';
 import { savedFilterErrorMessage } from '../lib/savedFilterError';
+import { focusTicketRow } from '../lib/focusTicketRow';
 import BacklogProjectSwitcher from './BacklogProjectSwitcher';
+import BacklogSelectionBand from './BacklogSelectionBand';
 import SaveFilterControl from './SaveFilterControl';
+import TicketDetailPane from './TicketDetailPane';
+import TicketDetailSheet from './TicketDetailSheet';
 
 /**
  * 面ごとの見出し。小さな見出しは設計ボード ST08 の文言（バックログ）と、面の名前（ほか）。
@@ -100,7 +105,16 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     clearFilters,
     reset,
   } = useBacklogUrlState();
-  const [detailMobileOpen, setDetailMobileOpen] = useState(false);
+  // 狭い画面では、選ぶ（帯が出る）と開く（全画面の詳細）を別の操作にする（設計ボード ST12・ST13）。
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  // 並び替えの結果（「1 つ上へ動かしました」）。選択中の帯に出し、読み上げにも通知する。
+  const [moveMessage, setMoveMessage] = useState<string | null>(null);
+  // 広い画面（詳細を右の列に出す）か、狭い画面（一覧の下の帯と全画面の詳細）か。
+  // どちらか片方しか描かない —— 同じ詳細を 2 か所に描くと取得も下書きも二重に動く。
+  const wide = !useMediaQuery('(max-width: 767px)');
+  // 行を押して開いたチケット。そのときだけ詳細の見出しへフォーカスを移す（URL から選択付きで
+  // 開いた直後にフォーカスを奪わない）。
+  const [focusDetailFor, setFocusDetailFor] = useState<string | null>(null);
   // 保存した絞り込みへの操作（保存・改名・削除）の結果。操作した場所（タブの並びの下）に出す。
   const [filterMessage, setFilterMessage] = useState<string | null>(null);
   // 保存した絞り込みの削除は確認を挟む（消すと同じ条件を組み直すしかない）。
@@ -209,6 +223,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     if (shownProject.current !== null && shownProject.current !== id) {
       reset();
       setFilterMessage(null);
+      setMobileDetailOpen(false);
+      setMoveMessage(null);
     }
     shownProject.current = id;
   }, [project?.id, reset]);
@@ -218,6 +234,21 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   const parentTicket = selectedTicket?.parentId
     ? list.tickets.find((t) => t.id === selectedTicket.parentId)
     : undefined;
+  const selectedKey = selectedTicket && project ? formatTicketKey(project.key, selectedTicket.number) : null;
+
+  // 並び替えは「選んだ行が入っている段の中」で行う。段をまたぐ移動は別の操作（スプリントへ
+  // 入れる／から出す）。どちらも選択中の帯から。
+  const reorder = useBacklogReorder(groups, selectedTicket?.id ?? null, {
+    onMove: list.move,
+    onMoveInSprint: (ticketId, anchorTicketId, anchorAfter) =>
+      sprints.moveTicket(ticketId, anchorTicketId, anchorAfter).then(() => list.refresh()),
+  });
+
+  /** 並び替えの結果を帯に出す。失敗は知らせて、一覧は動かさない。 */
+  const announceMove = (action: Promise<unknown>, doneMessage: string, failMessage: string) => {
+    setMoveMessage(null);
+    void action.then(() => setMoveMessage(doneMessage)).catch(() => showToast('error', failMessage));
+  };
 
   const handleEnable = async () => {
     if (!workspaceSlug || !project) return;
@@ -235,7 +266,26 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
 
   const handleSelect = (ticketId: string) => {
     selectTicket(ticketId);
-    setDetailMobileOpen(true);
+    setFocusDetailFor(ticketId);
+    setMoveMessage(null);
+  };
+
+  /** 狭い画面の全画面の詳細から一覧へ戻る。選択は残し、開いた行へフォーカスを戻す。 */
+  const backToList = () => {
+    setMobileDetailOpen(false);
+    if (selectedId) focusTicketRow(selectedId);
+  };
+
+  /**
+   * 選択を外して詳細を閉じる（選択解除・Escape）。閉じたら起点の行へフォーカスを戻す
+   * （設計ボード ST14 の 04）。狭い画面の「一覧へ」は別の操作 —— 選択は残る。
+   */
+  const closeDetail = () => {
+    const id = selectedId;
+    selectTicket(null);
+    setMobileDetailOpen(false);
+    setMoveMessage(null);
+    if (id) focusTicketRow(id);
   };
 
   const handleCreateBlank = () =>
@@ -335,11 +385,113 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
       });
   };
 
+  /**
+   * 選択中の帯（ST14 の 01）。広い画面では詳細の上、狭い画面では一覧の下。中身は同じで、
+   * 狭い画面だけ「選択した課題をひらく」が付く。
+   */
+  const selectionBand = (variant: 'header' | 'bottom') =>
+    selectedTicket && selectedKey ? (
+      <BacklogSelectionBand
+        variant={variant}
+        selectedKey={selectedKey}
+        groupName={reorder.ownerGroup?.name ?? null}
+        isFirst={reorder.isFirst}
+        isLast={reorder.isLast}
+        canReorder={!archived}
+        onMoveUp={() => announceMove(reorder.moveUp(), `${selectedKey} を 1 つ上へ動かしました`, '並び替えできませんでした。')}
+        onMoveDown={() => announceMove(reorder.moveDown(), `${selectedKey} を 1 つ下へ動かしました`, '並び替えできませんでした。')}
+        onMoveLast={() => announceMove(reorder.moveLast(), `${selectedKey} を末尾へ動かしました`, '並び替えできませんでした。')}
+        sprints={reorder.otherSprints}
+        onMoveToSprint={(sprintId) =>
+          announceMove(
+            sprints.addTicket(sprintId, selectedTicket.id),
+            `${selectedKey} を${reorder.otherSprints.find((s) => s.id === sprintId)?.name ?? 'スプリント'}へ入れました`,
+            'スプリントへ入れられませんでした。',
+          )
+        }
+        onRemoveFromSprint={
+          reorder.ownerGroup?.kind === 'sprint'
+            ? () =>
+                announceMove(
+                  sprints.removeTicket(selectedTicket.id),
+                  `${selectedKey} をスプリントから出しました`,
+                  'スプリントから出せませんでした。',
+                )
+            : undefined
+        }
+        onDeselect={closeDetail}
+        onOpenDetail={variant === 'bottom' ? () => setMobileDetailOpen(true) : undefined}
+        message={moveMessage}
+      />
+    ) : null;
+
+  /** 詳細の中身。広い画面の列と狭い画面の全画面のどちらか片方にだけ差し込む。 */
+  const detailPanel = selectedTicket ? (
+    <TicketDetailPanel
+      key={selectedTicket.id}
+      ticket={selectedTicket}
+      projectKey={project?.key ?? ''}
+      workspaceSlug={workspaceSlug ?? ''}
+      statuses={masters.statuses}
+      types={masters.types}
+      principals={principals}
+      parentTicket={parentTicket}
+      canEdit
+      busy={list.busyId === selectedTicket.id}
+      allLabels={labels.labels}
+      onUpdate={(ticketId, input) => list.updateTicket(ticketId, input)}
+      onChangeStatus={(statusId) =>
+        withToastOnFailure(() => list.changeStatus(selectedTicket.id, { statusId }), '状態を変更できませんでした。')
+      }
+      onAssign={(principalId) =>
+        withToastOnFailure(() => list.assign(selectedTicket.id, principalId), '担当を設定できませんでした。')
+      }
+      onUnassign={() => withToastOnFailure(() => list.unassign(selectedTicket.id), '担当を外せませんでした。')}
+      onArchive={() =>
+        withToastOnFailure(() => list.archiveTicket(selectedTicket.id), 'アーカイブできませんでした。').then(closeDetail)
+      }
+      onRestore={() =>
+        withToastOnFailure(() => list.restoreTicket(selectedTicket.id), '現役に戻せませんでした。').then(closeDetail)
+      }
+      onToggleLabel={(label) => {
+        const attached = selectedTicket.labels.some((l) => l.id === label.id);
+        void withToastOnFailure(
+          () => (attached ? list.removeLabel(selectedTicket.id, label.id) : list.addLabel(selectedTicket.id, label)),
+          attached ? 'ラベルを外せませんでした。' : 'ラベルを付けられませんでした。',
+        );
+      }}
+      onCreateLabel={(name, color) => labels.createLabel({ name, color })}
+      onChangeParent={async (parentId) => {
+        try {
+          await list.changeParent(selectedTicket.id, parentId);
+        } catch (cause) {
+          const info = getApiError(cause);
+          showToast(
+            'error',
+            info.status === 403
+              ? 'この操作を行う権限がありません。'
+              : info.serverCode === 'ticket_hierarchy_rejected'
+                ? 'その親には移せません（循環になる、または階層の深さの上限を超えます）。'
+                : '親を変更できませんでした。',
+          );
+        }
+      }}
+    />
+  ) : null;
+
   return (
     // 左の列は持たない（設計ボード ST08: バックログは全幅）。プロジェクトの切替は見出しの上の
     // 文脈の行に置く。
     <div className="flex h-full overflow-hidden">
-      <main className="mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col overflow-hidden">
+      {/*
+        一覧の側。本文のランドマーク（main）は枠（AppShell）が持つので、ここは div にする
+        （main の中に main を置かない）。狭い画面で全画面の詳細を重ねている間は inert にして、
+        Tab が裏の一覧へ抜けないようにする（一覧は描いたまま重ねるので、戻ればスクロール位置も残る）。
+      */}
+      <div
+        inert={!wide && mobileDetailOpen}
+        className="mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col overflow-hidden"
+      >
         {projectError ? (
           <div role="alert" className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
             {projectError}
@@ -476,18 +628,18 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
             )}
 
             <div className="min-h-0 flex-1">
-              {masters.loading && <Loading className="min-h-56" message="チケットの設定を読み込んでいます" />}
-              {!masters.loading && masters.error && <EmptyState headingLevel={2} illustration={<FsIllustration name="load-error" />} title="チケットの設定を読み込めませんでした" description={masters.error} action={{ label: '再読み込み', onClick: masters.refresh }} />}
-              {view !== 'settings' && !masters.loading && !masters.error &&
-                (!enabled && !masters.loading ? (
-                  <div className="flex h-full items-center justify-center px-6 text-center">
-                    <div>
-                      <p className="mb-1 text-base font-semibold text-[var(--color-text-secondary)]">
-                        このプロジェクトではチケットを使っていません
-                      </p>
-                      <p className="text-sm text-[var(--color-text-muted)]">
-                        有効化すると、状態 5 件と種別 3 件の雛形が入ります。あとから増やせます。
-                      </p>
+                {masters.loading && <Loading className="min-h-56" message="チケットの設定を読み込んでいます" />}
+                {!masters.loading && masters.error && <EmptyState headingLevel={2} illustration={<FsIllustration name="load-error" />} title="チケットの設定を読み込めませんでした" description={masters.error} action={{ label: '再読み込み', onClick: masters.refresh }} />}
+                {view !== 'settings' && !masters.loading && !masters.error &&
+                  (!enabled && !masters.loading ? (
+                    <div className="flex h-full items-center justify-center px-6 text-center">
+                      <div>
+                        <p className="mb-1 text-base font-semibold text-[var(--color-text-secondary)]">
+                          このプロジェクトではチケットを使っていません
+                        </p>
+                        <p className="text-sm text-[var(--color-text-muted)]">
+                          有効化すると、状態 5 件と種別 3 件の雛形が入ります。あとから増やせます。
+                        </p>
                     </div>
                   </div>
                 ) : (
@@ -509,6 +661,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                         </button>
                       </p>
                     )}
+                    {/* 一覧は残りの高さを使い、狭い画面の選択中の帯はその下に常に見える位置に置く。 */}
+                    <div className="min-h-0 flex-1">
                     <BacklogList
                       filtered={filtered}
                       totalCount={counts.counts?.total ?? null}
@@ -524,6 +678,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       busyId={list.busyId}
                       nameOf={nameOf}
                       onSelect={handleSelect}
+                      // 狭い画面だけ、選択中のカードに「詳細をひらく」を出す（広い画面は右に開いている）。
+                      onOpenDetail={wide ? undefined : () => setMobileDetailOpen(true)}
                       onCreate={(title) => list.createTicket({ title }).then((t) => handleSelect(t.id))}
                       onChangeStatus={(ticketId, nextStatusId) => {
                         void withToastOnFailure(
@@ -531,23 +687,6 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                           '状態を変えられませんでした。',
                         ).catch(() => undefined);
                       }}
-                      onMove={(id, input) => list.move(id, input)}
-                      onMoveInSprint={(ticketId, anchorTicketId, anchorAfter) =>
-                        sprints
-                          .moveTicket(ticketId, anchorTicketId, anchorAfter)
-                          .then(() => list.refresh())
-                          .catch(() => showToast('error', 'スプリントの中で動かせませんでした。'))
-                      }
-                      onMoveToSprint={(ticketId, sprintId) =>
-                        void sprints
-                          .addTicket(sprintId, ticketId)
-                          .catch(() => showToast('error', 'スプリントへ入れられませんでした。'))
-                      }
-                      onRemoveFromSprint={(ticketId) =>
-                        void sprints
-                          .removeTicket(ticketId)
-                          .catch(() => showToast('error', 'スプリントから出せませんでした。'))
-                      }
                       renderGroupAction={(group) =>
                         group.kind === 'sprint' ? (
                           <button
@@ -583,6 +722,9 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       }
                       onRetry={list.refresh}
                     />
+                    </div>
+                    {/* 狭い画面の選択中の帯（設計ボード ST12）。一覧の下に出て、開く・並び替え・選択解除を持つ。 */}
+                    {!wide && selectedTicket && selectionBand('bottom')}
                   </div>
                 ))}
 
@@ -631,89 +773,27 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
             </div>
           </>
         )}
-      </main>
+      </div>
 
-      {view !== 'settings' && selectedTicket && (
-        <SecondaryPanel
-          title={`選択中 ${formatTicketKey(project?.key ?? '', selectedTicket.number)}`}
-          side="right"
-          resizable
-          resizeStorageKey="frestyle.panel.ticket-detail.width"
-          defaultWidth={420}
-          mobileOpen={detailMobileOpen}
-          onMobileClose={() => setDetailMobileOpen(false)}
-          headerActions={
-            /* 全画面へは本文の身元（キー・種別）のリンクから開く。ここに同じ行き先の矢印を置くと
-               入口が 2 つになるので持たない。ここに残すのは選択を解く操作だけ。 */
-            <button
-              type="button"
-              onClick={() => selectTicket(null)}
-              aria-label="選択解除"
-              title="選択解除"
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-surface-3 text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-            >
-              <FsIcon name="x" className="h-3.5 w-3.5" />
-            </button>
-          }
+      {/*
+        詳細は画面幅で出し分ける。広い画面は右の列（ST10）、狭い画面は全画面の 1 列（ST13）。
+        全画面へは本文の身元（キー・種別）のリンクから開く。帯に同じ行き先の矢印を置くと
+        入口が 2 つになるので持たない。帯に残すのは選択を解く操作と並び替えだけ。
+      */}
+      {view !== 'settings' && selectedTicket && wide && (
+        <TicketDetailPane
+          key={selectedTicket.id}
+          band={selectionBand('header')}
+          onClose={closeDetail}
+          autoFocus={focusDetailFor === selectedTicket.id}
         >
-          <TicketDetailPanel
-            key={selectedTicket.id}
-            ticket={selectedTicket}
-            projectKey={project?.key ?? ''}
-            workspaceSlug={workspaceSlug ?? ''}
-            statuses={masters.statuses}
-            types={masters.types}
-            principals={principals}
-            parentTicket={parentTicket}
-            canEdit
-            busy={list.busyId === selectedTicket.id}
-            allLabels={labels.labels}
-            onUpdate={(ticketId, input) => list.updateTicket(ticketId, input)}
-            onChangeStatus={(statusId) =>
-              withToastOnFailure(() => list.changeStatus(selectedTicket.id, { statusId }), '状態を変更できませんでした。')
-            }
-            onAssign={(principalId) =>
-              withToastOnFailure(() => list.assign(selectedTicket.id, principalId), '担当を設定できませんでした。')
-            }
-            onUnassign={() => withToastOnFailure(() => list.unassign(selectedTicket.id), '担当を外せませんでした。')}
-            onArchive={() =>
-              withToastOnFailure(() => list.archiveTicket(selectedTicket.id), 'アーカイブできませんでした。').then(() =>
-                selectTicket(null),
-              )
-            }
-            onRestore={() =>
-              withToastOnFailure(() => list.restoreTicket(selectedTicket.id), '現役に戻せませんでした。').then(() =>
-                selectTicket(null),
-              )
-            }
-            onToggleLabel={(label) => {
-              const attached = selectedTicket.labels.some((l) => l.id === label.id);
-              void withToastOnFailure(
-                () =>
-                  attached
-                    ? list.removeLabel(selectedTicket.id, label.id)
-                    : list.addLabel(selectedTicket.id, label),
-                attached ? 'ラベルを外せませんでした。' : 'ラベルを付けられませんでした。',
-              );
-            }}
-            onCreateLabel={(name, color) => labels.createLabel({ name, color })}
-            onChangeParent={async (parentId) => {
-              try {
-                await list.changeParent(selectedTicket.id, parentId);
-              } catch (cause) {
-                const info = getApiError(cause);
-                showToast(
-                  'error',
-                  info.status === 403
-                    ? 'この操作を行う権限がありません。'
-                    : info.serverCode === 'ticket_hierarchy_rejected'
-                      ? 'その親には移せません（循環になる、または階層の深さの上限を超えます）。'
-                      : '親を変更できませんでした。',
-                );
-              }
-            }}
-          />
-        </SecondaryPanel>
+          {detailPanel}
+        </TicketDetailPane>
+      )}
+      {view !== 'settings' && selectedTicket && !wide && (
+        <TicketDetailSheet open={mobileDetailOpen} label={`選択中 ${selectedKey ?? ''}`} onBack={backToList}>
+          {detailPanel}
+        </TicketDetailSheet>
       )}
 
       {deletingFilter && (

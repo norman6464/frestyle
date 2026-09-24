@@ -293,6 +293,122 @@ export const 担当で絞る: Story = {
   },
 };
 
+/** 詳細を開いたときに中の節が取りに行く宛先。どれも空で返す。 */
+function detailApi(): ApiStubs {
+  return {
+    '/profile/me': { userId: 1, displayName: 'norman6464', email: '', bio: '', avatarUrl: '', status: '', updatedAt: '' },
+    '/workspaces/acme/tickets/t-1/comments': { comments: [] },
+    '/workspaces/acme/tickets/t-1/attachments': { attachments: [] },
+    '/workspaces/acme/tickets/t-1/children': { tickets: [] },
+    '/workspaces/acme/tickets/t-1/watch': { watching: false, count: 0 },
+    ...baseApi(),
+  };
+}
+
+const TITLE = '段1: チケットの骨格（9表）';
+
+/**
+ * 行を押すと右に詳細が開き（設計ボード ST10）、一覧は領域が狭くなるのでカードに変わる。
+ * 開いたら詳細の見出しへ、Escape で閉じて押した行へ戻る（ST14 の 04）。
+ */
+export const 選ぶと右に詳細が開く: Story = {
+  decorators: [withApi(detailApi())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
+    const aside = await canvas.findByRole('complementary', { name: '選択中のチケット' });
+    const heading = within(aside).getByRole('heading', { level: 2, name: /選択中 FRESTYLE-457/ });
+    await waitFor(async () => {
+      await expect(heading).toHaveFocus();
+    });
+    await waitFor(async () => {
+      await expect(canvas.getByRole('table', { name: 'チケット' })).toHaveAttribute('data-layout', 'card');
+    });
+    await userEvent.keyboard('{Escape}');
+    await waitFor(async () => {
+      await expect(canvas.queryByRole('complementary', { name: '選択中のチケット' })).toBeNull();
+    });
+    await waitFor(async () => {
+      await expect(canvas.getByRole('button', { name: TITLE })).toHaveFocus();
+    });
+  },
+};
+
+/** 詳細を開いたままの形（見た目の確認用。ST10 と見比べる）。 */
+export const 詳細を開いた形: Story = {
+  decorators: [withApi(detailApi())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
+    await expect(await canvas.findByRole('complementary', { name: '選択中のチケット' })).toBeVisible();
+  },
+};
+
+/** 狭い画面で選んだだけの形（ST12）。一覧の下に選択中の帯。 */
+export const 狭い画面で選んだ形: Story = {
+  decorators: [withApi(detailApi())],
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
+    await expect(await canvas.findByRole('button', { name: '選択した課題をひらく' })).toBeVisible();
+  },
+};
+
+/** 狭い画面で詳細を開いた形（ST13）。 */
+export const 狭い画面で詳細を開いた形: Story = {
+  decorators: [withApi(detailApi())],
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
+    await userEvent.click(await canvas.findByRole('button', { name: '選択した課題をひらく' }));
+    await expect(await canvas.findByRole('region', { name: '選択中 FRESTYLE-457' })).toBeVisible();
+  },
+};
+
+/** 選択解除は文字のボタン。押すと閉じて、押した行へ戻る。 */
+export const 選択解除で閉じる: Story = {
+  decorators: [withApi(detailApi())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
+    const aside = await canvas.findByRole('complementary', { name: '選択中のチケット' });
+    await userEvent.click(within(aside).getByRole('button', { name: '選択解除' }));
+    await waitFor(async () => {
+      await expect(canvas.queryByRole('complementary', { name: '選択中のチケット' })).toBeNull();
+    });
+    await waitFor(async () => {
+      await expect(canvas.getByRole('button', { name: TITLE })).toHaveFocus();
+    });
+  },
+};
+
+/**
+ * 狭い画面では、選ぶと一覧の下に選択中の帯が出るだけ（ST12）。「選択した課題をひらく」で
+ * 全画面の詳細（ST13）、「一覧へ」で戻る。戻っても選択は残る（選択解除とは別の操作）。
+ */
+export const 狭い画面で選んで開いて戻る: Story = {
+  decorators: [withApi(detailApi())],
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
+    await userEvent.click(await canvas.findByRole('button', { name: '選択した課題をひらく' }));
+    const sheet = await canvas.findByRole('region', { name: '選択中 FRESTYLE-457' });
+    await waitFor(async () => {
+      await expect(within(sheet).getByRole('heading', { level: 2 })).toHaveFocus();
+    });
+    // 裏の一覧は触れない（Tab が抜けない）。
+    await expect(canvas.getByRole('button', { name: 'フィルター', hidden: true }).closest('[inert]')).not.toBeNull();
+    await userEvent.click(within(sheet).getByRole('button', { name: '一覧へ' }));
+    await waitFor(async () => {
+      await expect(canvas.queryByRole('region', { name: '選択中 FRESTYLE-457' })).toBeNull();
+    });
+    await expect(canvas.getByRole('button', { name: '選択した課題をひらく' })).toBeVisible();
+  },
+};
+
 /** 「フィルター」を押すと選択欄が現れ、条件を選ぶと URL とチップに載る。 */
 export const フィルターを開いて条件を付ける: Story = {
   decorators: [withApi(baseApi())],
