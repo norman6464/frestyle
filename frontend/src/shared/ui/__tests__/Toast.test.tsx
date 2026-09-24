@@ -45,6 +45,10 @@ describe('Toast', () => {
     const { unmount } = render(<Toast type="success" message="保存しました" onClose={vi.fn()} />);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    // role="log" などの別の live region や aria-live も自分では持たない。
+    const root = screen.getByText('保存しました').closest('[data-toast-type]');
+    expect(root).not.toHaveAttribute('role');
+    expect(root).not.toHaveAttribute('aria-live');
     unmount();
     render(<Toast type="info" message="お知らせ" onClose={vi.fn()} />);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -87,6 +91,39 @@ describe('Toast', () => {
       vi.advanceTimersByTime(1);
     });
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('閉じるボタンにフォーカスしたままマウスを離しても消えない（マウスとフォーカスは別々に数える）', () => {
+    const onClose = vi.fn();
+    render(<Toast type="success" message="保存しました" onClose={onClose} />);
+    const toast = screen.getByText('保存しました').closest('[data-toast-type]') as HTMLElement;
+    fireEvent.mouseEnter(toast);
+    act(() => {
+      screen.getByRole('button', { name: '閉じる' }).focus();
+    });
+    fireEvent.mouseLeave(toast);
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('マウスを乗せたままフォーカスを外しても消えない', () => {
+    const onClose = vi.fn();
+    render(<Toast type="success" message="保存しました" onClose={onClose} />);
+    const toast = screen.getByText('保存しました').closest('[data-toast-type]') as HTMLElement;
+    const close = screen.getByRole('button', { name: '閉じる' });
+    act(() => {
+      close.focus();
+    });
+    fireEvent.mouseEnter(toast);
+    act(() => {
+      close.blur();
+    });
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('閉じるボタンにフォーカスがある間は消えない', () => {

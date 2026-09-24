@@ -40,7 +40,12 @@ const COLOR_MAP = {
  */
 export default function Toast({ type, message, onClose }: ToastProps) {
   const autoClose = type !== 'error';
-  const [paused, setPaused] = useState(false);
+  // マウスとフォーカスは別々に持つ。1 つの印で持つと、閉じるボタンにフォーカスしたまま
+  // マウスを離しただけで（あるいはマウスを乗せたままフォーカスを外しただけで）再開してしまう。
+  // 両方が外れたときだけ数え直す。
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const paused = hovered || focused;
   // 呼び出し側は描画のたびに新しい onClose を渡してくる。依存に入れるとタイマーが
   // 描画ごとに巻き戻るので、最新の関数だけを参照で持つ。
   const onCloseRef = useRef(onClose);
@@ -60,11 +65,11 @@ export default function Toast({ type, message, onClose }: ToastProps) {
     <div
       role={type === 'error' ? 'alert' : undefined}
       data-toast-type={type}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocus={() => setPaused(true)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPaused(false);
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
       }}
       className={`pointer-events-auto flex items-start gap-3 px-5 py-3.5 rounded-lg shadow-xl min-w-[280px] max-w-md ${COLOR_MAP[type]} animate-toast-drop`}
     >

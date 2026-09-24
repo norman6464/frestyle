@@ -56,5 +56,7 @@ describe('ToastContainer', () => {
     expect(screen.getByText('お知らせ').closest('[aria-live]')).toHaveAttribute('aria-live', 'polite');
     expect(screen.getByText('保存しました').closest('[aria-live]')).toHaveAttribute('aria-live', 'polite');
     expect(screen.getByText('保存できませんでした').closest('[aria-live]')).toBeNull();
+    // aria-live 以外の live region の役割（log / status / alert）でも包まない。
+    expect(screen.getByText('保存できませんでした').closest('[role="log"], [role="status"], [role="alert"]')).toBeNull();
   });
 });
