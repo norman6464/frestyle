@@ -13,38 +13,35 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"math"
-	"math/big"
-	"net/http"
 	"slices"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/norman6464/frestyle/backend/internal/infra/jwk"
+)
+
+const (
+	defaultJWKSCacheTTL        = time.Hour
+	defaultJWKSRefreshCooldown = time.Minute
 )
 
 // Verifier は発行者が署名した JWT を検証する。署名を確かめずに payload を読むと sub でも
 // 役割でも好きに名乗れてしまうので、保護されたルートの認可より前に必ずここを通す。
 type Verifier struct {
-	issuer     string
-	jwksURI    string
-	audiences  []string
-	clientID   string
-	httpClient *http.Client
+	issuer   string
+	aud      []string
+	clientID string
 
-	mu        sync.RWMutex
-	keys      map[string]*rsa.PublicKey
-	fetchedAt time.Time
-	// triedAt は取得を試みた時刻。成功だけ記録すると発行者に届かない間ずっと stale 扱いになり、
-	// 待ち時間の長い取得が全リクエストで直列に並んでしまう。
-	triedAt time.Time
-	// refreshMu は JWKS 再取得を 1 本に直列化し、未知 kid 同時多発時のスパイクを防ぐ。
-	refreshMu sync.Mutex
-	// refreshCooldown は未知 kid によるリフェッチ連打を防ぐ最小間隔。
-	refreshCooldown time.Duration
+	jwkProvider *jwk.Provider
+
 	// leeway は時計ずれを吸収する許容誤差。
 	leeway time.Duration
+}
+type signatureVerificationInput struct {
+	kid          string
+	signingInput string
+	signature    string
+	key          *rsa.PublicKey
 }
 
 // 検証失敗の sentinel エラー。呼び出し側は errors.Is で分岐できる。
@@ -58,7 +55,6 @@ var (
 	ErrJWTBadIssuer    = errors.New("oidc: unexpected issuer")
 	ErrJWTBadAudience  = errors.New("oidc: unexpected audience")
 	ErrJWTBadNonce     = errors.New("oidc: unexpected nonce")
-	ErrJWKSUnavailable = errors.New("oidc: jwks fetch failed")
 )
 
 // Config は Verifier に必要な設定。**どれも空にできない。**
@@ -81,7 +77,8 @@ type Config struct {
 	//
 	// **ClientID は常に受け入れる**（置き換えにしない）。id_token の aud は client_id なので、
 	// 置き換えにすると「プロジェクト識別子を設定したらログインが全員落ちる」ことになる。
-	Audiences []string
+	Audiences    []string
+	JWKSCacheTTL time.Duration
 }
 
 // NewVerifier は設定から Verifier を組み立てる。必須項目が欠けていればエラーを返す。
@@ -112,24 +109,22 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 			auds = append(auds, a)
 		}
 	}
-	return &Verifier{
-		issuer:          cfg.Issuer,
-		jwksURI:         cfg.JWKSURI,
-		audiences:       auds,
-		clientID:        cfg.ClientID,
-		httpClient:      &http.Client{Timeout: 5 * time.Second},
-		keys:            map[string]*rsa.PublicKey{},
-		refreshCooldown: 1 * time.Minute,
-		leeway:          60 * time.Second,
-	}, nil
-}
-
-// WithHTTPClient はテストで通信先を差し替えるための設定。
-func (v *Verifier) WithHTTPClient(client *http.Client) *Verifier {
-	if client != nil {
-		v.httpClient = client
+	jwksCacheTTL := cfg.JWKSCacheTTL
+	if jwksCacheTTL <= 0 {
+		jwksCacheTTL = defaultJWKSCacheTTL
 	}
-	return v
+	jwkProvider := jwk.NewProvider(
+		cfg.JWKSURI,
+		defaultJWKSRefreshCooldown,
+		jwksCacheTTL,
+	)
+	return &Verifier{
+		issuer:      cfg.Issuer,
+		aud:         auds,
+		clientID:    cfg.ClientID,
+		jwkProvider: jwkProvider,
+		leeway:      60 * time.Second,
+	}, nil
 }
 
 // Verify は access_token を検証し、検証済みの claims を返す。
@@ -190,11 +185,22 @@ func (v *Verifier) parse(ctx context.Context, token string) (map[string]any, err
 		return nil, ErrJWTMalformed
 	}
 
-	key, err := v.keyForKid(ctx, kid)
+	key, err := v.jwkProvider.KeyForKid(ctx, kid)
 	if err != nil {
+		if errors.Is(err, jwk.ErrUnknownKey) {
+			return nil, ErrJWTUnknownKey
+		}
 		return nil, err
 	}
-	if err := verifyRS256(parts[0]+"."+parts[1], parts[2], key); err != nil {
+	if err := v.verifySignatureWithRefresh(
+		ctx,
+		signatureVerificationInput{
+			kid:          kid,
+			signingInput: parts[0] + "." + parts[1],
+			signature:    parts[2],
+			key:          key,
+		},
+	); err != nil {
 		return nil, err
 	}
 
@@ -203,6 +209,31 @@ func (v *Verifier) parse(ctx context.Context, token string) (map[string]any, err
 		return nil, ErrJWTMalformed
 	}
 	return claims, nil
+}
+
+func (v *Verifier) verifySignatureWithRefresh(
+	ctx context.Context,
+	input signatureVerificationInput,
+) error {
+	if err := verifyRS256(input.signingInput, input.signature, input.key); err != nil {
+		if !errors.Is(err, ErrJWTBadSignature) {
+			return err
+		}
+
+		newKey, err := v.jwkProvider.RefreshKeyForKid(ctx, input.kid, input.key)
+		if err != nil {
+			if errors.Is(err, jwk.ErrUnknownKey) {
+				return ErrJWTUnknownKey
+			}
+			return err
+		}
+
+		if err := verifyRS256(input.signingInput, input.signature, newKey); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // verifyStandardClaims は exp / nbf / iat / iss / aud / azp を検証する。
@@ -269,151 +300,12 @@ func (v *Verifier) audienceMatches(raw any) bool {
 }
 
 func (v *Verifier) acceptsAudience(aud string) bool {
-	for _, want := range v.audiences {
+	for _, want := range v.aud {
 		if aud == want {
 			return true
 		}
 	}
 	return false
-}
-
-// keyForKid は kid に対応する RSA 公開鍵を返す。キャッシュに無ければ JWKS を再取得する。
-func (v *Verifier) keyForKid(ctx context.Context, kid string) (*rsa.PublicKey, error) {
-	if key, ok := v.lookup(kid); ok {
-		return key, nil
-	}
-
-	// 未知 kid。取得を 1 本に直列化し、待っている間に他が更新済みかを見直す。
-	v.refreshMu.Lock()
-	defer v.refreshMu.Unlock()
-
-	if key, ok := v.lookup(kid); ok {
-		return key, nil
-	}
-	v.mu.RLock()
-	// 成功時刻ではなく「試みた時刻」で間隔を測る。成功だけを見ると、発行者に
-	// 届かない間は毎回 stale になり、タイムアウト待ちが全リクエストで直列に並ぶ。
-	stale := time.Since(v.triedAt) > v.refreshCooldown
-	v.mu.RUnlock()
-	if !stale {
-		return nil, ErrJWTUnknownKey
-	}
-	if err := v.refresh(ctx); err != nil {
-		return nil, err
-	}
-	if key, ok := v.lookup(kid); ok {
-		return key, nil
-	}
-	return nil, ErrJWTUnknownKey
-}
-
-// lookup は kid に対応する鍵をキャッシュから返す。
-func (v *Verifier) lookup(kid string) (*rsa.PublicKey, bool) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
-	key, ok := v.keys[kid]
-	return key, ok
-}
-
-// jwk は JWKS 内の 1 鍵を表す。
-type jwk struct {
-	Kid string `json:"kid"`
-	Kty string `json:"kty"`
-	Use string `json:"use"`
-	Alg string `json:"alg"`
-	N   string `json:"n"`
-	E   string `json:"e"`
-}
-
-// maxJWKSBytes は JWKS 応答の読み取り上限。発行者が壊れて巨大な応答を返したときに
-// メモリを食い尽くさないための蓋。
-const maxJWKSBytes = 1 << 20 // 1 MiB
-
-// refresh は JWKS を取得してキャッシュを差し替える。
-func (v *Verifier) refresh(ctx context.Context) error {
-	// 試みた時刻は、成功しても失敗しても記録する（keyForKid の間隔判定の根拠）。
-	defer func() {
-		v.mu.Lock()
-		v.triedAt = time.Now()
-		v.mu.Unlock()
-	}()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, v.jwksURI, nil)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrJWKSUnavailable, err)
-	}
-	resp, err := v.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrJWKSUnavailable, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: status %d", ErrJWKSUnavailable, resp.StatusCode)
-	}
-	var doc struct {
-		Keys []jwk `json:"keys"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxJWKSBytes)).Decode(&doc); err != nil {
-		return fmt.Errorf("%w: %w", ErrJWKSUnavailable, err)
-	}
-	keys := make(map[string]*rsa.PublicKey, len(doc.Keys))
-	for _, k := range doc.Keys {
-		if k.Kty != "RSA" || k.Kid == "" {
-			continue
-		}
-		// use / alg が明示されているなら、署名用の RS256 鍵だけを取り込む。
-		// 暗号化用の鍵まで署名鍵として使うと、鍵の用途の分離が崩れる。
-		if k.Use != "" && k.Use != "sig" {
-			continue
-		}
-		if k.Alg != "" && k.Alg != "RS256" {
-			continue
-		}
-		pub, err := k.toRSAPublicKey()
-		if err != nil {
-			continue
-		}
-		keys[k.Kid] = pub
-	}
-	// 空 / 壊れた JWKS で有効なキャッシュを潰さない（認証の全断を避ける）。
-	if len(keys) == 0 {
-		return fmt.Errorf("%w: no usable rsa keys", ErrJWKSUnavailable)
-	}
-	v.mu.Lock()
-	v.keys = keys
-	v.fetchedAt = time.Now()
-	v.mu.Unlock()
-	return nil
-}
-
-// minRSAModulusBits は受け入れる RSA 公開鍵の最小の大きさ。
-// 小さすぎる鍵は署名を偽造できるので、発行者が何を返してきても受け取らない。
-const minRSAModulusBits = 2048
-
-// toRSAPublicKey は JWK の n / e から rsa.PublicKey を組み立てる。
-func (k jwk) toRSAPublicKey() (*rsa.PublicKey, error) {
-	nBytes, err := base64URLDecode(k.N)
-	if err != nil {
-		return nil, err
-	}
-	eBytes, err := base64URLDecode(k.E)
-	if err != nil {
-		return nil, err
-	}
-	// 外部入力なので指数の範囲を確かめる（int 変換の桁あふれと異常値を弾く）。
-	eBig := new(big.Int).SetBytes(eBytes)
-	if !eBig.IsInt64() {
-		return nil, errors.New("oidc: jwk exponent too large")
-	}
-	e := eBig.Int64()
-	if e <= 0 || e > math.MaxInt32 {
-		return nil, errors.New("oidc: invalid jwk exponent")
-	}
-	n := new(big.Int).SetBytes(nBytes)
-	if n.BitLen() < minRSAModulusBits {
-		return nil, errors.New("oidc: jwk modulus too small")
-	}
-	return &rsa.PublicKey{N: n, E: int(e)}, nil
 }
 
 // verifyRS256 は signingInput (header.payload) の RS256 署名を公開鍵で検証する。

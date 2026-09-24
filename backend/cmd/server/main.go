@@ -56,9 +56,10 @@ func main() {
 	// トークンの検証器はここで組み立てる。設定が足りなければ起動を止める。
 	// router の中で組み立ててエラーを飲み込むと、検証していないまま動く環境ができる。
 	verifier, err := oidc.NewVerifier(oidc.Config{
-		Issuer:    cfg.OIDC.Issuer,
-		JWKSURI:   cfg.OIDC.JWKSURI,
-		Audiences: cfg.OIDC.Audiences,
+		Issuer:       cfg.OIDC.Issuer,
+		JWKSURI:      cfg.OIDC.JWKSURI,
+		Audiences:    cfg.OIDC.Audiences,
+		JWKSCacheTTL: cfg.OIDC.JWKSCacheTTL,
 	})
 	if err != nil {
 		fatal("oidc verifier init failed", err)

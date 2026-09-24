@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,9 +24,10 @@ const (
 )
 
 type idp struct {
-	key    *rsa.PrivateKey
-	kid    string
-	server *httptest.Server
+	key          *rsa.PrivateKey
+	kid          string
+	server       *httptest.Server
+	cacheControl string
 	// hits は JWKS を何回取りに来たかの数。取得の抑止が効いているかを見る。
 	// 検証器は取得を別の goroutine から呼び得るので atomic で数える
 	// （-race で data race として報告されないように）。
@@ -41,8 +43,13 @@ func newIdP(t *testing.T) *idp {
 	i := &idp{key: key, kid: "kid-1"}
 	i.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		i.hits.Add(1)
-		n := base64.RawURLEncoding.EncodeToString(key.N.Bytes())
-		e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes())
+		if i.cacheControl != "" {
+			w.Header().Set("Cache-Control", i.cacheControl)
+		}
+		// JWK の RSA 公開鍵は modulus(n) と exponent(e) を
+		// パディングなしの Base64URL 形式で表現するため、テスト用 JWKS も同じ形式に変換する。
+		n := base64.RawURLEncoding.EncodeToString(i.key.N.Bytes())
+		e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(i.key.E)).Bytes())
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"keys": []map[string]string{
 				{"kid": i.kid, "kty": "RSA", "use": "sig", "alg": "RS256", "n": n, "e": e},
@@ -293,8 +300,18 @@ func Test_検証_署名が壊れていれば弾く(t *testing.T) {
 		"iss": testIssuer, "aud": testClientID, "sub": "u1",
 		"exp": time.Now().Add(time.Hour).Unix(),
 	})
-	if _, err := v.Verify(context.Background(), tok[:len(tok)-4]+"AAAA"); !errors.Is(err, ErrJWTBadSignature) {
-		t.Fatalf("err = %v, want ErrJWTBadSignature", err)
+	if _, err := v.Verify(context.Background(), tok); err != nil {
+		t.Fatalf("最初の検証に失敗: %v", err)
+	}
+	badTok := tok[:len(tok)-4] + "AAAA"
+
+	for range 5 {
+		if _, err := v.Verify(context.Background(), badTok); !errors.Is(err, ErrJWTBadSignature) {
+			t.Fatalf("err = %v, want ErrJWTBadSignature", err)
+		}
+	}
+	if got := i.hits.Load(); got != 2 {
+		t.Fatalf("壊れた署名連続時のJWKS取得回数 = %d, want 2", got)
 	}
 }
 
@@ -342,5 +359,85 @@ func Test_検証_未知の鍵でも取得を連打しない(t *testing.T) {
 	}
 	if got := i.hits.Load(); got > 1 {
 		t.Fatalf("JWKS を %d 回取りに行った（1 回に抑えたい）", got)
+	}
+}
+
+func Test_検証_同じkidの鍵交換で再取得して成功する(t *testing.T) {
+	i := newIdP(t)
+	v := newVerifier(t, i)
+	tok := i.sign(t, map[string]any{
+		"iss": testIssuer,
+		"aud": testClientID,
+		"sub": "u1",
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+	if _, err := v.Verify(context.Background(), tok); err != nil {
+		t.Fatalf("最初の検証に失敗: %v", err)
+	}
+
+	newKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("新しい鍵を作れない: %v", err)
+	}
+
+	i.key = newKey
+	newTok := i.sign(t, map[string]any{
+		"iss": testIssuer,
+		"aud": testClientID,
+		"sub": "u1",
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+	if _, err := v.Verify(context.Background(), newTok); err != nil {
+		t.Fatalf("鍵交換後の検証に失敗: %v", err)
+	}
+	if _, err := v.Verify(context.Background(), tok); !errors.Is(err, ErrJWTBadSignature) {
+		t.Fatalf("古い鍵のJWT: err = %v, want ErrJWTBadSignature", err)
+	}
+	if got := i.hits.Load(); got != 2 {
+		t.Fatalf("鍵交換後のJWKS取得回数 = %d, want 2", got)
+	}
+}
+
+func Test_検証_不正署名を並行送信してもJWKS取得を連打しない(t *testing.T) {
+	i := newIdP(t)
+	v := newVerifier(t, i)
+
+	tok := i.sign(t, map[string]any{
+		"iss": testIssuer,
+		"aud": testClientID,
+		"sub": "u1",
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+	if _, err := v.Verify(context.Background(), tok); err != nil {
+		t.Fatalf("最初の検証に失敗: %v", err)
+	}
+	badTok := tok[:len(tok)-4] + "AAAA"
+	const workers = 10
+
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	errs := make(chan error, workers)
+	for range workers {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			<-start
+
+			_, err := v.Verify(context.Background(), badTok)
+			errs <- err
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if !errors.Is(err, ErrJWTBadSignature) {
+			t.Fatalf("err = %v, want ErrJWTBadSignature", err)
+		}
+	}
+	if got := i.hits.Load(); got != 2 {
+		t.Fatalf("並行送信時のJWKS取得回数 = %d, want 2", got)
 	}
 }

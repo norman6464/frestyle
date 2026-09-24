@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -83,6 +84,8 @@ type OIDCConfig struct {
 	// Audiences は ID トークンの aud に含まれていることを要求する値（カンマ区切り）。
 	// GCIP は aud に client_id ではなく GCP のプロジェクト ID を入れる。
 	Audiences []string
+	// JWKSCacheTTL は JWKS キャッシュの有効期限。
+	JWKSCacheTTL time.Duration
 }
 
 // Configured は認証に必要な設定が揃っているかを返す。
@@ -90,7 +93,26 @@ func (c OIDCConfig) Configured() bool {
 	return c.Issuer != "" && c.JWKSURI != "" && len(c.Audiences) > 0
 }
 
+func getDurationEnv(key string) (time.Duration, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return 0, nil
+	}
+
+	duration, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", key, err)
+	}
+
+	return duration, nil
+}
+
 func Load() (*Config, error) {
+	jwksCacheTTL, err := getDurationEnv("OIDC_JWKS_CACHE_TTL")
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
 		AppEnv:      getEnvOrDefault("APP_ENV", "local"),
 		ServerPort:  getEnvOrDefault("PORT", "8080"),
@@ -103,9 +125,10 @@ func Load() (*Config, error) {
 		DBSSLMode:   getEnvOrDefault("DB_SSLMODE", "require"),
 		AppBaseURL:  getEnvOrDefault("APP_BASE_URL", ""),
 		OIDC: OIDCConfig{
-			Issuer:    os.Getenv("OIDC_ISSUER"),
-			JWKSURI:   os.Getenv("OIDC_JWKS_URI"),
-			Audiences: splitAndTrim(os.Getenv("OIDC_AUDIENCES")),
+			Issuer:       os.Getenv("OIDC_ISSUER"),
+			JWKSURI:      os.Getenv("OIDC_JWKS_URI"),
+			Audiences:    splitAndTrim(os.Getenv("OIDC_AUDIENCES")),
+			JWKSCacheTTL: jwksCacheTTL,
 		},
 		Images: ImagesConfig{
 			Bucket: os.Getenv("IMAGES_BUCKET"),
