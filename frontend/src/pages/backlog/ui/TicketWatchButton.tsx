@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { TicketRepository } from '@/entities/ticket';
 import { FsIcon } from '@/shared/ui';
+import { useToast } from '@/shared/lib/hooks/useToast';
 
 export interface TicketWatchButtonProps {
   workspaceSlug: string;
@@ -21,6 +22,7 @@ export default function TicketWatchButton({ workspaceSlug, ticketId }: TicketWat
   const [count, setCount] = useState(0);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     let alive = true;
@@ -49,11 +51,13 @@ export default function TicketWatchButton({ workspaceSlug, ticketId }: TicketWat
       setWatching(next.watching);
       setCount(next.count);
     } catch {
-      // 失敗したら見た目を変えない（押す前の状態のまま）。
+      // 失敗したら見た目を変えない（押す前の状態のまま）。黙っていると押せなかったことに
+      // 気づけないので、失敗は知らせる。
+      showToast('error', watching ? 'ウォッチを外せませんでした。' : 'ウォッチできませんでした。');
     } finally {
       setBusy(false);
     }
-  }, [busy, ticketId, watching, workspaceSlug]);
+  }, [busy, ticketId, watching, workspaceSlug, showToast]);
 
   if (!ready) return null;
 

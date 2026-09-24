@@ -112,7 +112,7 @@ export default function BacklogReorderBar({
           ただし中身を title だけに置くとホバーでしか読めない —— 読み上げとキーボードにも
           決まりそのものが届くよう、短い見出しではなく本文を名前にしている。 */}
       <span
-        className="ml-auto inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-surface-3 text-[10px] font-bold text-[var(--color-text-muted)]"
+        className="ui-hit ml-auto inline-flex h-6 w-6 cursor-help items-center justify-center rounded-full border border-surface-3 text-xs font-bold text-[var(--color-text-muted)]"
         tabIndex={0}
         role="note"
         aria-label={REORDER_RULE}

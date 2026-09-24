@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { EmptyState, Loading, FsIcon, fsIcon } from '@/shared/ui';
+import { ConfirmModal, EmptyState, Loading, FsIcon, fsIcon } from '@/shared/ui';
 import type { Ticket } from '@/entities/ticket';
 import { useSprints } from '../model/useSprints';
 import { useSprintTickets } from '../model/useSprintTickets';
 import SprintCard from './SprintCard';
+import { sprintConfirmText, type SprintConfirmKind } from '../lib/sprintConfirm';
 
 export interface SprintBoardProps {
   /** ページが持つスプリントの状態（チケットの面の「入れ先」と同じものを使う）。 */
@@ -44,6 +45,9 @@ export default function SprintBoard({
   const byId = new Map(tickets.map((t) => [t.id, t]));
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  // 取り消せない操作（削除・完了）は確認を挟む。
+  const [confirming, setConfirming] = useState<{ kind: SprintConfirmKind; sprintId: string; name: string; count: number } | null>(null);
+  const [confirmPending, setConfirmPending] = useState(false);
 
   const handleCreate = async () => {
     const name = newName.trim();
@@ -70,6 +74,23 @@ export default function SprintBoard({
       onError(state === 'active' ? 'スプリントを開始できませんでした。' : 'スプリントを完了できませんでした。');
     }
   };
+
+  const runConfirmed = async () => {
+    if (!confirming) return;
+    setConfirmPending(true);
+    try {
+      if (confirming.kind === 'delete') {
+        await remove(confirming.sprintId).catch(() => onError('スプリントを削除できませんでした。'));
+      } else {
+        await handleChangeState(confirming.sprintId, 'completed');
+      }
+    } finally {
+      setConfirmPending(false);
+      setConfirming(null);
+    }
+  };
+
+  const confirmText = confirming ? sprintConfirmText(confirming.kind, confirming.name, confirming.count) : null;
 
   if (loading) return <Loading className="py-16" />;
 
@@ -153,12 +174,32 @@ export default function SprintBoard({
                 .then(reloadMembership)
                 .catch(() => onError('並べ替えられませんでした。'))
             }
-            onChangeState={(state) => void handleChangeState(sprint.id, state)}
+            onChangeState={(state) => {
+              if (state === 'completed') {
+                setConfirming({ kind: 'complete', sprintId: sprint.id, name: sprint.name, count: (bySprint[sprint.id] ?? []).length });
+                return;
+              }
+              void handleChangeState(sprint.id, state);
+            }}
             onUpdate={(input) => void update(sprint.id, input).catch(() => onError('スプリントを保存できませんでした。'))}
-            onDelete={() => void remove(sprint.id).catch(() => onError('スプリントを削除できませんでした。'))}
+            onDelete={() =>
+              setConfirming({ kind: 'delete', sprintId: sprint.id, name: sprint.name, count: (bySprint[sprint.id] ?? []).length })
+            }
           />
         ))
       )}
+
+      <ConfirmModal
+        isOpen={confirming !== null}
+        title={confirmText?.title}
+        message={confirmText?.message ?? ''}
+        confirmText={confirmText?.confirmText}
+        isDanger
+        icon={confirming?.kind === 'delete' ? 'trash' : undefined}
+        pending={confirmPending}
+        onConfirm={() => void runConfirmed()}
+        onCancel={() => setConfirming(null)}
+      />
     </div>
   );
 }

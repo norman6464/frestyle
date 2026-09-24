@@ -46,7 +46,7 @@ export default function KbSpaceMembersPage() {
                 アクセスできるスペースがありません
               </h1>
               <p className="text-sm text-[var(--color-text-muted)]">
-                メニューの「ナレッジ」からワークスペースまたはスペースを作ると使えるようになります。
+                左のサイドバーから、最初のスペースを作れます。
               </p>
             </div>
           </div>

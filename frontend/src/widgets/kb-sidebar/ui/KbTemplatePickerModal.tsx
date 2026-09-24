@@ -182,7 +182,7 @@ export default function KbTemplatePickerModal({
                           type="button"
                           onClick={() => setConfirmingDeleteId(template.id)}
                           aria-label={`${template.name} を削除`}
-                          className="shrink-0 rounded p-1 text-[var(--color-text-muted)] opacity-0 transition-opacity hover:bg-surface-3 focus-visible:opacity-100 group-hover:opacity-100"
+                          className="ui-hit inline-flex shrink-0 items-center justify-center rounded p-1 text-[var(--color-text-muted)] opacity-0 transition-opacity hover:bg-surface-3 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                         >
                           <FsIcon name="trash" className="h-4 w-4" />
                         </button>
@@ -246,6 +246,8 @@ export default function KbTemplatePickerModal({
         title="テンプレートを削除"
         message={`「${deletingTemplateName}」を削除します。元に戻せません。`}
         confirmText="削除"
+        isDanger
+        icon="trash"
         onConfirm={() => void handleDelete(confirmingDeleteId as string)}
         onCancel={() => setConfirmingDeleteId(null)}
       />

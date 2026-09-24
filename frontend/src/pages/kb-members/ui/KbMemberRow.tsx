@@ -47,7 +47,7 @@ export default function KbMemberRow({
       <td role="cell" className="min-w-0 px-3 py-2 md:px-4 md:py-3">
         <span aria-hidden="true" className="mb-2 block text-xs text-[var(--color-text-muted)] md:hidden">役割</span>
         {suspended ? (
-          <span className="text-sm text-[var(--color-text-muted)]">{member.role ?? '役割なし'}</span>
+          <span className="text-sm text-[var(--color-text-muted)]">{member.role ? KB_ROLE_LABEL[member.role] : '役割なし'}</span>
         ) : (
           <select
             aria-label={`${member.name || '相手'} の役割`}

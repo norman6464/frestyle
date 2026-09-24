@@ -162,7 +162,7 @@ export const 役割を変更する: Story = {
   },
 };
 
-/** 停止ボタンを押すとその場で「停止中」に変わる（同じ理由で一覧のスタブを可変にする）。 */
+/** 停止は確認を挟み、確定するとその場で「停止中」に変わる（同じ理由で一覧のスタブを可変にする）。 */
 export const 停止する: Story = {
   decorators: [
     withApi(
@@ -190,6 +190,8 @@ export const 停止する: Story = {
     const canvas = within(canvasElement);
     await canvas.findByText('佐藤 花子');
     await userEvent.click(canvas.getByRole('button', { name: '佐藤 花子 を停止する' }));
+    const dialog = await screen.findByRole('dialog', { name: 'アカウントを停止しますか？' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '停止する' }));
     await waitFor(async () => {
       await expect(canvas.getByText('停止中')).toBeInTheDocument();
     });
@@ -215,6 +217,23 @@ export const 削除は確認してから: Story = {
   },
 };
 
+/** 「役割なし」を選ぶと確認を挟む。取り消せば役割はそのまま。 */
+export const 役割を外すのは確認してから: Story = {
+  decorators: [withApi(baseApi())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText('佐藤 花子');
+    const select = canvas.getByRole('combobox', { name: '佐藤 花子 の役割' });
+    await userEvent.selectOptions(select, '');
+    const dialog = await screen.findByRole('dialog', { name: '役割を外しますか？' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'キャンセル' }));
+    await waitFor(async () => {
+      await expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    await expect(select).toHaveValue('editor');
+  },
+};
+
 /** 409（最後の admin 等）が返ったら、トーストで理由を知らせるだけで行は変わらない。 */
 export const 競合したら理由をトーストで知らせる: Story = {
   decorators: [
@@ -228,6 +247,8 @@ export const 競合したら理由をトーストで知らせる: Story = {
     const canvas = within(canvasElement);
     await canvas.findByText('佐藤 花子');
     await userEvent.click(canvas.getByRole('button', { name: '佐藤 花子 を停止する' }));
+    const dialog = await screen.findByRole('dialog', { name: 'アカウントを停止しますか？' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '停止する' }));
 
     await waitFor(async () => {
       await expect(

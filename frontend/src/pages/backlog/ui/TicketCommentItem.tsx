@@ -168,7 +168,7 @@ export default function TicketCommentItem({
                 onClick={() => setMenuOpen((v) => !v)}
                 aria-label={`${authorName} の発言の操作`}
                 aria-expanded={menuOpen}
-                className="grid h-5 w-5 place-items-center rounded text-[var(--color-text-muted)] hover:bg-surface-2"
+                className="ui-hit grid h-6 w-6 place-items-center rounded text-[var(--color-text-muted)] hover:bg-surface-2"
               >
                 <FsIcon name="more" className="h-4 w-4" />
               </button>
@@ -225,6 +225,7 @@ export default function TicketCommentItem({
         }
         confirmText="削除"
         isDanger
+        icon="trash"
         onConfirm={() => {
           setConfirmingDelete(false);
           void onDelete();

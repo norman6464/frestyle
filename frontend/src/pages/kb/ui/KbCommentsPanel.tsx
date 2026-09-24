@@ -7,6 +7,8 @@ export interface KbCommentsPanelProps {
   threads: KbCommentThread[];
   loading: boolean;
   error: string | null;
+  /** 取得に失敗したときの再読み込み。渡されれば失敗の文の横にボタンを出す。 */
+  onRetry?: () => void;
   /** コメント権限が無ければ、作成フォーム・返信欄・解決/再開ボタンを出さない。読むことは誰でもできる。 */
   canComment: boolean;
   /**
@@ -41,6 +43,7 @@ export default function KbCommentsPanel({
   onReply,
   onResolve,
   onReopen,
+  onRetry,
 }: KbCommentsPanelProps) {
   const unresolved = threads.filter((thread) => thread.resolvedAt === null);
   const resolved = threads.filter((thread) => thread.resolvedAt !== null);
@@ -95,9 +98,18 @@ export default function KbCommentsPanel({
       )}
 
       {!loading && error && (
-        <p role="alert" className="text-sm leading-relaxed text-danger-ink">
-          {error}
-        </p>
+        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm leading-relaxed text-danger-ink">
+          <p>{error}</p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex min-h-9 items-center rounded-md border border-surface-3 bg-surface-1 px-3 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-2"
+            >
+              再読み込み
+            </button>
+          )}
+        </div>
       )}
 
       {!loading && !error && threads.length === 0 && (

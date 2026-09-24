@@ -48,7 +48,7 @@ export default function TicketReactionBar({ reactions, canReact, onToggle }: Tic
             aria-label="反応を付ける"
             aria-expanded={pickerOpen}
             onClick={() => setPickerOpen((v) => !v)}
-            className="grid h-5 w-5 place-items-center rounded-full border border-dashed border-surface-3 text-xs text-[var(--color-text-muted)] hover:bg-surface-2"
+            className="ui-hit grid h-6 w-6 place-items-center rounded-full border border-dashed border-surface-3 text-xs text-[var(--color-text-muted)] hover:bg-surface-2"
           >
             ＋
           </button>

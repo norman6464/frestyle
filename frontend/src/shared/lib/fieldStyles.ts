@@ -1,8 +1,8 @@
 /**
  * 入力欄の枠とフォーカスの輪の色。
  *
- * フォーカスの輪は brand-600（白地 5.15:1）。brand-400 は白地 2.33:1 で、枠線・輪郭に要る
- * 3:1（WCAG 2.2 SC 1.4.11）に届かず、どの欄にいるか見えなかった。全体の :focus-visible と揃える。
+ * フォーカスの輪は brand-600（白地 5.15:1）。枠線・輪郭には 3:1（WCAG 2.2 SC 1.4.11）が要り、
+ * brand-400（白地 2.33:1）では届かない。全体の :focus-visible と揃える。
  */
 export function getFieldBorderClass(hasError: boolean): string {
   return hasError

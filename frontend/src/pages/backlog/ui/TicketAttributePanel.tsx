@@ -251,18 +251,33 @@ export default function TicketAttributePanel({
                 <Muted>なし</Muted>
               ) : (
                 <span className="flex flex-wrap gap-1">
-                  {fixVersions.map((v) => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      disabled={!editable}
-                      onClick={() => onSetFixVersion(v.id, false)}
-                      title={editable ? `${v.name} を外す` : undefined}
-                      className="rounded-md border border-surface-3 px-1.5 py-0.5 text-xs text-[var(--color-text-secondary)] hover:bg-surface-2 disabled:cursor-default disabled:hover:bg-transparent"
-                    >
-                      {v.name}
-                    </button>
-                  ))}
+                  {/* 値の表示と「外す」操作を分ける。値に見えるチップ全体を外すボタンにすると、
+                      押すと外れることが見た目からも読み上げからも分からない。 */}
+                  {fixVersions.map((v) =>
+                    editable ? (
+                      <span
+                        key={v.id}
+                        className="inline-flex items-center gap-0.5 rounded-md border border-surface-3 py-0.5 pl-1.5 pr-0.5 text-xs text-[var(--color-text-secondary)]"
+                      >
+                        {v.name}
+                        <button
+                          type="button"
+                          onClick={() => onSetFixVersion(v.id, false)}
+                          aria-label={`修正バージョン ${v.name} を外す`}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--color-text-muted)] hover:bg-danger-soft hover:text-danger-ink [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9"
+                        >
+                          <FsIcon name="x" className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    ) : (
+                      <span
+                        key={v.id}
+                        className="rounded-md border border-surface-3 px-1.5 py-0.5 text-xs text-[var(--color-text-secondary)]"
+                      >
+                        {v.name}
+                      </span>
+                    ),
+                  )}
                 </span>
               )}
               {/* 選んだ値は保持しない（追加が操作の中身で、この欄自体に現在値は無い）。

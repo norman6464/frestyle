@@ -57,13 +57,15 @@ export const 通常: Story = {
     // 継承の注記は常に出る（この画面のいちばん大事な一文）。
     await expect(canvas.getByText(/上の段.*から届いている人はここには出ません/)).toBeVisible();
 
-    // 役割を変えると、その相手と新しい役割で呼ばれる。
+    // 役割を変えると、その相手と新しい役割で呼ばれ、結果がパネルの中に出る。
     await userEvent.selectOptions(canvas.getByLabelText('田中 太郎 の役割'), 'admin');
     await expect(args.onGrant).toHaveBeenCalledWith('p-tanaka', 'admin');
+    await expect(await canvas.findByText('田中 太郎 を管理者にしました')).toBeVisible();
 
-    // 外すのは確認を挟まない（取り消しは冪等で、間違えたらその場で足し直せる）。
+    // 外すのは確認を挟まない（取り消しは冪等で、間違えたらその場で足し直せる）。結果は出す。
     await userEvent.click(canvas.getByLabelText('田中 太郎 を外す'));
     await expect(args.onRevoke).toHaveBeenCalledWith('p-tanaka');
+    await expect(await canvas.findByText('田中 太郎 を外しました')).toBeVisible();
   },
 };
 

@@ -60,10 +60,35 @@ export default function SharePanel({
 }: SharePanelProps) {
   const [pickedPrincipal, setPickedPrincipal] = useState('');
   const [pickedRole, setPickedRole] = useState<ShareRole>('editor');
+  // 直前の操作の結果（成功のとき）。操作した場所のすぐ近くに出し、押せたことが分かるように
+  // する。失敗は error が受け持つ。
+  const [notice, setNotice] = useState('');
+
+  const nameOf = (principalId: string) => {
+    const row = rows.find((r) => r.principalId === principalId);
+    if (row) return displayName(row.name, row.principalId);
+    const candidate = candidates.find((c) => c.id === principalId);
+    return candidate ? candidate.name : principalId;
+  };
+  const roleLabelOf = (role: ShareRole) => ROLES.find((r) => r.value === role)?.label ?? role;
+
+  const grant = async (principalId: string, role: ShareRole, verb: 'add' | 'change') => {
+    const name = nameOf(principalId);
+    const ok = await onGrant(principalId, role);
+    const label = roleLabelOf(role);
+    setNotice(ok ? (verb === 'add' ? `${name} を${label}として足しました` : `${name} を${label}にしました`) : '');
+    return ok;
+  };
+
+  const revoke = async (principalId: string) => {
+    const name = nameOf(principalId);
+    const ok = await onRevoke(principalId);
+    setNotice(ok ? `${name} を外しました` : '');
+  };
 
   const handleAdd = async () => {
     if (!pickedPrincipal) return;
-    const added = await onGrant(pickedPrincipal, pickedRole);
+    const added = await grant(pickedPrincipal, pickedRole, 'add');
     // 成功したときだけ選択を戻す。追加した相手は候補から外れるので、残すと次の追加で
     // もう候補に無い相手を指したままになる。**失敗したときは残す** — 消すと、
     // エラーを読んだ人が同じ相手をもう一度選び直すことになる。
@@ -135,12 +160,17 @@ export default function SharePanel({
                 key={row.principalId}
                 row={row}
                 disabled={saving}
-                onChangeRole={(role) => onGrant(row.principalId, role)}
-                onRemove={() => onRevoke(row.principalId)}
+                onChangeRole={(role) => void grant(row.principalId, role, 'change')}
+                onRemove={() => void revoke(row.principalId)}
               />
             ))}
           </ul>
         )}
+
+        {/* 結果の知らせ。空でも置いておく（後から差し込むと読み上げが拾わないことがある）。 */}
+        <p role="status" className="min-h-4 text-xs text-[var(--color-text-secondary)]">
+          {notice}
+        </p>
 
         <div className="h-px bg-surface-3" />
 

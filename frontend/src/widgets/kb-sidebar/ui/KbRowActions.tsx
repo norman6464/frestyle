@@ -62,7 +62,9 @@ export default function KbRowActions({
     <div
       ref={containerRef}
       className={`relative flex shrink-0 items-center gap-0.5 transition-opacity ${
-        menuOpen ? 'opacity-100' : 'opacity-0 focus-within:opacity-100 group-hover:opacity-100'
+        // マウスを乗せられない端末（タッチ）では常に見せる。乗せたときだけ出す作りだと、
+        // 名前変更・移動・アーカイブ・削除の入口がタッチ端末では一度も見えない。
+        menuOpen ? 'opacity-100' : 'opacity-0 focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100'
       }`}
     >
       {onRename && (
@@ -73,7 +75,7 @@ export default function KbRowActions({
             onClick={() => setMenuOpen((prev) => !prev)}
             aria-expanded={menuOpen}
             aria-label={`${label} の操作`}
-            className="rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-3"
+            className="ui-hit inline-flex items-center justify-center rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-3"
           >
             <FsIcon name="more" className="h-4 w-4" />
           </button>
@@ -164,7 +166,7 @@ export default function KbRowActions({
         onClick={onCreateChild}
         aria-label={`${label} の下にページを追加`}
         title="中にページを作成"
-        className="rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-3"
+        className="ui-hit inline-flex items-center justify-center rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-3"
       >
         <FsIcon name="plus" className="h-4 w-4" />
       </button>
@@ -175,6 +177,8 @@ export default function KbRowActions({
           title="ページを削除"
           message={`「${label}」を中のページごと削除します（アーカイブ済みの子ページも含みます）。元に戻せません。`}
           confirmText="削除"
+          isDanger
+          icon="trash"
           onConfirm={() => {
             setConfirmingDelete(false);
             onDelete();
