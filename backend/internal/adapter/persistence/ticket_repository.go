@@ -916,6 +916,30 @@ func (r *ticketRepository) ListTickets(ctx context.Context, in repository.ListTi
 	return out, nil
 }
 
+func (r *ticketRepository) CountTickets(ctx context.Context, in repository.ListTicketsInput) (int64, error) {
+	wsID, ok := kbParseID(in.WorkspaceID)
+	pjID, ok2 := kbParseID(in.ProjectID)
+	if !ok || !ok2 {
+		return 0, nil
+	}
+	statusID, ok3 := kbNullID(in.StatusID)
+	typeID, ok4 := kbNullID(in.TypeID)
+	assigneeID, ok5 := kbNullID(in.AssigneePrincipalID)
+	labelID, ok6 := kbNullID(in.LabelID)
+	assignedToMeID, ok7 := kbNullID(in.AssignedToMePrincipalID)
+	if !ok3 || !ok4 || !ok5 || !ok6 || !ok7 {
+		// 形の壊れた ID は ListTickets が空を返すのと同じで、0 件。
+		return 0, nil
+	}
+	return r.queries(ctx).CountTickets(ctx, sqlcgen.CountTicketsParams{
+		WorkspaceID: wsID, ProjectID: pjID, IncludeArchived: in.IncludeArchived,
+		StatusID: statusID, TypeID: typeID, AssigneePrincipalID: assigneeID,
+		Unassigned: in.Unassigned, AssignedToMePrincipalID: assignedToMeID,
+		LabelID: labelID, DueBefore: nullDate(in.DueBefore), StartAfter: nullDate(in.StartAfter),
+		Overdue: in.Overdue, Q: nullString(in.Q),
+	})
+}
+
 func (r *ticketRepository) GetTicketCounts(
 	ctx context.Context, workspaceID, projectID string, myPrincipalID *string,
 ) (repository.TicketCounts, error) {

@@ -169,6 +169,9 @@ type TicketRepository interface {
 	// （domain.ParseTicketKey で分解した結果を渡す）。
 	ResolveTicketIDByKey(ctx context.Context, workspaceID, projectKey string, number int64) (string, error)
 	ListTickets(ctx context.Context, in ListTicketsInput) ([]TicketWithAssignee, error)
+	// CountTickets は ListTickets と同じ条件に合うチケットを数える（利用者が保存した絞り込みの
+	// 件数バッジ用。一覧を引いてから数えると本文まで運ぶことになるので、数えるだけの経路を別に持つ）。
+	CountTickets(ctx context.Context, in ListTicketsInput) (int64, error)
 	// GetTicketCounts はサイドバー「保存した絞り込み」の件数バッジを 1 回で返す。
 	// myPrincipalID が nil なら AssignedToMe は 0 になる。
 	GetTicketCounts(ctx context.Context, workspaceID, projectID string, myPrincipalID *string) (TicketCounts, error)

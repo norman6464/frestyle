@@ -4096,6 +4096,167 @@ table "page_labels" {
   }
 }
 
+# ticket_saved_filters: 利用者が名前を付けて保存したバックログの絞り込み（本人 × プロジェクト）。
+# 条件は JSON ではなく列で持ち、状態・種別・ラベル・担当の主体は複合 FK で「同じワークスペース
+# （状態・種別は同じプロジェクト）の行」しか指せないようにする。JSON に畳むと、参照先が消えた
+# あとも壊れた ID が残り、読む側が毎回ふるいにかけることになる。列なら参照先の消滅は DB が扱う。
+#
+# 参照先（状態・種別・ラベル・担当の主体）が消えたら絞り込みごと消す（CASCADE）。SET NULL に
+# すると「ラベル=不具合 かつ 期限切れ」が黙って「期限切れ」に広がり、保存した本人の意図と違う
+# 結果を同じ名前で出し続ける。消えたことは一覧から無くなることで分かる。
+#
+# 条件の意味は ListTickets（ticket.sql）と同じ。担当は「この主体 / 未割り当て / 自分」の高々
+# 1 つ（ck_ticket_saved_filters_assignee_mode）。条件が 1 つも無い絞り込みは保存させない
+# （固定の「すべて」と同じ結果にしかならない。ck_ticket_saved_filters_has_condition）。
+# 同名は大文字小文字違いも同じ本人・同じプロジェクトでは作れない（name_lower は索引の足場に
+# だけ使う生成列。labels.name_key と同じ作法）。
+#
+# FK 側の列（status_id 等）に索引は張らない。行数は本人 × プロジェクトごとに usecase が 20 件で
+# 頭打ちにしており、参照先の削除に伴う走査が問題になる大きさにならない。
+table "ticket_saved_filters" {
+  schema = schema.public
+  column "id" {
+    null = false
+    type = uuid
+  }
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  column "project_id" {
+    null = false
+    type = uuid
+  }
+  column "user_id" {
+    null = false
+    type = bigint
+  }
+  column "name" {
+    null = false
+    type = character_varying(60)
+  }
+  column "name_lower" {
+    null = true
+    type = character_varying(60)
+    as {
+      expr = "lower((name)::text)"
+      type = STORED
+    }
+  }
+  column "status_id" {
+    null = true
+    type = uuid
+  }
+  column "type_id" {
+    null = true
+    type = uuid
+  }
+  column "label_id" {
+    null = true
+    type = uuid
+  }
+  column "assignee_principal_id" {
+    null = true
+    type = uuid
+  }
+  # FK の足場（定数の生成列。ticket_assignments.assignee_kind と同じ作法 — 担当に指定できるのは
+  # kind='user' の主体だけ、を principals への複合 FK で守る）。
+  column "assignee_kind" {
+    null = true
+    type = character_varying(16)
+    as {
+      expr = "'user'::character varying"
+      type = STORED
+    }
+  }
+  column "unassigned" {
+    null    = false
+    type    = boolean
+    default = false
+  }
+  column "assigned_to_me" {
+    null    = false
+    type    = boolean
+    default = false
+  }
+  column "overdue" {
+    null    = false
+    type    = boolean
+    default = false
+  }
+  # 題名・本文のあいまい検索の語（ListTickets の q）。
+  column "q" {
+    null = true
+    type = character_varying(200)
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  column "updated_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  foreign_key "fk_ticket_saved_filters_project" {
+    columns     = [column.workspace_id, column.project_id]
+    ref_columns = [table.projects.column.workspace_id, table.projects.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  # 本人の持ち物なので、退会すれば一緒に消える（page_favorites と同じ方針）。
+  foreign_key "fk_ticket_saved_filters_user" {
+    columns     = [column.user_id]
+    ref_columns = [table.users.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  foreign_key "fk_ticket_saved_filters_status" {
+    columns     = [column.workspace_id, column.project_id, column.status_id]
+    ref_columns = [table.ticket_statuses.column.workspace_id, table.ticket_statuses.column.project_id, table.ticket_statuses.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  foreign_key "fk_ticket_saved_filters_type" {
+    columns     = [column.workspace_id, column.project_id, column.type_id]
+    ref_columns = [table.ticket_types.column.workspace_id, table.ticket_types.column.project_id, table.ticket_types.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  foreign_key "fk_ticket_saved_filters_label" {
+    columns     = [column.workspace_id, column.label_id]
+    ref_columns = [table.labels.column.workspace_id, table.labels.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  foreign_key "fk_ticket_saved_filters_assignee" {
+    columns     = [column.workspace_id, column.assignee_kind, column.assignee_principal_id]
+    ref_columns = [table.principals.column.workspace_id, table.principals.column.kind, table.principals.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  index "uq_ticket_saved_filters_owner_name" {
+    unique  = true
+    columns = [column.project_id, column.user_id, column.name_lower]
+  }
+  check "ck_ticket_saved_filters_name_trimmed" {
+    expr = "((name)::text = btrim((name)::text)) AND ((name)::text <> ''::text)"
+  }
+  check "ck_ticket_saved_filters_q_not_blank" {
+    expr = "(q IS NULL) OR (btrim((q)::text) <> ''::text)"
+  }
+  check "ck_ticket_saved_filters_assignee_mode" {
+    expr = "((((assignee_principal_id IS NOT NULL))::integer + (unassigned)::integer) + (assigned_to_me)::integer) <= 1"
+  }
+  check "ck_ticket_saved_filters_has_condition" {
+    expr = "(status_id IS NOT NULL) OR (type_id IS NOT NULL) OR (label_id IS NOT NULL) OR (assignee_principal_id IS NOT NULL) OR unassigned OR assigned_to_me OR overdue OR (q IS NOT NULL)"
+  }
+}
+
 # ticket_attachments: チケットに添付したファイルのメタデータ。本体は Cloud Storage
 # （IMAGES_BUCKET を tickets/<workspaceId>/<ticketId>/ prefix で kb ページ画像等と共有する）。
 # 論理削除は持たない（このテーブルを指す子表が無く、undo が要る運用も無いため。ticket_comments

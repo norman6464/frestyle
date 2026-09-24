@@ -59,7 +59,7 @@ func newTicketFixture(uid uint64, role domain.GrantRole) ticketFixture {
 			c.Next()
 		})
 	}
-	registerTicketRoutesWith(g, tickets, tickets, tickets, tickets, perms, pages, users, &fakeNotifRepo{}, fakeTxManager{}, ticketAttachmentFakePresigner{})
+	registerTicketRoutesWith(g, tickets, tickets, tickets, tickets, tickets, perms, pages, users, &fakeNotifRepo{}, fakeTxManager{}, ticketAttachmentFakePresigner{})
 	return ticketFixture{tickets: tickets, pages: pages, perms: perms, router: r}
 }
 

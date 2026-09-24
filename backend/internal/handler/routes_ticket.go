@@ -39,6 +39,7 @@ func registerTicketRoutes(g *gin.RouterGroup, deps *routeDeps) {
 		persistence.NewTicketCommentRepository(deps.db),
 		persistence.NewLabelRepository(deps.db),
 		persistence.NewTicketAttachmentRepository(deps.db),
+		persistence.NewTicketSavedFilterRepository(deps.db),
 		persistence.NewKnowledgeBasePermissionRepository(deps.db),
 		persistence.NewKnowledgeBaseRepository(deps.db),
 		persistence.NewUserRepository(deps.db),
@@ -72,6 +73,7 @@ func registerTicketRoutesWith(
 	comments repository.TicketCommentRepository,
 	labels repository.LabelRepository,
 	attachments repository.TicketAttachmentRepository,
+	savedFilters repository.TicketSavedFilterRepository,
 	permissions repository.KnowledgeBasePermissionRepository,
 	pages repository.KnowledgeBaseRepository,
 	users repository.UserRepository,
@@ -164,6 +166,13 @@ func registerTicketRoutesWith(
 		ticket.NewIssueTicketAttachmentDownloadURLUseCase(attachments, attachmentPresigner),
 		ticket.NewDeleteTicketAttachmentUseCase(attachments),
 	)
+	fh := NewTicketSavedFilterHandler(
+		checkWorkspace,
+		ticket.NewListSavedFiltersUseCase(savedFilters, tickets, permissions),
+		ticket.NewCreateSavedFilterUseCase(savedFilters, tickets, permissions),
+		ticket.NewUpdateSavedFilterUseCase(savedFilters, tickets, permissions),
+		ticket.NewDeleteSavedFilterUseCase(savedFilters),
+	)
 
 	// slug 無しの解決だけは middleware.KnowledgeBaseWorkspace を通さない（handler が ID から
 	// ワークスペースを解決し、その場で権限判定を通す。kb の /kb/pages/:pageId と同じ）。
@@ -186,6 +195,11 @@ func registerTicketRoutesWith(
 	// 保存した絞り込みの件数バッジ（自分の担当・期限切れ・未割り当て・総数）。
 	tkGroup.GET("/workspaces/:workspaceSlug/projects/:projectId/tickets/counts", h.Counts)
 	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/tickets", h.Create)
+	// 利用者が保存した絞り込み（本人 × プロジェクト。固定の 4 つの下に並ぶ）。
+	tkGroup.GET("/workspaces/:workspaceSlug/projects/:projectId/saved-filters", fh.List)
+	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/saved-filters", fh.Create)
+	tkGroup.PUT("/workspaces/:workspaceSlug/projects/:projectId/saved-filters/:filterId", fh.Update)
+	tkGroup.DELETE("/workspaces/:workspaceSlug/projects/:projectId/saved-filters/:filterId", fh.Delete)
 	// 表示キー（例 FRESTYLE-12）からの解決。キーはプロジェクトの key を含む
 	// （domain.ParseTicketKey が最後のハイフンで割る）ので URL 側にプロジェクトを取らない。
 	// /tickets/:ticketId と衝突しないよう /tickets/by-key/:key に独立させる。
