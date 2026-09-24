@@ -1,6 +1,7 @@
 import type { ShareRole, ShareRow as ShareRowData } from '../model/types';
 import { ROLES, displayName } from '../model/labels';
 import { FsIcon } from '@/shared/ui';
+import { SHARE_SELECT_CLASS } from './selectClass';
 
 export interface ShareRowProps {
   row: ShareRowData;
@@ -22,7 +23,7 @@ export default function ShareRow({ row, disabled, onChangeRole, onRemove }: Shar
     <li className="flex flex-wrap items-center gap-2 rounded px-1 py-2 hover:bg-surface-2">
       <span
         aria-hidden="true"
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-surface-3 bg-surface-2 text-[0.6875rem] font-bold text-[var(--color-text-tertiary)]"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-surface-3 bg-surface-2 text-xs font-bold text-[var(--color-text-tertiary)]"
       >
         {initials(row)}
       </span>
@@ -34,7 +35,7 @@ export default function ShareRow({ row, disabled, onChangeRole, onRemove }: Shar
         >
           {name}
         </span>
-        <span className="block text-[0.6875rem] text-[var(--color-text-muted)]">
+        <span className="block text-xs text-[var(--color-text-muted)]">
           {KIND_LABEL[row.kind]}
         </span>
       </span>
@@ -43,7 +44,7 @@ export default function ShareRow({ row, disabled, onChangeRole, onRemove }: Shar
         value={row.role}
         onChange={(e) => onChangeRole(e.target.value as ShareRole)}
         disabled={disabled}
-        className="shrink-0 rounded border border-surface-3 bg-surface-1 px-1.5 py-1 text-sm text-[var(--color-text-secondary)]"
+        className={`shrink-0 ${SHARE_SELECT_CLASS}`}
       >
         {ROLES.map((option) => (
           <option key={option.value} value={option.value}>

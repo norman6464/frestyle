@@ -224,7 +224,7 @@ export default function TicketDetailPanel({
 
       {/* 作成・更新と、チケットそのものへの操作はどの項目より後ろ。読む順の最後に来るのが自然。 */}
       <div className="flex flex-wrap items-end justify-between gap-3 border-t border-surface-3 pt-4">
-        <p className="text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+        <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
           作成 {formatTicketTimestamp(ticket.createdAt)}
           <br />
           更新 {formatTicketTimestamp(ticket.updatedAt)}

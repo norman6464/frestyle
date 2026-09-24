@@ -150,7 +150,7 @@ export default function TicketFullView({
           バックログ
         </Link>
         <TicketAncestorTrail ancestors={ancestors} projectKey={projectKey} />
-        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--color-text-secondary)]">
+        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-xs font-semibold text-[var(--color-text-secondary)]">
           {type?.name ?? ''}
         </span>
         <TicketKeyBadge projectKey={projectKey} number={ticket.number} />

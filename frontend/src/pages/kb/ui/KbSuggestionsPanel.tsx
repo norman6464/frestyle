@@ -78,7 +78,7 @@ export default function KbSuggestionsPanel({
                 <span className="text-xs font-semibold text-[var(--color-text-primary)]">
                   {suggestion.author.name || '不明なユーザー'}
                 </span>
-                <span className="text-[0.6875rem] text-[var(--color-text-muted)]">
+                <span className="text-xs text-[var(--color-text-muted)]">
                   {formatMonthDay(suggestion.createdAt)} {formatHourMinute(suggestion.createdAt)}
                 </span>
               </div>

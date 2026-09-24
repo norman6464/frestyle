@@ -55,13 +55,13 @@ export default function KbCommentsPanel({
       {canComment && !loading && pendingAnchor && (
         <div className="rounded-lg border border-surface-3 bg-surface-1 p-3">
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <h3 className="text-[0.6875rem] font-bold tracking-wide text-[var(--color-text-muted)]">
+            <h3 className="text-xs font-bold tracking-wide text-[var(--color-text-muted)]">
               選択範囲へコメント
             </h3>
             <button
               type="button"
               onClick={onCancelPendingAnchor}
-              className="text-[0.6875rem] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:underline"
+              className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:underline"
             >
               キャンセル
             </button>
@@ -82,7 +82,7 @@ export default function KbCommentsPanel({
           最低限の防御として残す）。 */}
       {canComment && !loading && !pendingAnchor && (
         <div className="rounded-lg border border-surface-3 bg-surface-1 p-3">
-          <h3 className="mb-1.5 text-[0.6875rem] font-bold tracking-wide text-[var(--color-text-muted)]">
+          <h3 className="mb-1.5 text-xs font-bold tracking-wide text-[var(--color-text-muted)]">
             新しいスレッドを作成
           </h3>
           <KbCommentComposer placeholder="コメントを書く…" onSubmit={onCreateThread} />
@@ -120,7 +120,7 @@ export default function KbCommentsPanel({
 
       {!loading && !error && unresolved.length > 0 && (
         <section aria-label="未解決のスレッド">
-          <h3 className="mb-1.5 text-[0.6875rem] font-bold tracking-wide text-[var(--color-text-muted)]">
+          <h3 className="mb-1.5 text-xs font-bold tracking-wide text-[var(--color-text-muted)]">
             未解決（{unresolved.length}）
           </h3>
           <ul className="flex flex-col gap-2">
@@ -141,7 +141,7 @@ export default function KbCommentsPanel({
 
       {!loading && !error && resolved.length > 0 && (
         <section aria-label="解決済みのスレッド">
-          <h3 className="mb-1.5 text-[0.6875rem] font-bold tracking-wide text-[var(--color-text-muted)]">
+          <h3 className="mb-1.5 text-xs font-bold tracking-wide text-[var(--color-text-muted)]">
             解決済み（{resolved.length}）
           </h3>
           <ul className="flex flex-col gap-2">

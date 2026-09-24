@@ -57,7 +57,7 @@ export default function TicketAttachmentRow({
       >
         {attachment.filename}
       </button>
-      <span className="flex-none text-[11px] text-[var(--color-text-muted)]">
+      <span className="flex-none text-xs text-[var(--color-text-muted)]">
         {formatFileSize(attachment.sizeBytes)}
       </span>
       {downloadFailed && (

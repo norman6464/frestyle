@@ -73,7 +73,7 @@ export default function TicketStatusAdmin({ statuses, onCreate, onSetInitial, on
       <div role="region" aria-label="状態の一覧（横にスクロールできます）" tabIndex={0} className="overflow-x-auto rounded-lg border border-surface-3 p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">
       <table className="w-full min-w-[32rem] text-left text-sm">
         <thead>
-          <tr className="border-b border-surface-3 text-[10.5px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          <tr className="border-b border-surface-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             <th className="py-1.5 font-semibold">名前</th>
             <th className="w-24 py-1.5 font-semibold">枠</th>
             <th className="w-20 py-1.5 font-semibold">色</th>

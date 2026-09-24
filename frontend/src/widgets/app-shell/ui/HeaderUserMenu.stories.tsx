@@ -45,7 +45,7 @@ export const Escapeで閉じてフォーカスを戻す: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const portal = within(canvasElement.ownerDocument.body);
-    const trigger = canvas.getByRole('button', { name: '川野 拓馬' });
+    const trigger = canvas.getByRole('button', { name: '川野 拓馬 のアカウント' });
     if (trigger.getAttribute('aria-expanded') !== 'true') await userEvent.click(trigger);
     (await portal.findByRole('menuitem', { name: '設定' })).focus();
     await userEvent.keyboard('{Escape}');

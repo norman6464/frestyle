@@ -88,3 +88,29 @@ export const 失敗しても消えない: Story = {
     });
   },
 };
+
+/** 開いた欄を閉じる手立て。「やめる」でも Esc でも閉じる（呼び出し側が onCancel を渡したとき）。 */
+export const やめるで閉じる: Story = {
+  args: { onCancel: fn(), autoFocus: true },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByLabelText('ワークスペースの名前')).toHaveFocus();
+    await userEvent.keyboard('{Escape}');
+    await expect(args.onCancel).toHaveBeenCalledTimes(1);
+    await userEvent.click(canvas.getByRole('button', { name: 'やめる' }));
+    await expect(args.onCancel).toHaveBeenCalledTimes(2);
+  },
+};
+
+/**
+ * 一覧の上の帯に置く 1 行の形。見出しは読み上げにだけ残し、欄の中の薄い字で何の名前かを示す。
+ * 幅が足りないと（この見本の 256px のように）ボタンは次の行へ回る。
+ */
+export const 一行に並べる: Story = {
+  args: { what: 'スプリント', layout: 'inline', initialName: 'スプリント 3', onCancel: fn() },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('textbox', { name: 'スプリントの名前' })).toHaveValue('スプリント 3');
+    await expect(canvas.getByRole('button', { name: 'スプリントを作る' })).toBeEnabled();
+  },
+};

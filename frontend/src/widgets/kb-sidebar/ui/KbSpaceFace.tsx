@@ -96,7 +96,7 @@ export default function KbSpaceFace({
   const navItemClass = (isActive: boolean) =>
     `flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
       isActive
-        ? 'bg-brand-500/10 font-medium text-brand-700'
+        ? 'bg-[var(--color-nav-selected)] font-medium text-[var(--color-nav-selected-text)]'
         : 'text-[var(--color-text-tertiary)] hover:bg-surface-2'
     }`;
 
@@ -329,10 +329,13 @@ function KbSpaceSwitcherMenu({
           key={s.id}
           to={`/kb/spaces/${s.id}`}
           onClick={onClose}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-surface-2 ${
+          // 今いるスペースの印。'page' にしないのは、同じスペースのメンバー画面などを開いていても
+          // このリンク（概要）が「今のページ」だと読まれてしまうため。
+          aria-current={s.id === activeSpaceId ? 'true' : undefined}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm ${
             s.id === activeSpaceId
-              ? 'font-semibold text-[var(--color-text-primary)]'
-              : 'text-[var(--color-text-secondary)]'
+              ? 'bg-[var(--color-nav-selected)] font-medium text-[var(--color-nav-selected-text)]'
+              : 'text-[var(--color-text-secondary)] hover:bg-surface-2'
           }`}
         >
           <FsIcon name="folder" className="h-4 w-4 shrink-0" />
@@ -342,14 +345,7 @@ function KbSpaceSwitcherMenu({
       <div className="mt-1 border-t border-surface-3 pt-1">
         {addingSpace ? (
           <div className="px-2 pb-1">
-            <NameCreateForm what="スペース" onCreate={createSpace} />
-            <button
-              type="button"
-              onClick={() => setAddingSpace(false)}
-              className="w-full px-2 pb-1 text-left text-xs text-[var(--color-text-muted)] hover:underline"
-            >
-              やめる
-            </button>
+            <NameCreateForm what="スペース" onCreate={createSpace} onCancel={() => setAddingSpace(false)} autoFocus />
           </div>
         ) : (
           <button
@@ -365,14 +361,9 @@ function KbSpaceSwitcherMenu({
             <NameCreateForm
               what="プライベートスペース"
               onCreate={(input) => createSpace({ ...input, visibility: 'private' })}
+              onCancel={() => setAddingPrivateSpace(false)}
+              autoFocus
             />
-            <button
-              type="button"
-              onClick={() => setAddingPrivateSpace(false)}
-              className="w-full px-2 pb-1 text-left text-xs text-[var(--color-text-muted)] hover:underline"
-            >
-              やめる
-            </button>
           </div>
         ) : (
           <button

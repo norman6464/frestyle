@@ -64,7 +64,7 @@ export default function CodeBlock({ children }: { children: ReactNode }) {
 
   return (
     <div className="my-2 rounded-md overflow-hidden bg-[var(--color-surface-3)]">
-      <div className="flex items-center justify-between px-3 py-1 bg-[var(--color-surface-2)] border-b border-[var(--color-surface-3)] text-[11px]">
+      <div className="flex items-center justify-between px-3 py-1 bg-[var(--color-surface-2)] border-b border-[var(--color-surface-3)] text-xs">
         <span className="text-[var(--color-text-muted)] font-mono">
           {language || 'code'}
         </span>

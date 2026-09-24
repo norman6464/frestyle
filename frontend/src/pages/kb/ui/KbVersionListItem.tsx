@@ -25,7 +25,7 @@ export default function KbVersionListItem({ version, selected, onSelect }: KbVer
         aria-current={selected ? 'true' : undefined}
         className={`w-full rounded-lg border p-3 text-left transition-colors ${
           selected
-            ? 'border-brand-600 bg-brand-500/10'
+            ? 'border-[var(--color-nav-selected-rule)] bg-[var(--color-nav-selected)]'
             : 'border-surface-3 bg-surface-1 hover:bg-surface-2'
         }`}
       >
@@ -33,7 +33,7 @@ export default function KbVersionListItem({ version, selected, onSelect }: KbVer
           <span className="text-xs font-semibold text-[var(--color-text-primary)]">
             {version.author.name || '不明なユーザー'}
           </span>
-          <span className="text-[0.6875rem] text-[var(--color-text-muted)]">
+          <span className="text-xs text-[var(--color-text-muted)]">
             {formatMonthDay(version.createdAt)} {formatHourMinute(version.createdAt)}
           </span>
         </div>

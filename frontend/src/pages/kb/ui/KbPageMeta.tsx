@@ -29,21 +29,21 @@ const VISIBILITY_LABEL: Record<KbPageVisibility, string> = {
 function KbVisibilityBadge({ visibility }: { visibility: KbPageVisibility }) {
   if (visibility === 'public') {
     return (
-      <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold leading-relaxed bg-brand-100 text-brand-800">
+      <span className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold leading-relaxed bg-brand-100 text-brand-800">
         {VISIBILITY_LABEL.public}
       </span>
     );
   }
   if (visibility === 'private') {
     return (
-      <span className="inline-flex items-center gap-1 rounded bg-taupe-600 px-1.5 py-0.5 text-[11px] font-semibold leading-relaxed text-white">
+      <span className="inline-flex items-center gap-1 rounded bg-taupe-600 px-1.5 py-0.5 text-xs font-semibold leading-relaxed text-white">
         <FsIcon name="lock" className="h-2.5 w-2.5" />
         {VISIBILITY_LABEL.private}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center rounded bg-taupe-100 px-1.5 py-0.5 text-[11px] font-semibold leading-relaxed text-taupe-600">
+    <span className="inline-flex items-center rounded bg-taupe-100 px-1.5 py-0.5 text-xs font-semibold leading-relaxed text-taupe-600">
       {VISIBILITY_LABEL.space}
     </span>
   );

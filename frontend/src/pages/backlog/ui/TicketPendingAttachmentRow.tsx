@@ -23,7 +23,7 @@ export default function TicketPendingAttachmentRow({ pending, onRetry, onDismiss
         <span className="min-w-0 flex-1 truncate text-[var(--color-text-primary)]" title={pending.file.name}>
           {pending.file.name}
         </span>
-        <span className="flex-none text-[11px] text-[var(--color-text-muted)]">
+        <span className="flex-none text-xs text-[var(--color-text-muted)]">
           {formatFileSize(pending.file.size)}
         </span>
         {pending.status === 'uploading' && (

@@ -154,7 +154,7 @@ export default function KbPageRow({
       className={`group flex items-center gap-1 rounded-md border-l-2 pr-1 transition-colors ${
         // いま開いている行は**背景と字の太さ・左罫**で示す。文字色まで変えると、行の中の
         // 操作メニューまで色を継ぎ、木全体が青く見える（文字は黒で揃える）。
-        active ? 'border-brand-600 bg-brand-500/10' : 'border-transparent hover:bg-surface-2'
+        active ? 'border-[var(--color-nav-selected-rule)] bg-[var(--color-nav-selected)]' : 'border-transparent hover:bg-surface-2'
       } ${dragging ? 'opacity-60' : ''} ${dropClass}`}
       style={{ paddingLeft: depth * KB_INDENT_PX }}
     >

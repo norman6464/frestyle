@@ -29,7 +29,7 @@ export default function GlobalBottomNav() {
             key={item.id}
             to={item.to}
             aria-current={active ? 'page' : undefined}
-            className={`flex h-full flex-col items-center justify-center gap-0.5 px-1 text-[11px] font-medium transition-colors duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600 ${
+            className={`flex h-full flex-col items-center justify-center gap-0.5 px-1 text-xs font-medium transition-colors duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600 ${
               active ? 'text-brand-700' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
             }`}
           >

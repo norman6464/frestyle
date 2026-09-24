@@ -148,7 +148,7 @@ export default function SprintCard({
               key={ticket.id}
               className="flex items-center gap-2.5 border-b border-surface-3 px-3 py-2 text-sm last:border-b-0"
             >
-              <span className="shrink-0 font-mono text-[11px] text-[var(--color-text-muted)]">
+              <span className="shrink-0 font-mono text-xs text-[var(--color-text-muted)]">
                 {formatTicketKey(projectKey, ticket.number)}
               </span>
               <span className="min-w-0 flex-1 truncate text-[var(--color-text-primary)]">{ticket.title}</span>

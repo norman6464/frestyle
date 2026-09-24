@@ -8,7 +8,7 @@ import {
   emptyRichDoc,
   isAllowedLinkHref,
   isRichDoc,
-  normalizeLinkInput,
+  LinkUrlForm,
   sanitizeDocLinks,
   type RichDocContent,
 } from '@/shared/ui/RichTextEditor';
@@ -273,82 +273,86 @@ function TicketFormatBar({ editor, disabled }: { editor: Editor; disabled: boole
     };
   }, [editor]);
 
-  const addLink = () => {
-    const current = editor.getAttributes('link').href as string | undefined;
-    const input = window.prompt('リンク先の URL', current ?? '');
-    if (input === null) return;
-    if (input.trim() === '') {
-      editor.chain().focus().unsetLink().run();
-      return;
-    }
-    const href = normalizeLinkInput(input);
-    if (!href) {
-      window.alert('この URL は開けません（http / https / mailto / tel のみ）');
-      return;
-    }
-    editor.chain().focus().setLink({ href }).run();
-  };
+  const [linkOpen, setLinkOpen] = useState(false);
+  const linkActive = editor.isActive('link');
 
   return (
-    <div
-      role="toolbar"
-      aria-label="本文の書式"
-      className="flex flex-wrap items-center gap-1 border-b border-surface-3 bg-surface-1 p-2 [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600"
-    >
-      {FORMAT_BUTTONS.map((button) => {
-        const active = button.isActive(editor);
-        return (
-          <button
-            key={button.id}
-            type="button"
-            onClick={() => button.run(editor)}
-            disabled={disabled}
-            aria-pressed={active}
-            aria-label={button.label}
-            title={button.label}
-            className={`grid h-7 w-7 place-items-center rounded-md text-[15px] transition-colors disabled:opacity-50 ${
-              active
-                ? 'bg-brand-100 text-brand-700'
-                : 'text-[var(--color-text-secondary)] hover:bg-surface-2'
-            }`}
-          >
-            <FormatIcon name={button.icon} />
-          </button>
-        );
-      })}
-      <span aria-hidden="true" className="mx-1 h-4 w-px bg-surface-3" />
-      <button
-        type="button"
-        onClick={addLink}
-        disabled={disabled}
-        aria-label="リンク"
-        title="リンク"
-        className="grid h-7 w-7 place-items-center rounded-md text-[15px] text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 disabled:opacity-50"
+    <>
+      <div
+        role="toolbar"
+        aria-label="本文の書式"
+        className="flex flex-wrap items-center gap-1 border-b border-surface-3 bg-surface-1 p-2 [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600"
       >
-        <FormatIcon name="link" />
-      </button>
-      <span className="ml-auto flex items-center gap-0.5">
+        {FORMAT_BUTTONS.map((button) => {
+          const active = button.isActive(editor);
+          return (
+            <button
+              key={button.id}
+              type="button"
+              onClick={() => button.run(editor)}
+              disabled={disabled}
+              aria-pressed={active}
+              aria-label={button.label}
+              title={button.label}
+              className={`grid h-7 w-7 place-items-center rounded-md text-[15px] transition-colors disabled:opacity-50 ${
+                active
+                  ? 'bg-brand-100 text-brand-700'
+                  : 'text-[var(--color-text-secondary)] hover:bg-surface-2'
+              }`}
+            >
+              <FormatIcon name={button.icon} />
+            </button>
+          );
+        })}
+        <span aria-hidden="true" className="mx-1 h-4 w-px bg-surface-3" />
         <button
           type="button"
-          onClick={() => editor.chain().focus().undo().run()}
-          disabled={disabled || !editor.can().undo()}
-          aria-label="元に戻す"
-          title="元に戻す"
-          className="grid h-7 w-7 place-items-center rounded-md text-[15px] text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 disabled:opacity-50"
+          // 押下で本文の選択が外れないようにする（外れるとどこにリンクを掛けるのか分からなくなる）。
+          onMouseDown={(mouseEvent) => mouseEvent.preventDefault()}
+          onClick={() => setLinkOpen((prev) => !prev)}
+          disabled={disabled}
+          aria-pressed={linkActive}
+          aria-expanded={linkOpen}
+          aria-label="リンク"
+          title="リンク"
+          className={`grid h-7 w-7 place-items-center rounded-md text-[15px] transition-colors disabled:opacity-50 ${
+            linkActive || linkOpen ? 'bg-brand-100 text-brand-700' : 'text-[var(--color-text-secondary)] hover:bg-surface-2'
+          }`}
         >
-          <FormatIcon name="undo" />
+          <FormatIcon name="link" />
         </button>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().redo().run()}
-          disabled={disabled || !editor.can().redo()}
-          aria-label="やり直す"
-          title="やり直す"
-          className="grid h-7 w-7 place-items-center rounded-md text-[15px] text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 disabled:opacity-50"
-        >
-          <FormatIcon name="redo" />
-        </button>
-      </span>
-    </div>
+        <span className="ml-auto flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().undo().run()}
+            disabled={disabled || !editor.can().undo()}
+            aria-label="元に戻す"
+            title="元に戻す"
+            className="grid h-7 w-7 place-items-center rounded-md text-[15px] text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 disabled:opacity-50"
+          >
+            <FormatIcon name="undo" />
+          </button>
+          <button
+            type="button"
+            onClick={() => editor.chain().focus().redo().run()}
+            disabled={disabled || !editor.can().redo()}
+            aria-label="やり直す"
+            title="やり直す"
+            className="grid h-7 w-7 place-items-center rounded-md text-[15px] text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 disabled:opacity-50"
+          >
+            <FormatIcon name="redo" />
+          </button>
+        </span>
+      </div>
+      {linkOpen && (
+        <LinkUrlForm
+          editor={editor}
+          initialHref={(editor.getAttributes('link').href as string | undefined) ?? ''}
+          canRemove={linkActive}
+          onClose={() => setLinkOpen(false)}
+          className="border-b border-surface-3 bg-surface-1 px-2 py-1.5"
+        />
+      )}
+    </>
   );
 }

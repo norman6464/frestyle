@@ -146,6 +146,6 @@ export const 狭い画面: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'サイドメニューを開く' }));
     await expect(args.onOpenMobileSidebar).toHaveBeenCalledTimes(1);
     await expect(canvas.queryByRole('navigation')).toBeNull();
-    await expect(await canvas.findByRole('button', { name: '川野 拓馬' })).toBeVisible();
+    await expect(await canvas.findByRole('button', { name: '川野 拓馬 のアカウント' })).toBeVisible();
   },
 };

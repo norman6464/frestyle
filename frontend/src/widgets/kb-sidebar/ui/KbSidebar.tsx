@@ -204,7 +204,7 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
             aria-current={workspaceAdminActive ? 'page' : undefined}
             className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
               workspaceAdminActive
-                ? 'bg-brand-500/10 font-medium text-brand-700'
+                ? 'bg-[var(--color-nav-selected)] font-medium text-[var(--color-nav-selected-text)]'
                 : 'text-[var(--color-text-tertiary)] hover:bg-surface-2'
             }`}
           >
@@ -373,7 +373,7 @@ export default function KbSidebar({ workspaceSlug, spaceId, activePageId }: KbSi
           aria-label={archivedMode ? '現役のページに戻る' : 'アーカイブしたページを表示'}
           className={`mt-2 flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors ${
             archivedMode
-              ? 'bg-brand-500/10 text-[var(--color-text-primary)]'
+              ? 'bg-[var(--color-nav-selected)] text-[var(--color-nav-selected-text)]'
               : 'text-[var(--color-text-muted)] hover:bg-surface-2'
           }`}
         >

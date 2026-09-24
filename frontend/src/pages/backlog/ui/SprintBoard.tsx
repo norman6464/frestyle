@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { ConfirmModal, EmptyState, Loading, FsIcon, fsIcon } from '@/shared/ui';
+import { useEffect, useRef, useState } from 'react';
+import { ConfirmModal, EmptyState, Loading, FsIcon, NameCreateForm, fsIcon } from '@/shared/ui';
 import type { Ticket } from '@/entities/ticket';
 import { useSprints } from '../model/useSprints';
 import { useSprintTickets } from '../model/useSprintTickets';
 import SprintCard from './SprintCard';
 import { sprintConfirmText, type SprintConfirmKind } from '../lib/sprintConfirm';
+import { nextSprintName } from '../lib/nextSprintName';
 
 export interface SprintBoardProps {
   /** ページが持つスプリントの状態（チケットの面の「入れ先」と同じものを使う）。 */
@@ -44,21 +45,32 @@ export default function SprintBoard({
   );
   const byId = new Map(tickets.map((t) => [t.id, t]));
   const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState('');
+  // 名前の欄を閉じたら（やめる・Esc・作成）、開く前の「スプリントを作成」へフォーカスを戻す。
+  // 欄が消えると、そこにあったフォーカスは行き場を失い body に落ちる。
+  const createButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocusToCreate = useRef(false);
+  useEffect(() => {
+    if (creating || !returnFocusToCreate.current) return;
+    returnFocusToCreate.current = false;
+    createButtonRef.current?.focus();
+  }, [creating]);
+  const closeCreate = () => {
+    returnFocusToCreate.current = true;
+    setCreating(false);
+  };
   // 取り消せない操作（削除・完了）は確認を挟む。
   const [confirming, setConfirming] = useState<{ kind: SprintConfirmKind; sprintId: string; name: string; count: number } | null>(null);
   const [confirmPending, setConfirmPending] = useState(false);
 
-  const handleCreate = async () => {
-    const name = newName.trim();
-    if (name === '') return;
+  // 失敗は投げ直す。NameCreateForm は投げられたときだけ入力を残す（打ち直しにさせない）。
+  const handleCreate = async ({ name }: { name: string }) => {
     try {
       await create({ name });
-      setNewName('');
-      setCreating(false);
-    } catch {
+    } catch (cause) {
       onError('スプリントを作成できませんでした。');
+      throw cause;
     }
+    closeCreate();
   };
 
   // 規則違反は backend が 409 で返す。どの規則に当たったかを文言で伝える。
@@ -105,39 +117,19 @@ export default function SprintBoard({
   return (
     <div className="p-4">
       {canEdit && (
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex max-w-xl items-center gap-2">
           {creating ? (
-            <>
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="スプリントの名前"
-                aria-label="スプリントの名前"
-                autoFocus
-                className="rounded-md border border-surface-3 px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-brand-600"
-              />
-              <button
-                type="button"
-                onClick={() => void handleCreate()}
-                disabled={newName.trim() === ''}
-                className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
-              >
-                作成
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setCreating(false);
-                  setNewName('');
-                }}
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
-              >
-                キャンセル
-              </button>
-            </>
+            <NameCreateForm
+              what="スプリント"
+              layout="inline"
+              initialName={nextSprintName(sprints)}
+              onCreate={handleCreate}
+              onCancel={closeCreate}
+              autoFocus
+            />
           ) : (
             <button
+              ref={createButtonRef}
               type="button"
               onClick={() => setCreating(true)}
               className="flex items-center gap-1.5 rounded-lg border border-surface-3 bg-surface-1 px-3 py-1.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
