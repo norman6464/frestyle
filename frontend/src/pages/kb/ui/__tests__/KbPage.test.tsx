@@ -61,6 +61,10 @@ const hoisted = vi.hoisted(() => ({
   fetchWorkspaces: vi.fn(),
   fetchSpaces: vi.fn(),
   fetchPageTree: vi.fn(),
+  addFavorite: vi.fn(),
+  removeFavorite: vi.fn(),
+  /** 枠（KbFrame）の偽物が本文へ渡すスペース。パンくずのスペースの段の検査で差し込む。 */
+  frameSpace: null as null | { id: string; key: string; name: string; visibility: 'workspace' | 'private'; createdAt: string },
   getLastVisitedPageId: vi.fn(),
   emit: vi.fn(),
   showToast: vi.fn(),
@@ -119,6 +123,8 @@ vi.mock('@/entities/kb', async (importOriginal) => {
       fetchWorkspaces: hoisted.fetchWorkspaces,
       fetchSpaces: hoisted.fetchSpaces,
       fetchPageTree: hoisted.fetchPageTree,
+      addFavorite: hoisted.addFavorite,
+      removeFavorite: hoisted.removeFavorite,
     },
     getLastVisitedPageId: hoisted.getLastVisitedPageId,
     // スパイしつつ実物へ転送する（購読側の配線もこのテストの検査対象のため）。
@@ -147,10 +153,10 @@ vi.mock('@/widgets/kb-sidebar', async (importOriginal) => {
   return {
     ...actual,
     KbFrame: ({ children }: { children?: ReactNode }) => (
-      <>
+      <actual.KbFrameContext.Provider value={{ space: hoisted.frameSpace }}>
         <nav aria-label="枠の偽物" />
         {children}
-      </>
+      </actual.KbFrameContext.Provider>
     ),
   };
 });
@@ -174,7 +180,22 @@ vi.mock('@/shared/ui/RichTextEditor', async (importOriginal) => {
       onCommentBadgeClick?: (blockId: string) => void;
     }) => {
       hoisted.editorProps.current = props;
-      return <div data-testid="editor" />;
+      // 目次の飛び先の検査のため、見出しだけは本物と同じ形（.ProseMirror の中の h2・data-block-id）で描く。
+      const headings = (props.value?.content ?? []).filter(
+        (node): node is { type: 'heading'; attrs?: { id?: string; level?: number }; content?: { text?: string }[] } =>
+          (node as { type?: string }).type === 'heading',
+      );
+      return (
+        <div data-testid="editor">
+          <div className="ProseMirror">
+            {headings.map((node, i) => (
+              <h2 key={i} data-block-id={node.attrs?.id}>
+                {(node.content ?? []).map((child) => child.text ?? '').join('')}
+              </h2>
+            ))}
+          </div>
+        </div>
+      );
     },
   };
 });
@@ -219,6 +240,8 @@ function renderPage() {
 }
 
 beforeEach(() => {
+  hoisted.frameSpace = null;
+
   vi.clearAllMocks();
   hoisted.editorProps.current = null;
   hoisted.useParams.mockReturnValue({ pageId: 'p1' });
@@ -442,7 +465,8 @@ describe('KbPage のアイコン・最終編集', () => {
     });
     renderPage();
 
-    expect(await screen.findByText(/最終編集 不明なユーザー/)).toBeInTheDocument();
+    expect(await screen.findByText(/不明なユーザー/)).toBeInTheDocument();
+    expect(screen.getByText(/が最終編集/)).toBeInTheDocument();
   });
 
   it('読むだけの人にはアイコンは img として出て、押せない', async () => {
@@ -979,7 +1003,7 @@ describe('KbPage の履歴', () => {
     await screen.findByTestId('editor');
     expect(hoisted.editorProps.current?.editable).toBe(true);
 
-    fireEvent.click(await findPageOption('履歴'));
+    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
     await waitFor(() => expect(hoisted.listPageVersions).toHaveBeenCalledWith('w-3f2a9c', 'p1'));
 
     const row = (await screen.findAllByRole('button', { name: /初版/ }))[0];
@@ -998,7 +1022,7 @@ describe('KbPage の履歴', () => {
     renderPage();
     await screen.findByTestId('editor');
 
-    fireEvent.click(await findPageOption('履歴'));
+    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
     fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
 
@@ -1023,7 +1047,7 @@ describe('KbPage の履歴', () => {
     renderPage();
     await screen.findByTestId('editor');
 
-    fireEvent.click(await findPageOption('履歴'));
+    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
     fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
 
@@ -1086,7 +1110,7 @@ describe('KbPage の履歴', () => {
 
     // 版を選んで「この版に戻す」を確定する。まだ PUT の応答が無いので、
     // 復元 API はまだ呼ばれないはず。
-    fireEvent.click(await findPageOption('履歴'));
+    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
     fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
     fireEvent.click(await screen.findByRole('button', { name: 'この版に戻す' }));
@@ -1127,7 +1151,7 @@ describe('KbPage の履歴', () => {
     renderPage();
     await screen.findByTestId('editor');
 
-    fireEvent.click(await findPageOption('履歴'));
+    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
     fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
 
@@ -1147,12 +1171,12 @@ describe('KbPage の履歴', () => {
     renderPage();
     await screen.findByTestId('editor');
 
-    const historyToggle = await findPageOption('履歴');
+    const historyToggle = await screen.findByRole('button', { name: '履歴' });
     fireEvent.click(historyToggle);
     fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
 
-    // 履歴パネルを閉じても、帯とプレビューは残る（明示的な「現在の版に戻る」だけが退出手段）。
+    // 履歴のタブを閉じても、帯とプレビューは残る（明示的な「現在の版に戻る」だけが退出手段）。
     fireEvent.click(historyToggle);
     expect(hoisted.editorProps.current?.editable).toBe(false);
     expect(screen.getByText(/の版を表示中/)).toBeInTheDocument();
@@ -1168,7 +1192,7 @@ describe('KbPage の履歴', () => {
     hoisted.getPageVersion.mockResolvedValue(versionDetail(1, '初版'));
     renderPage();
 
-    fireEvent.click(await findPageOption('履歴'));
+    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
     await waitFor(() => expect(hoisted.listPageVersions).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: '版を残す' })).not.toBeInTheDocument();
 
@@ -1376,8 +1400,6 @@ describe('KbPage の提案パネル（開閉・採用・却下）', () => {
     fireEvent.click(await screen.findByRole('button', { name: '提案' }));
 
     await waitFor(() => expect(hoisted.listOpenSuggestions).toHaveBeenCalledWith('w-3f2a9c', 'p1'));
-    // SecondaryPanel はモバイル版・デスクトップ版の両方に同じ中身を描くため常に2つ出る
-    // （KbCommentsPanel・KbVersionsPanel の既存テストと同じ扱い）。
     expect((await screen.findAllByText('田中 太郎')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('書き換え後').length).toBeGreaterThan(0);
   });
@@ -1503,8 +1525,159 @@ describe('KbPage の入口解決（素の /kb）', () => {
   });
 });
 
+/** 「…」（その他の操作）を開いて、中の操作を返す。 */
 async function findPageOption(name: string) {
-  const toggle = await screen.findByRole('button', { name: 'ページの設定とその他の操作' });
+  const toggle = await screen.findByRole('button', { name: 'その他の操作' });
   if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
   return screen.findByRole('button', { name });
 }
+
+describe('KbPage の操作バーと右レール', () => {
+  beforeEach(() => {
+    hoisted.resolvePage.mockResolvedValue(resolved(true));
+    hoisted.listCommentThreads.mockResolvedValue([]);
+    hoisted.listPageVersions.mockResolvedValue([]);
+    hoisted.listOpenSuggestions.mockResolvedValue([]);
+    hoisted.addFavorite.mockResolvedValue(undefined);
+    hoisted.removeFavorite.mockResolvedValue(undefined);
+  });
+
+  it('星を押すとお気に入りに入り、もう一度押すと外れる（表示はその場で反転する）', async () => {
+    renderPage();
+    const star = await screen.findByRole('button', { name: 'お気に入りに追加' });
+    expect(star).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(star);
+    expect(screen.getByRole('button', { name: 'お気に入りから外す' })).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => expect(hoisted.addFavorite).toHaveBeenCalledWith('w-3f2a9c', 'p1'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'お気に入りから外す' }));
+    await waitFor(() => expect(hoisted.removeFavorite).toHaveBeenCalledWith('w-3f2a9c', 'p1'));
+    expect(screen.getByRole('button', { name: 'お気に入りに追加' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('応答が isFavorite を持てば、星は最初から塗られている', async () => {
+    hoisted.resolvePage.mockResolvedValue({ ...resolved(true), isFavorite: true });
+    renderPage();
+    expect(await screen.findByRole('button', { name: 'お気に入りから外す' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('お気に入りに失敗したら知らせを出し、星を元に戻す', async () => {
+    hoisted.addFavorite.mockRejectedValue(new Error('boom'));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'お気に入りに追加' }));
+    await waitFor(() =>
+      expect(hoisted.showToast).toHaveBeenCalledWith('error', 'お気に入りに追加できませんでした'),
+    );
+    expect(screen.getByRole('button', { name: 'お気に入りに追加' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('目次は本文の見出しから作り、押すとその見出しへ移る', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    hoisted.resolvePage.mockResolvedValue({
+      ...resolved(true),
+      doc: {
+        type: 'doc',
+        content: [
+          { type: 'heading', attrs: { level: 2, id: 'h-1' }, content: [{ type: 'text', text: '命名' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: '本文' }] },
+          { type: 'heading', attrs: { level: 3, id: 'h-2' }, content: [{ type: 'text', text: 'ファイル名' }] },
+        ],
+      },
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: '目次' }));
+    const toc = await screen.findByRole('navigation', { name: '目次' });
+    expect(within(toc).getByRole('button', { name: '命名' })).toBeInTheDocument();
+    expect(within(toc).getByRole('button', { name: 'ファイル名' })).toBeInTheDocument();
+
+    fireEvent.click(within(toc).getByRole('button', { name: 'ファイル名' }));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect((scrollIntoView.mock.instances[0] as HTMLElement).getAttribute('data-block-id')).toBe('h-2');
+  });
+
+  it('見出しが無ければ目次はそう伝える', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: '目次' }));
+    expect(await screen.findByText(/見出しがありません/)).toBeInTheDocument();
+  });
+
+  it('右レールは 1 枚で、コメント → 履歴 と押すとタブが切り替わり、同じボタンをもう一度押すと閉じる', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'コメント' }));
+    const rail = await screen.findByRole('complementary', { name: 'ページの補助' });
+    expect(within(rail).getByRole('tab', { name: 'コメント' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(rail).getByText('まだコメントはありません。')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '履歴' }));
+    await waitFor(() => expect(hoisted.listPageVersions).toHaveBeenCalled());
+    expect(within(rail).getByRole('tab', { name: '履歴' })).toHaveAttribute('aria-selected', 'true');
+    // 同時に見えるのは 1 つ。コメントの中身は消えている。
+    expect(within(rail).queryByText('まだコメントはありません。')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '履歴' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'コメント' })).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: '履歴' }));
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'ページの補助' })).not.toBeInTheDocument());
+  });
+
+  it('レールの閉じるボタンで閉じる', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: '提案' }));
+    await screen.findByRole('complementary', { name: 'ページの補助' });
+    fireEvent.click(screen.getByRole('button', { name: '補助を閉じる' }));
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'ページの補助' })).not.toBeInTheDocument());
+  });
+
+  it('保存状態はバイラインに出る。読み上げ用の領域は最初から置き、書き換えると「未保存」が入る', async () => {
+    renderPage();
+    await screen.findByTestId('editor');
+    const status = screen.getByRole('status', { name: '保存状態' });
+    expect(status).toHaveTextContent('');
+
+    act(() => {
+      hoisted.editorProps.current?.onChange?.({ type: 'doc', content: [] });
+    });
+    expect(status).toHaveTextContent('未保存');
+  });
+
+  it('編集できない人には保存状態を出さず、「閲覧のみ」または「コメント可」の印を出す', async () => {
+    hoisted.resolvePage.mockResolvedValue(resolved(false, false, false));
+    const { unmount } = renderPage();
+    await screen.findByTestId('editor');
+    expect(screen.queryByRole('status', { name: '保存状態' })).not.toBeInTheDocument();
+    expect(screen.getByText('閲覧のみ')).toBeInTheDocument();
+    unmount();
+
+    hoisted.resolvePage.mockResolvedValue(resolved(false, false, true));
+    renderPage();
+    expect(await screen.findByText('コメント可')).toBeInTheDocument();
+  });
+
+  it('読むだけの人には「その他の操作」を出さない（雛形・カバー・アイコンは編集できる人の操作）', async () => {
+    hoisted.resolvePage.mockResolvedValue(resolved(false));
+    renderPage();
+    await screen.findByTestId('editor');
+    expect(screen.queryByRole('button', { name: 'その他の操作' })).not.toBeInTheDocument();
+  });
+
+  it('パンくずは ワークスペース（リンク）→ スペース（枠から受け取る）→ 祖先 → 今のページ', async () => {
+    hoisted.frameSpace = { id: 's1', key: 's-1', name: 'バックエンド定例', visibility: 'workspace', createdAt: '' };
+    renderPage();
+    const nav = await screen.findByRole('navigation', { name: 'ページの場所' });
+    expect(within(nav).getByRole('link', { name: '開発チーム' })).toHaveAttribute('href', '/kb/spaces?workspace=w-3f2a9c');
+    expect(within(nav).getByRole('link', { name: 'バックエンド定例' })).toHaveAttribute('href', '/kb/spaces/s1');
+    expect(within(nav).getByRole('link', { name: '親ページの親' })).toHaveAttribute('href', '/kb/anc-1');
+    // 省いた題名の全文は title で読める。
+    expect(within(nav).getByText('親ページ')).toHaveAttribute('title', '親ページ');
+  });
+
+  it('枠のスペースが今のページのスペースと違えば、その段は出さない（別のスペースの名前を騙らない）', async () => {
+    hoisted.frameSpace = { id: 'other', key: 'o', name: '別のスペース', visibility: 'workspace', createdAt: '' };
+    renderPage();
+    const nav = await screen.findByRole('navigation', { name: 'ページの場所' });
+    expect(within(nav).queryByRole('link', { name: '別のスペース' })).not.toBeInTheDocument();
+  });
+});

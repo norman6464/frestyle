@@ -83,7 +83,9 @@ export default function KbPageTitle({ title, canEdit, onRename, onEnter }: KbPag
           event.currentTarget.blur();
         }
       }}
-      className="mb-3 min-h-14 w-full rounded-md border border-transparent bg-transparent px-1 text-3xl font-bold text-[var(--color-text-primary)] outline-none hover:border-surface-3 focus:ring-2 focus:ring-brand-600 md:text-4xl"
+      // 枠 1px と内側の余白 4px のぶん左へ寄せ、読むだけのときの h1 と文字の左端をそろえる
+      // （そろえないと、編集できる人にだけ題名が約 5px 右にずれて見える）。
+      className="-ml-[5px] mb-3 min-h-14 w-[calc(100%+5px)] rounded-md border border-transparent bg-transparent px-1 text-3xl font-bold text-[var(--color-text-primary)] outline-none hover:border-surface-3 focus:ring-2 focus:ring-brand-600 md:text-4xl"
     />
     </>
   );

@@ -4,7 +4,7 @@ import { withApi, withToast, routerWithParam } from '../../../../.storybook/deco
 import KbPage from './KbPage';
 
 /**
- * ナレッジの画面（左に木、右に本文）。
+ * ナレッジの画面（上に文脈バー、左に木、本文、右にレール）。
  *
  * URL は `/kb/:pageId` だけで、ワークスペースやスペースは出さない。どのページかが決まれば
  * 場所は引けるので、URL に階層を並べても長くなるだけで、階層を組み替えるたびにリンクが
@@ -114,6 +114,11 @@ const api = (over: Record<string, unknown> = {}) => ({
     createdAt: '2026-09-01T00:00:00Z',
   }),
   '/pages/p-1/suggestions': [],
+  // 版・コメント・お気に入りの宛先も `/kb/workspaces` を部分文字列として含むので、その前に置く
+  // （後ろだと workspaces の一覧が版の応答として使われ、author の無い行で画面が落ちる）。
+  '/pages/p-1/versions': [],
+  '/pages/p-1/comment-threads': [],
+  '/pages/p-1/favorite': () => undefined,
   '/spaces/s-1/pages': tree,
   '/spaces': spaces,
   '/kb/workspaces': workspaces,
@@ -155,6 +160,9 @@ export const 読むだけ: Story = {
     await expect(canvas.getByRole('img', { name: 'ページのアイコン' })).toHaveTextContent('📘');
     await expect(canvas.queryByRole('button', { name: 'アイコンを追加' })).toBeNull();
     await expect(canvas.queryByRole('button', { name: 'ページのアイコンを変更' })).toBeNull();
+    // 書けないことは言葉で示す。設定（…）は出さない。
+    await expect(canvas.getByText('閲覧のみ')).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'その他の操作' })).toBeNull();
   },
 };
 
@@ -334,9 +342,9 @@ export const 最終編集が出る: Story = {
     ),
   ],
   play: async ({ canvasElement }) => {
-    await expect(
-      await within(canvasElement).findByText(/最終編集 田中 太郎/),
-    ).toBeVisible();
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('田中 太郎')).toBeVisible();
+    await expect(canvas.getByText(/が最終編集/)).toBeVisible();
   },
 };
 
@@ -388,8 +396,140 @@ export const 幅とパンくずと共有ボタン: Story = {
   },
 };
 
+/** 操作バーの「…」（その他の操作）を開いて、中の操作を返す。 */
 async function findPageOption(canvas: ReturnType<typeof within>, name: string) {
-  const toggle = await canvas.findByRole('button', { name: 'ページの設定とその他の操作' });
+  const toggle = await canvas.findByRole('button', { name: 'その他の操作' });
   if (toggle.getAttribute('aria-expanded') === 'false') await userEvent.click(toggle);
   return canvas.findByRole('button', { name });
 }
+
+const docWithHeadings = {
+  type: 'doc',
+  content: [
+    { type: 'paragraph', content: [{ type: 'text', text: 'このページでは規約をまとめます。' }] },
+    { type: 'heading', attrs: { level: 2, id: 'h-1' }, content: [{ type: 'text', text: '命名' }] },
+    { type: 'paragraph', content: [{ type: 'text', text: 'コンポーネントは PascalCase。' }] },
+    { type: 'heading', attrs: { level: 3, id: 'h-2' }, content: [{ type: 'text', text: 'ファイル名' }] },
+    { type: 'paragraph', content: [{ type: 'text', text: 'コンポーネント名と一致させる。' }] },
+    { type: 'heading', attrs: { level: 2, id: 'h-3' }, content: [{ type: 'text', text: 'レビュー' }] },
+    { type: 'paragraph', content: [{ type: 'text', text: 'PR は 400 行以内を目安にする。' }] },
+  ],
+};
+
+/**
+ * 右レールは広い画面では目次を開いた状態から始まる（見本 3a の既定）。目次は本文の見出しから
+ * 作り、3 段目は字下げして並ぶ。押すとその見出しへ移る。
+ */
+export const 右レールの目次: Story = {
+  decorators: [
+    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    withApi(api({ '/kb/pages/p-1': resolved({ doc: docWithHeadings }) })),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const rail = await canvas.findByRole('complementary', { name: 'ページの補助' });
+    await expect(within(rail).getByRole('tab', { name: '目次' })).toHaveAttribute('aria-selected', 'true');
+    const toc = within(rail).getByRole('navigation', { name: '目次' });
+    for (const label of ['命名', 'ファイル名', 'レビュー']) {
+      await expect(within(toc).getByRole('button', { name: label })).toBeVisible();
+    }
+    // 3 段目は 2 段目より字下げされる。
+    const h2Padding = parseFloat(getComputedStyle(within(toc).getByRole('button', { name: '命名' })).paddingLeft);
+    const h3Padding = parseFloat(getComputedStyle(within(toc).getByRole('button', { name: 'ファイル名' })).paddingLeft);
+    await expect(h3Padding).toBeGreaterThan(h2Padding);
+    await userEvent.click(within(toc).getByRole('button', { name: 'レビュー' }));
+    // 操作バーの「目次」は押された状態。
+    await expect(canvas.getByRole('button', { name: '目次' })).toHaveAttribute('aria-expanded', 'true');
+  },
+};
+
+/** 操作バーのコメント・履歴・提案はレールの同じ名前のタブを開く。同時に見えるのは 1 つで、閉じるボタンで本文が広がる。 */
+export const 右レールのタブを切り替える: Story = {
+  decorators: [
+    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    withApi(
+      api({
+        '/pages/p-1/versions': [
+          { seq: 2, author: { userId: 1, name: '田中 太郎' }, note: 'レビュー節を追記', createdAt: '2026-09-04T11:20:00' },
+          { seq: 1, author: { userId: 2, name: '鈴木 花子' }, note: null, createdAt: '2026-08-21T09:05:00' },
+        ],
+      }),
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole('complementary', { name: 'ページの補助' });
+    await userEvent.click(canvas.getByRole('button', { name: '履歴' }));
+    const rail = canvas.getByRole('complementary', { name: 'ページの補助' });
+    await expect(within(rail).getByRole('tab', { name: '履歴' })).toHaveAttribute('aria-selected', 'true');
+    await expect(await within(rail).findByText('レビュー節を追記')).toBeVisible();
+
+    // タブを直接押しても切り替わる。
+    await userEvent.click(within(rail).getByRole('tab', { name: 'コメント' }));
+    await expect(await within(rail).findByText('まだコメントはありません。')).toBeVisible();
+    await expect(within(rail).queryByText('レビュー節を追記')).toBeNull();
+
+    await userEvent.click(within(rail).getByRole('button', { name: '補助を閉じる' }));
+    await waitFor(async () => {
+      await expect(canvas.queryByRole('complementary', { name: 'ページの補助' })).toBeNull();
+    });
+    // 閉じた後は操作バーから開き直せる。
+    await userEvent.click(canvas.getByRole('button', { name: 'コメント' }));
+    await expect(await canvas.findByRole('complementary', { name: 'ページの補助' })).toBeVisible();
+  },
+};
+
+/** 操作バーの星。押すとその場で塗られ、もう一度押すと外れる。 */
+export const お気に入りの星: Story = {
+  decorators: [routerWithParam('/kb/:pageId', '/kb/p-1'), withApi(api())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const star = await canvas.findByRole('button', { name: 'お気に入りに追加' });
+    await expect(star).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(star);
+    await expect(await canvas.findByRole('button', { name: 'お気に入りから外す' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(canvas.getByRole('button', { name: 'お気に入りから外す' }));
+    await expect(await canvas.findByRole('button', { name: 'お気に入りに追加' })).toHaveAttribute('aria-pressed', 'false');
+  },
+};
+
+/** 保存状態はバイラインの右端。読み上げ用の領域は最初から置き、本文を書き換えると文字が入る。 */
+export const 保存状態はバイラインに出る: Story = {
+  decorators: [
+    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    withApi(api({ '/pages/p-1/content': () => ({ ...resolved(), doc }) })),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const status = await canvas.findByRole('status', { name: '保存状態' });
+    await expect(status).toHaveTextContent('');
+    const body = await canvas.findByRole('textbox', { name: '設計メモ の本文' });
+    await userEvent.click(body);
+    await userEvent.keyboard('追記');
+    await waitFor(async () => {
+      await expect(status).toHaveTextContent(/未保存|保存中|保存済み/);
+    });
+  },
+};
+
+/** 狭い画面では右レールは右から出る引き出しになる。Escape で閉じて、押したボタンへ戻る。 */
+export const 狭い画面の補助: Story = {
+  decorators: [routerWithParam('/kb/:pageId', '/kb/p-1'), withApi(api())],
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // 狭い画面では最初は閉じている（本文の上に重なる物を勝手に出さない）。
+    const button = await canvas.findByRole('button', { name: 'コメント' });
+    await expect(canvas.queryByRole('dialog', { name: 'ページの補助' })).toBeNull();
+    await userEvent.click(button);
+    const drawer = await canvas.findByRole('dialog', { name: 'ページの補助' });
+    await expect(within(drawer).getByRole('tab', { name: 'コメント' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(async () => {
+      await expect(canvas.queryByRole('dialog', { name: 'ページの補助' })).toBeNull();
+    });
+    await waitFor(async () => {
+      await expect(button).toHaveFocus();
+    });
+  },
+};

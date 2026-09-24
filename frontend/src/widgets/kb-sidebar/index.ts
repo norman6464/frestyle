@@ -1,5 +1,7 @@
 export { default as KbFrame } from './ui/KbFrame';
 export type { KbFrameProps } from './ui/KbFrame';
+export { KbFrameContext, useKbFrameSpace } from './model/kbFrameContext';
+export type { KbFrameValue } from './model/kbFrameContext';
 export { default as KbPageGlyph } from './ui/KbPageGlyph';
 export type { KbPageGlyphProps } from './ui/KbPageGlyph';
 export { default as KbTemplatePickerModal } from './ui/KbTemplatePickerModal';

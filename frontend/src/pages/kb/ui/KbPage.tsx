@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { KbFrame, KbTemplatePickerModal, useKbPageTemplates } from '@/widgets/kb-sidebar';
-import { SecondaryPanel } from '@/widgets/secondary-panel';
 import {
   RichTextEditor,
   emptyRichDoc,
@@ -15,13 +14,16 @@ import Loading from '@/shared/ui/Loading';
 import EmptyState from '@/shared/ui/EmptyState';
 import ConfirmModal from '@/shared/ui/ConfirmModal';
 import Button from '@/shared/ui/Button';
-import { Disclosure, FsIcon, fsIcon } from '@/shared/ui';
+import { FsIcon, fsIcon } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
+import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useKbPageDoc } from '../model/useKbPageDoc';
 import { createSubpage } from '../model/createSubpage';
 import { resolveEntryPageId } from '../model/resolveEntryPage';
 import { useKbImageResolver } from '../model/useKbImageResolver';
+import { useKbPageFavorite } from '../model/useKbPageFavorite';
+import { extractHeadings } from '../lib/docOutline';
 import { emitKbTreeEvent, KbRepository, subscribeKbTreeEvents, type KbIcon } from '@/entities/kb';
 import KbPageTitle from './KbPageTitle';
 import KbPageIconButton from './KbPageIconButton';
@@ -36,6 +38,12 @@ import KbBacklinksSection from './KbBacklinksSection';
 import KbSuggestEditButton from './KbSuggestEditButton';
 import KbSuggestDraftBanner from './KbSuggestDraftBanner';
 import KbSuggestionsPanel from './KbSuggestionsPanel';
+import KbRightRail from './KbRightRail';
+import type { KbRailTab } from '../model/railTabs';
+import KbTocPanel from './KbTocPanel';
+import KbFavoriteButton from './KbFavoriteButton';
+import KbPageMoreActions from './KbPageMoreActions';
+import KbPageBreadcrumb from './KbPageBreadcrumb';
 import { SharePanel } from '@/features/permission-sharing';
 import { useKbShare } from '../model/useKbShare';
 import { useKbComments } from '../model/useKbComments';
@@ -57,6 +65,11 @@ const READING_CHARS_PER_MINUTE = 600;
  * ページ未選択（素の /kb）では、続きを resolveEntryPageId に決めさせて
  * /kb/{pageId} へ即座に移る（見せるための画面ではなく、素通りする入口）。
  */
+/** 操作バーの、レールのタブを開く四角いボタン（見本 3a の mk-ob）。 */
+const RAIL_BUTTON_CLASS =
+  'relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-surface-3 bg-surface-1 text-[var(--color-text-secondary)] shadow-sm transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11';
+const RAIL_BUTTON_ACTIVE = 'bg-[var(--color-nav-active)] text-[var(--color-text-primary)]';
+
 export default function KbPage() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
@@ -231,13 +244,28 @@ export default function KbPage() {
     shareOpen ? data?.page.id : undefined,
   );
 
-  // コメントパネルの開閉。あくまで「パネルの見た目を出すかどうか」の UI 状態で、データ取得の
-  // トリガーではない（useKbComments はバッジ表示のため、開閉に関わらず常に取得する）。
+  // 右レール（目次・コメント・履歴・提案の 1 枚）の開閉と、開いているタブ。見本 3a のとおり
+  // 同時に見えるのは 1 つ。あくまで「レールの見た目を出すかどうか」の UI 状態で、データ取得の
+  // トリガーではない（コメントはバッジ表示のため常に取得し、履歴・提案は開いている間だけ取る）。
   // 共有パネルと同じ理由でページを移ったら必ず閉じる。
-  const [commentsOpen, setCommentsOpen] = useState(false);
+  // 広い画面では目次を開いた状態から始める（見本 3a の既定）。狭い画面では引き出しになるので閉じておく。
+  const wide = useMediaQuery('(min-width: 768px)');
+  const [rail, setRail] = useState<{ open: boolean; tab: KbRailTab }>(() => ({ open: wide, tab: 'toc' }));
   useEffect(() => {
-    setCommentsOpen(false);
-  }, [pageId]);
+    // ページを移ったら目次へ戻す（前のページのコメントや版を開いたまま題名だけ変わると読めない）。
+    // 狭い画面の引き出しは閉じる（本文の中のリンクから移ったときも取り残さない）。
+    setRail((prev) => ({ open: wide ? prev.open : false, tab: 'toc' }));
+  }, [pageId, wide]);
+  const openRail = useCallback((tab: KbRailTab) => setRail({ open: true, tab }), []);
+  // 操作バーのボタンは「そのタブで開く／同じタブが開いていれば閉じる」。
+  const toggleRail = useCallback(
+    (tab: KbRailTab) => setRail((prev) => (prev.open && prev.tab === tab ? { ...prev, open: false } : { open: true, tab })),
+    [],
+  );
+  const tocOpen = rail.open && rail.tab === 'toc';
+  const commentsOpen = rail.open && rail.tab === 'comments';
+  const historyOpen = rail.open && rail.tab === 'history';
+  const suggestionsOpen = rail.open && rail.tab === 'suggestions';
   const comments = useKbComments(data?.workspaceSlug, data?.page.id);
   const unresolvedCommentCount = comments.threads.filter((thread) => !thread.resolvedAt).length;
 
@@ -321,10 +349,10 @@ export default function KbPage() {
   const handleCommentBadgeClick = useCallback(
     (blockId: string) => {
       const target = comments.threads.find((thread) => thread.blockId === blockId && !thread.resolvedAt);
-      setCommentsOpen(true);
+      openRail('comments');
       setScrollToThreadId(target?.id ?? null);
     },
-    [comments.threads],
+    [comments.threads, openRail],
   );
   useEffect(() => {
     if (!commentsOpen || !scrollToThreadId) return;
@@ -333,14 +361,8 @@ export default function KbPage() {
     setScrollToThreadId(null);
   }, [commentsOpen, scrollToThreadId]);
 
-  // 履歴パネルの開閉。あくまで「パネルの見た目を出すかどうか」の UI 状態 — 一覧の取得は
-  // useKbPageVersions がこの open を見て自分でゲートする(useKbComments と違い、版一覧は
-  // 常設のバッジを持たないので開いている間だけ取りに行く)。共有・コメントと同じ理由で
-  // ページを移ったら必ず閉じる。
-  const [historyOpen, setHistoryOpen] = useState(false);
-  useEffect(() => {
-    setHistoryOpen(false);
-  }, [pageId]);
+  // 版の一覧は useKbPageVersions が「履歴のタブが開いているか」を見て自分でゲートする
+  // (useKbComments と違い、版一覧は常設のバッジを持たないので開いている間だけ取りに行く)。
   const versions = useKbPageVersions(data?.workspaceSlug, data?.page.id, historyOpen);
 
   // 「雛形から作る」ピッカー（/template コマンド用）の開閉。共有・コメント・履歴と同じ理由で
@@ -385,6 +407,21 @@ export default function KbPage() {
     return charCount > 0 ? Math.max(1, Math.ceil(charCount / READING_CHARS_PER_MINUTE)) : null;
   }, [data?.doc]);
 
+  // 目次は本文（doc）の見出しから作る。書きながら見出しを足せばその場で増える。
+  const headings = useMemo(() => extractHeadings(data?.doc), [data?.doc]);
+  // 目次の飛び先（本文の見出しの DOM）を探す起点。
+  const articleRef = useRef<HTMLElement | null>(null);
+
+  // お気に入りの星。初期値は応答（isFavorite）。旧応答では undefined = 入れていない扱い。
+  const favorite = useKbPageFavorite(data?.workspaceSlug, data?.page.id, data?.isFavorite ?? false);
+  const handleToggleFavorite = useCallback(async () => {
+    try {
+      await favorite.toggle();
+    } catch {
+      showToast('error', favorite.favorite ? 'お気に入りから外せませんでした' : 'お気に入りに追加できませんでした');
+    }
+  }, [favorite, showToast]);
+
   // 「この版に戻す」の確認ダイアログ。KbRowActions の削除確認と同じ形 —
   // 確定した瞬間に閉じ、実行(失敗時の知らせ)は非同期のまま進める。
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
@@ -424,12 +461,8 @@ export default function KbPage() {
     }
   }, [data, versions, applyRestoredContent, waitForPendingSaveToSettle, showToast]);
 
-  // 提案パネルの開閉。履歴・コメントと同じ流儀 — canView であれば誰でも開ける
-  // （backend の一覧 API が CanView だけで許可するのと同じ考え方）。ページを移ったら必ず閉じる。
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
-  useEffect(() => {
-    setSuggestionsOpen(false);
-  }, [pageId]);
+  // 提案の一覧も履歴と同じ流儀（開いている間だけ取る）。canView であれば誰でも開ける
+  // （backend の一覧 API が CanView だけで許可するのと同じ考え方）。
   const suggestions = useKbPageSuggestions(data?.workspaceSlug, data?.page.id, suggestionsOpen);
 
   /**
@@ -576,7 +609,7 @@ export default function KbPage() {
             )}
 
             {pageId && !loading && !error && data && (
-              <article>
+              <article ref={articleRef}>
                 {/*
                   版のプレビュー中の帯。ページ上部(カバー画像より前)に置く — パンくず・題名は
                   「今のページ」を指したまま変えず、変わるのは本文だけという設計を明確にする。
@@ -618,70 +651,22 @@ export default function KbPage() {
                 )}
                 {/* カバー画像（設定済みのときだけ）。頭部の最初に置く見せ場なので、パンくずより上。 */}
                 <KbPageCover cover={data.cover} />
-                {/*
-                  パンくず（場所の表示）。ワークスペース名 → 閲覧できる祖先 → 現在のページ。
-                  見えない祖先は応答に含まれず、穴があいたまま出す（木と同じ見え方。
-                  フロントで埋めると、サーバーが伏せた実在を推測で喋ることになる）。
-                */}
                 {/* パンくずの行と操作ボタンの行は別の行にする（幅が狭いときにパンくずが
-                    折り返しても、操作ボタンの並びが崩れないようにするため）。 */}
-                <nav aria-label="ページの場所" className="mb-2 flex min-w-0 flex-wrap items-center gap-1 text-xs text-[var(--color-text-muted)]">
-                  <span className="truncate">{data.workspaceName ?? data.workspaceSlug}</span>
-                  {/* ?? [] はデプロイ順の防御 — 旧バックエンドの応答（ancestors なし）でも落とさない */}
-                  {(data.ancestors ?? []).map((ancestor) => (
-                    <span key={ancestor.id} className="flex min-w-0 items-center gap-1">
-                      <span aria-hidden="true">/</span>
-                      <Link
-                        to={`/kb/${ancestor.id}`}
-                        className="inline-flex min-h-11 max-w-40 items-center rounded px-1 hover:text-[var(--color-text-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-                      >
-                        {ancestor.title}
-                      </Link>
-                    </span>
-                  ))}
-                  {/* 区切りは題名と組にして折り返す（独立させると「/」だけが行末に残る） */}
-                  <span className="flex min-w-0 items-center gap-1">
-                    <span aria-hidden="true">/</span>
-                    <span aria-current="page" className="max-w-40 truncate text-[var(--color-text-secondary)]">
-                      {data.page.title}
-                    </span>
-                  </span>
-                </nav>
-                <div role="group" aria-label="ページの操作" className="mb-3 flex flex-wrap items-center gap-2 border-b border-surface-3 pb-3 [&_button]:min-h-9 [&_button]:min-w-9 [@media(pointer:coarse)]:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_button]:min-w-11">
-                  {/* コメントは canComment に関わらず誰でも開ける（読むだけの人にも見せる）。 */}
-                  <button
-                    type="button"
-                    onClick={() => setCommentsOpen((open) => !open)}
-                    aria-expanded={commentsOpen}
-                    aria-label={
-                      unresolvedCommentCount > 0
-                        ? `コメント (未解決 ${unresolvedCommentCount} 件)`
-                        : 'コメント'
-                    }
-                    className="relative inline-flex items-center gap-2 rounded-md border border-surface-3 px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-                  >
-                    <FsIcon name="chat" className="h-4 w-4" />
-                    コメント
-                    {unresolvedCommentCount > 0 && (
-                      <span className="absolute -right-1 -top-1 h-4 min-w-[16px] rounded-full bg-danger px-1 text-center text-xs leading-4 text-white">
-                        {unresolvedCommentCount > 99 ? '99+' : unresolvedCommentCount}
-                      </span>
-                    )}
-                  </button>
-                  {/*
-                    提案は canView だけで開ける(履歴と同じ考え方 — backend の一覧 API も
-                    CanView だけで許可する)。バッジ・件数表示は持たせない(履歴と揃える)。
-                  */}
-                  <button
-                    type="button"
-                    onClick={() => setSuggestionsOpen((open) => !open)}
-                    aria-expanded={suggestionsOpen}
-                    aria-label="提案"
-                    className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-                  >
-                    <FsIcon name="lightbulb" className="h-4 w-4" />
-                    提案
-                  </button>
+                    折り返しても、操作ボタンの並びが崩れないようにするため）。
+                    ?? [] はデプロイ順の防御 — 旧バックエンドの応答（ancestors なし）でも落とさない */}
+                <KbPageBreadcrumb
+                  workspaceSlug={data.workspaceSlug}
+                  workspaceName={data.workspaceName}
+                  spaceId={data.page.spaceId}
+                  ancestors={data.ancestors ?? []}
+                  title={data.page.title}
+                />
+                {/*
+                  操作バー（見本 3a）。左から 変更を提案する（コメント可の人だけ）→ お気に入りの星 →
+                  目次 → コメント（未解決の件数）→ 履歴 → 提案 → 共有（主ボタン。権限を変えられる人だけ）→ …。
+                  目次・コメント・履歴・提案は右レールの同じ名前のタブを開く（もう一度押すと閉じる）。
+                */}
+                <div role="group" aria-label="ページの操作" className="mb-3 flex flex-wrap items-center gap-1.5 border-b border-surface-3 pb-3">
                   {/*
                     「変更を提案する」は commenter（閲覧+コメントはできるが編集はできない役割）
                     だけに見せる。editor 以上は本文を直接編集できるので提案の必要が無く、
@@ -690,6 +675,67 @@ export default function KbPage() {
                   {data.canComment && !data.canEdit && (
                     <KbSuggestEditButton active={suggestionDraft.open} onToggle={handleToggleSuggestDraft} />
                   )}
+                  <KbFavoriteButton favorite={favorite.favorite} pending={favorite.pending} onToggle={() => void handleToggleFavorite()} />
+                  {/* 目次はレールの既定のタブ。閉じた後に開き直す入口としてもここに置く。 */}
+                  <button
+                    type="button"
+                    onClick={() => toggleRail('toc')}
+                    aria-expanded={tocOpen}
+                    aria-label="目次"
+                    title="目次"
+                    className={`${RAIL_BUTTON_CLASS} ${tocOpen ? RAIL_BUTTON_ACTIVE : ''}`}
+                  >
+                    <FsIcon name="clipboard-list" className="h-4 w-4" />
+                  </button>
+                  {/* コメントは canComment に関わらず誰でも開ける（読むだけの人にも見せる）。 */}
+                  <button
+                    type="button"
+                    onClick={() => toggleRail('comments')}
+                    aria-expanded={commentsOpen}
+                    aria-label={
+                      unresolvedCommentCount > 0
+                        ? `コメント (未解決 ${unresolvedCommentCount} 件)`
+                        : 'コメント'
+                    }
+                    title="コメント"
+                    className={`${RAIL_BUTTON_CLASS} ${commentsOpen ? RAIL_BUTTON_ACTIVE : ''}`}
+                  >
+                    <FsIcon name="chat" className="h-4 w-4" />
+                    {unresolvedCommentCount > 0 && (
+                      // 未解決の数は「見に行く価値がある」印であって警告ではないので、危険色にしない。
+                      <span className="absolute -right-1.5 -top-1.5 h-[18px] min-w-[18px] rounded-full bg-[var(--color-nav-selected)] px-1 text-center text-xs font-semibold leading-[18px] text-[var(--color-nav-selected-text)]">
+                        {unresolvedCommentCount > 99 ? '99+' : unresolvedCommentCount}
+                      </span>
+                    )}
+                  </button>
+                  {/*
+                    履歴は閲覧できれば誰でも開ける(canView。canEdit に関わらず)。
+                    バッジ・件数表示は持たせない(画面設計の約束 — 版の有無を煽らない)。
+                  */}
+                  <button
+                    type="button"
+                    onClick={() => toggleRail('history')}
+                    aria-expanded={historyOpen}
+                    aria-label="履歴"
+                    title="履歴"
+                    className={`${RAIL_BUTTON_CLASS} ${historyOpen ? RAIL_BUTTON_ACTIVE : ''}`}
+                  >
+                    <FsIcon name="clock" className="h-4 w-4" />
+                  </button>
+                  {/*
+                    提案は canView だけで開ける(履歴と同じ考え方 — backend の一覧 API も
+                    CanView だけで許可する)。バッジ・件数表示は持たせない(履歴と揃える)。
+                  */}
+                  <button
+                    type="button"
+                    onClick={() => toggleRail('suggestions')}
+                    aria-expanded={suggestionsOpen}
+                    aria-label="提案"
+                    title="提案"
+                    className={`${RAIL_BUTTON_CLASS} ${suggestionsOpen ? RAIL_BUTTON_ACTIVE : ''}`}
+                  >
+                    <FsIcon name="lightbulb" className="h-4 w-4" />
+                  </button>
                   {/*
                     共有は canManage のときだけ出す。権限が無い相手に押せるボタンを出しても、
                     返るのは 404 だけで「権限が無い」ことすら伝わらない。
@@ -724,44 +770,35 @@ export default function KbPage() {
                       )}
                     </div>
                   )}
-                </div>
-                <Disclosure key={`options-${data.page.id}`} label="ページの設定とその他の操作" className="mb-5">
-                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-surface-3 bg-surface-2 p-3">
                   {/*
-                    履歴は閲覧できれば誰でも開ける(canView。canEdit に関わらず)。
-                    バッジ・件数表示は持たせない(画面設計の約束 — 版の有無を煽らない)。
+                    毎回は使わないページの設定（雛形として保存・カバー画像・アイコン）は「…」の中。
+                    どれも編集できる人の操作なので、読むだけの人には「…」自体を出さない。
                   */}
-                  <button
-                    type="button"
-                    onClick={() => setHistoryOpen((open) => !open)}
-                    aria-expanded={historyOpen}
-                    aria-label="履歴"
-                    className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-                  >
-                    <FsIcon name="clock" className="h-4 w-4" />
-                    履歴
-                  </button>
-                  {/*
-                    「テンプレートとして保存」は canEdit（このページを編集できる）と
-                    workspaceCanEdit（ワークスペース全体への書き込み資格。雛形の作成が実際に
-                    要求する権限）の両方が揃ったときだけ出す。ページ/スペース限定の編集権限
-                    しか持たない人は canEdit だけ true になり得るので、そちらだけで判定すると
-                    「押せるが403になる」ボタンを出してしまう（共有ボタンの canManage と同じ
-                    考え方 — 権限が無い相手に押せるボタンを出しても、返るのは 403 だけで
-                    「権限が無い」ことすら伝わらない）。
-                  */}
-                  {data.canEdit && data.workspaceCanEdit && (
-                    <KbSaveAsTemplateButton
-                      workspaceSlug={data.workspaceSlug}
-                      pageId={data.page.id}
-                      spaceId={data.page.spaceId}
-                    />
+                  {data.canEdit && (
+                    <div className={data.canManage ? '' : 'ml-auto'}>
+                      <KbPageMoreActions>
+                        {/*
+                          「テンプレートとして保存」は canEdit（このページを編集できる）と
+                          workspaceCanEdit（ワークスペース全体への書き込み資格。雛形の作成が実際に
+                          要求する権限）の両方が揃ったときだけ出す。ページ/スペース限定の編集権限
+                          しか持たない人は canEdit だけ true になり得るので、そちらだけで判定すると
+                          「押せるが403になる」ボタンを出してしまう（共有ボタンの canManage と同じ
+                          考え方 — 権限が無い相手に押せるボタンを出しても、返るのは 403 だけで
+                          「権限が無い」ことすら伝わらない）。
+                        */}
+                        {data.workspaceCanEdit && (
+                          <KbSaveAsTemplateButton
+                            workspaceSlug={data.workspaceSlug}
+                            pageId={data.page.id}
+                            spaceId={data.page.spaceId}
+                          />
+                        )}
+                        <KbPageCoverButton cover={data.cover} canEdit={data.canEdit} onChange={handleChangeCover} />
+                        <KbPageIconButton icon={data.page.icon} canEdit={data.canEdit} onChange={handleChangeIcon} />
+                      </KbPageMoreActions>
+                    </div>
                   )}
-
-                    <KbPageCoverButton cover={data.cover} canEdit={data.canEdit} onChange={handleChangeCover} />
-                    <KbPageIconButton icon={data.page.icon} canEdit={data.canEdit} onChange={handleChangeIcon} />
-                  </div>
-                </Disclosure>
+                </div>
                 <div key={data.page.id}>
                   {data.page.icon && <KbPageIconButton icon={data.page.icon} canEdit={false} onChange={handleChangeIcon} />}
                   <KbPageTitle
@@ -778,6 +815,9 @@ export default function KbPage() {
                   labels={data.labels}
                   viewCount={data.viewCount}
                   readMinutes={readMinutes}
+                  // 保存状態はバイラインに常に置く（本文の末尾だと、長いページで見えない）。
+                  saveStatus={data.canEdit ? saveStatus : undefined}
+                  access={data.canEdit ? 'edit' : data.canComment ? 'comment' : 'view'}
                 />
                 {suggestionDraft.open ? (
                   // ドラフトモード中。value/onChange は useKbPageDoc の自動保存とは完全に
@@ -812,13 +852,12 @@ export default function KbPage() {
                     value={isRichDoc(data.doc) ? data.doc : emptyRichDoc()}
                     editable={data.canEdit}
                     onChange={onDocChange}
-                    saveStatus={data.canEdit ? saveStatus : 'idle'}
                     ariaLabel={`${data.page.title} の本文`}
                     extraSlashCommands={data.canEdit ? extraSlashCommands : undefined}
                     onNavigateToPage={(path) => navigate(path)}
                     onRequestComment={(anchor) => {
                       setPendingAnchor(anchor);
-                      setCommentsOpen(true);
+                      openRail('comments');
                     }}
                     canComment={data?.canComment ?? false}
                     commentBadgeCounts={commentBadgeCounts}
@@ -859,74 +898,58 @@ export default function KbPage() {
         </main>
 
         {/*
-          通常表示（peekable・collapsible 無し）を、開閉トグルで出し入れする。
-          SecondaryPanel の通常表示は常時幅を占有するため、閉じている間はレンダリング
-          ごとやめる — これで「常時表示」を経由せずに開閉トグルの見た目になる。
-          <main> の後に置くだけで、デスクトップでは右側に来る（呼び出し側の DOM 順）。
+          右レール。目次・コメント・履歴・提案を 1 枚のタブで切り替える（見本 3a）。
+          <main> の後に置くだけで、広い画面では右側に来る（呼び出し側の DOM 順）。
+          閉じている間は描かない — 履歴・提案の取得はタブが開いている間だけ走る。
+          プレビュー状態(versions.selected)自体はレールの開閉と独立に生きるので、
+          閉じても帯(KbVersionPreviewBanner)は消えない。
         */}
-        {commentsOpen && (
-          <SecondaryPanel
-            title="コメント"
-            side="right"
-            mobileOpen={commentsOpen}
-            onMobileClose={() => setCommentsOpen(false)}
-          >
-            <KbCommentsPanel
-              threads={comments.threads}
-              loading={comments.loading}
-              error={comments.error}
-              onRetry={comments.retry}
-              canComment={data?.canComment ?? false}
-              pendingAnchor={pendingAnchor}
-              onCancelPendingAnchor={handleCancelPendingAnchor}
-              onCreateThread={handleCreateThread}
-              onReply={handleReplyToThread}
-              onResolve={handleResolveThread}
-              onReopen={handleReopenThread}
-            />
-          </SecondaryPanel>
-        )}
-
-        {/* 履歴パネル。コメントパネルと同じ流儀 — 閉じている間はレンダリングごとやめる。
-            プレビュー状態(versions.selected)自体はこのパネルの開閉と独立に生きるので、
-            閉じても帯(KbVersionPreviewBanner)は消えない。 */}
-        {historyOpen && (
-          <SecondaryPanel
-            title="履歴"
-            side="right"
-            mobileOpen={historyOpen}
-            onMobileClose={() => setHistoryOpen(false)}
-          >
-            <KbVersionsPanel
-              versions={versions.versions}
-              loading={versions.loading}
-              error={versions.error}
-              canEdit={data?.canEdit ?? false}
-              selectedSeq={versions.selected?.seq ?? null}
-              onCreateVersion={handleCreateVersion}
-              onSelectVersion={versions.selectVersion}
-            />
-          </SecondaryPanel>
-        )}
-
-        {/* 提案パネル。履歴・コメントと同じ流儀 — 閉じている間はレンダリングごとやめる。 */}
-        {suggestionsOpen && (
-          <SecondaryPanel
-            title="提案"
-            side="right"
-            mobileOpen={suggestionsOpen}
-            onMobileClose={() => setSuggestionsOpen(false)}
-          >
-            <KbSuggestionsPanel
-              suggestions={suggestions.suggestions}
-              loading={suggestions.loading}
-              error={suggestions.error}
-              canEdit={data?.canEdit ?? false}
-              onAccept={handleAcceptSuggestion}
-              onReject={handleRejectSuggestion}
-            />
-          </SecondaryPanel>
-        )}
+        <KbRightRail
+          open={rail.open}
+          tab={rail.tab}
+          onTabChange={openRail}
+          onClose={() => setRail((prev) => ({ ...prev, open: false }))}
+          unresolvedCommentCount={unresolvedCommentCount}
+          panels={{
+            toc: <KbTocPanel headings={headings} articleRef={articleRef} />,
+            comments: (
+              <KbCommentsPanel
+                threads={comments.threads}
+                loading={comments.loading}
+                error={comments.error}
+                onRetry={comments.retry}
+                canComment={data?.canComment ?? false}
+                pendingAnchor={pendingAnchor}
+                onCancelPendingAnchor={handleCancelPendingAnchor}
+                onCreateThread={handleCreateThread}
+                onReply={handleReplyToThread}
+                onResolve={handleResolveThread}
+                onReopen={handleReopenThread}
+              />
+            ),
+            history: (
+              <KbVersionsPanel
+                versions={versions.versions}
+                loading={versions.loading}
+                error={versions.error}
+                canEdit={data?.canEdit ?? false}
+                selectedSeq={versions.selected?.seq ?? null}
+                onCreateVersion={handleCreateVersion}
+                onSelectVersion={versions.selectVersion}
+              />
+            ),
+            suggestions: (
+              <KbSuggestionsPanel
+                suggestions={suggestions.suggestions}
+                loading={suggestions.loading}
+                error={suggestions.error}
+                canEdit={data?.canEdit ?? false}
+                onAccept={handleAcceptSuggestion}
+                onReject={handleRejectSuggestion}
+              />
+            ),
+          }}
+        />
 
         {/* /template コマンドが開くピッカー。削除ボタンの表示可否は、雛形の削除が実際に
             要求するワークスペース全体の CanEdit（data.workspaceCanEdit）で判定する

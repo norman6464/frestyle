@@ -3,11 +3,12 @@ import { expect, within } from 'storybook/test';
 import KbPageMeta from './KbPageMeta';
 
 /**
- * 題名の下に出すバイライン。
+ * 題名の下に出すバイライン（見本 3a）。左から 最終編集 → 公開範囲 → ラベル → 権限の印、
+ * 右端に 閲覧数・読了時間・保存状態。
  *
- * lastEditedBy / lastEditedAt が無ければ何も出さない（旧応答・未保存のページの
- * どちらも該当し得るので、無いことを匂わせる空欄は置かない）。それ以外
- * （公開範囲バッジ・ラベル・閲覧数・読了時間）はどれも省略可で、無い部分だけ出さない。
+ * lastEditedBy / lastEditedAt が無ければその部分だけ省く（旧応答・未保存のページの
+ * どちらも該当し得るので、無いことを匂わせる空欄は置かない）。公開範囲・保存状態は
+ * それでも要るので、行ごとは消さない。
  */
 const meta = {
   title: 'pages/kb/KbPageMeta',
@@ -26,7 +27,8 @@ type Story = StoryObj<typeof meta>;
 /** 名前が引けたとき。 */
 export const 名前あり: Story = {
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByText(/最終編集 田中 太郎 · 9\/6/)).toBeVisible();
+    await expect(within(canvasElement).getByText('田中 太郎')).toBeVisible();
+    await expect(within(canvasElement).getByText(/が最終編集 · 9\/6/)).toBeVisible();
   },
 };
 
@@ -34,15 +36,16 @@ export const 名前あり: Story = {
 export const 名前が引けない: Story = {
   args: { lastEditedBy: { userId: 1, name: '' } },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByText(/最終編集 不明なユーザー/)).toBeVisible();
+    await expect(within(canvasElement).getByText('不明なユーザー')).toBeVisible();
   },
 };
 
-/** まだ一度も保存されていない（旧応答も同じ形）。何も出さない。 */
+/** まだ一度も保存されていない（旧応答も同じ形）。最終編集の部分だけ省き、公開範囲は出す。 */
 export const 最終編集が無い: Story = {
   args: { lastEditedBy: null, lastEditedAt: null },
   play: async ({ canvasElement }) => {
-    await expect(canvasElement).toBeEmptyDOMElement();
+    await expect(within(canvasElement).queryByText(/が最終編集/)).toBeNull();
+    await expect(within(canvasElement).getByText('スペース')).toBeVisible();
   },
 };
 
@@ -103,5 +106,48 @@ export const 閲覧数と読了時間が無い: Story = {
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).queryByText(/閲覧/)).toBeNull();
     await expect(within(canvasElement).queryByText(/読了/)).toBeNull();
+  },
+};
+
+/**
+ * 保存状態。読み上げ用の領域（role=status）は最初から置き、変わったときにだけ文字を入れる
+ * （本文の末尾に置くと長いページで見えないので、バイラインに常置する）。
+ */
+export const 保存状態_保存済み: Story = {
+  args: { saveStatus: 'saved' },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('status', { name: '保存状態' })).toHaveTextContent('保存済み');
+  },
+};
+
+export const 保存状態_未保存: Story = {
+  args: { saveStatus: 'unsaved' },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('status', { name: '保存状態' })).toHaveTextContent('未保存');
+  },
+};
+
+/** まだ書き換えていない（idle）。領域はあるが文字は入っていない。 */
+export const 保存状態_変更なし: Story = {
+  args: { saveStatus: 'idle' },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('status', { name: '保存状態' })).toHaveTextContent('');
+  },
+};
+
+/** 読むだけの人。書ける人と見え方がほぼ同じなので、書けないことを言葉で示す。 */
+export const 閲覧のみ: Story = {
+  args: { access: 'view' },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('閲覧のみ')).toBeVisible();
+    await expect(within(canvasElement).queryByRole('status')).toBeNull();
+  },
+};
+
+/** コメントはできるが本文は編集できない人。 */
+export const コメント可: Story = {
+  args: { access: 'comment' },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('コメント可')).toBeVisible();
   },
 };

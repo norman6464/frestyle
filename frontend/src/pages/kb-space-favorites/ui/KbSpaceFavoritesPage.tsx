@@ -1,13 +1,14 @@
-import { useParams, useNavigate } from 'react-router-dom';
-import { KbFrame } from '@/widgets/kb-sidebar';
-import { Loading, FsIcon, fsIcon } from '@/shared/ui';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { KbFrame, KbPageGlyph } from '@/widgets/kb-sidebar';
+import { Loading, fsIcon } from '@/shared/ui';
 import { useKbSpaceEntry, KbSpaceHeading } from '@/entities/kb';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useKbFavorites } from '../model/useKbFavorites';
 
 /**
- * お気に入り（段14・段7）。ワークスペース内の自分のお気に入り全件を出す
- * （現在のスペースだけに絞らない — 1 件 1 件がどのスペースかは spaceName で示す）。
+ * お気に入り（段14・段7）。今いるスペースの中で自分がお気に入りに入れたページを出す。
+ * 応答はワークスペース全体なので、手元でこのスペースに絞る（スペースの画面の中で
+ * 別のスペースのページが並ぶと、どこにいるのか分からなくなる）。
  */
 export default function KbSpaceFavoritesPage() {
   const { spaceId } = useParams<{ spaceId?: string }>();
@@ -51,7 +52,7 @@ export default function KbSpaceFavoritesPage() {
           <>
             <KbSpaceHeading space={space} title="お気に入り" />
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-              <FavoritesList workspaceSlug={workspaceSlug} onOpen={(id) => navigate(`/kb/${id}`)} />
+              <FavoritesList workspaceSlug={workspaceSlug} spaceId={space.id} />
             </div>
           </>
         )}
@@ -60,8 +61,9 @@ export default function KbSpaceFavoritesPage() {
   );
 }
 
-function FavoritesList({ workspaceSlug, onOpen }: { workspaceSlug: string; onOpen: (pageId: string) => void }) {
+function FavoritesList({ workspaceSlug, spaceId }: { workspaceSlug: string; spaceId: string }) {
   const { favorites, loading, error, retry } = useKbFavorites(workspaceSlug);
+  const inSpace = favorites.filter((favorite) => favorite.spaceId === spaceId);
 
   if (loading) return <Loading className="min-h-56" message="お気に入りを読み込んでいます" />;
 
@@ -77,45 +79,39 @@ function FavoritesList({ workspaceSlug, onOpen }: { workspaceSlug: string; onOpe
     );
   }
 
-  if (!loading && favorites.length === 0) {
+  if (!loading && inSpace.length === 0) {
     return (
       <EmptyState
         headingLevel={2}
         icon={fsIcon('star')}
-        title="お気に入りがありません"
-        description="ページの操作から追加できます。"
+        title="このスペースにお気に入りがありません"
+        description="ページを開いて、操作バーの星を押すとここに並びます。"
       />
     );
   }
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-6 pt-3 sm:px-6">
-      <p className="mb-5 text-sm leading-relaxed text-[var(--color-text-muted)]">このワークスペース内で保存したページです。スペースをまたいで表示しています。</p>
-    <ul className="divide-y divide-surface-2">
-      {favorites.map((favorite) => (
-        <li key={favorite.pageId}>
-          <button
-            type="button"
-            onClick={() => onOpen(favorite.pageId)}
-            className="flex min-h-16 w-full items-center gap-3 rounded-lg px-3 py-3 text-left hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-          >
-            {favorite.icon?.type === 'emoji' ? (
-              <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center">
-                {favorite.icon.value}
-              </span>
-            ) : (
-              <FsIcon name="document" className="h-5 w-5 shrink-0 text-[var(--color-text-muted)]" />
-            )}
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium text-[var(--color-text-primary)] [overflow-wrap:anywhere]">
+      <p className="mb-5 text-sm leading-relaxed text-[var(--color-text-muted)]">このスペースで星を付けたページです。</p>
+      <ul className="divide-y divide-surface-3">
+        {inSpace.map((favorite) => (
+          <li key={favorite.pageId}>
+            {/* 行はリンク（新しいタブで開ける）。絵は木と同じ規則（KbPageGlyph）。 */}
+            <Link
+              to={`/kb/${favorite.pageId}`}
+              className="flex min-h-14 w-full items-center gap-3 rounded-md px-4 py-3 text-left hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+            >
+              <KbPageGlyph
+                page={{ id: favorite.pageId, spaceId: favorite.spaceId, title: favorite.title, icon: favorite.icon, createdByUserId: 0, createdAt: favorite.createdAt, updatedAt: favorite.createdAt }}
+                className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]"
+              />
+              <span className="min-w-0 text-sm font-medium text-[var(--color-text-primary)] [overflow-wrap:anywhere]">
                 {favorite.title || '無題'}
               </span>
-              <span className="mt-1 block text-xs text-[var(--color-text-muted)] [overflow-wrap:anywhere]">{favorite.spaceName}</span>
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

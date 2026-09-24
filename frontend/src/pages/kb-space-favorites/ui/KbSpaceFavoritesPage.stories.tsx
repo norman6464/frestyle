@@ -7,7 +7,7 @@ const workspaces = [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:
 const mySpaces = [{ id: 'space-1', name: '開発部', role: 'editor' }];
 const spaces = [{ id: 'space-1', key: 'space-1', name: '開発部', visibility: 'workspace', createdAt: '2026-01-01T00:00:00Z' }];
 
-/** スペース単位の「お気に入り」（段14・段7）。ワークスペース内の自分のお気に入り全件。 */
+/** スペース単位の「お気に入り」（段14・段7）。今いるスペースで星を付けたページだけを出す。 */
 const meta = {
   title: 'pages/kb-space-favorites/KbSpaceFavoritesPage',
   component: KbSpaceFavoritesPage,
@@ -51,6 +51,6 @@ export const お気に入りが無い: Story = {
     }),
   ],
   play: async ({ canvasElement }) => {
-    await expect(await within(canvasElement).findByText('お気に入りがありません')).toBeInTheDocument();
+    await expect(await within(canvasElement).findByText('このスペースにお気に入りがありません')).toBeInTheDocument();
   },
 };

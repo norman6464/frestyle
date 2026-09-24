@@ -81,7 +81,7 @@ export default function KbPageCoverButton({ cover, canEdit, onChange }: KbPageCo
   };
 
   return (
-    <div className="mb-1 flex flex-wrap items-center gap-2 [&_button]:min-h-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600">
+    <div className="flex flex-col gap-1">
       <input
         ref={inputRef}
         type="file"
@@ -96,9 +96,9 @@ export default function KbPageCoverButton({ cover, canEdit, onChange }: KbPageCo
         disabled={saving}
         onClick={openPicker}
         aria-label={cover ? 'カバー画像を変更' : 'カバー画像を追加'}
-        className="flex items-center gap-1 rounded px-1.5 py-1 text-sm text-[var(--color-text-muted)] hover:bg-surface-2 disabled:opacity-50"
+        className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-[var(--color-text-primary)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50 [@media(pointer:coarse)]:min-h-11"
       >
-        <FsIcon name="image" className="h-4 w-4" />
+        <FsIcon name="image" className="h-4 w-4 shrink-0" />
         {cover ? 'カバー画像を変更' : 'カバー画像を追加'}
       </button>
       {cover && (
@@ -107,13 +107,14 @@ export default function KbPageCoverButton({ cover, canEdit, onChange }: KbPageCo
           disabled={saving}
           onClick={() => void clear()}
           aria-label="カバー画像を外す"
-          className="rounded px-1.5 py-1 text-sm text-[var(--color-text-muted)] hover:bg-surface-2 disabled:opacity-50"
+          className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-[var(--color-text-secondary)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50 [@media(pointer:coarse)]:min-h-11"
         >
-          外す
+          <FsIcon name="x" className="h-4 w-4 shrink-0" />
+          カバー画像を外す
         </button>
       )}
       {validationError && (
-        <p role="alert" className="w-full text-sm text-danger-ink">
+        <p role="alert" className="px-2 text-sm text-danger-ink">
           {validationError}
         </p>
       )}

@@ -1,17 +1,11 @@
-/**
- * SaveStatus はエディタ本文の保存状態。
- * 保存の実処理（debounce・PUT・楽観ロック）は画面側が持ち、
- * この部品は状態を受け取って表示するだけ（presentational）。
- */
-export type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved';
+import { SAVE_STATUS_LABEL, type SaveStatus } from './saveStatusLabel';
 
-const SAVE_STATUS_CONFIG: Record<
-  Exclude<SaveStatus, 'idle'>,
-  { label: string; color: string }
-> = {
-  unsaved: { label: '未保存', color: 'text-warning' },
-  saving: { label: '保存中...', color: 'text-[var(--color-text-muted)]' },
-  saved: { label: '保存済み', color: 'text-success' },
+export type { SaveStatus } from './saveStatusLabel';
+
+const SAVE_STATUS_CONFIG: Record<Exclude<SaveStatus, 'idle'>, { label: string; color: string }> = {
+  unsaved: { label: SAVE_STATUS_LABEL.unsaved, color: 'text-warning' },
+  saving: { label: SAVE_STATUS_LABEL.saving, color: 'text-[var(--color-text-muted)]' },
+  saved: { label: SAVE_STATUS_LABEL.saved, color: 'text-success' },
 };
 
 /**

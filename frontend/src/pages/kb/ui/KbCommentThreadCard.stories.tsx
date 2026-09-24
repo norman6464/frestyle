@@ -88,21 +88,41 @@ export const 未解決_コメントできる: Story = {
     await userEvent.click(resolveButton);
     await expect(args.onResolve).toHaveBeenCalledWith('t-1');
 
-    // 返信も送れる。
+    // 返信は「返信」を押してから書く（全スレッドに欄を常に出さない）。
+    await expect(canvas.queryByPlaceholderText('返信を書く…')).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: '返信' }));
     const reply = canvas.getByPlaceholderText('返信を書く…');
+    await expect(reply).toHaveFocus();
     await userEvent.type(reply, '直しました');
     await userEvent.click(canvas.getByRole('button', { name: '送信' }));
     await expect(args.onReply).toHaveBeenCalledWith('t-1', [{ type: 'text', text: '直しました' }]);
   },
 };
 
-/** 未解決・コメントできない。読めるが、返信欄も「解決」ボタンも出ない。 */
+/** 未解決・コメントできない。読めるが、「返信」も「解決」ボタンも出ない。 */
 export const 未解決_コメントできない: Story = {
   args: { thread: unresolvedThread, canComment: false },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('この段落、もう少し具体例が欲しいです。')).toBeVisible();
     await expect(canvas.queryByRole('button', { name: '解決' })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: '返信' })).not.toBeInTheDocument();
+  },
+};
+
+/** 開いた返信欄は「キャンセル」でも Escape でも閉じる（書きかけは捨てる）。 */
+export const 返信欄を閉じる: Story = {
+  args: { thread: unresolvedThread },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '返信' }));
+    await userEvent.type(canvas.getByPlaceholderText('返信を書く…'), '書きかけ');
+    await userEvent.click(canvas.getByRole('button', { name: 'キャンセル' }));
+    await expect(canvas.queryByPlaceholderText('返信を書く…')).not.toBeInTheDocument();
+    await expect(args.onReply).not.toHaveBeenCalled();
+
+    await userEvent.click(canvas.getByRole('button', { name: '返信' }));
+    await userEvent.keyboard('{Escape}');
     await expect(canvas.queryByPlaceholderText('返信を書く…')).not.toBeInTheDocument();
   },
 };

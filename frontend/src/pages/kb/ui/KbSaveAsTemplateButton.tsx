@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { FsIcon } from '@/shared/ui';
 import { KbRepository } from '@/entities/kb';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useToast } from '@/shared/lib/hooks/useToast';
@@ -71,8 +72,9 @@ export default function KbSaveAsTemplateButton({
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
-        className="rounded border border-surface-3 px-2 py-1 text-xs text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
+        className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-[var(--color-text-primary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 [@media(pointer:coarse)]:min-h-11"
       >
+        <FsIcon name="document-text" className="h-4 w-4 shrink-0" />
         テンプレートとして保存
       </button>
       {open && (
