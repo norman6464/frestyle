@@ -46,7 +46,10 @@ describe('useContainerWidth', () => {
 
   it('最初の幅を測り、変わるたびに追いかけ、外れたら観測をやめる', () => {
     const observers = stubResizeObserver();
-    const { result, unmount } = renderHook(() => useContainerWidth({ current: elementOfWidth(900) }));
+    // ref は描画をまたいで同じ物を渡す（呼び出し側の useRef と同じ）。毎回作り直すと、
+    // 描画のたびに観測を張り直して最初の幅を測り直してしまう。
+    const ref = { current: elementOfWidth(900) };
+    const { result, unmount } = renderHook(() => useContainerWidth(ref));
     expect(result.current).toBe(900);
 
     act(() => observers[0].callback([{ contentRect: { width: 520 } }]));
