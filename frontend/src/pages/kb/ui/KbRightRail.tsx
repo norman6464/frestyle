@@ -54,7 +54,7 @@ export default function KbRightRail({ open, tab, onTabChange, onClose, unresolve
                 <Tabs.Tab
                   key={id}
                   value={id}
-                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 hover:text-[var(--color-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 data-[selected]:bg-[var(--color-nav-active)] data-[selected]:font-semibold data-[selected]:text-[var(--color-text-primary)]"
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 hover:text-[var(--color-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 aria-selected:bg-[var(--color-nav-active)] aria-selected:font-semibold aria-selected:text-[var(--color-text-primary)]"
                 >
                   {KB_RAIL_TAB_LABEL[id]}
                   {id === 'comments' && unresolvedCommentCount > 0 && (

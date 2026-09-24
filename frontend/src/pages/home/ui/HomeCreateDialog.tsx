@@ -64,7 +64,7 @@ export default function HomeCreateDialog({ workspaces, initialWorkspaceSlug, onC
                 <Tabs.Tab
                   key={value}
                   value={value}
-                  className="min-h-11 rounded-lg text-base font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 data-[selected]:bg-brand-100 data-[selected]:font-semibold data-[selected]:text-brand-800"
+                  className="min-h-11 rounded-lg text-base font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 aria-selected:bg-brand-100 aria-selected:font-semibold aria-selected:text-brand-800"
                 >
                   {value === 'page' ? 'ページ' : 'チケット'}
                 </Tabs.Tab>
