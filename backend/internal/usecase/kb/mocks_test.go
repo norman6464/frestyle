@@ -258,9 +258,9 @@ func (m *mockKBPermissionRepo) EnsureSpaceEveryonePrincipal(ctx context.Context,
 	return p, args.Error(1)
 }
 
-func (m *mockKBPermissionRepo) ListMemberWorkspaces(ctx context.Context, userID uint64) ([]domain.MemberWorkspace, error) {
+func (m *mockKBPermissionRepo) ListMemberWorkspaces(ctx context.Context, userID uint64) ([]repository.WorkspaceWithScopeFacts, error) {
 	args := m.Called(ctx, userID)
-	rows, _ := args.Get(0).([]domain.MemberWorkspace)
+	rows, _ := args.Get(0).([]repository.WorkspaceWithScopeFacts)
 	return rows, args.Error(1)
 }
 

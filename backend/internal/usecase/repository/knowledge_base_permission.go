@@ -64,6 +64,14 @@ type SpaceWithScopeFacts struct {
 	Facts domain.ScopeFacts
 }
 
+// WorkspaceWithScopeFacts はワークスペース 1 つと、そこで呼び出し元に届いている役割の組。
+// ListMemberWorkspaces が返す（判定は domain.ResolveScopePermission が行う）。役割は
+// ワークスペースの grants（自分自身と所属グループ宛て）だけで、スペースやページの付与は含まない。
+type WorkspaceWithScopeFacts struct {
+	Workspace domain.Workspace
+	Facts     domain.ScopeFacts
+}
+
 // KnowledgeBasePermissionRepository はナレッジの権限モデル（principals /
 // principal_members / workspace_grants / space_grants / page_grants）への
 // アクセスを提供する（share_links は [ShareLinkRepository] が持つ）。
@@ -92,10 +100,11 @@ type KnowledgeBasePermissionRepository interface {
 	// 逐次 SELECT を発行しない。@メンション通知の宛先解決が本来の用途）。
 	// userIDs が空なら問い合わせずに空集合を返す。
 	IsWorkspaceMemberBulk(ctx context.Context, workspaceID string, userIDs []uint64) (map[uint64]bool, error)
-	// ListMemberWorkspaces はそのユーザーが所属するワークスペースと、そこでの CanManage を
-	// 返す（slug 順）。ナレッジで唯一テナントを跨いで読むメソッド（どのテナントに入れるかを
-	// 答える口）で、絞り込みは user_id だけが行う。
-	ListMemberWorkspaces(ctx context.Context, userID uint64) ([]domain.MemberWorkspace, error)
+	// ListMemberWorkspaces はそのユーザーが所属するワークスペースと、それぞれで自分に届いている
+	// 役割の事実を返す（slug 順）。ナレッジで唯一テナントを跨いで読むメソッド（どのテナントに
+	// 入れるかを答える口）で、絞り込みは user_id だけが行う。**返り値の Facts はまだ判定では
+	// ない**（何ができるかは呼び出し側が domain.ResolveScopePermission で決める）。
+	ListMemberWorkspaces(ctx context.Context, userID uint64) ([]WorkspaceWithScopeFacts, error)
 
 	// LeaveWorkspaceMembership は所属を終える（status を left にし、principal があれば
 	// 削除する。削除は「最後の admin」検査を同じトランザクションで通す）。既に非メンバーなら

@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/norman6464/frestyle/backend/internal/domain"
+	"github.com/norman6464/frestyle/backend/internal/handler/dto"
 	"github.com/norman6464/frestyle/backend/internal/handler/middleware"
 	"github.com/norman6464/frestyle/backend/internal/usecase/kb"
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
@@ -2278,9 +2279,11 @@ func Test_チケットからの逆参照_ワークスペースが見えるとき
 
 		w := f.do(t, http.MethodGet, path, "")
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-		got := decodeJSON[[]domain.Ticket](t, w)
-		require.Len(t, got, 1)
-		assert.Equal(t, linkedID, got[0].ID)
+		got := decodeJSON[dto.TicketReferenceListResponse](t, w)
+		require.Len(t, got.Tickets, 1)
+		assert.Equal(t, linkedID, got.Tickets[0].ID)
+		assert.Equal(t, "紐づく", got.Tickets[0].Title)
+		assert.NotContains(t, w.Body.String(), `"doc"`, "本文は返さない")
 	})
 
 	t.Run("ワークスペースの役割が無ければ空", func(t *testing.T) {
@@ -2288,6 +2291,39 @@ func Test_チケットからの逆参照_ワークスペースが見えるとき
 		// ページ自体は fallback(kbCanView) で見えるが、ワークスペースの役割は付けない。
 		w := f.do(t, http.MethodGet, path, "")
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-		assert.Empty(t, decodeJSON[[]domain.Ticket](t, w), "バックログ側は見せない")
+		assert.JSONEq(t, `{"tickets":[]}`, w.Body.String(), "バックログ側は見せない")
+	})
+
+	t.Run("件数を指定すると上限で切りアーカイブは出さない", func(t *testing.T) {
+		f, _ := setup(t)
+		f.perms.setScopeRole(kbWorkspaceID, kbUserID, domain.GrantRoleViewer)
+		for _, title := range []string{"二つ目", "三つ目"} {
+			linked := f.tickets.addTicket(domain.Ticket{
+				ID: "tb-" + title, WorkspaceID: kbWorkspaceID, ProjectID: "tb-project", Title: title,
+			})
+			f.tickets.pageLinks[linked.ID] = []string{kbRootPageID}
+		}
+		archivedAt := time.Now()
+		archived := f.tickets.addTicket(domain.Ticket{
+			ID: "tb-archived", WorkspaceID: kbWorkspaceID, ProjectID: "tb-project", Title: "アーカイブ", ArchivedAt: &archivedAt,
+		})
+		f.tickets.pageLinks[archived.ID] = []string{kbRootPageID}
+
+		all := decodeJSON[dto.TicketReferenceListResponse](t, f.do(t, http.MethodGet, path, ""))
+		assert.Len(t, all.Tickets, 3, "既定の上限の中なら全部。アーカイブは出ない")
+
+		w := f.do(t, http.MethodGet, path+"?limit=2", "")
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		assert.Len(t, decodeJSON[dto.TicketReferenceListResponse](t, w).Tickets, 2)
+	})
+
+	t.Run("件数が範囲外なら400", func(t *testing.T) {
+		for _, q := range []string{"0", "51", "abc"} {
+			f, _ := setup(t)
+			f.perms.setScopeRole(kbWorkspaceID, kbUserID, domain.GrantRoleViewer)
+			w := f.do(t, http.MethodGet, path+"?limit="+q, "")
+			assert.Equal(t, http.StatusBadRequest, w.Code, "limit=%s", q)
+			assert.JSONEq(t, `{"error":"invalid_limit"}`, w.Body.String())
+		}
 	})
 }

@@ -628,19 +628,34 @@ SELECT * FROM ticket_page_links
 WHERE workspace_id = $1 AND source_ticket_id = $2;
 
 -- name: ListTicketsReferencingPage :many
--- ページ詳細の逆参照一覧（そのページを参照しているチケット一覧。）。
--- target_page_id を起点に tickets を JOIN し、チケットの行そのものを返す
--- （handler が題名・状態をそのまま出せるように、リンク行だけでなくチケット本体を返す）。
+-- ページを本文の pageRef で参照しているチケット（逆参照）。ホームの「続きからはじめる」が、
+-- 最後に開いたページに「このページを参照しているチケット」として短く添える。
 --
 -- deleted_at IS NULL（ticket_page_links）: 参照元チケットが削除されていれば、削除時に
 -- DeleteTicketPageLinksBySourceCascade がこの行にも deleted_at を立てている。ここで除かないと、
 -- 消えたはずのチケットの存在がページ側の逆参照一覧から漏れる（参照元チケットの deleted_at を
 -- 都度 JOIN で見る代わりに、削除時に伝播させて 1 列で判定できるようにしてある。設計 Ⅳ-J の
 -- 「読み出しの述語を単純に保つ」）。t.deleted_at IS NULL は伝播が万一漏れた場合の二重の安全弁。
-SELECT t.* FROM ticket_page_links tpl
+--
+-- アーカイブしたチケットは出さない（片付けた仕事を「このページを参照している」として並べない）。
+-- 完了したチケットは出す（そのページが何の仕事に使われたかを知る手がかりになる）。
+-- 並びは更新の新しい順。上限で切るので、更新時刻が同じ行の順が毎回同じになるよう最後に id で
+-- 決める。返すのは一覧の 1 行に要る列（題名と表示キーの材料）だけで、本文は返さない。
+SELECT
+  t.id,
+  t.title,
+  t.number,
+  p.key AS project_key
+FROM ticket_page_links tpl
 JOIN tickets t ON t.workspace_id = tpl.workspace_id AND t.id = tpl.source_ticket_id
-WHERE tpl.workspace_id = $1 AND tpl.target_page_id = $2
-  AND tpl.deleted_at IS NULL AND t.deleted_at IS NULL;
+JOIN projects p ON p.id = t.project_id
+WHERE tpl.workspace_id = sqlc.arg(workspace_id)
+  AND tpl.target_page_id = sqlc.arg(target_page_id)
+  AND tpl.deleted_at IS NULL
+  AND t.deleted_at IS NULL
+  AND t.archived_at IS NULL
+ORDER BY t.updated_at DESC, t.id DESC
+LIMIT sqlc.arg(row_limit);
 
 -- name: ListTicketTicketLinksBySource :many
 SELECT * FROM ticket_ticket_links
@@ -714,6 +729,58 @@ ORDER BY
   s."position",
   t.due_date ASC NULLS LAST,
   t.created_at ASC;
+
+-- name: ListAssignedTicketsAcrossWorkspaces :many
+-- ホームの「自分の担当」。全ワークスペースを横断し、未完了のものを期限の近い順に上限まで返す。
+--
+-- ListAssignedTicketsForPrincipal（1 ワークスペースの全件）との違いは 4 つ。
+-- 1. 対象のワークスペースは呼び出し側が渡す（workspace_ids）。usecase が所属一覧を domain の
+--    判定にかけ、チケットを見てよいワークスペースだけに絞ってから渡す。ここでは所属も役割も
+--    判定しない（判定を SQL と domain の 2 か所に置かない）。上限は、絞った後の行にかかる。
+-- 2. 自分の principal はワークスペースごとに別の行なので、principals（kind='user'・user_id）と
+--    JOIN して「そのワークスペースでの自分」を解く。workspace_ids にあっても自分の principal が
+--    無いワークスペース（判定の後に所属を外れた等）の行は、この JOIN で 1 件も出ない。
+-- 3. 完了（状態の枠が done）を除き、期限の近い順 → 期限なしは最後 → 作成の古い順 → id の順に
+--    並べてから切る。最後の id は、期限も作成時刻も同じ行の順を毎回同じにするため（上限で切る
+--    一覧は、順が揺れると境目の行が出たり消えたりする）。緊急度や重要度は推測しない。
+-- 4. 一覧の 1 行に要る列だけを返す（本文の doc / plain_text は返さない）。
+SELECT
+  t.id,
+  t.project_id,
+  t.number,
+  t.title,
+  t.priority,
+  t.due_date,
+  t.created_at,
+  w.slug AS workspace_slug,
+  w.name AS workspace_name,
+  p.key AS project_key,
+  p.name AS project_name,
+  s.name AS status_name,
+  s.category AS status_category,
+  s.color AS status_color,
+  ty.name AS type_name
+FROM tickets t
+JOIN principals me
+  ON me.workspace_id = t.workspace_id AND me.kind = 'user' AND me.user_id = sqlc.arg(user_id)
+JOIN ticket_assignments a
+  ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id AND a.assignee_principal_id = me.id
+JOIN workspaces w
+  ON w.id = t.workspace_id
+JOIN projects p
+  ON p.id = t.project_id
+JOIN ticket_statuses s
+  ON s.workspace_id = t.workspace_id AND s.id = t.status_id
+JOIN ticket_types ty
+  ON ty.workspace_id = t.workspace_id AND ty.id = t.type_id
+WHERE t.workspace_id IN (
+    SELECT value::uuid FROM json_array_elements_text(sqlc.arg(workspace_ids)::json) AS v(value)
+  )
+  AND s.category <> 'done'
+  AND t.archived_at IS NULL
+  AND t.deleted_at IS NULL
+ORDER BY t.due_date ASC NULLS LAST, t.created_at ASC, t.id ASC
+LIMIT sqlc.arg(row_limit);
 
 -- =============================================================================
 -- ticket_watchers

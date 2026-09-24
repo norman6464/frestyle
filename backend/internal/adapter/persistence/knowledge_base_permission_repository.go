@@ -1305,7 +1305,7 @@ func (r *knowledgeBasePermissionRepository) ListWorkspacePageViewFactsByIDs(
 	return out, nil
 }
 
-func (r *knowledgeBasePermissionRepository) ListMemberWorkspaces(ctx context.Context, userID uint64) ([]domain.MemberWorkspace, error) {
+func (r *knowledgeBasePermissionRepository) ListMemberWorkspaces(ctx context.Context, userID uint64) ([]repository.WorkspaceWithScopeFacts, error) {
 	// ここは唯一テナントを跨いで読むメソッドで、絞り込みは user_id だけが行う。
 	// つまり userID の取り違えがそのままテナント境界の越境になるので、
 	// 巻き戻った値で問い合わせることは絶対に避ける。
@@ -1314,26 +1314,38 @@ func (r *knowledgeBasePermissionRepository) ListMemberWorkspaces(ctx context.Con
 	// クエリが 0 行を返したときと同じ空スライスを返す（下のループが作る値と同じ）。
 	uid, uok := toInt64ID(userID)
 	if !uok {
-		return []domain.MemberWorkspace{}, nil
+		return []repository.WorkspaceWithScopeFacts{}, nil
 	}
 	rows, err := r.queries(ctx).ListMemberWorkspaces(ctx, sql.NullInt64{Int64: uid, Valid: true})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]domain.MemberWorkspace, 0, len(rows))
+	// クエリは（ワークスペース × 届いている役割）の行を返すので、ワークスペース単位に畳み直す
+	// （ListWorkspaceSpaceScopeFacts と同じ）。役割の無い所属は role が NULL の 1 行として来る。
+	// 行は slug 順なので、畳んでも順序は保たれる。
+	out := make([]repository.WorkspaceWithScopeFacts, 0, len(rows))
+	indexByWorkspace := make(map[uuid.UUID]int, len(rows))
 	for _, row := range rows {
-		out = append(out, domain.MemberWorkspace{
-			Workspace: toDomainWorkspace(sqlcgen.Workspace{
-				ID:                  row.ID,
-				Slug:                row.Slug,
-				Name:                row.Name,
-				IsActive:            row.IsActive,
-				PersonalOwnerUserID: row.PersonalOwnerUserID,
-				CreatedAt:           row.CreatedAt,
-				UpdatedAt:           row.UpdatedAt,
-			}),
-			CanManage: row.IsAdmin,
-		})
+		i, seen := indexByWorkspace[row.ID]
+		if !seen {
+			i = len(out)
+			indexByWorkspace[row.ID] = i
+			out = append(out, repository.WorkspaceWithScopeFacts{
+				Workspace: toDomainWorkspace(sqlcgen.Workspace{
+					ID:                  row.ID,
+					Slug:                row.Slug,
+					Name:                row.Name,
+					IsActive:            row.IsActive,
+					PersonalOwnerUserID: row.PersonalOwnerUserID,
+					CreatedAt:           row.CreatedAt,
+					UpdatedAt:           row.UpdatedAt,
+				}),
+				Facts: domain.ScopeFacts{Roles: []domain.GrantRole{}},
+			})
+		}
+		if row.GrantRole.Valid {
+			out[i].Facts.Roles = append(out[i].Facts.Roles, domain.GrantRole(row.GrantRole.String))
+		}
 	}
 	return out, nil
 }

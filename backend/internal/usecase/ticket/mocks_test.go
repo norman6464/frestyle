@@ -316,6 +316,14 @@ func (m *mockTicketRepo) ListAssignedTickets(ctx context.Context, workspaceID, p
 	return t, args.Error(1)
 }
 
+func (m *mockTicketRepo) ListAssignedTicketsAcrossWorkspaces(
+	ctx context.Context, userID uint64, workspaceIDs []string, limit int,
+) ([]domain.AssignedTicketSummary, error) {
+	args := m.Called(ctx, userID, workspaceIDs, limit)
+	t, _ := args.Get(0).([]domain.AssignedTicketSummary)
+	return t, args.Error(1)
+}
+
 func (m *mockTicketRepo) AddTicketWatcher(ctx context.Context, workspaceID, ticketID string, userID uint64) error {
 	args := m.Called(ctx, workspaceID, ticketID, userID)
 	return args.Error(0)
@@ -381,9 +389,11 @@ func (m *mockTicketRepo) ListTicketPageLinks(ctx context.Context, workspaceID, s
 	return l, args.Error(1)
 }
 
-func (m *mockTicketRepo) ListTicketsReferencingPage(ctx context.Context, workspaceID, pageID string) ([]domain.Ticket, error) {
-	args := m.Called(ctx, workspaceID, pageID)
-	t, _ := args.Get(0).([]domain.Ticket)
+func (m *mockTicketRepo) ListTicketsReferencingPage(
+	ctx context.Context, workspaceID, pageID string, limit int,
+) ([]domain.TicketReference, error) {
+	args := m.Called(ctx, workspaceID, pageID, limit)
+	t, _ := args.Get(0).([]domain.TicketReference)
 	return t, args.Error(1)
 }
 
@@ -550,9 +560,9 @@ func (m *mockKBPermissionRepo) IsWorkspaceMemberBulk(ctx context.Context, worksp
 	return out, args.Error(1)
 }
 
-func (m *mockKBPermissionRepo) ListMemberWorkspaces(ctx context.Context, userID uint64) ([]domain.MemberWorkspace, error) {
+func (m *mockKBPermissionRepo) ListMemberWorkspaces(ctx context.Context, userID uint64) ([]repository.WorkspaceWithScopeFacts, error) {
 	args := m.Called(ctx, userID)
-	w, _ := args.Get(0).([]domain.MemberWorkspace)
+	w, _ := args.Get(0).([]repository.WorkspaceWithScopeFacts)
 	return w, args.Error(1)
 }
 

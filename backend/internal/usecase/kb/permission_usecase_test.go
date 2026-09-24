@@ -818,24 +818,42 @@ func Test_所属ワークスペース一覧_必須項目の検証(t *testing.T) 
 	require.Error(t, err, "userID 必須")
 }
 
-func Test_所属ワークスペース一覧_repositoryの結果をそのまま返す(t *testing.T) {
+func Test_所属ワークスペース一覧_役割の事実を規則にかけて返す(t *testing.T) {
 	repo := &mockKBPermissionRepo{}
 	repo.On("ListMemberWorkspaces", mock.Anything, uint64(7)).
-		Return([]domain.MemberWorkspace{{Workspace: domain.Workspace{ID: kbWS, Slug: "acme"}, CanManage: true}}, nil)
+		Return([]repository.WorkspaceWithScopeFacts{
+			{
+				Workspace: domain.Workspace{ID: kbWS, Slug: "acme"},
+				Facts:     domain.ScopeFacts{Roles: []domain.GrantRole{domain.GrantRoleViewer, domain.GrantRoleAdmin}},
+			},
+			{
+				Workspace: domain.Workspace{ID: "ws-editor", Slug: "beta"},
+				Facts:     domain.ScopeFacts{Roles: []domain.GrantRole{domain.GrantRoleEditor}},
+			},
+			{
+				Workspace: domain.Workspace{ID: "ws-none", Slug: "gamma"},
+				Facts:     domain.ScopeFacts{Roles: []domain.GrantRole{}},
+			},
+		}, nil)
 	uc := kb.NewListMemberWorkspacesUseCase(repo)
 
 	got, err := uc.Execute(context.Background(), kb.ListMemberWorkspacesInput{UserID: 7})
 	require.NoError(t, err)
-	require.Len(t, got, 1)
-	assert.Equal(t, "acme", got[0].Slug)
-	assert.True(t, got[0].CanManage)
+	require.Len(t, got, 3)
+	assert.Equal(t, []string{"acme", "beta", "gamma"}, []string{got[0].Slug, got[1].Slug, got[2].Slug}, "並びは repository のまま")
+	// 役割が複数届いていれば最も強いもの（admin）で解く。
+	assert.True(t, got[0].Permission.CanManage)
+	assert.True(t, got[0].Permission.CanEdit)
+	assert.False(t, got[1].Permission.CanManage, "editor は管理できない")
+	assert.True(t, got[1].Permission.CanEdit, "editor はチケットを作れる")
+	assert.Equal(t, domain.ScopePermission{}, got[2].Permission, "役割が無ければ何もできない")
 }
 
 func Test_所属ワークスペース一覧_失敗はそのまま伝える(t *testing.T) {
 	wantErr := errors.New("db down")
 	repo := &mockKBPermissionRepo{}
 	repo.On("ListMemberWorkspaces", mock.Anything, uint64(7)).
-		Return([]domain.MemberWorkspace(nil), wantErr)
+		Return([]repository.WorkspaceWithScopeFacts(nil), wantErr)
 	uc := kb.NewListMemberWorkspacesUseCase(repo)
 
 	_, err := uc.Execute(context.Background(), kb.ListMemberWorkspacesInput{UserID: 7})

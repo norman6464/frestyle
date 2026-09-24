@@ -20,11 +20,14 @@ type Workspace struct {
 }
 
 // MemberWorkspace はワークスペースと、そのユーザーから見た実効権限の組。
-// 一覧 API は削除アイコンの出し分けに要る CanManage だけを添えて返す。
+//
+// Permission はワークスペースそのものに対する実効権限（ResolveScopePermission の結果）。
+// 削除（CanManage）やチケットの作成（CanEdit）の入口で 1 件ずつ確かめる判定と同じ値で、
+// 一覧の段階で操作の出し分けに使う。スペースやページの可否ではない（あちらは入れ物ごとの
+// 付与で広がる・狭まる）。
 type MemberWorkspace struct {
 	Workspace
-	// CanManage は自分がこのワークスペースの admin か（DeleteWorkspace が要求する権限と同じ）。
-	CanManage bool `json:"canManage"`
+	Permission ScopePermission
 }
 
 // WorkspaceMember はワークスペースに属する人 1 人。

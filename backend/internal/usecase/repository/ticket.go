@@ -233,6 +233,11 @@ type TicketRepository interface {
 	// ListAssignedTickets は「自分の担当」の画面向け。プロジェクトを横断し、表示に要る
 	// 隣の値（プロジェクト・状態・種別）を同じ行で返す。並びは状態の枠 → 状態 → 期限。
 	ListAssignedTickets(ctx context.Context, workspaceID, principalID string) ([]domain.AssignedTicket, error)
+	// ListAssignedTicketsAcrossWorkspaces はホームの「自分の担当」向け。userID 本人に割り当たった
+	// 未完了のチケットを、workspaceIDs の範囲で横断し、期限の近い順（期限なしは最後・同じなら
+	// 作成の古い順 → id）に limit 件まで返す。workspaceIDs は呼び出し側が権限で絞ったもので、
+	// ここでは判定しない。空なら問い合わせずに空を返す。
+	ListAssignedTicketsAcrossWorkspaces(ctx context.Context, userID uint64, workspaceIDs []string, limit int) ([]domain.AssignedTicketSummary, error)
 
 	// --- 変更履歴 ---
 
@@ -258,9 +263,9 @@ type TicketRepository interface {
 	DeleteTicketPageLinksBySourceCascade(ctx context.Context, workspaceID, sourceTicketID string) error
 	DeleteTicketTicketLinksBySourceCascade(ctx context.Context, workspaceID, sourceTicketID string) error
 	ListTicketPageLinks(ctx context.Context, workspaceID, sourceTicketID string) ([]domain.TicketPageLink, error)
-	// ListTicketsReferencingPage はページ詳細の逆参照一覧が使う。リンク行ではなくチケット本体を
-	// 返す（handler が題名・状態をそのまま出せるように）。
-	ListTicketsReferencingPage(ctx context.Context, workspaceID, pageID string) ([]domain.Ticket, error)
+	// ListTicketsReferencingPage はページを参照しているチケットを、更新の新しい順に limit 件まで
+	// 返す（アーカイブ・削除したものは除く）。一覧の 1 行に要る題名と表示キーだけで、本文は返さない。
+	ListTicketsReferencingPage(ctx context.Context, workspaceID, pageID string, limit int) ([]domain.TicketReference, error)
 	ListTicketTicketLinks(ctx context.Context, workspaceID, sourceTicketID string) ([]domain.TicketTicketLink, error)
 	ListTicketsReferencingTicket(ctx context.Context, workspaceID, targetTicketID string) ([]domain.TicketTicketLink, error)
 

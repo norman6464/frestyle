@@ -187,7 +187,7 @@ func (u *UpsertUserFromIDTokenUseCase) Execute(
 // 丸ごと mock せずに済む。
 type membershipRepository interface {
 	IsWorkspaceMember(ctx context.Context, workspaceID string, userID uint64) (bool, error)
-	ListMemberWorkspaces(ctx context.Context, userID uint64) ([]domain.MemberWorkspace, error)
+	ListMemberWorkspaces(ctx context.Context, userID uint64) ([]repository.WorkspaceWithScopeFacts, error)
 	LeaveWorkspaceMembership(ctx context.Context, workspaceID string, userID, actorUserID uint64) error
 	RecordMembershipEvent(
 		ctx context.Context, workspaceID string, targetUserID, actorUserID uint64,
@@ -302,7 +302,7 @@ func (u *RetireSelfUseCase) Execute(ctx context.Context, userID uint64) error {
 			return err
 		}
 		for _, ws := range workspaces {
-			if err := u.perm.LeaveWorkspaceMembership(ctx, ws.ID, userID, userID); err != nil {
+			if err := u.perm.LeaveWorkspaceMembership(ctx, ws.Workspace.ID, userID, userID); err != nil {
 				return err
 			}
 		}
