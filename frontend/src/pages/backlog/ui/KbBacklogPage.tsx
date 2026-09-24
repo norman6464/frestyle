@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { BacklogSidebar, useBacklogFilterCounts } from '@/widgets/backlog-sidebar';
 import { SecondaryPanel } from '@/widgets/secondary-panel';
-import { EmptyState, FsIcon, FsIllustration, Loading, SidebarSection } from '@/shared/ui';
+import { ConfirmModal, EmptyState, FsIcon, FsIllustration, Loading, NameCreateForm, SidebarSection } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { TicketRepository, formatTicketKey } from '@/entities/ticket';
+import { ProjectRepository } from '@/entities/project';
 import type { SprintState } from '@/entities/sprint';
 import { useTicketList } from '../model/useTicketList';
 import { useTicketMasters } from '../model/useTicketMasters';
@@ -25,6 +26,7 @@ import TicketDetailPanel from './TicketDetailPanel';
 import TicketStatusAdmin from './TicketStatusAdmin';
 import TicketTypeAdmin from './TicketTypeAdmin';
 import { formatPeriodShort } from '../lib/dueDate';
+import { sprintConfirmText } from '../lib/sprintConfirm';
 
 /**
  * 面ごとの見出し。小さな見出しは設計ボード ST08 の文言（バックログ）と、面の名前（ほか）。
@@ -88,6 +90,9 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   } = useBacklogUrlState();
   const [detailMobileOpen, setDetailMobileOpen] = useState(false);
   const [enabling, setEnabling] = useState(false);
+  // スプリントの完了は開始し直せないので確認を挟む（開始は確認しない）。
+  const [completing, setCompleting] = useState<{ sprintId: string; name: string; count: number } | null>(null);
+  const [completePending, setCompletePending] = useState(false);
 
   const {
     workspaceSlug,
@@ -265,9 +270,20 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
               <p className="mb-1 text-base font-semibold text-[var(--color-text-secondary)]">
                 プロジェクトがありません
               </p>
-              <p className="text-sm text-[var(--color-text-muted)]">
+              <p className="mb-4 text-sm text-[var(--color-text-muted)]">
                 プロジェクトを作るとバックログを使えるようになります。
               </p>
+              {workspaceSlug && (
+                <div className="mx-auto max-w-sm text-left">
+                  <NameCreateForm
+                    what="プロジェクト"
+                    onCreate={async ({ name }) => {
+                      const created = await ProjectRepository.createProject(workspaceSlug, { name });
+                      navigate(backlogPath(created.id, 'backlog'));
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         ) : projectLoading || !project ? (
@@ -420,7 +436,13 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                           <button
                             type="button"
                             disabled={sprints.busyId === group.id}
-                            onClick={() => void handleChangeSprintState(group.id, group.sprintState)}
+                            onClick={() => {
+                              if (group.sprintState === 'active') {
+                                setCompleting({ sprintId: group.id, name: group.name, count: group.tickets.length });
+                                return;
+                              }
+                              void handleChangeSprintState(group.id, group.sprintState);
+                            }}
                             className="rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] transition-colors duration-fast hover:bg-surface-2 disabled:opacity-50"
                           >
                             {group.sprintState === 'active' ? 'スプリントを完了' : 'スプリントを開始'}
@@ -568,6 +590,24 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
             }}
           />
         </SecondaryPanel>
+      )}
+
+      {completing && (
+        <ConfirmModal
+          isOpen
+          {...sprintConfirmText('complete', completing.name, completing.count)}
+          isDanger
+          pending={completePending}
+          onConfirm={() => {
+            const target = completing;
+            setCompletePending(true);
+            void handleChangeSprintState(target.sprintId, 'active').finally(() => {
+              setCompletePending(false);
+              setCompleting(null);
+            });
+          }}
+          onCancel={() => setCompleting(null)}
+        />
       )}
     </div>
   );

@@ -181,15 +181,15 @@ export default function TicketCommentComposer({
   if (collapsible && !open) {
     return (
       <div>
-        <div className="rounded-lg border border-surface-3 bg-surface-1 px-4 py-3">
-          <button
-            type="button"
-            onClick={() => openWith()}
-            className="block w-full text-left text-sm text-[var(--color-text-muted)]"
-          >
-            {placeholder}
-          </button>
-        </div>
+        {/* 枠全体を押せるボタンにする（枠の中の文字の行だけが押せると、見た目の大きさと
+            押せる範囲が食い違う）。 */}
+        <button
+          type="button"
+          onClick={() => openWith()}
+          className="block min-h-11 w-full rounded-lg border border-surface-3 bg-surface-1 px-4 py-3 text-left text-sm text-[var(--color-text-muted)] hover:bg-surface-2"
+        >
+          {placeholder}
+        </button>
       </div>
     );
   }

@@ -39,7 +39,7 @@ export default function BlankableField({ value, placeholder, editable, render }:
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className={`-mx-1 rounded px-1 py-0.5 text-left transition-colors duration-fast hover:bg-surface-2 ${
+      className={`-mx-1 min-h-6 rounded px-1 py-0.5 text-left transition-colors [@media(pointer:coarse)]:min-h-11 duration-fast hover:bg-surface-2 ${
         filled
           ? 'text-[var(--color-text-primary)]'
           : 'text-[var(--color-text-muted)] underline decoration-dotted underline-offset-4'

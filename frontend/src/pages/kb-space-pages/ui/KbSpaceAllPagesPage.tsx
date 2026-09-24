@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { KbSidebar, KbPageGlyph } from '@/widgets/kb-sidebar';
 import { Loading, SidebarSection, fsIcon } from '@/shared/ui';
-import { useKbSpaceEntry, KbSpaceTabs } from '@/entities/kb';
+import { KbRepository, KbSpaceTabs, NOTE_NEW_PAGE_TITLE, emitKbTreeEvent, useKbSpaceEntry } from '@/entities/kb';
+import { useToast } from '@/shared/lib/hooks/useToast';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useKbSpaceAllPages } from '../model/useKbSpaceAllPages';
 
@@ -36,7 +37,7 @@ export default function KbSpaceAllPagesPage() {
                 アクセスできるスペースがありません
               </h1>
               <p className="text-sm text-[var(--color-text-muted)]">
-                メニューの「ナレッジ」からワークスペースまたはスペースを作ると使えるようになります。
+                左のサイドバーから、最初のスペースを作れます。
               </p>
             </div>
           </div>
@@ -52,7 +53,12 @@ export default function KbSpaceAllPagesPage() {
           <>
             <KbSpaceTabs space={space} active="pages" />
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-              <AllPagesList workspaceSlug={workspaceSlug} spaceId={space.id} onOpen={(id) => navigate(`/kb/${id}`)} />
+              <AllPagesList
+                workspaceSlug={workspaceSlug}
+                spaceId={space.id}
+                canCreate={space.role === 'admin' || space.role === 'editor'}
+                onOpen={(id) => navigate(`/kb/${id}`)}
+              />
             </div>
           </>
         )}
@@ -64,13 +70,29 @@ export default function KbSpaceAllPagesPage() {
 function AllPagesList({
   workspaceSlug,
   spaceId,
+  canCreate,
   onOpen,
 }: {
   workspaceSlug: string;
   spaceId: string;
+  /** このスペースでページを作れるか（編集者以上）。空のときに「ページを作る」を出す。 */
+  canCreate: boolean;
   onOpen: (pageId: string) => void;
 }) {
   const { pages, hasHiddenChildren, loading, error, retry } = useKbSpaceAllPages(workspaceSlug, spaceId);
+  const { showToast } = useToast();
+
+  // 空の画面から最初のページを作れるようにする（ナレッジの中にいるのに別の場所へ行かせない）。
+  // 作ったらそのページを開く。
+  const createFirstPage = async () => {
+    try {
+      const page = await KbRepository.createPage(workspaceSlug, spaceId, { title: NOTE_NEW_PAGE_TITLE });
+      emitKbTreeEvent({ type: 'page-created', page });
+      onOpen(page.id);
+    } catch {
+      showToast('error', 'ページを作成できませんでした');
+    }
+  };
 
   if (loading) return <Loading className="min-h-56" message="ページを読み込んでいます" />;
 
@@ -92,7 +114,14 @@ function AllPagesList({
         headingLevel={2}
         icon={fsIcon('document')}
         title={hasHiddenChildren ? '表示できるページがありません' : 'ページがありません'}
-        description={hasHiddenChildren ? '表示できる範囲のページはありません。必要な場合は管理者にアクセスを確認してください。' : 'ナレッジのメニューからページを作成すると、ここに表示されます。'}
+        description={
+          hasHiddenChildren
+            ? '表示できる範囲のページはありません。必要な場合は管理者にアクセスを確認してください。'
+            : canCreate
+              ? '最初のページを作ると、ここに並びます。'
+              : 'まだページがありません。編集できる人がページを作ると、ここに並びます。'
+        }
+        action={!hasHiddenChildren && canCreate ? { label: 'ページを作る', onClick: () => void createFirstPage() } : undefined}
       />
     );
   }

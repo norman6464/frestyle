@@ -1,12 +1,11 @@
 import type { KbGrantRole } from './types';
 
 /**
- * 役割の呼び名。画面に出す日本語はここにだけ置く。
+ * 役割の呼び名。画面に出す日本語はここにだけ置く（画面ごとに表を持つと、同じ役割が画面に
+ * よって別の名前で出る）。
  *
  * 値（admin / editor / commenter / viewer）は backend の domain.GrantRole と同じで、画面には
- * 出さない。以前は画面ごとに表を持っていて、招待やメンバー管理では英語の値がそのまま、
- * スペースの画面では日本語、共有パネルでは「編集」「閲覧」と、同じ役割が 3 通りの名前で
- * 出ていた。
+ * 出さない。
  */
 export const KB_ROLE_LABEL: Readonly<Record<KbGrantRole, string>> = {
   admin: '管理者',

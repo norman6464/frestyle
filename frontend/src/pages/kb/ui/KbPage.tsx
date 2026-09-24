@@ -558,7 +558,7 @@ export default function KbPage() {
               headingLevel={1}
               icon={fsIcon('document-text')}
               title="まだページがありません"
-              description="メニューの「ナレッジ」からページを作成してください。"
+              description="左のサイドバーで、スペース名の横の「＋」から最初のページを作れます。"
             />
           )}
 
@@ -878,6 +878,7 @@ export default function KbPage() {
             threads={comments.threads}
             loading={comments.loading}
             error={comments.error}
+            onRetry={comments.retry}
             canComment={data?.canComment ?? false}
             pendingAnchor={pendingAnchor}
             onCancelPendingAnchor={handleCancelPendingAnchor}

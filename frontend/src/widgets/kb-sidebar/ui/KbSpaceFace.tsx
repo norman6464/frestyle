@@ -269,22 +269,29 @@ function KbSpaceSwitcherMenu({
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [mySpaces, setMySpaces] = useState<KbMySpace[] | null>(null);
+  // 取得の失敗を空の一覧（[]）に畳まない。空だと「スペースが無い」に見え、作り直してしまう。
+  const [loadFailed, setLoadFailed] = useState(false);
+  // 再試行の引き金（値に意味は無い。増えたら同じ問い合わせをもう一度投げる）。
+  const [attempt, setAttempt] = useState(0);
   const [addingSpace, setAddingSpace] = useState(false);
   const [addingPrivateSpace, setAddingPrivateSpace] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setLoadFailed(false);
     KbRepository.fetchMySpaces(workspaceSlug)
       .then((list) => {
         if (!cancelled) setMySpaces(list);
       })
       .catch(() => {
-        if (!cancelled) setMySpaces([]);
+        if (cancelled) return;
+        setMySpaces(null);
+        setLoadFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [workspaceSlug]);
+  }, [workspaceSlug, attempt]);
 
   const createSpace = async (input: { name: string; visibility?: 'workspace' | 'private' }) => {
     try {
@@ -304,7 +311,19 @@ function KbSpaceSwitcherMenu({
       ref={ref}
       className="absolute left-0 top-full z-20 mt-1 w-60 rounded-lg border border-surface-3 bg-surface-1 py-1 shadow-lg"
     >
-      {mySpaces === null && <p className="px-3 py-1.5 text-sm text-[var(--color-text-muted)]">読み込み中…</p>}
+      {mySpaces === null && !loadFailed && <p className="px-3 py-1.5 text-sm text-[var(--color-text-muted)]">読み込み中…</p>}
+      {loadFailed && (
+        <div role="alert" className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-danger-ink">
+          <span>スペースを読み込めませんでした</span>
+          <button
+            type="button"
+            onClick={() => setAttempt((prev) => prev + 1)}
+            className="shrink-0 rounded px-1.5 py-1 text-xs underline hover:no-underline"
+          >
+            再試行
+          </button>
+        </div>
+      )}
       {mySpaces?.map((s) => (
         <Link
           key={s.id}

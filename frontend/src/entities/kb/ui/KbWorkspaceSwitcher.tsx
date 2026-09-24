@@ -106,7 +106,7 @@ export default function KbWorkspaceSwitcher({
                     setOpen(false);
                   }}
                   aria-label={`${workspace.name} のメンバーを管理`}
-                  className="mr-1 shrink-0 rounded p-1 text-[var(--color-text-tertiary)] opacity-0 transition-opacity hover:bg-surface-3 hover:text-[var(--color-text-primary)] focus-visible:opacity-100 group-hover:opacity-100"
+                  className="ui-hit mr-1 inline-flex shrink-0 items-center justify-center rounded p-1 text-[var(--color-text-tertiary)] opacity-0 transition-opacity hover:bg-surface-3 hover:text-[var(--color-text-primary)] focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                 >
                   <FsIcon name="users" className="h-4 w-4" />
                 </button>
@@ -116,7 +116,7 @@ export default function KbWorkspaceSwitcher({
                   type="button"
                   onClick={() => setDeleting(workspace)}
                   aria-label={`${workspace.name} を削除`}
-                  className="mr-1 shrink-0 rounded p-1 text-[var(--color-text-tertiary)] opacity-0 transition-opacity hover:bg-surface-3 hover:text-danger-ink focus-visible:opacity-100 group-hover:opacity-100"
+                  className="ui-hit mr-1 inline-flex shrink-0 items-center justify-center rounded p-1 text-[var(--color-text-tertiary)] opacity-0 transition-opacity hover:bg-surface-3 hover:text-danger-ink focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                 >
                   <FsIcon name="trash" className="h-4 w-4" />
                 </button>
@@ -159,6 +159,8 @@ export default function KbWorkspaceSwitcher({
           title="ワークスペースを削除"
           message={`「${deleting.name}」を中のスペース・ページごと削除します。元に戻せません。`}
           confirmText="削除"
+          isDanger
+          icon="trash"
           onConfirm={() => {
             const target = deleting;
             setDeleting(null);

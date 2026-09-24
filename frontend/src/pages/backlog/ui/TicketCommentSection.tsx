@@ -97,9 +97,16 @@ export default function TicketCommentSection({ workspaceSlug, ticketId, compact 
       <div className="flex flex-col gap-2">
         {loading && <Loading size="small" />}
         {!loading && error && (
-          <p role="alert" className="text-sm text-danger-ink">
-            {error}
-          </p>
+          <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger-ink">
+            <p>{error}</p>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="inline-flex min-h-9 items-center rounded-md border border-surface-3 bg-surface-1 px-3 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-2"
+            >
+              再読み込み
+            </button>
+          </div>
         )}
         {!loading && !error && latest.length === 0 && (
           <p className="text-xs text-[var(--color-text-muted)]">まだコメントはありません</p>

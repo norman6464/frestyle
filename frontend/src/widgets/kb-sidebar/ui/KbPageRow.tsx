@@ -164,7 +164,7 @@ export default function KbPageRow({
           onClick={() => onToggle(page.id)}
           aria-expanded={expanded}
           aria-label={expanded ? `${page.title} を閉じる` : `${page.title} を開く`}
-          className="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-3"
+          className="ui-hit inline-flex shrink-0 items-center justify-center rounded p-1 text-[var(--color-text-muted)] hover:bg-surface-3"
         >
           <FsIcon name="chevron-right" className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`} />
         </button>
@@ -223,7 +223,7 @@ export default function KbPageRow({
               <button
                 type="button"
                 onClick={() => onUnarchive(page.id)}
-                className="shrink-0 rounded px-1.5 py-0.5 text-xs text-[var(--color-text-muted)] opacity-0 transition-opacity hover:bg-surface-3 focus:opacity-100 group-hover:opacity-100"
+                className="ui-hit min-h-6 shrink-0 rounded px-1.5 py-0.5 text-xs text-[var(--color-text-muted)] opacity-0 transition-opacity hover:bg-surface-3 focus:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
               >
                 復帰
               </button>

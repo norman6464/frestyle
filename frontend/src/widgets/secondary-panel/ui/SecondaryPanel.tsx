@@ -203,7 +203,7 @@ function PeekablePanel({
               <button
                 onClick={panel.collapse}
                 aria-label="サイドバーを閉じる"
-                className="p-1 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
+                className="ui-hit inline-flex items-center justify-center p-1 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
               >
                 <FsIcon name="chevron-double-left" className="w-4 h-4" />
               </button>
@@ -258,7 +258,7 @@ function PeekablePanel({
               <button
                 onClick={panel.pin}
                 aria-label="サイドバーを固定表示する"
-                className="p-1 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
+                className="ui-hit inline-flex items-center justify-center p-1 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
               >
                 <FsIcon name="chevron-double-right" className="w-4 h-4" />
               </button>
@@ -389,7 +389,7 @@ export default function SecondaryPanel({
                   onClick={onToggleCollapsed}
                   title="パネルを折りたたむ"
                   aria-label="パネルを折りたたむ"
-                  className="p-1 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
+                  className="ui-hit inline-flex items-center justify-center p-1 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors flex-shrink-0"
                 >
                   <FsIcon name="chevron-double-left" className="w-4 h-4" />
                 </button>

@@ -565,6 +565,14 @@
   @media (pointer: coarse) {
     .ui-control, .ui-control-compact { min-height: 44px; }
   }
+  /*
+   * 小さなアイコンボタンの押せる範囲。見た目の大きさは変えずに、指で触る環境（粗いポインタ）
+   * では 44px 四方まで広げる（ST01・PX00 の目標）。マウスでは各部品が 24px 以上を持つ
+   * （WCAG 2.2 SC 2.5.8 の最低）。
+   */
+  @media (pointer: coarse) {
+    .ui-hit { min-height: 44px; min-width: 44px; }
+  }
   /* 白文字に対して brand-500 は 3.7:1 で基準（4.5:1）に届かない。600 から始める（5.2:1）。 */
   /*
    * ヘッダーは常時表示（本文の上に重ねない）なので、半透明・ぼかしは使わない。

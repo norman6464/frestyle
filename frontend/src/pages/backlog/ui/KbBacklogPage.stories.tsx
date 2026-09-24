@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import KbBacklogPage from './KbBacklogPage';
 import { routerWithParam, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
 
@@ -190,6 +190,51 @@ export const フィルターを開いて条件を付ける: Story = {
 };
 
 /** 設定の面。状態・種別・スプリントの管理をここに集める。 */
+/**
+ * スプリントの削除は確認を挟む（中のチケットはバックログへ戻り、スプリントは元に戻せない）。
+ * 取り消せば何も起きない。
+ *
+ * スタブの宛先は前から順の部分一致なので、スプリントの鍵は `/workspaces/acme/projects` より先に置く。
+ */
+export const スプリントの削除は確認してから: Story = {
+  decorators: [
+    withApi({
+      '/workspaces/acme/projects/p-1/sprints': {
+        sprints: [
+          {
+            id: 's-1',
+            workspaceId: 'w-1',
+            projectId: 'p-1',
+            name: 'スプリント 12',
+            state: 'planned',
+            startDate: '2026-09-01',
+            endDate: '2026-09-14',
+            position: 'a0',
+            ticketCount: 2,
+            createdAt: '2026-09-01T00:00:00Z',
+            updatedAt: '2026-09-01T00:00:00Z',
+          },
+        ],
+      },
+      '/workspaces/acme/sprints/s-1/tickets': { ticketIds: ['t-1', 't-2'] },
+      ...baseApi(),
+    }),
+  ],
+  render: () => <KbBacklogPage view="settings" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText('スプリント 12');
+    await userEvent.click(canvas.getByRole('button', { name: '削除' }));
+    const dialog = await screen.findByRole('dialog', { name: 'スプリントを削除しますか？' });
+    await expect(dialog).toHaveTextContent('中の 2 件のチケットは消えず、バックログへ戻ります');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'キャンセル' }));
+    await waitFor(async () => {
+      await expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    await expect(canvas.getByText('スプリント 12')).toBeInTheDocument();
+  },
+};
+
 export const 設定の面: Story = {
   // 面は経路ではなく prop で決まる（経路 → prop の対応は app/App.tsx が持つ）。
   // ここで router を重ねると入れ子になるので、meta の router のまま prop だけ変える。

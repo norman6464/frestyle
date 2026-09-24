@@ -222,5 +222,10 @@ export function useKbComments(workspaceSlug: string | undefined, pageId: string 
     [mutate],
   );
 
-  return { ...state, createThread, reply, resolve, reopen };
+  /** 取得に失敗したときの再読み込み（いまの宛先で取り直す）。 */
+  const retry = useCallback(() => {
+    if (active.current) void load(active.current);
+  }, [load]);
+
+  return { ...state, createThread, reply, resolve, reopen, retry };
 }

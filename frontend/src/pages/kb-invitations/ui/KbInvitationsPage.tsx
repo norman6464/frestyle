@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { KbWorkspaceTabs, useWorkspaceList, type KbInvitation, type KbIssuedInvitation } from '@/entities/kb';
 import { Button, ConfirmModal, FsIcon, fsIcon } from '@/shared/ui';
 import EmptyState from '@/shared/ui/EmptyState';
@@ -18,6 +18,7 @@ import KbInvitationsSection from './KbInvitationsSection';
  */
 export default function KbInvitationsPage() {
   const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const { workspaces } = useWorkspaceList();
   const invitations = useKbInvitations(workspaceSlug);
@@ -60,6 +61,7 @@ export default function KbInvitationsPage() {
         icon={fsIcon('lock')}
         title="この画面は admin だけが開けます"
         description="メンバーを招くこと、招待の再送と取り消しは、このワークスペースの admin だけが行えます。"
+        action={{ label: 'ナレッジへ戻る', onClick: () => navigate('/kb') }}
       />
     );
   }
@@ -104,6 +106,7 @@ export default function KbInvitationsPage() {
         title="招待を取り消しますか？"
         message={revoking ? `${revoking.email} 宛の招待を取り消します。送ったリンクは使えなくなります。また招きたいときは新しく作れます。` : ''}
         confirmText="取り消す"
+        isDanger
         onConfirm={() => {
           if (!revoking) return;
           const target = revoking;

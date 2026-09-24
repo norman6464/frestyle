@@ -33,7 +33,7 @@ describe('ConfirmModal', () => {
       <ConfirmModal isOpen={true} message="削除しますか？" onConfirm={mockOnConfirm} onCancel={mockOnCancel} />
     );
 
-    fireEvent.click(screen.getByText('削除'));
+    fireEvent.click(screen.getByText('確定する'));
     expect(mockOnConfirm).toHaveBeenCalled();
   });
 
@@ -78,7 +78,7 @@ describe('ConfirmModal', () => {
     render(
       <ConfirmModal isOpen={true} message="実行しますか？" isDanger={false} onConfirm={mockOnConfirm} onCancel={mockOnCancel} />
     );
-    const confirmBtn = screen.getByText('削除');
+    const confirmBtn = screen.getByText('確定する');
     expect(confirmBtn.className).toContain('bg-brand-600');
   });
 
@@ -86,7 +86,7 @@ describe('ConfirmModal', () => {
     render(
       <ConfirmModal isOpen={true} message="削除しますか？" isDanger={true} onConfirm={mockOnConfirm} onCancel={mockOnCancel} />
     );
-    const confirmBtn = screen.getByText('削除');
+    const confirmBtn = screen.getByText('確定する');
     expect(confirmBtn.className).toContain('bg-danger');
   });
 
@@ -141,7 +141,7 @@ describe('ConfirmModal', () => {
       <ConfirmModal isOpen={true} message="削除しますか？" onConfirm={mockOnConfirm} onCancel={mockOnCancel} />
     );
     await expectFocusSettlesOn('キャンセル');
-    screen.getByText('削除').focus();
+    screen.getByText('確定する').focus();
     await user.tab();
     await expectFocusSettlesOn('キャンセル');
   });
@@ -154,7 +154,7 @@ describe('ConfirmModal', () => {
     await expectFocusSettlesOn('キャンセル');
     screen.getByText('キャンセル').focus();
     await user.tab({ shift: true });
-    await expectFocusSettlesOn('削除');
+    await expectFocusSettlesOn('確定する');
   });
 
   it('role=dialogとaria-modal=trueが設定される', () => {
@@ -176,11 +176,24 @@ describe('ConfirmModal', () => {
     expect(title).toHaveTextContent('確認');
   });
 
-  it('isDanger未指定時のデフォルトがtrueである', () => {
+  it('何も指定しなければ中立（青の「確定する」）。文言を渡し忘れた確認が赤い「削除」にならない', () => {
     render(
-      <ConfirmModal isOpen={true} message="削除しますか？" onConfirm={mockOnConfirm} onCancel={mockOnCancel} />
+      <ConfirmModal isOpen={true} message="実行しますか？" onConfirm={mockOnConfirm} onCancel={mockOnCancel} />
     );
-    const confirmBtn = screen.getByText('削除');
-    expect(confirmBtn.className).toContain('bg-danger');
+    const confirmBtn = screen.getByRole('button', { name: '確定する' });
+    expect(confirmBtn.className).toContain('bg-brand-600');
+    expect(confirmBtn.className).not.toContain('bg-danger');
+  });
+
+  it('処理中は両方のボタンを押せなくし、確定ボタンに「処理中」を出す（二重に送らない）', () => {
+    render(
+      <ConfirmModal isOpen={true} message="削除しますか？" pending onConfirm={mockOnConfirm} onCancel={mockOnCancel} />
+    );
+    const confirmBtn = screen.getByRole('button', { name: '処理中…' });
+    expect(confirmBtn).toBeDisabled();
+    expect(confirmBtn).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('button', { name: 'キャンセル' })).toBeDisabled();
+    fireEvent.click(confirmBtn);
+    expect(mockOnConfirm).not.toHaveBeenCalled();
   });
 });

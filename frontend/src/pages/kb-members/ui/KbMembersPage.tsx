@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { KbWorkspaceTabs, useWorkspaceList, type KbAdminWorkspaceMember, type KbGrantRole } from '@/entities/kb';
 import { ConfirmModal, Loading, fsIcon } from '@/shared/ui';
 import EmptyState from '@/shared/ui/EmptyState';
@@ -41,12 +41,15 @@ function mutationErrorMessage(cause: unknown): string {
  */
 export default function KbMembersPage() {
   const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const currentUserId = useCurrentUserId();
   const { workspaces } = useWorkspaceList();
   const { members, loading, error, busyUserId, retry, changeRole, suspend, restore, remove } =
     useKbAdminMembers(workspaceSlug);
   const [removing, setRemoving] = useState<KbAdminWorkspaceMember | null>(null);
+  // 停止と「役割なし」は、相手がすぐに使えなくなる操作なので確認を挟む。
+  const [confirming, setConfirming] = useState<{ kind: 'suspend' | 'revokeRole'; member: KbAdminWorkspaceMember } | null>(null);
 
   const workspaceName = workspaces.find((w) => w.slug === workspaceSlug)?.name;
 
@@ -66,6 +69,7 @@ export default function KbMembersPage() {
         icon={fsIcon('lock')}
         title="この画面は admin だけが開けます"
         description="メンバーの役割変更・停止・削除は、このワークスペースの admin だけが行えます。"
+        action={{ label: 'ナレッジへ戻る', onClick: () => navigate('/kb') }}
       />
     );
   }
@@ -118,10 +122,14 @@ export default function KbMembersPage() {
                   member={member}
                   isSelf={member.userId === currentUserId}
                   busy={busyUserId === member.userId}
-                  onChangeRole={(role: KbGrantRole | null) =>
-                    void runOrToast(() => changeRole(member.principalId, member.userId, role))
-                  }
-                  onSuspend={() => void runOrToast(() => suspend(member.userId))}
+                  onChangeRole={(role: KbGrantRole | null) => {
+                    if (role === null) {
+                      setConfirming({ kind: 'revokeRole', member });
+                      return;
+                    }
+                    void runOrToast(() => changeRole(member.principalId, member.userId, role));
+                  }}
+                  onSuspend={() => setConfirming({ kind: 'suspend', member })}
                   onRestore={() => void runOrToast(() => restore(member.userId))}
                   onRemove={() => setRemoving(member)}
                 />
@@ -132,6 +140,29 @@ export default function KbMembersPage() {
       )}
 
       <ConfirmModal
+        isOpen={confirming !== null}
+        title={confirming?.kind === 'suspend' ? 'アカウントを停止しますか？' : '役割を外しますか？'}
+        message={
+          confirming
+            ? confirming.kind === 'suspend'
+              ? `${confirming.member.name || 'このメンバー'} はこのワークスペースに入れなくなります。「復帰」でいつでも戻せます。`
+              : `${confirming.member.name || 'このメンバー'} のワークスペース全体の役割を外します。個別に共有されたスペースやページ以外は見えなくなります。`
+            : ''
+        }
+        confirmText={confirming?.kind === 'suspend' ? '停止する' : '役割を外す'}
+        isDanger
+        onConfirm={() => {
+          if (!confirming) return;
+          const { kind, member } = confirming;
+          setConfirming(null);
+          void runOrToast(() =>
+            kind === 'suspend' ? suspend(member.userId) : changeRole(member.principalId, member.userId, null),
+          );
+        }}
+        onCancel={() => setConfirming(null)}
+      />
+
+      <ConfirmModal
         isOpen={removing !== null}
         title="メンバーを外しますか？"
         message={
@@ -140,6 +171,7 @@ export default function KbMembersPage() {
             : ''
         }
         confirmText="外す"
+        isDanger
         onConfirm={() => {
           if (!removing) return;
           const userId = removing.userId;
