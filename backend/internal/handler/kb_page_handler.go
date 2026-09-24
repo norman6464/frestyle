@@ -6,10 +6,12 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/norman6464/frestyle/backend/internal/domain"
+	"github.com/norman6464/frestyle/backend/internal/handler/dto"
 	"github.com/norman6464/frestyle/backend/internal/handler/middleware"
 	"github.com/norman6464/frestyle/backend/internal/usecase/kb"
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
@@ -590,16 +592,25 @@ func (h *KnowledgeBasePageHandler) Backlinks(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// TicketBacklinks は、このページを本文の pageRef で参照しているチケット一覧を返す
-// （ticket_page_links の逆参照）。チケットには pages のような個票の権限が無く、実効権限は
-// ワークスペース単位（ticket.CheckTicketPermissionUseCase 参照）。候補はすべて同じワーク
-// スペースの中なので、判定は 1 回で足りる。
+// TicketBacklinks は、このページを本文の pageRef で参照しているチケットを、更新の新しい順に
+// 上限まで返す（GET .../ticket-backlinks?limit=2。ticket_page_links の逆参照）。チケットには
+// pages のような個票の権限が無く、実効権限はワークスペース単位（ticket.CheckTicketPermissionUseCase
+// 参照）。候補はすべて同じワークスペースの中なので、判定は 1 回で足りる。
 func (h *KnowledgeBasePageHandler) TicketBacklinks(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
 		return
 	}
 	pageID := c.Param("pageId")
+	limit := ticket.DefaultPageBacklinkLimit
+	if raw, ok := c.GetQuery("limit"); ok {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > ticket.MaxPageBacklinkLimit {
+			c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_limit"})
+			return
+		}
+		limit = n
+	}
 	if !h.requirePagePermission(c, scope, pageID, domain.CapabilityView) {
 		return
 	}
@@ -613,17 +624,17 @@ func (h *KnowledgeBasePageHandler) TicketBacklinks(c *gin.Context) {
 		return
 	}
 	if !perm.CanView {
-		c.JSON(http.StatusOK, []domain.Ticket{})
+		c.JSON(http.StatusOK, dto.TicketReferenceListFromDomain(nil))
 		return
 	}
-	tickets, err := h.ticketBacklinks.Execute(c.Request.Context(), scope.workspaceID, pageID)
+	tickets, err := h.ticketBacklinks.Execute(c.Request.Context(), ticket.ListTicketsReferencingPageInput{
+		WorkspaceID: scope.workspaceID, PageID: pageID, Limit: limit,
+	})
 	if err != nil {
 		respondKnowledgeBaseErr(c, err)
 		return
 	}
-	out := make([]domain.Ticket, 0, len(tickets))
-	out = append(out, tickets...)
-	c.JSON(http.StatusOK, out)
+	c.JSON(http.StatusOK, dto.TicketReferenceListFromDomain(tickets))
 }
 
 type kbRenamePageRequest struct {

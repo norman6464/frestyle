@@ -178,6 +178,11 @@ func registerTicketRoutesWith(
 	// ワークスペースを解決し、その場で権限判定を通す。kb の /kb/pages/:pageId と同じ）。
 	g.GET("/tickets/:ticketId", h.ResolveByID)
 
+	// ホームの「自分の担当」。全ワークスペースを横断するので URL に slug を取らない。どの
+	// ワークスペースを見てよいかは usecase が所属と役割から決める。
+	mh := NewTicketMeHandler(ticket.NewListAssignedAcrossWorkspacesUseCase(tickets, permissions))
+	g.GET("/me/assigned-tickets", mh.ListAssigned)
+
 	tkGroup := g.Group("", middleware.KnowledgeBaseWorkspace(
 		kb.NewResolveWorkspaceUseCase(pages, permissions),
 	))

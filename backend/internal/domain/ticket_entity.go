@@ -168,3 +168,36 @@ type AssignedTicket struct {
 	StatusColor    string               `json:"statusColor"`
 	TypeName       string               `json:"typeName"`
 }
+
+// TicketReference はページを本文の pageRef で参照しているチケットの 1 行（逆参照の短い一覧）。
+// 題名と表示キー（ProjectKey と Number で PRJ-12 の形）だけを持つ。開いた先で本体を取る。
+type TicketReference struct {
+	ID         string
+	ProjectKey string
+	Number     int64
+	Title      string
+}
+
+// AssignedTicketSummary は全ワークスペース横断の「自分の担当」の 1 行（ホームの短い一覧）。
+//
+// AssignedTicket（1 ワークスペースの担当画面）と違い、どのワークスペースの仕事かを見分ける
+// ためにワークスペースの slug と名前を持つ。逆にチケット本体（本文など）は持たない —
+// ホームの一覧は件名・キー・場所・状態・期限を比べるだけで、編集はチケットを開いてから行う。
+type AssignedTicketSummary struct {
+	ID            string
+	WorkspaceSlug string
+	WorkspaceName string
+	ProjectID     string
+	// ProjectKey と Number で表示キー（PRJ-12 の形）になる。
+	ProjectKey     string
+	ProjectName    string
+	Number         int64
+	Title          string
+	Priority       TicketPriority
+	DueDate        *string
+	StatusName     string
+	StatusCategory TicketStatusCategory
+	StatusColor    string
+	TypeName       string
+	CreatedAt      time.Time
+}

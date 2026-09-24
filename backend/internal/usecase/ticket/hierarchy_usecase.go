@@ -33,8 +33,18 @@ func (u *ListTicketAncestorsUseCase) Execute(ctx context.Context, workspaceID, t
 	return u.repo.ListTicketAncestors(ctx, workspaceID, ticketID)
 }
 
-// ListTicketsReferencingPageUseCase はページ詳細の逆参照一覧が使う（そのページを本文中の
-// pageRef で参照しているチケット一覧。段 5）。
+const (
+	// DefaultPageBacklinkLimit は件数を指定しないときの上限。
+	DefaultPageBacklinkLimit = 10
+	// MaxPageBacklinkLimit は指定できる上限（逆参照は短い一覧として出す口で、全件は約束しない）。
+	MaxPageBacklinkLimit = 50
+)
+
+// ErrInvalidPageBacklinkLimit は件数が 1〜MaxPageBacklinkLimit の外。
+var ErrInvalidPageBacklinkLimit = errors.New("limit must be between 1 and 50")
+
+// ListTicketsReferencingPageUseCase はページを本文中の pageRef で参照しているチケットを、
+// 更新の新しい順に上限まで返す（ホームの「続きからはじめる」が最後に開いたページに添える）。
 //
 // チケットには pages のような個票の権限が無く、実効権限はワークスペース単位のため、ここでは
 // 可視判定を行わない — 候補チケットをそのまま返し、バックログ側を見せてよいかの判定は
@@ -49,12 +59,24 @@ func NewListTicketsReferencingPageUseCase(r repository.TicketRepository) *ListTi
 	return &ListTicketsReferencingPageUseCase{repo: r}
 }
 
-func (u *ListTicketsReferencingPageUseCase) Execute(ctx context.Context, workspaceID, pageID string) ([]domain.Ticket, error) {
-	if workspaceID == "" {
+type ListTicketsReferencingPageInput struct {
+	WorkspaceID string
+	PageID      string
+	// Limit は返す最大件数（1〜MaxPageBacklinkLimit）。
+	Limit int
+}
+
+func (u *ListTicketsReferencingPageUseCase) Execute(
+	ctx context.Context, in ListTicketsReferencingPageInput,
+) ([]domain.TicketReference, error) {
+	if in.WorkspaceID == "" {
 		return nil, errors.New("workspaceID is required")
 	}
-	if pageID == "" {
+	if in.PageID == "" {
 		return nil, errors.New("pageID is required")
 	}
-	return u.repo.ListTicketsReferencingPage(ctx, workspaceID, pageID)
+	if in.Limit < 1 || in.Limit > MaxPageBacklinkLimit {
+		return nil, ErrInvalidPageBacklinkLimit
+	}
+	return u.repo.ListTicketsReferencingPage(ctx, in.WorkspaceID, in.PageID, in.Limit)
 }

@@ -1168,18 +1168,21 @@ func (f *kbFakePerms) setScopeRole(scopeID string, userID uint64, role domain.Gr
 }
 
 // ListMemberWorkspaces は kind='user' の主体があるワークスペースを slug 順で返す。
-func (f *kbFakePerms) ListMemberWorkspaces(_ context.Context, userID uint64) ([]domain.MemberWorkspace, error) {
+func (f *kbFakePerms) ListMemberWorkspaces(_ context.Context, userID uint64) ([]repository.WorkspaceWithScopeFacts, error) {
 	if f.listWorkspacesErr != nil {
 		return nil, f.listWorkspacesErr
 	}
-	out := []domain.MemberWorkspace{}
+	out := []repository.WorkspaceWithScopeFacts{}
 	for _, ws := range f.pages.workspaces {
 		if f.userPrincipal(ws.ID, userID) != nil {
-			role := f.scopeRoles[kbScopeKey{scopeID: ws.ID, userID: userID}]
-			out = append(out, domain.MemberWorkspace{Workspace: *ws, CanManage: role == domain.GrantRoleAdmin})
+			roles := []domain.GrantRole{}
+			if role, ok := f.scopeRoles[kbScopeKey{scopeID: ws.ID, userID: userID}]; ok {
+				roles = append(roles, role)
+			}
+			out = append(out, repository.WorkspaceWithScopeFacts{Workspace: *ws, Facts: domain.ScopeFacts{Roles: roles}})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Slug < out[j].Slug })
+	sort.Slice(out, func(i, j int) bool { return out[i].Workspace.Slug < out[j].Workspace.Slug })
 	return out, nil
 }
 

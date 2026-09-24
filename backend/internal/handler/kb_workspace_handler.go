@@ -86,10 +86,17 @@ type kbWorkspaceResponse struct {
 	// CanManage は自分がこのワークスペースの admin か（削除操作を出してよいかの判定に使う。
 	// DeleteWorkspace が要求する権限と同じ）。
 	CanManage bool `json:"canManage"`
+	// CanCreateTickets はこのワークスペースでチケットを作れるか（作成 API が要求する
+	// ワークスペースの編集権限と同じ判定）。「新しくつくる」で作成先の候補を絞るのに使う。
+	// プロジェクトでチケットが有効化済みかは含まない（それはプロジェクトの状態で、権限ではない）。
+	CanCreateTickets bool `json:"canCreateTickets"`
 }
 
-func toKbWorkspaceResponse(w *domain.Workspace, canManage bool) kbWorkspaceResponse {
-	return kbWorkspaceResponse{Slug: w.Slug, Name: w.Name, CreatedAt: w.CreatedAt, CanManage: canManage}
+func toKbWorkspaceResponse(w *domain.Workspace, perm domain.ScopePermission) kbWorkspaceResponse {
+	return kbWorkspaceResponse{
+		Slug: w.Slug, Name: w.Name, CreatedAt: w.CreatedAt,
+		CanManage: perm.CanManage, CanCreateTickets: perm.CanEdit,
+	}
 }
 
 // kbSpaceResponse はスペース 1 件の返却形。
@@ -124,7 +131,7 @@ func (h *KnowledgeBaseWorkspaceHandler) List(c *gin.Context) {
 	}
 	out := make([]kbWorkspaceResponse, 0, len(workspaces))
 	for i := range workspaces {
-		out = append(out, toKbWorkspaceResponse(&workspaces[i].Workspace, workspaces[i].CanManage))
+		out = append(out, toKbWorkspaceResponse(&workspaces[i].Workspace, workspaces[i].Permission))
 	}
 	c.JSON(http.StatusOK, out)
 }
@@ -159,7 +166,9 @@ func (h *KnowledgeBaseWorkspaceHandler) Create(c *gin.Context) {
 		return
 	}
 	// 作成者は同じトランザクションで admin の grant を受け取る（ProvisionWorkspace の契約）。
-	c.JSON(http.StatusCreated, toKbWorkspaceResponse(ws, true))
+	// admin で何ができるかは書き写さず、一覧と同じ domain の解決に通す。
+	creator := domain.ResolveScopePermission(domain.ScopeFacts{Roles: []domain.GrantRole{domain.GrantRoleAdmin}})
+	c.JSON(http.StatusCreated, toKbWorkspaceResponse(ws, creator))
 }
 
 // ListSpaces はワークスペース配下のスペースのうち、自分が閲覧できるものだけを返す。

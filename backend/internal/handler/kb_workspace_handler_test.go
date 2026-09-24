@@ -121,6 +121,8 @@ func Test_ナレッジAPI_ワークスペース作成は作成者をメンバー
 	var created kbWorkspaceResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
 	assert.Equal(t, "new-team", created.Slug)
+	assert.True(t, created.CanManage, "作成者は admin")
+	assert.True(t, created.CanCreateTickets, "admin はチケットも作れる")
 
 	// 作成者が自分の作ったワークスペースに入れること。ここが崩れると
 	// middleware が所属を確かめて 404 にするため、誰も入れないワークスペースが残る。
@@ -477,6 +479,42 @@ func Test_ナレッジAPI_所属先が無いユーザーの一覧は空(t *testi
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.JSONEq(t, `[]`, w.Body.String())
 }
+
+// 一覧の canManage / canCreateTickets は、削除とチケット作成の入口が 1 件ずつ確かめる判定
+// （ワークスペースの役割を domain で解いた CanManage / CanEdit）と同じ値になる。
+func Test_ナレッジAPI_ワークスペース一覧は操作の可否を役割から添える(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		role          *domain.GrantRole
+		canManage     bool
+		canCreateTask bool
+	}{
+		{"admin は管理もチケット作成もできる", ptrRole(domain.GrantRoleAdmin), true, true},
+		{"editor はチケットを作れるが管理はできない", ptrRole(domain.GrantRoleEditor), false, true},
+		{"commenter はチケットを作れない", ptrRole(domain.GrantRoleCommenter), false, false},
+		{"viewer はチケットを作れない", ptrRole(domain.GrantRoleViewer), false, false},
+		{"役割の無い所属は何もできない", nil, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newKbFixture(kbCanEdit, kbUserID)
+			if tc.role != nil {
+				f.perms.setScopeRole(kbWorkspaceID, kbUserID, *tc.role)
+			}
+
+			w := f.do(t, http.MethodGet, kbWorkspacesPath, "")
+
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			var got []kbWorkspaceResponse
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+			require.Len(t, got, 1)
+			assert.Equal(t, kbWorkspaceSlug, got[0].Slug)
+			assert.Equal(t, tc.canManage, got[0].CanManage)
+			assert.Equal(t, tc.canCreateTask, got[0].CanCreateTickets)
+		})
+	}
+}
+
+func ptrRole(r domain.GrantRole) *domain.GrantRole { return &r }
 
 // kbListSpaces はスペース一覧を叩いて応答をデコードする。
 func kbListSpaces(t *testing.T, f kbFixture, slug string) (*httptest.ResponseRecorder, []kbSpaceResponse) {

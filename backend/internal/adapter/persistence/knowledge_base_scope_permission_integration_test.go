@@ -231,8 +231,8 @@ func TestKnowledgeBaseMemberWorkspaces_Integration(t *testing.T) {
 		got, err := f.perm.ListMemberWorkspaces(ctx, f.alice)
 		require.NoError(t, err)
 		require.Len(t, got, 2)
-		assert.Equal(t, "perm-main", got[0].Slug)
-		assert.Equal(t, "perm-other", got[1].Slug)
+		assert.Equal(t, "perm-main", got[0].Workspace.Slug)
+		assert.Equal(t, "perm-other", got[1].Workspace.Slug)
 	})
 
 	t.Run("所属していないワークスペースは漏らさない", func(t *testing.T) {
@@ -246,7 +246,7 @@ func TestKnowledgeBaseMemberWorkspaces_Integration(t *testing.T) {
 		got, err := f.perm.ListMemberWorkspaces(ctx, f.alice)
 		require.NoError(t, err)
 		require.Len(t, got, 1)
-		assert.Equal(t, "perm-main", got[0].Slug)
+		assert.Equal(t, "perm-main", got[0].Workspace.Slug)
 
 		none, err := f.perm.ListMemberWorkspaces(ctx, f.carol)
 		require.NoError(t, err)
@@ -294,10 +294,13 @@ func TestKnowledgeBaseMemberWorkspaces_Integration(t *testing.T) {
 		got, err := f.perm.ListMemberWorkspaces(ctx, f.alice)
 		require.NoError(t, err)
 		require.Len(t, got, 1, "停止した perm-other は落ちる")
-		assert.Equal(t, "perm-main", got[0].Slug)
+		assert.Equal(t, "perm-main", got[0].Workspace.Slug)
 	})
 
-	t.Run("CanManageはadmin grantを持つ人だけtrue", func(t *testing.T) {
+	// 一覧が返すのは役割の事実で、何ができるかは domain が決める。1 件ずつの判定
+	// （WorkspacePermissionFactsForUser）と同じ主体（自分自身 + 所属グループ）を集めているかを、
+	// 解いた結果で確かめる。
+	t.Run("役割の事実を返し1件ずつの判定と同じ結果に解ける", func(t *testing.T) {
 		f := setupKBPermission(t, sqlDB)
 		alice := f.principalFor(ctx, t, f.alice)
 		_, err := f.perm.UpsertWorkspaceGrant(ctx, f.ws, alice.ID, domain.GrantRoleAdmin, f.alice)
@@ -305,24 +308,52 @@ func TestKnowledgeBaseMemberWorkspaces_Integration(t *testing.T) {
 		bob := f.principalFor(ctx, t, f.bob)
 		_, err = f.perm.UpsertWorkspaceGrant(ctx, f.ws, bob.ID, domain.GrantRoleEditor, f.bob)
 		require.NoError(t, err)
-		// carol は所属だけで grant が無い（LEFT JOIN が noなmatch になる側）。
-		// sqlc が (wg.role = 'admin') を非 null の bool と推論しているので、
-		// NULL のときに落ちずに false を返すことをここで確かめる。
+		// carol は所属だけで grant が無い（LEFT JOIN が一致しない側）。role が NULL の行を
+		// 落ちずに畳み、役割なしの 1 件として返すことを見る。
 		f.principalFor(ctx, t, f.carol)
+
+		for _, tc := range []struct {
+			name      string
+			userID    uint64
+			canEdit   bool
+			canManage bool
+		}{
+			{"admin grant を持つ本人", f.alice, true, true},
+			{"editor grant は作成できるが管理はできない", f.bob, true, false},
+			{"grant が無い所属は何もできない", f.carol, false, false},
+		} {
+			got, err := f.perm.ListMemberWorkspaces(ctx, tc.userID)
+			require.NoError(t, err)
+			require.Len(t, got, 1, tc.name)
+			perm := domain.ResolveScopePermission(got[0].Facts)
+			assert.Equal(t, tc.canEdit, perm.CanEdit, tc.name)
+			assert.Equal(t, tc.canManage, perm.CanManage, tc.name)
+
+			one, err := f.perm.WorkspacePermissionFactsForUser(ctx, f.ws, tc.userID)
+			require.NoError(t, err)
+			assert.Equal(t, domain.ResolveScopePermission(*one), perm, "1 件ずつの判定と一致する: "+tc.name)
+		}
+	})
+
+	// 所属グループ宛ての grant も一覧に届く。ワークスペースの削除やチケットの作成は 1 件ずつの
+	// 判定でグループを数えるので、一覧だけが本人宛てしか見ないと「操作できるのにボタンが出ない」。
+	//
+	// 変異確認: SQL の mine からグループの UNION を外すと、このテストの CanManage が false になって落ちる。
+	t.Run("所属グループ宛ての役割も届き1件に畳まれる", func(t *testing.T) {
+		f := setupKBPermission(t, sqlDB)
+		alice := f.principalFor(ctx, t, f.alice)
+		_, err := f.perm.UpsertWorkspaceGrant(ctx, f.ws, alice.ID, domain.GrantRoleViewer, f.alice)
+		require.NoError(t, err)
+		group, err := f.perm.CreateGroupPrincipal(ctx, f.ws, "管理チーム")
+		require.NoError(t, err)
+		require.NoError(t, f.perm.AddGroupMember(ctx, f.ws, group.ID, alice.ID))
+		_, err = f.perm.UpsertWorkspaceGrant(ctx, f.ws, group.ID, domain.GrantRoleAdmin, f.alice)
+		require.NoError(t, err)
 
 		got, err := f.perm.ListMemberWorkspaces(ctx, f.alice)
 		require.NoError(t, err)
-		require.Len(t, got, 1)
-		assert.True(t, got[0].CanManage, "admin grant を持つ本人")
-
-		got, err = f.perm.ListMemberWorkspaces(ctx, f.bob)
-		require.NoError(t, err)
-		require.Len(t, got, 1)
-		assert.False(t, got[0].CanManage, "editor grant は admin ではない")
-
-		got, err = f.perm.ListMemberWorkspaces(ctx, f.carol)
-		require.NoError(t, err)
-		require.Len(t, got, 1)
-		assert.False(t, got[0].CanManage, "grant が無い所属（LEFT JOIN 不一致）は admin ではない")
+		require.Len(t, got, 1, "役割が 2 つ届いてもワークスペースは 1 件")
+		assert.ElementsMatch(t, []domain.GrantRole{domain.GrantRoleViewer, domain.GrantRoleAdmin}, got[0].Facts.Roles)
+		assert.True(t, domain.ResolveScopePermission(got[0].Facts).CanManage)
 	})
 }

@@ -1187,5 +1187,18 @@ func (u *ListMemberWorkspacesUseCase) Execute(ctx context.Context, in ListMember
 	if in.UserID == 0 {
 		return nil, errors.New("userID is required")
 	}
-	return u.repo.ListMemberWorkspaces(ctx, in.UserID)
+	facts, err := u.repo.ListMemberWorkspaces(ctx, in.UserID)
+	if err != nil {
+		return nil, err
+	}
+	// 役割の事実を実効権限へ解く規則は domain にだけある。1 件ずつの判定
+	// （CheckWorkspacePermissionUseCase）と同じ関数を通すので、一覧の出し分けと入口の判定が揃う。
+	out := make([]domain.MemberWorkspace, 0, len(facts))
+	for _, f := range facts {
+		out = append(out, domain.MemberWorkspace{
+			Workspace:  f.Workspace,
+			Permission: domain.ResolveScopePermission(f.Facts),
+		})
+	}
+	return out, nil
 }

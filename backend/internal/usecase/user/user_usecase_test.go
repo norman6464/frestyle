@@ -726,7 +726,7 @@ type membershipRepoSpy struct {
 	isMember    bool
 	isMemberErr error
 
-	workspaces    []domain.MemberWorkspace
+	workspaces    []repository.WorkspaceWithScopeFacts
 	workspacesErr error
 
 	leaveCalls     []string // workspaceID を呼ばれた順に記録
@@ -747,7 +747,7 @@ func (m *membershipRepoSpy) IsWorkspaceMember(_ context.Context, _ string, _ uin
 	return m.isMember, m.isMemberErr
 }
 
-func (m *membershipRepoSpy) ListMemberWorkspaces(_ context.Context, _ uint64) ([]domain.MemberWorkspace, error) {
+func (m *membershipRepoSpy) ListMemberWorkspaces(_ context.Context, _ uint64) ([]repository.WorkspaceWithScopeFacts, error) {
 	return m.workspaces, m.workspacesErr
 }
 
@@ -855,7 +855,7 @@ func Test_アカウント復帰_旧ラベルはsuspended新ラベルはactive(t 
 
 func Test_退会_所属する全ワークスペースを退出してから退会する(t *testing.T) {
 	perm := &membershipRepoSpy{
-		workspaces: []domain.MemberWorkspace{
+		workspaces: []repository.WorkspaceWithScopeFacts{
 			{Workspace: domain.Workspace{ID: "ws-a"}},
 			{Workspace: domain.Workspace{ID: "ws-b"}},
 		},
@@ -881,7 +881,7 @@ func Test_退会_所属する全ワークスペースを退出してから退会
 
 func Test_退会_最後のadminのワークスペースがあれば全体を断る(t *testing.T) {
 	perm := &membershipRepoSpy{
-		workspaces: []domain.MemberWorkspace{
+		workspaces: []repository.WorkspaceWithScopeFacts{
 			{Workspace: domain.Workspace{ID: "ws-a"}},
 			{Workspace: domain.Workspace{ID: "ws-b"}},
 		},

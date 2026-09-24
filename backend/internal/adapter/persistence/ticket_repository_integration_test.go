@@ -433,7 +433,7 @@ func TestTicketRepository_Integration(t *testing.T) {
 
 		// ListTicketsReferencingPage はページ詳細の逆参照一覧が使う（そのページを参照している
 		// チケット一覧）。ticket_repository.go の doc 参照。
-		referencing, err := repo.ListTicketsReferencingPage(ctx, ws, pageID)
+		referencing, err := repo.ListTicketsReferencingPage(ctx, ws, pageID, 10)
 		require.NoError(t, err)
 		require.Len(t, referencing, 1)
 		assert.Equal(t, src.ID, referencing[0].ID)
@@ -443,9 +443,72 @@ func TestTicketRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, links, "空へ張り替えると消える")
 
-		referencing, err = repo.ListTicketsReferencingPage(ctx, ws, pageID)
+		referencing, err = repo.ListTicketsReferencingPage(ctx, ws, pageID, 10)
 		require.NoError(t, err)
 		assert.Empty(t, referencing, "張り替えで空にすれば逆参照からも消える")
+	})
+
+	// ホームが最後に開いたページに添える短い一覧。並び（更新の新しい順 → id）・上限・
+	// アーカイブの除外・完了は残すことは生 SQL でしか確かめられない。
+	//
+	// 変異確認: SQL から `t.archived_at IS NULL` を外すと「アーカイブ済み」が混ざって落ちる。
+	// ORDER BY を `t.updated_at ASC` にすると順が逆になって落ちる。
+	t.Run("ページの逆参照は更新の新しい順に上限まで返しアーカイブを除く", func(t *testing.T) {
+		ws, project := setup(t)
+		statusID, typeID := seedTicketMasterViaRepo(ctx, t, repo, ws, project)
+		done := &domain.TicketStatus{
+			WorkspaceID: ws, ProjectID: project, Name: "完了",
+			Category: domain.TicketStatusCategoryDone, Color: "#2f6b47", Position: "a1",
+		}
+		require.NoError(t, repo.InsertTicketStatus(ctx, done))
+		pageSpace := createSpace(t, sqlDB, ws, "kb")
+		pageID := createPage(t, sqlDB, ws, pageSpace, nil, "a0")
+		otherPage := createPage(t, sqlDB, ws, pageSpace, nil, "a1")
+
+		ids := map[string]string{}
+		for _, seed := range []struct {
+			title, status string
+			page          string
+		}{
+			{"古い参照", statusID, pageID},
+			{"完了した参照", done.ID, pageID},
+			{"アーカイブ済み", statusID, pageID},
+			{"別のページの参照", statusID, otherPage},
+			{"新しい参照", statusID, pageID},
+		} {
+			created, err := repo.CreateTicket(ctx, repository.TicketCreateInput{
+				WorkspaceID: ws, ProjectID: project, TypeID: typeID, StatusID: seed.status,
+				Title: seed.title, Doc: []byte(`{"type":"doc","content":[]}`), Priority: domain.TicketPriorityDefault, CreatedByUserID: 1,
+			})
+			require.NoError(t, err)
+			require.NoError(t, repo.ReplaceTicketPageLinks(ctx, ws, created.ID, []string{seed.page}))
+			ids[seed.title] = created.ID
+		}
+		require.NoError(t, repo.ArchiveTicket(ctx, ws, ids["アーカイブ済み"]))
+		// 更新時刻をはっきり分ける（作った順と同じ向き。新しいほど後ろ）。
+		for i, title := range []string{"古い参照", "完了した参照", "新しい参照"} {
+			_, err := sqlDB.Exec(`UPDATE tickets SET updated_at = now() - make_interval(mins => $1) WHERE id = $2`, 30-i*10, ids[title])
+			require.NoError(t, err)
+		}
+
+		titlesOf := func(rows []domain.TicketReference) []string {
+			out := make([]string, 0, len(rows))
+			for _, r := range rows {
+				out = append(out, r.Title)
+			}
+			return out
+		}
+
+		all, err := repo.ListTicketsReferencingPage(ctx, ws, pageID, 10)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"新しい参照", "完了した参照", "古い参照"}, titlesOf(all),
+			"更新の新しい順。完了は残し、アーカイブと別のページの参照は出ない")
+		assert.Equal(t, "eng", all[0].ProjectKey, "表示キーの材料が添えられている")
+		assert.Positive(t, all[0].Number)
+
+		two, err := repo.ListTicketsReferencingPage(ctx, ws, pageID, 2)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"新しい参照", "完了した参照"}, titlesOf(two), "上限で切る")
 	})
 
 	t.Run("状態マスタのCRUD一式", func(t *testing.T) {

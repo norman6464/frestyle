@@ -48,6 +48,17 @@ type ticketFakeRepo struct {
 
 	// 利用者が保存した絞り込み（TicketSavedFilterRepository もこの同じ struct に実装する）。
 	savedFilters map[string]*domain.TicketSavedFilter
+
+	// 全ワークスペース横断の担当。並びと絞り込みは SQL の仕事なので、fake は用意された行を
+	// 渡された範囲と件数で切って返し、渡された引数を記録するだけにする（結合テストが本物を見る）。
+	assignedAcross      []domain.AssignedTicketSummary
+	assignedAcrossCalls []assignedAcrossCall
+}
+
+type assignedAcrossCall struct {
+	userID       uint64
+	workspaceIDs []string
+	limit        int
 }
 
 func newTicketFakeRepo() *ticketFakeRepo {
@@ -804,6 +815,22 @@ func (f *ticketFakeRepo) ListAssignedTickets(_ context.Context, workspaceID, pri
 	return out, nil
 }
 
+func (f *ticketFakeRepo) ListAssignedTicketsAcrossWorkspaces(
+	_ context.Context, userID uint64, workspaceIDs []string, limit int,
+) ([]domain.AssignedTicketSummary, error) {
+	f.assignedAcrossCalls = append(f.assignedAcrossCalls, assignedAcrossCall{
+		userID: userID, workspaceIDs: append([]string(nil), workspaceIDs...), limit: limit,
+	})
+	out := []domain.AssignedTicketSummary{}
+	for _, row := range f.assignedAcross {
+		if len(out) == limit {
+			break
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
 // 監視は「誰が・どのチケットを」の集合だけで足りる（fake は表ではなく map で持つ）。
 func (f *ticketFakeRepo) AddTicketWatcher(_ context.Context, workspaceID, ticketID string, userID uint64) error {
 	if f.watchers == nil {
@@ -910,19 +937,27 @@ func (f *ticketFakeRepo) ListTicketPageLinks(_ context.Context, workspaceID, sou
 	return out, nil
 }
 
-func (f *ticketFakeRepo) ListTicketsReferencingPage(_ context.Context, workspaceID, pageID string) ([]domain.Ticket, error) {
-	var out []domain.Ticket
+// ListTicketsReferencingPage は並び（更新の新しい順）を SQL に任せ、fake では題名の順で安定させる。
+// 並びの正しさは結合テストが見る。ここで見るのは可視判定と件数の受け渡しだけ。
+func (f *ticketFakeRepo) ListTicketsReferencingPage(
+	_ context.Context, workspaceID, pageID string, limit int,
+) ([]domain.TicketReference, error) {
+	out := []domain.TicketReference{}
 	for ticketID, pageIDs := range f.pageLinks {
 		t, ok := f.tickets[ticketID]
-		if !ok || t.WorkspaceID != workspaceID || t.DeletedAt != nil {
+		if !ok || t.WorkspaceID != workspaceID || t.DeletedAt != nil || t.ArchivedAt != nil {
 			continue
 		}
 		for _, pid := range pageIDs {
 			if pid == pageID {
-				out = append(out, *t)
+				out = append(out, domain.TicketReference{ID: t.ID, Number: t.Number, Title: t.Title})
 				break
 			}
 		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Title < out[j].Title })
+	if len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }

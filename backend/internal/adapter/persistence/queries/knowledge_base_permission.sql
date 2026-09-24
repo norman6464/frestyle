@@ -462,29 +462,41 @@ WHERE p.workspace_id = sqlc.arg(workspace_id)
 ORDER BY p."position";
 
 -- name: ListMemberWorkspaces :many
--- そのユーザーが所属するワークスペース一覧と、自分がそこの admin かどうか。
+-- そのユーザーが所属するワークスペース一覧と、それぞれのワークスペースで自分に届いている
+-- 役割（事実だけ）。
 --
--- 所属の正本は principals（kind='user'）の行なので、JOIN の結果がそのまま答えになる。
+-- 所属の正本は principals（kind='user'）の行なので、me との JOIN の結果がそのまま答えになる。
 -- このファイルの作法（WHERE に workspace_id を必ず含める）に対する唯一の例外で、
 -- テナントを絞る手前の「どのテナントに入れるか」を答えるクエリだから workspace_id を取らない。
--- 代わりに principals 側で user_id を必ず縛る（ここが緩むと全テナントが漏れる）。
+-- 代わりに me で user_id を必ず縛る（ここが緩むと全テナントが漏れる）。mine のグループも
+-- me と同じワークスペースの所属だけに限る（別テナントのグループの付与を混ぜない）。
 --
--- is_admin は workspace_grants を自分の principal で LEFT JOIN するだけで求まる
--- （admin だけが consequential なので role = 'admin' の 1 行があるかどうかだけを見る）。
--- DeleteWorkspace が要求する権限（CanManage）と同じ判定を、一覧の段階で添えて返す。
+-- 返すのは（ワークスペース × 届いている役割）の行。役割の届いていない所属は LEFT JOIN の右が
+-- NULL の 1 行になる。「その役割で何ができるか」は domain.ResolveScopePermission だけが決め、
+-- ここでは admin かどうかも判定しない。1 つのワークスペースの判定（ListWorkspaceScopeGrantRoles）
+-- と主体の集め方（自分自身 + 所属グループ。space_all は数えない）をそろえてあり、一覧に出る
+-- 可否と、削除やチケット作成の入口で 1 件ずつ判定した可否が食い違わない。
 --
--- grant が 1 行も無い所属では wg.role が NULL になり、(wg.role = 'admin') も NULL になる
--- （SQL の三値論理）。COALESCE(wg.role, '') で先に text を NULL 抜きにしてから比較すると、
--- 比較結果そのものは NULL になり得ない。COALESCE(bool式, false) だと sqlc の型推論が
--- interface{} に落ちてしまうため、text 側で COALESCE する形にしている
--- （driver が NULL を bool へ Scan できずに落ちることをローカル PostgreSQL で確認済み）。
 -- 停止中のワークスペースは一覧に出さない。個々の解決（slug / id）が「無いもの」として
 -- 扱うのに一覧にだけ残ると、開けない行が並ぶだけで意味が無い。
-SELECT w.*, (COALESCE(wg.role, '') = 'admin') AS is_admin FROM workspaces w
-JOIN principals p
-  ON p.workspace_id = w.id AND p.kind = 'user' AND p.user_id = sqlc.arg(user_id)
+WITH me AS (
+    SELECT p.id, p.workspace_id
+    FROM principals p
+    WHERE p.kind = 'user' AND p.user_id = sqlc.arg(user_id)
+),
+mine AS (
+    SELECT me.id, me.workspace_id FROM me
+    UNION
+    SELECT pm.group_principal_id, pm.workspace_id
+    FROM principal_members pm
+    JOIN me ON me.id = pm.member_principal_id AND me.workspace_id = pm.workspace_id
+)
+SELECT w.*, wg."role" AS grant_role
+FROM workspaces w
+JOIN me ON me.workspace_id = w.id
 LEFT JOIN workspace_grants wg
-  ON wg.workspace_id = w.id AND wg.principal_id = p.id
+  ON wg.workspace_id = w.id
+ AND wg.principal_id IN (SELECT mine.id FROM mine WHERE mine.workspace_id = w.id)
 WHERE w.is_active = true
 ORDER BY w.slug;
 
@@ -781,7 +793,7 @@ SELECT
     )::integer AS grant_rank,
     -- 本文一致の抜粋を Go 側（usecase）で計算するための材料。page_search がまだ無ければ
     -- 空文字（NULL ではなく COALESCE で text に倒す — driver が NULL を string へ Scan
-    -- できずに落ちることを避けるため。ListMemberWorkspaces の is_admin と同じ理由）。
+    -- できずに落ちることを避けるため）。
     COALESCE(ps.body, '')::text AS body
 FROM cand cnd
 -- pages → spaces は複合 FK があるので必ず 1 行に当たる。

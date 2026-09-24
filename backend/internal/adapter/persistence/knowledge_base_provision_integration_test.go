@@ -46,7 +46,7 @@ func TestKnowledgeBaseProvisionWorkspace_Integration(t *testing.T) {
 		listed, err := f.perm.ListMemberWorkspaces(ctx, f.alice)
 		require.NoError(t, err)
 		require.Len(t, listed, 1)
-		assert.Equal(t, ws.ID, listed[0].ID, "作った本人の所属一覧に出る")
+		assert.Equal(t, ws.ID, listed[0].Workspace.ID, "作った本人の所属一覧に出る")
 
 		// ほかの人は入れない（作成が既存のアクセスを増やさない）。
 		other, err := f.perm.ListMemberWorkspaces(ctx, f.bob)

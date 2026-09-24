@@ -1438,6 +1438,68 @@ func (r *ticketRepository) ListAssignedTickets(ctx context.Context, workspaceID,
 	return out, nil
 }
 
+func (r *ticketRepository) ListAssignedTicketsAcrossWorkspaces(
+	ctx context.Context, userID uint64, workspaceIDs []string, limit int,
+) ([]domain.AssignedTicketSummary, error) {
+	out := []domain.AssignedTicketSummary{}
+	// bigint に収まらない userID はどの principal にも一致しない ＝ 担当 0 件。
+	uid, uok := toInt64ID(userID)
+	if !uok || limit <= 0 {
+		return out, nil
+	}
+	// 解釈できない ID は SQL の ::uuid で落ちるので、渡す前に外す（どのワークスペースにも
+	// 一致しない値なので、外しても答えは変わらない）。
+	ids := make([]string, 0, len(workspaceIDs))
+	for _, id := range workspaceIDs {
+		if parsed, ok := kbParseID(id); ok {
+			ids = append(ids, parsed.String())
+		}
+	}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	idsJSON, err := json.Marshal(ids)
+	if err != nil {
+		return nil, err
+	}
+	rowLimit, ok := toInt32(limit)
+	if !ok {
+		return nil, outOfRangeInt32Error("limit", limit)
+	}
+	rows, err := r.queries(ctx).ListAssignedTicketsAcrossWorkspaces(ctx, sqlcgen.ListAssignedTicketsAcrossWorkspacesParams{
+		UserID:       sql.NullInt64{Int64: uid, Valid: true},
+		WorkspaceIds: idsJSON,
+		RowLimit:     rowLimit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		t := domain.AssignedTicketSummary{
+			ID:             row.ID.String(),
+			WorkspaceSlug:  row.WorkspaceSlug,
+			WorkspaceName:  row.WorkspaceName,
+			ProjectID:      row.ProjectID.String(),
+			ProjectKey:     row.ProjectKey,
+			ProjectName:    row.ProjectName,
+			Number:         row.Number,
+			Title:          row.Title,
+			Priority:       domain.TicketPriority(row.Priority),
+			StatusName:     row.StatusName,
+			StatusCategory: domain.TicketStatusCategory(row.StatusCategory),
+			StatusColor:    row.StatusColor,
+			TypeName:       row.TypeName,
+			CreatedAt:      row.CreatedAt,
+		}
+		if row.DueDate.Valid {
+			d := row.DueDate.String
+			t.DueDate = &d
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
 // fromNullInt32 は列の NULL を nil に戻す。
 // nullInt64 は *int を sql.NullInt64 へ畳む（nil は NULL）。int は 64bit なので取りこぼしは無い。
 func nullInt64(v *int) sql.NullInt64 {
@@ -1764,21 +1826,29 @@ func (r *ticketRepository) ListTicketPageLinks(ctx context.Context, workspaceID,
 // ListTicketsReferencingPage はそのページを参照しているチケット一覧を返す（ページ詳細の
 // 逆参照用）。target_page_id で絞る — source_ticket_id 絞り（自分が参照しているページ）とは
 // 向きが逆なので混同しないこと。
-func (r *ticketRepository) ListTicketsReferencingPage(ctx context.Context, workspaceID, pageID string) ([]domain.Ticket, error) {
+func (r *ticketRepository) ListTicketsReferencingPage(
+	ctx context.Context, workspaceID, pageID string, limit int,
+) ([]domain.TicketReference, error) {
+	out := []domain.TicketReference{}
 	wsID, ok := kbParseID(workspaceID)
 	pID, ok2 := kbParseID(pageID)
-	if !ok || !ok2 {
-		return nil, nil
+	if !ok || !ok2 || limit <= 0 {
+		return out, nil
+	}
+	rowLimit, ok := toInt32(limit)
+	if !ok {
+		return nil, outOfRangeInt32Error("limit", limit)
 	}
 	rows, err := r.queries(ctx).ListTicketsReferencingPage(ctx, sqlcgen.ListTicketsReferencingPageParams{
-		WorkspaceID: wsID, TargetPageID: pID,
+		WorkspaceID: wsID, TargetPageID: pID, RowLimit: rowLimit,
 	})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]domain.Ticket, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toDomainTicket(row, ""))
+		out = append(out, domain.TicketReference{
+			ID: row.ID.String(), ProjectKey: row.ProjectKey, Number: row.Number, Title: row.Title,
+		})
 	}
 	return out, nil
 }
