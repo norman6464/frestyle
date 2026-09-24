@@ -23,6 +23,9 @@ import type {
   TicketAttachment,
   TicketPriority,
   TicketResolution,
+  TicketSavedFilter,
+  TicketSavedFilterInput,
+  TicketSavedFilterWire,
   TicketStatus,
   TicketStatusCategory,
   TicketStatusWire,
@@ -120,6 +123,39 @@ function normalizeComment(wire: TicketCommentWire): TicketComment {
     reactions: toArray(wire.reactions),
     createdAt: wire.createdAt,
     updatedAt: wire.updatedAt,
+  };
+}
+
+function normalizeSavedFilter(wire: TicketSavedFilterWire): TicketSavedFilter {
+  return {
+    id: wire.id,
+    name: wire.name,
+    statusId: wire.statusId ?? null,
+    typeId: wire.typeId ?? null,
+    labelId: wire.labelId ?? null,
+    assigneePrincipalId: wire.assigneePrincipalId ?? null,
+    unassigned: wire.unassigned,
+    assignedToMe: wire.assignedToMe,
+    overdue: wire.overdue,
+    q: wire.q ?? null,
+    count: wire.count,
+    createdAt: wire.createdAt,
+    updatedAt: wire.updatedAt,
+  };
+}
+
+/** 保存・更新の入力を送る形にする。null は「指定なし」で、backend は空文字も同じに読む。 */
+function savedFilterBody(input: TicketSavedFilterInput) {
+  return {
+    name: input.name,
+    statusId: input.statusId ?? null,
+    typeId: input.typeId ?? null,
+    labelId: input.labelId ?? null,
+    assigneePrincipalId: input.assigneePrincipalId ?? null,
+    unassigned: input.unassigned ?? false,
+    assignedToMe: input.assignedToMe ?? false,
+    overdue: input.overdue ?? false,
+    q: input.q ?? null,
   };
 }
 
@@ -256,6 +292,49 @@ const TicketRepository = {
   async fetchTicketCounts(workspaceSlug: string, projectId: string): Promise<TicketCounts> {
     const res = await apiClient.get<TicketCounts>(TICKET_API.ticketCounts(workspaceSlug, projectId));
     return res.data;
+  },
+
+  /** 本人がそのプロジェクトで保存した絞り込み。作った順・件数付き。0 件は []。 */
+  async fetchSavedFilters(workspaceSlug: string, projectId: string): Promise<TicketSavedFilter[]> {
+    const res = await apiClient.get<{ savedFilters: TicketSavedFilterWire[] }>(
+      TICKET_API.savedFilters(workspaceSlug, projectId),
+    );
+    return toArray<TicketSavedFilterWire>(res.data?.savedFilters).map(normalizeSavedFilter);
+  },
+
+  /**
+   * 絞り込みに名前を付けて保存する。同名は 409 saved_filter_name_taken、上限（20 件）は
+   * 409 saved_filter_limit_reached、条件なしは 400 filter_has_no_condition。
+   */
+  async createSavedFilter(
+    workspaceSlug: string,
+    projectId: string,
+    input: TicketSavedFilterInput,
+  ): Promise<TicketSavedFilter> {
+    const res = await apiClient.post<TicketSavedFilterWire>(
+      TICKET_API.savedFilters(workspaceSlug, projectId),
+      savedFilterBody(input),
+    );
+    return normalizeSavedFilter(res.data);
+  },
+
+  /** 名前と条件を丸ごと差し替える（部分更新は無い）。他人の分・別プロジェクトは 404。 */
+  async updateSavedFilter(
+    workspaceSlug: string,
+    projectId: string,
+    filterId: string,
+    input: TicketSavedFilterInput,
+  ): Promise<TicketSavedFilter> {
+    const res = await apiClient.put<TicketSavedFilterWire>(
+      TICKET_API.savedFilter(workspaceSlug, projectId, filterId),
+      savedFilterBody(input),
+    );
+    return normalizeSavedFilter(res.data);
+  },
+
+  /** 204 応答。他人の分・別プロジェクトは 404。 */
+  async deleteSavedFilter(workspaceSlug: string, projectId: string, filterId: string): Promise<void> {
+    await apiClient.delete(TICKET_API.savedFilter(workspaceSlug, projectId, filterId));
   },
 
   /** 直下の子だけ（孫は含まない）。並び順は一覧と同じ position 準拠。 */

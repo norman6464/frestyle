@@ -48,6 +48,8 @@ export type {
   TicketHierarchyLevel,
   TicketListFilter,
   TicketCounts,
+  TicketSavedFilter,
+  TicketSavedFilterInput,
   TicketKey,
   ResolvedTicket,
   EnableTicketsResult,

@@ -1,23 +1,27 @@
 import { useEffect, useId, useState } from 'react';
 import type { Label, TicketStatus, TicketType } from '@/entities/ticket';
+import type { KbGrantablePrincipal } from '@/entities/kb';
 import { Button, FieldSelect, FsIcon } from '@/shared/ui';
-import type { BacklogQuickFilter } from '../model/useBacklogUrlState';
+import type { BacklogAssigneeFilter } from '../model/useBacklogUrlState';
 
 export interface BacklogFilterBarProps {
   statuses: TicketStatus[];
   types: TicketType[];
   labels: Label[];
+  /** 担当に選べる相手（kind が user のものだけを候補にする）。 */
+  principals: KbGrantablePrincipal[];
   statusId: string | null;
   typeId: string | null;
   labelId: string | null;
+  assignee: BacklogAssigneeFilter;
+  overdue: boolean;
   q: string;
-  /** 「保存した絞り込み」のタブで選ばれているもの。適用中の条件のチップとして出す。 */
-  quick: BacklogQuickFilter | null;
   onChangeStatusId: (value: string | null) => void;
   onChangeTypeId: (value: string | null) => void;
   onChangeLabelId: (value: string | null) => void;
+  onChangeAssignee: (value: BacklogAssigneeFilter) => void;
+  onChangeOverdue: (value: boolean) => void;
   onChangeQuery: (value: string) => void;
-  onClearQuick: () => void;
   /** 題名検索・タブ・詳細条件をまとめて外す。 */
   onClearFilters: () => void;
   /** 「課題をつくる」。渡されなければ出さない（アーカイブの面・読むだけの人）。 */
@@ -26,19 +30,40 @@ export interface BacklogFilterBarProps {
 
 const QUERY_DEBOUNCE_MS = 300;
 
-const QUICK_LABEL: Record<BacklogQuickFilter, string> = {
-  assignedToMe: '自分の担当',
-  overdue: '期限切れ',
-  unassigned: '未割り当て',
-};
+/** 担当の選択欄の値。「自分」「未割り当て」は主体の ID と衝突しない印にする。 */
+const ASSIGNEE_ME = '__me__';
+const ASSIGNEE_NONE = '__none__';
+
+function assigneeValue(assignee: BacklogAssigneeFilter): string {
+  switch (assignee.kind) {
+    case 'me':
+      return ASSIGNEE_ME;
+    case 'none':
+      return ASSIGNEE_NONE;
+    case 'principal':
+      return assignee.id;
+    default:
+      return '';
+  }
+}
+
+function assigneeFromValue(value: string): BacklogAssigneeFilter {
+  if (value === ASSIGNEE_ME) return { kind: 'me' };
+  if (value === ASSIGNEE_NONE) return { kind: 'none' };
+  if (value) return { kind: 'principal', id: value };
+  return { kind: 'any' };
+}
 
 /**
  * 一覧の操作列。題名検索・「フィルター」・「課題をつくる」を 1 行に置き、
- * 状態／種別／ラベルの選択は「フィルター」を押したときだけ開く（設計ボード ST08 / ST09）。
+ * 状態／種別／ラベル／担当の選択は「フィルター」を押したときだけ開く（設計ボード ST08 / ST09）。
  *
- * 3 つの選択欄を常に出していた頃は、条件を 1 つも使わない日でも操作列が 5 つ並んでいた。
+ * 4 つの選択欄を常に出していた頃は、条件を 1 つも使わない日でも操作列が 5 つ並んでいた。
  * 開く手間が 1 回増える代わりに、いま効いている条件はチップで常に見える
  * （閉じていても消えない）ので、隠したことで見失う条件は無い。
+ *
+ * 担当は「誰でも / 自分 / 未割り当て / この人」の 4 通りを 1 つの選択欄で選ぶ。固定のタブの
+ * 「自分の担当」「未割り当て」と同じ条件を指すので、どちらで付けても同じチップになる。
  *
  * 題名検索だけは入力のたびに URL を書き換えない —— 1 文字ごとに一覧を取り直すのは無駄が
  * 大きく、`replace` の連打で IME 変換途中の状態が URL に残ることも避けたい。
@@ -48,21 +73,24 @@ export default function BacklogFilterBar({
   statuses,
   types,
   labels,
+  principals,
   statusId,
   typeId,
   labelId,
+  assignee,
+  overdue,
   q,
-  quick,
   onChangeStatusId,
   onChangeTypeId,
   onChangeLabelId,
+  onChangeAssignee,
+  onChangeOverdue,
   onChangeQuery,
-  onClearQuick,
   onClearFilters,
   onCreate,
 }: BacklogFilterBarProps) {
   const [queryInput, setQueryInput] = useState(q);
-  const detailCount = [statusId, typeId, labelId].filter(Boolean).length;
+  const detailCount = [statusId, typeId, labelId, assignee.kind !== 'any'].filter(Boolean).length;
   // 条件付きの URL で開いたときは、その条件が見える状態で始める（畳まれていると探す）。
   const [open, setOpen] = useState(detailCount > 0);
   const panelId = useId();
@@ -84,6 +112,21 @@ export default function BacklogFilterBar({
   const nameOf = <T extends { id: string; name: string }>(list: T[], id: string | null) =>
     id ? list.find((item) => item.id === id)?.name ?? null : null;
 
+  const assigneeUsers = principals.filter((p) => p.kind === 'user');
+  // 選ばれている人が候補に無い（名前が引けていない・外れた）ときも、選択欄に「いまの値」が
+  // 見えるよう、候補に足す。無いと空欄に見えて、条件が効いているのに気づけない。
+  const assigneeName =
+    assignee.kind === 'principal' ? nameOf(assigneeUsers, assignee.id) || '不明なユーザー' : null;
+  const assigneeOptions = [
+    { value: '', label: 'すべて' },
+    { value: ASSIGNEE_ME, label: '自分' },
+    { value: ASSIGNEE_NONE, label: '未割り当て' },
+    ...assigneeUsers.map((p) => ({ value: p.id, label: p.name || p.id })),
+  ];
+  if (assignee.kind === 'principal' && !assigneeUsers.some((p) => p.id === assignee.id)) {
+    assigneeOptions.push({ value: assignee.id, label: assigneeName ?? '不明なユーザー' });
+  }
+
   // 適用中の条件。押すとその 1 つだけ外れる。
   const chips: { key: string; label: string; onRemove: () => void }[] = [];
   const statusName = nameOf(statuses, statusId);
@@ -92,7 +135,11 @@ export default function BacklogFilterBar({
   if (statusName) chips.push({ key: 'status', label: `状態: ${statusName}`, onRemove: () => onChangeStatusId(null) });
   if (typeName) chips.push({ key: 'type', label: `種別: ${typeName}`, onRemove: () => onChangeTypeId(null) });
   if (labelName) chips.push({ key: 'label', label: `ラベル: ${labelName}`, onRemove: () => onChangeLabelId(null) });
-  if (quick) chips.push({ key: 'quick', label: QUICK_LABEL[quick], onRemove: onClearQuick });
+  if (assignee.kind !== 'any') {
+    const label = assignee.kind === 'me' ? '担当: 自分' : assignee.kind === 'none' ? '担当: 未割り当て' : `担当: ${assigneeName}`;
+    chips.push({ key: 'assignee', label, onRemove: () => onChangeAssignee({ kind: 'any' }) });
+  }
+  if (overdue) chips.push({ key: 'overdue', label: '期限切れ', onRemove: () => onChangeOverdue(false) });
   if (q) chips.push({ key: 'q', label: `題名: ${q}`, onRemove: () => { setQueryInput(''); onChangeQuery(''); } });
 
   const selectClass = 'w-full rounded-lg border-surface-3 bg-surface-1 font-normal';
@@ -148,7 +195,7 @@ export default function BacklogFilterBar({
       <div id={panelId} hidden={!open} className={open ? 'mt-3 rounded-lg border border-surface-3 bg-surface-2/60 p-3 sm:p-4' : undefined}>
         {open && (
           <>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <span className="mb-1 block text-xs text-[var(--color-text-muted)]">状態</span>
                 <FieldSelect
@@ -176,6 +223,16 @@ export default function BacklogFilterBar({
                   value={labelId ?? ''}
                   onChange={(value) => onChangeLabelId(value || null)}
                   options={[{ value: '', label: 'すべて' }, ...labels.map((l) => ({ value: l.id, label: l.name }))]}
+                  className={selectClass}
+                />
+              </div>
+              <div>
+                <span className="mb-1 block text-xs text-[var(--color-text-muted)]">担当</span>
+                <FieldSelect
+                  label="担当で絞り込む"
+                  value={assigneeValue(assignee)}
+                  onChange={(value) => onChangeAssignee(assigneeFromValue(value))}
+                  options={assigneeOptions}
                   className={selectClass}
                 />
               </div>

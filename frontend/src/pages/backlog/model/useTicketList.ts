@@ -28,6 +28,11 @@ export interface TicketListState {
   error: string | null;
   /** 一覧に載る 1 件への操作（並び替え・状態変更等）が飛んでいる間、その ticketId。 */
   busyId: string | null;
+  /**
+   * この画面で成功した書き込みの回数。件数バッジ（保存した絞り込み）のように「チケットを
+   * 動かしたら取り直す」派生値の引き金に使う。読み直し（load）では増えない。
+   */
+  mutations: number;
 }
 
 const LOAD_FAILED = 'チケットを読み込めませんでした。時間をおいて開き直すと最新の状態が出ます。';
@@ -98,6 +103,7 @@ export function useTicketList(
     loading: false,
     error: null,
     busyId: null,
+    mutations: 0,
   });
 
   const active = useRef<ListTarget | null>(null);
@@ -118,14 +124,14 @@ export function useTicketList(
         setState((prev) => ({ ...prev, loading: false }));
         return;
       }
-      setState({ tickets, loading: false, error: null, busyId: null });
+      setState((prev) => ({ ...prev, tickets, loading: false, error: null, busyId: null }));
     } catch {
       if (active.current?.key !== to.key || seq.current !== request) return;
       if (writeCount.current !== writesAtStart) {
         setState((prev) => ({ ...prev, loading: false }));
         return;
       }
-      setState({ tickets: [], loading: false, error: LOAD_FAILED, busyId: null });
+      setState((prev) => ({ ...prev, tickets: [], loading: false, error: LOAD_FAILED, busyId: null }));
     }
   }, []);
 
@@ -133,7 +139,7 @@ export function useTicketList(
     active.current = target;
     if (!target) {
       seq.current += 1;
-      setState({ tickets: [], loading: false, error: null, busyId: null });
+      setState((prev) => ({ ...prev, tickets: [], loading: false, error: null, busyId: null }));
       return;
     }
     void load(target);
@@ -162,7 +168,12 @@ export function useTicketList(
         const result = await run(to);
         if (active.current?.key === to.key && seq.current === request) {
           writeCount.current += 1;
-          setState((prev) => ({ ...prev, tickets: apply(prev.tickets, result), busyId: null }));
+          setState((prev) => ({
+            ...prev,
+            tickets: apply(prev.tickets, result),
+            busyId: null,
+            mutations: prev.mutations + 1,
+          }));
         }
         return result;
       } catch (cause) {

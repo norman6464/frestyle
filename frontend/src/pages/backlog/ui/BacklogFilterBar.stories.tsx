@@ -2,6 +2,13 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import BacklogFilterBar from './BacklogFilterBar';
 import type { Label, TicketStatus, TicketType } from '@/entities/ticket';
+import type { KbGrantablePrincipal } from '@/entities/kb';
+
+const principals: KbGrantablePrincipal[] = [
+  { id: 'u-1', kind: 'user', name: '川野 拓馬' },
+  { id: 'u-2', kind: 'user', name: '山田 花子' },
+  { id: 'g-1', kind: 'group', name: '開発チーム' },
+];
 
 const statuses: TicketStatus[] = [
   {
@@ -66,16 +73,19 @@ const meta = {
     statuses,
     types,
     labels,
+    principals,
     statusId: null,
     typeId: null,
     labelId: null,
+    assignee: { kind: 'any' },
+    overdue: false,
     q: '',
-    quick: null,
     onChangeStatusId: fn(),
     onChangeTypeId: fn(),
     onChangeLabelId: fn(),
+    onChangeAssignee: fn(),
+    onChangeOverdue: fn(),
     onChangeQuery: fn(),
-    onClearQuick: fn(),
     onClearFilters: fn(),
     onCreate: fn(),
   },
@@ -95,7 +105,7 @@ export const 既定: Story = {
   },
 };
 
-/** 「フィルター」を押すと 3 つの選択欄が現れる。押した本人が開いたと分かるよう aria-expanded を返す。 */
+/** 「フィルター」を押すと 4 つの選択欄が現れる。押した本人が開いたと分かるよう aria-expanded を返す。 */
 export const フィルターを開く: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -104,6 +114,7 @@ export const フィルターを開く: Story = {
     await expect(canvas.getByLabelText('状態で絞り込む')).toBeInTheDocument();
     await expect(canvas.getByLabelText('種別で絞り込む')).toBeInTheDocument();
     await expect(canvas.getByLabelText('ラベルで絞り込む')).toBeInTheDocument();
+    await expect(canvas.getByLabelText('担当で絞り込む')).toBeInTheDocument();
     await expect(canvas.getByText('変更はすぐに反映されます')).toBeVisible();
   },
 };
@@ -141,27 +152,57 @@ export const 種別を選ぶ: Story = {
 };
 
 /**
+ * 担当は「すべて / 自分 / 未割り当て / この人」の 4 通りを 1 つの選択欄で選ぶ。候補は人だけ
+ * （グループやスペース全体は担当にできないので出さない）。
+ */
+export const 担当を選ぶ: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await choose(canvas, '担当で絞り込む', '川野 拓馬');
+    await expect(args.onChangeAssignee).toHaveBeenCalledWith({ kind: 'principal', id: 'u-1' });
+    await userEvent.click(canvas.getByLabelText('担当で絞り込む'));
+    const listbox = await within(document.body).findByRole('listbox');
+    await expect(within(listbox).queryByRole('option', { name: '開発チーム' })).toBeNull();
+    await userEvent.click(within(listbox).getByRole('option', { name: '未割り当て' }));
+    await expect(args.onChangeAssignee).toHaveBeenCalledWith({ kind: 'none' });
+  },
+};
+
+/**
  * 条件付きで開いたときは、選択欄が見えた状態で始まり、「フィルター」に適用数が付く。
  * 効いている条件はチップになって、畳んでも消えない。
  */
 export const 条件が付いている: Story = {
-  args: { statusId: 'st-2', typeId: 'ty-1', quick: 'overdue', q: '認証' },
+  args: { statusId: 'st-2', typeId: 'ty-1', assignee: { kind: 'me' }, overdue: true, q: '認証' },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('button', { name: /フィルター/ })).toHaveAttribute('aria-expanded', 'true');
-    await expect(canvas.getByLabelText('2 件の条件を適用中')).toBeInTheDocument();
+    await expect(canvas.getByLabelText('3 件の条件を適用中')).toBeInTheDocument();
     // チップは 1 つずつ外せる。
     await expect(canvas.getByRole('button', { name: '状態: 開発 の絞り込みを解除' })).toBeVisible();
     await expect(canvas.getByRole('button', { name: '種別: 開発タスク の絞り込みを解除' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: '担当: 自分 の絞り込みを解除' })).toBeVisible();
     await expect(canvas.getByRole('button', { name: '期限切れ の絞り込みを解除' })).toBeVisible();
     await expect(canvas.getByRole('button', { name: '題名: 認証 の絞り込みを解除' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '状態: 開発 の絞り込みを解除' }));
     await expect(args.onChangeStatusId).toHaveBeenCalledWith(null);
     await userEvent.click(canvas.getByRole('button', { name: '期限切れ の絞り込みを解除' }));
-    await expect(args.onClearQuick).toHaveBeenCalledOnce();
+    await expect(args.onChangeOverdue).toHaveBeenCalledWith(false);
+    await userEvent.click(canvas.getByRole('button', { name: '担当: 自分 の絞り込みを解除' }));
+    await expect(args.onChangeAssignee).toHaveBeenCalledWith({ kind: 'any' });
     // 畳んでもチップは残る。
     await userEvent.click(canvas.getByRole('button', { name: /フィルター/ }));
     await expect(canvas.getByRole('button', { name: '種別: 開発タスク の絞り込みを解除' })).toBeVisible();
+  },
+};
+
+/** 担当の人の名前が引けていなくても、条件が効いていることは見える（空欄に見せない）。 */
+export const 担当の名前が引けない: Story = {
+  args: { principals: [], assignee: { kind: 'principal', id: 'u-9' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: '担当: 不明なユーザー の絞り込みを解除' })).toBeVisible();
+    await expect(canvas.getByLabelText('担当で絞り込む')).toHaveTextContent('不明なユーザー');
   },
 };
 

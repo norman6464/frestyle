@@ -4,7 +4,7 @@ import { SecondaryPanel } from '@/widgets/secondary-panel';
 import { ConfirmModal, EmptyState, FsIcon, FsIllustration, Loading, NameCreateForm } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
-import { TicketRepository, formatTicketKey } from '@/entities/ticket';
+import { TicketRepository, formatTicketKey, type TicketSavedFilter } from '@/entities/ticket';
 import { ProjectRepository } from '@/entities/project';
 import type { SprintState } from '@/entities/sprint';
 import { useTicketList } from '../model/useTicketList';
@@ -29,7 +29,10 @@ import { sprintConfirmText } from '../lib/sprintConfirm';
 import { nextSprintName } from '../lib/nextSprintName';
 import { projectInitials } from '../lib/projectInitials';
 import { useBacklogFilterCounts } from '../model/useBacklogFilterCounts';
+import { useSavedFilters } from '../model/useSavedFilters';
+import { savedFilterErrorMessage } from '../lib/savedFilterError';
 import BacklogProjectSwitcher from './BacklogProjectSwitcher';
+import SaveFilterControl from './SaveFilterControl';
 
 /**
  * 面ごとの見出し。小さな見出しは設計ボード ST08 の文言（バックログ）と、面の名前（ほか）。
@@ -81,17 +84,28 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     assignedToMe,
     overdue,
     q,
+    savedFilterId,
+    assignee,
+    filtered,
     quickFilter,
     selectTicket,
     setStatusId,
     setTypeId,
     setLabelId,
+    setAssignee,
+    setOverdue,
     setQuickFilter,
     setQuery,
+    applySavedFilter,
     clearFilters,
     reset,
   } = useBacklogUrlState();
   const [detailMobileOpen, setDetailMobileOpen] = useState(false);
+  // 保存した絞り込みへの操作（保存・改名・削除）の結果。操作した場所（タブの並びの下）に出す。
+  const [filterMessage, setFilterMessage] = useState<string | null>(null);
+  // 保存した絞り込みの削除は確認を挟む（消すと同じ条件を組み直すしかない）。
+  const [deletingFilter, setDeletingFilter] = useState<TicketSavedFilter | null>(null);
+  const [deleteFilterPending, setDeleteFilterPending] = useState(false);
   const [enabling, setEnabling] = useState(false);
   // スプリントの完了は開始し直せないので確認を挟む（開始は確認しない）。
   const [completing, setCompleting] = useState<{ sprintId: string; name: string; count: number } | null>(null);
@@ -138,6 +152,18 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   const { principals, nameOf } = usePrincipalNames(workspaceSlug ?? undefined);
   // 「保存した絞り込み」の件数と全件数。一覧の真上に出す（設計ボード ST08）。
   const counts = useBacklogFilterCounts(workspaceSlug ?? undefined, project?.id);
+  // 利用者が名前を付けて保存した絞り込み（件数付き）。固定のタブの後ろに並ぶ（設計ボード ST09）。
+  const saved = useSavedFilters(workspaceSlug ?? undefined, project?.id);
+
+  // チケットを動かしたら（状態・担当・期限・ラベル・作成・アーカイブ）件数を取り直す。
+  // 一覧の読み直しでは動かない（mutations は書き込みの成功でだけ増える）。
+  const refreshCounts = counts.refresh;
+  const refreshSaved = saved.refresh;
+  useEffect(() => {
+    if (list.mutations === 0) return;
+    refreshCounts();
+    refreshSaved();
+  }, [list.mutations, refreshCounts, refreshSaved]);
 
   /**
    * 一覧を段に割る。1 件のチケットはどこか 1 つの段にしか出さない —— 見本と同じく、
@@ -180,7 +206,10 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   const shownProject = useRef<string | null>(null);
   useEffect(() => {
     const id = project?.id ?? null;
-    if (shownProject.current !== null && shownProject.current !== id) reset();
+    if (shownProject.current !== null && shownProject.current !== id) {
+      reset();
+      setFilterMessage(null);
+    }
     shownProject.current = id;
   }, [project?.id, reset]);
 
@@ -255,6 +284,55 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
       showToast('error', getApiError(cause).status === 403 ? 'この操作を行う権限がありません。' : failureMessage);
       throw cause;
     }
+  };
+
+  /** 保存した絞り込みのタブを押した。押されているものをもう一度押すと条件ごと外す。 */
+  const handleSelectSaved = (filter: TicketSavedFilter | null) => {
+    setFilterMessage(null);
+    if (filter) applySavedFilter(filter);
+    else clearFilters();
+  };
+
+  /** いま URL に載っている条件に名前を付けて保存し、その絞り込みを選んだ状態にする。 */
+  const handleSaveFilter = async (name: string) => {
+    const created = await saved.create({
+      name,
+      statusId,
+      typeId,
+      labelId,
+      assigneePrincipalId: assignee.kind === 'principal' ? assignee.id : null,
+      unassigned: assignee.kind === 'none',
+      assignedToMe: assignee.kind === 'me',
+      overdue,
+      q: q || null,
+    });
+    applySavedFilter(created);
+    setFilterMessage(`絞り込み「${created.name}」を保存しました`);
+  };
+
+  const handleRenameSaved = async (filter: TicketSavedFilter, name: string) => {
+    const updated = await saved.rename(filter, name);
+    setFilterMessage(`絞り込みの名前を「${updated.name}」に変えました`);
+  };
+
+  const handleDeleteSaved = () => {
+    const target = deletingFilter;
+    if (!target) return;
+    setDeleteFilterPending(true);
+    void saved
+      .remove(target.id)
+      .then(() => {
+        // 消したものを選んでいたら、条件ごと外す（無い絞り込みの名前の下に一覧を残さない）。
+        if (savedFilterId === target.id) clearFilters();
+        setFilterMessage(`絞り込み「${target.name}」を削除しました`);
+      })
+      .catch((cause: unknown) => {
+        showToast('error', savedFilterErrorMessage(cause, '絞り込みを削除できませんでした。'));
+      })
+      .finally(() => {
+        setDeleteFilterPending(false);
+        setDeletingFilter(null);
+      });
   };
 
   return (
@@ -335,7 +413,41 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
 
               {view === 'backlog' && enabled && (
                 <div className="mt-3">
-                  <BacklogQuickFilters counts={counts} value={quickFilter} onChange={setQuickFilter} />
+                  <BacklogQuickFilters
+                    counts={counts.counts}
+                    countsFailed={counts.failed}
+                    value={quickFilter}
+                    filtered={filtered}
+                    onChange={(kind) => {
+                      setFilterMessage(null);
+                      setQuickFilter(kind);
+                    }}
+                    savedFilters={saved.filters}
+                    savedFilterId={savedFilterId}
+                    savedCountsFailed={saved.countsFailed}
+                    onSelectSaved={handleSelectSaved}
+                    onRenameSaved={handleRenameSaved}
+                    onDeleteSaved={setDeletingFilter}
+                  />
+                  {/* 保存した絞り込みが読めなかったことは、無いことと区別して出す（0 件は何も出ない）。 */}
+                  {saved.error && (
+                    <p role="alert" className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-muted)]">
+                      <span>{saved.error}</span>
+                      <button
+                        type="button"
+                        onClick={saved.refresh}
+                        className="min-h-9 rounded px-1.5 underline hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                      >
+                        再試行
+                      </button>
+                    </p>
+                  )}
+                  {/* 保存・改名・削除の結果は、操作したタブの並びのすぐ下に出す（トーストだけにしない）。 */}
+                  {filterMessage && (
+                    <p role="status" className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                      {filterMessage}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -345,16 +457,19 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                 statuses={masters.statuses}
                 types={masters.types}
                 labels={labels.labels}
+                principals={principals}
                 statusId={statusId}
                 typeId={typeId}
                 labelId={labelId}
+                assignee={assignee}
+                overdue={overdue}
                 q={q}
-                quick={quickFilter}
                 onChangeStatusId={setStatusId}
                 onChangeTypeId={setTypeId}
                 onChangeLabelId={setLabelId}
+                onChangeAssignee={setAssignee}
+                onChangeOverdue={setOverdue}
                 onChangeQuery={setQuery}
-                onClearQuick={() => setQuickFilter(null)}
                 onClearFilters={clearFilters}
                 onCreate={view === 'backlog' ? handleCreateBlank : undefined}
               />
@@ -395,8 +510,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       </p>
                     )}
                     <BacklogList
-                      filtered={Boolean(statusId || typeId || labelId || assignedToMe || unassigned || overdue || q)}
-                      totalCount={counts?.total ?? null}
+                      filtered={filtered}
+                      totalCount={counts.counts?.total ?? null}
                       groups={groups}
                       statuses={masters.statuses}
                       types={masters.types}
@@ -458,6 +573,13 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                             スプリントを作成
                           </button>
                         )
+                      }
+                      // 条件が付いていて、まだ名前が付いていないときだけ「この絞り込みを保存」。
+                      // 保存済みのタブを選んでいる間は出さない（同じ条件をもう 1 つ作らせない）。
+                      footerAction={
+                        view === 'backlog' && filtered && !savedFilterId ? (
+                          <SaveFilterControl onSave={handleSaveFilter} />
+                        ) : undefined
                       }
                       onRetry={list.refresh}
                     />
@@ -592,6 +714,20 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
             }}
           />
         </SecondaryPanel>
+      )}
+
+      {deletingFilter && (
+        <ConfirmModal
+          isOpen
+          title={`絞り込み「${deletingFilter.name}」を削除しますか？`}
+          message="チケットは消えません。同じ条件が要るときは、もう一度名前を付けて保存し直すことになります。"
+          confirmText="削除する"
+          isDanger
+          icon="trash"
+          pending={deleteFilterPending}
+          onConfirm={handleDeleteSaved}
+          onCancel={() => setDeletingFilter(null)}
+        />
       )}
 
       {completing && (

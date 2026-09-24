@@ -439,6 +439,18 @@ export const TICKET_API = {
    */
   ticketCounts: (workspaceSlug: string, projectId: string) =>
     `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/tickets/counts`,
+  /**
+   * GET(一覧) / POST(作成) — /api/v2/workspaces/:slug/projects/:projectId/saved-filters
+   *
+   * 利用者が名前を付けて保存した絞り込み（本人 × プロジェクト）。一覧は作った順・件数付き。
+   * 条件の項目名は tickets のクエリと同じ語彙（statusId / typeId / labelId / assigneePrincipalId /
+   * unassigned / assignedToMe / overdue / q）。
+   */
+  savedFilters: (workspaceSlug: string, projectId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/saved-filters`,
+  /** PUT(名前と条件を丸ごと差し替え) / DELETE — .../saved-filters/:filterId */
+  savedFilter: (workspaceSlug: string, projectId: string, filterId: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}/saved-filters/${encodeURIComponent(filterId)}`,
   /** GET — /api/v2/workspaces/:slug/tickets/by-key/:key（例 FRESTYLE-12） */
   ticketByKey: (workspaceSlug: string, key: string) =>
     `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/by-key/${encodeURIComponent(key)}`,
