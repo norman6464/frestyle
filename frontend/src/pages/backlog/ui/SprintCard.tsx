@@ -135,7 +135,7 @@ export default function SprintCard({
         <div className="rounded-lg border border-[var(--color-border-hover)] bg-surface-1 px-4 py-6 text-center">
           <p className="text-sm font-bold text-[var(--color-text-primary)]">スプリントを計画</p>
           <p className="mx-auto mt-1 max-w-xl text-xs leading-relaxed text-[var(--color-text-secondary)]">
-            「チケット」の面で行を選び、下の帯の「スプリントへ」からこのスプリントを選ぶと入ります。
+            バックログで行を選び、選択中の帯の「スプリントへ」からこのスプリントを選ぶと入ります。
             準備ができたら［スプリントを開始する］を選びます。
           </p>
         </div>

@@ -31,6 +31,7 @@ import { projectInitials } from '../lib/projectInitials';
 import { useBacklogFilterCounts } from '../model/useBacklogFilterCounts';
 import { useSavedFilters } from '../model/useSavedFilters';
 import { useBacklogReorder } from '../model/useBacklogReorder';
+import { useWriteOutcomes } from '../model/useWriteOutcomes';
 import { savedFilterErrorMessage } from '../lib/savedFilterError';
 import { focusTicketRow } from '../lib/focusTicketRow';
 import BacklogProjectSwitcher from './BacklogProjectSwitcher';
@@ -244,6 +245,17 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
       sprints.moveTicket(ticketId, anchorTicketId, anchorAfter).then(() => list.refresh()),
   });
 
+  // 一覧の行で状態を変えた結果（行ごと）。
+  const rowOutcomes = useWriteOutcomes<string>();
+
+  /** 結果が分からない失敗のあとの「最新を確認」。一覧・件数・状態と種別の選択肢を取り直す。 */
+  const refreshAll = () => {
+    list.refresh();
+    masters.refresh();
+    counts.refresh();
+    saved.refresh();
+  };
+
   /** 並び替えの結果を帯に出す。失敗は知らせて、一覧は動かさない。 */
   const announceMove = (action: Promise<unknown>, doneMessage: string, failMessage: string) => {
     setMoveMessage(null);
@@ -440,42 +452,22 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
       busy={list.busyId === selectedTicket.id}
       allLabels={labels.labels}
       onUpdate={(ticketId, input) => list.updateTicket(ticketId, input)}
-      onChangeStatus={(statusId) =>
-        withToastOnFailure(() => list.changeStatus(selectedTicket.id, { statusId }), '状態を変更できませんでした。')
-      }
-      onAssign={(principalId) =>
-        withToastOnFailure(() => list.assign(selectedTicket.id, principalId), '担当を設定できませんでした。')
-      }
-      onUnassign={() => withToastOnFailure(() => list.unassign(selectedTicket.id), '担当を外せませんでした。')}
+      // 状態・担当・ラベル・親の結果はパネルが項目のすぐ下に出す（PX04）。ここは失敗を投げ返すだけ。
+      onChangeStatus={(statusId) => list.changeStatus(selectedTicket.id, { statusId })}
+      onAssign={(principalId) => list.assign(selectedTicket.id, principalId)}
+      onUnassign={() => list.unassign(selectedTicket.id)}
       onArchive={() =>
         withToastOnFailure(() => list.archiveTicket(selectedTicket.id), 'アーカイブできませんでした。').then(closeDetail)
       }
       onRestore={() =>
         withToastOnFailure(() => list.restoreTicket(selectedTicket.id), '現役に戻せませんでした。').then(closeDetail)
       }
-      onToggleLabel={(label) => {
-        const attached = selectedTicket.labels.some((l) => l.id === label.id);
-        void withToastOnFailure(
-          () => (attached ? list.removeLabel(selectedTicket.id, label.id) : list.addLabel(selectedTicket.id, label)),
-          attached ? 'ラベルを外せませんでした。' : 'ラベルを付けられませんでした。',
-        );
-      }}
+      onToggleLabel={(label, attached) =>
+        attached ? list.removeLabel(selectedTicket.id, label.id) : list.addLabel(selectedTicket.id, label)
+      }
       onCreateLabel={(name, color) => labels.createLabel({ name, color })}
-      onChangeParent={async (parentId) => {
-        try {
-          await list.changeParent(selectedTicket.id, parentId);
-        } catch (cause) {
-          const info = getApiError(cause);
-          showToast(
-            'error',
-            info.status === 403
-              ? 'この操作を行う権限がありません。'
-              : info.serverCode === 'ticket_hierarchy_rejected'
-                ? 'その親には移せません（循環になる、または階層の深さの上限を超えます）。'
-                : '親を変更できませんでした。',
-          );
-        }
-      }}
+      onChangeParent={(parentId) => list.changeParent(selectedTicket.id, parentId)}
+      onRefresh={refreshAll}
     />
   ) : null;
 
@@ -530,27 +522,30 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
             */}
             <div className="shrink-0 border-b border-surface-3 px-4 pb-3 pt-4 sm:px-6">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                {/* 狭い画面では印と名前を畳み、切替（「プロジェクト KEY ▾」）だけを残す（設計ボード ST12）。
+                    面のタブと 1 行に収めて、一覧の 1 行目を上へ上げる。 */}
                 <div className="flex min-w-0 items-center gap-2 text-sm">
                   <span
                     aria-hidden="true"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-taupe-600 text-xs font-bold text-white"
+                    className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md bg-taupe-600 text-xs font-bold text-white sm:flex"
                   >
                     {projectInitials(project.key)}
                   </span>
-                  <span className="min-w-0 truncate font-semibold text-[var(--color-text-primary)]">{project.name}</span>
-                  <span aria-hidden="true" className="text-[var(--color-text-faint)]">/</span>
+                  <span className="hidden min-w-0 truncate font-semibold text-[var(--color-text-primary)] sm:inline">{project.name}</span>
+                  <span aria-hidden="true" className="hidden text-[var(--color-text-faint)] sm:inline">/</span>
                   <BacklogProjectSwitcher workspaceSlug={workspaceSlug ?? undefined} project={project} />
                 </div>
                 <BacklogTabs projectId={project.id} current={view} />
               </div>
 
-              <p className="mt-4 font-mono text-xs font-medium uppercase tracking-[0.14em] text-brand-700" aria-hidden="true">
+              <p className="mt-3 font-mono text-xs font-medium uppercase tracking-[0.14em] text-brand-700 sm:mt-4" aria-hidden="true">
                 {HEADING[view].eyebrow}
               </p>
               <h1 className="mt-1 text-3xl font-bold leading-tight tracking-tight text-[var(--color-text-primary)] sm:text-4xl">
                 {HEADING[view].title}
               </h1>
-              <p className="mt-2 max-w-[44em] text-sm text-[var(--color-text-muted)]">{HEADING[view].lede(project.name)}</p>
+              {/* 一文は狭い画面では出さない（ST12）。見出しで面は分かり、縦の場所は一覧に回す。 */}
+              <p className="mt-2 hidden max-w-[44em] text-sm text-[var(--color-text-muted)] sm:block">{HEADING[view].lede(project.name)}</p>
 
               {view === 'backlog' && !enabled && !masters.loading && !masters.error && (
                 <button
@@ -681,12 +676,18 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       // 狭い画面だけ、選択中のカードに「詳細をひらく」を出す（広い画面は右に開いている）。
                       onOpenDetail={wide ? undefined : () => setMobileDetailOpen(true)}
                       onCreate={(title) => list.createTicket({ title }).then((t) => handleSelect(t.id))}
+                      // 行の状態変更の結果は、その行のすぐ下に出す（PX04。トーストだけにしない）。
                       onChangeStatus={(ticketId, nextStatusId) => {
-                        void withToastOnFailure(
-                          () => list.changeStatus(ticketId, { statusId: nextStatusId }),
-                          '状態を変えられませんでした。',
-                        ).catch(() => undefined);
+                        const name = masters.statuses.find((st) => st.id === nextStatusId)?.name ?? '選んだ状態';
+                        void rowOutcomes.run(ticketId, () => list.changeStatus(ticketId, { statusId: nextStatusId }), {
+                          saving: `「${name}」に変更しています…`,
+                          saved: `状態を「${name}」にしました`,
+                          fallback: '状態を変えられませんでした。',
+                          reasons: { status_not_found: 'この状態は今は選べません。選択肢を更新してください。' },
+                        });
                       }}
+                      outcomeOf={rowOutcomes.outcomeOf}
+                      onVerify={refreshAll}
                       renderGroupAction={(group) =>
                         group.kind === 'sprint' ? (
                           <button
@@ -732,7 +733,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                   管理の面が 3 つ続けて並ぶだけになり、中の EmptyState の h3 まで段が飛ぶ。 */}
               {view === 'settings' && !masters.loading && !masters.error && (
                 <div className="h-full overflow-y-auto px-4 py-6 sm:px-6">
-                <div className="mx-auto max-w-4xl space-y-10 [&_button]:min-h-11 [&_input]:min-h-11 [&_select]:min-h-11">
+                {/* 左端は見出しの塊（px-4 sm:px-6）にそろえる。中央に寄せると見出しと本文の左端がずれる。 */}
+                <div className="max-w-4xl space-y-10 [&_button]:min-h-11 [&_input]:min-h-11 [&_select]:min-h-11">
                   <section>
                     <h2 className="mb-2 text-lg font-semibold text-[var(--color-text-primary)]">状態</h2>
                     <p className="mb-4 text-sm leading-relaxed text-[var(--color-text-muted)]">作業がどこまで進んだかを表す流れです。新しいチケットの開始状態もここで選べます。</p>

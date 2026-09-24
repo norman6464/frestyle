@@ -6,6 +6,7 @@ import Loading from '@/shared/ui/Loading';
 import FsIllustration from '@/shared/ui/icons/FsIllustration';
 import { useContainerWidth } from '@/shared/lib/hooks/useContainerWidth';
 import { localTodayISO } from '../lib/dueDate';
+import type { WriteOutcome } from '../lib/writeOutcome';
 import BacklogRow, { BACKLOG_TABLE_GRID, type BacklogRowLayout } from './BacklogRow';
 import BacklogGroup from './BacklogGroup';
 import TicketCreateRow from './TicketCreateRow';
@@ -52,6 +53,10 @@ export interface BacklogListProps {
   onOpenDetail?: (ticketId: string) => void;
   onCreate: (title: string) => Promise<void>;
   onChangeStatus: (ticketId: string, statusId: string) => void;
+  /** 行で状態を変えた結果（PX04）。行のすぐ下に出す。 */
+  outcomeOf?: (ticketId: string) => WriteOutcome | null;
+  /** 結果が分からない失敗のあとの「最新を確認」。 */
+  onVerify?: () => void;
   /** 段の見出しの右に出す操作（スプリントを開始 / 完了 / 作成）。段ごとに作る。 */
   renderGroupAction?: (group: BacklogGroupModel) => React.ReactNode;
   /** 件数の行の右端に置く操作（「この絞り込みを保存 ＋」）。無ければ件数だけ。 */
@@ -90,6 +95,8 @@ export default function BacklogList({
   onOpenDetail,
   onCreate,
   onChangeStatus,
+  outcomeOf,
+  onVerify,
   renderGroupAction,
   footerAction,
   onRetry,
@@ -193,6 +200,8 @@ export default function BacklogList({
                     onOpen={() => onSelect(ticket.id)}
                     onOpenDetail={onOpenDetail ? () => onOpenDetail(ticket.id) : undefined}
                     onChangeStatus={(statusId) => onChangeStatus(ticket.id, statusId)}
+                    outcome={outcomeOf?.(ticket.id) ?? null}
+                    onVerify={onVerify}
                   />
                 ))
               )}

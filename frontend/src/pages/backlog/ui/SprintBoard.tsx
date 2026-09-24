@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ConfirmModal, EmptyState, Loading, FsIcon, NameCreateForm, fsIcon } from '@/shared/ui';
+import { ConfirmModal, EmptyState, FsIllustration, Loading, FsIcon, NameCreateForm } from '@/shared/ui';
 import type { Ticket } from '@/entities/ticket';
 import { useSprints } from '../model/useSprints';
 import { useSprintTickets } from '../model/useSprintTickets';
@@ -108,14 +108,15 @@ export default function SprintBoard({
 
   if (error) {
     return (
-      <p role="alert" className="px-4 py-6 text-sm text-danger-ink">
+      <p role="alert" className="py-6 text-sm text-danger-ink">
         {error}
       </p>
     );
   }
 
   return (
-    <div className="p-4">
+    // 設定の面の節（状態・種別）と左端をそろえる。節の見出しと本文の間に余白を足さない。
+    <div>
       {canEdit && (
         <div className="mb-3 flex max-w-xl items-center gap-2">
           {creating ? (
@@ -143,7 +144,8 @@ export default function SprintBoard({
 
       {sprints.length === 0 ? (
         <EmptyState
-          icon={fsIcon('calendar')}
+          headingLevel={3}
+          illustration={<FsIllustration name="empty-backlog" />}
           title="スプリントがありません"
           description="「いつやるか」で仕事を区切るとき、ここにスプリントを作ります。"
         />

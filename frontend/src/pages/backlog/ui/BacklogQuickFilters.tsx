@@ -63,7 +63,8 @@ export default function BacklogQuickFilters({
 }: BacklogQuickFiltersProps) {
   return (
     <nav aria-label="保存した絞り込み" className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="text-sm text-[var(--color-text-muted)]">保存した絞り込み</span>
+      {/* 見出しの言葉は狭い画面では畳む（nav の名前が同じことを読み上げる）。 */}
+      <span className="hidden text-sm text-[var(--color-text-muted)] sm:inline">保存した絞り込み</span>
       <button type="button" aria-pressed={!filtered} onClick={() => onChange(null)} className={tabClass(!filtered)}>
         すべて
       </button>

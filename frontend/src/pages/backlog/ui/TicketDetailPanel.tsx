@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { AutoResizeTextarea } from '@/shared/ui';
 import {
   formatTicketKey,
@@ -12,6 +12,10 @@ import {
 import type { KbGrantablePrincipal } from '@/entities/kb';
 import { emptyRichDoc, isRichDoc } from '@/shared/ui/RichTextEditor';
 import { useTicketEditor } from '../model/useTicketEditor';
+import { useTicketFieldWrites } from '../model/useTicketFieldWrites';
+import { buildAttributeFeedback } from './attributeFeedback';
+import FieldFeedback from './FieldFeedback';
+import TicketSaveBadge from './TicketSaveBadge';
 import TicketAttachmentSection from './TicketAttachmentSection';
 import TicketAttributePanel from './TicketAttributePanel';
 import TicketChildrenSection from './TicketChildrenSection';
@@ -35,14 +39,21 @@ export interface TicketDetailPanelProps {
   busy: boolean;
   allLabels: Label[];
   onUpdate: (ticketId: string, input: UpdateTicketInput) => Promise<Ticket>;
-  onChangeStatus: (statusId: string) => Promise<void>;
-  onAssign: (principalId: string) => Promise<void>;
-  onUnassign: () => Promise<void>;
+  /**
+   * 状態・担当・ラベル・親の書き換え。失敗は投げ返すこと（結果はこのパネルが項目のすぐ下に
+   * 出すので、呼び出し側はトーストを重ねない）。
+   */
+  onChangeStatus: (statusId: string) => Promise<unknown>;
+  onAssign: (principalId: string) => Promise<unknown>;
+  onUnassign: () => Promise<unknown>;
   onArchive: () => Promise<void>;
   onRestore: () => Promise<void>;
-  onToggleLabel: (label: Label) => void;
+  /** attached は押す前に付いていたか（付いていれば外す）。 */
+  onToggleLabel: (label: Label, attached: boolean) => Promise<unknown>;
   onCreateLabel: (name: string, color: string) => Promise<Label>;
-  onChangeParent: (parentId: string | null) => Promise<void>;
+  onChangeParent: (parentId: string | null) => Promise<unknown>;
+  /** 結果が分からない失敗のあとの「最新を確認」。一覧（またはこのチケット）を取り直す。 */
+  onRefresh?: () => void;
 }
 
 /**
@@ -76,7 +87,9 @@ export default function TicketDetailPanel({
   onToggleLabel,
   onCreateLabel,
   onChangeParent,
+  onRefresh,
 }: TicketDetailPanelProps) {
+  const location = useLocation();
   const archived = ticket.archivedAt !== null;
   const editable = canEdit && !archived;
 
@@ -84,6 +97,15 @@ export default function TicketDetailPanel({
   // 版・チーム（プロジェクトの語彙）と、このチケットに付いている分・所属スプリント。
   const vocabulary = useTicketVocabulary(workspaceSlug, ticket.projectId, ticket.id, ticket.teamId);
   const editor = useTicketEditor(ticket, editable, (input) => onUpdate(ticket.id, input));
+  // 状態・担当・ラベル・親の書き換えと結果（PX04）。
+  const writes = useTicketFieldWrites(statuses, {
+    changeStatus: onChangeStatus,
+    assign: onAssign,
+    unassign: onUnassign,
+    toggleLabel: onToggleLabel,
+    changeParent: onChangeParent,
+  });
+  const feedback = buildAttributeFeedback(editor.outcomeOf, writes.outcomeOf, onRefresh);
   // 添付とサブタスクの件数。数えるのは各節の中（自前の取得を持つ）なので、報告を受けて見出しへ回す。
   const [attachmentCount, setAttachmentCount] = useState<number | null>(null);
   const [childCount, setChildCount] = useState<number | null>(null);
@@ -95,19 +117,25 @@ export default function TicketDetailPanel({
     // overflow-y-auto を付けると「スクロール範囲ゼロの空の容器」になり、overscroll-contain と
     // 相まってホイール操作を飲み込んで器までスクロールが届かなくなる（実測で確認）。
     <div className="px-4 py-5 sm:px-5">
-      {/* 身元。キーと種別を 1 行に。押すと全画面で開く（同じ物を大きく見る操作なので、身元そのものを入口にする）。 */}
-      <Link
-        to={`/tickets/${ticket.id}`}
-        className="inline-flex min-h-9 items-center gap-1.5 rounded-md font-mono text-xs font-semibold tracking-wide text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-      >
-        <span>{key}</span>
-        {type && (
-          <>
-            <span aria-hidden="true" className="text-[var(--color-text-faint)]">・</span>
-            <span className="font-sans font-medium">{type.name}</span>
-          </>
-        )}
-      </Link>
+      {/* 身元。キーと種別を 1 行に。押すと全画面で開く（同じ物を大きく見る操作なので、身元そのものを入口にする）。
+          いまの一覧の場所（条件つき）を持っていき、票の「戻る」でここへ帰れるようにする。
+          右端には保存状態（設計ボード ST10 の「✓ 保存済み」）。 */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link
+          to={`/tickets/${ticket.id}`}
+          state={{ from: `${location.pathname}${location.search}` }}
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-md font-mono text-xs font-semibold tracking-wide text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+        >
+          <span>{key}</span>
+          {type && (
+            <>
+              <span aria-hidden="true" className="text-[var(--color-text-faint)]">・</span>
+              <span className="font-sans font-medium">{type.name}</span>
+            </>
+          )}
+        </Link>
+        {editable && <TicketSaveBadge status={editor.saveStatus} />}
+      </div>
 
       {editable ? (
         <AutoResizeTextarea
@@ -121,25 +149,31 @@ export default function TicketDetailPanel({
           }}
           onBlur={editor.commitTitle}
           aria-label="題名"
-          className="-mx-1 mt-1 mb-3 min-h-12 w-[calc(100%+0.5rem)] rounded-md border border-transparent bg-transparent px-1 text-xl font-bold leading-snug text-[var(--color-text-primary)] hover:border-surface-3 focus:outline-none focus:ring-2 focus:ring-brand-600"
+          className="-mx-1 mt-1 min-h-12 w-[calc(100%+0.5rem)] rounded-md border border-transparent bg-transparent px-1 text-xl font-bold leading-snug text-[var(--color-text-primary)] hover:border-surface-3 focus:outline-none focus:ring-2 focus:ring-brand-600"
         />
       ) : (
         <h2 className="mt-1 mb-3 text-xl font-bold leading-snug text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{ticket.title}</h2>
       )}
 
-      {/* 状態と所属。状態はいちばん押す物なので題名の直下に置く。所属（スプリントかバックログか）は読むだけ。 */}
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <TicketStatusSelect
-          statuses={statuses}
-          statusId={ticket.statusId}
-          canEdit={editable}
-          busy={busy}
-          onChange={(statusId) => void onChangeStatus(statusId)}
-        />
-        <span className="text-sm text-[var(--color-text-muted)]">{vocabulary.sprint?.name ?? 'バックログ'}</span>
-        <div className="ml-auto">
-          <TicketWatchButton workspaceSlug={workspaceSlug} ticketId={ticket.id} />
+      <FieldFeedback outcome={editor.outcomeOf('title')} onVerify={onRefresh} className="mb-2" />
+
+      {/* 状態と所属。状態はいちばん押す物なので題名の直下に置く。所属（スプリントかバックログか）は読むだけ。
+          状態を変えた結果は選択欄のすぐ下に出す（PX04）。 */}
+      <div className="mb-5 mt-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <TicketStatusSelect
+            statuses={statuses}
+            statusId={ticket.statusId}
+            canEdit={editable}
+            busy={busy || writes.outcomeOf('status')?.kind === 'saving'}
+            onChange={(statusId) => void writes.changeStatus(statusId)}
+          />
+          <span className="text-sm text-[var(--color-text-muted)]">{vocabulary.sprint?.name ?? 'バックログ'}</span>
+          <div className="ml-auto">
+            <TicketWatchButton workspaceSlug={workspaceSlug} ticketId={ticket.id} />
+          </div>
         </div>
+        <FieldFeedback outcome={writes.outcomeOf('status')} onVerify={onRefresh} className="mt-1.5" />
       </div>
 
       <TicketSection title="説明">
@@ -169,15 +203,16 @@ export default function TicketDetailPanel({
           onSetFixVersion={(versionId, attach) => void vocabulary.setFixVersion(versionId, attach)}
           onChangeTeam={(next) => void vocabulary.changeTeam(next)}
           allLabels={allLabels}
-          onToggleLabel={onToggleLabel}
+          onToggleLabel={(label) => void writes.toggleLabel(label, ticket.labels.some((l) => l.id === label.id))}
           onCreateLabel={onCreateLabel}
-          onAssign={(principalId) => void onAssign(principalId)}
-          onUnassign={() => void onUnassign()}
+          onAssign={(principalId) => void writes.assign(principalId)}
+          onUnassign={() => void writes.unassign()}
           onChangePriority={editor.changePriority}
           onChangeStoryPoints={editor.changeStoryPoints}
           onChangeStartDate={editor.changeStartDate}
           onChangeDueDate={editor.changeDueDate}
-          onChangeParent={(parentId) => void onChangeParent(parentId)}
+          onChangeParent={(parentId) => void writes.changeParent(parentId)}
+          feedback={feedback}
         />
       </div>
 

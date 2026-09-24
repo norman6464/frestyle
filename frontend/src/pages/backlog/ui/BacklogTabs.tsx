@@ -22,10 +22,11 @@ export default function BacklogTabs({ projectId, current }: BacklogTabsProps) {
             key={tab.view}
             to={backlogPath(projectId, tab.view)}
             aria-current={active ? 'page' : undefined}
-            className={`inline-flex min-h-11 items-center rounded-md px-2.5 text-sm transition-colors duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
+            // 狭い画面では今いる面を畳む（大きな見出しが同じ名前を出している。設計ボード ST12）。
+            className={`min-h-11 items-center rounded-md px-2.5 text-sm transition-colors duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
               active
-                ? 'font-semibold text-brand-700'
-                : 'text-[var(--color-text-muted)] hover:bg-surface-2 hover:text-[var(--color-text-primary)]'
+                ? 'hidden font-semibold text-brand-700 sm:inline-flex'
+                : 'inline-flex text-[var(--color-text-muted)] hover:bg-surface-2 hover:text-[var(--color-text-primary)]'
             }`}
           >
             {tab.label}

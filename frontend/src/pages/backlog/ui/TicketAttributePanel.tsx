@@ -64,16 +64,28 @@ export interface TicketAttributePanelProps {
   onChangeStartDate: (value: string | null) => void;
   onChangeDueDate: (value: string | null) => void;
   onChangeParent: (parentId: string | null) => void;
+  /**
+   * 項目ごとの変更の結果（設計ボード PX04）。項目のすぐ下に出す。渡さなければ何も出さない。
+   * 中身は呼び出し側が FieldFeedback で組む（結果の持ち方は詳細パネルと全画面の票で同じ）。
+   */
+  feedback?: Partial<Record<TicketAttributeKey, ReactNode>>;
 }
 
-/** 項目名の上に値、の 1 升。表のように項目名を左列に揃えるより、狭い幅でも値が折れない。 */
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/** 結果を出せる項目。 */
+export type TicketAttributeKey = 'assignee' | 'priority' | 'dueDate' | 'labels' | 'parent' | 'startDate' | 'storyPoints';
+
+/**
+ * 項目名の上に値、の 1 升。表のように項目名を左列に揃えるより、狭い幅でも値が折れない。
+ * 変更の結果（feedback）は値のすぐ下に置く（操作した場所で結果が分かる）。
+ */
+function Field({ label, feedback, children }: { label: string; feedback?: ReactNode; children: ReactNode }) {
   return (
     <div className="min-w-0">
       <dt className="text-xs text-[var(--color-text-muted)]">{label}</dt>
       <dd className="mt-0.5 flex min-h-9 min-w-0 flex-wrap items-center gap-1 text-sm text-[var(--color-text-primary)] [overflow-wrap:anywhere] [@media(pointer:coarse)]:min-h-11">
         {children}
       </dd>
+      {feedback && <dd className="mt-1">{feedback}</dd>}
     </div>
   );
 }
@@ -122,6 +134,7 @@ export default function TicketAttributePanel({
   onChangeStartDate,
   onChangeDueDate,
   onChangeParent,
+  feedback = {},
 }: TicketAttributePanelProps) {
   const assigneeUsers = principals.filter((p) => p.kind === 'user');
   // 報告者の名前。チケットが持つのは作成者の id だけなので、ワークスペースの人から引く。
@@ -158,10 +171,10 @@ export default function TicketAttributePanel({
     <div className="space-y-4">
       {/* 状態は題名の下の TicketStatusSelect に置き、ここには入れない（いちばん押す物を埋めない）。 */}
       <dl className={gridClass}>
-        <Field label="担当者">
+        <Field label="担当者" feedback={feedback.assignee}>
           {canEdit ? (
             <FieldSelect
-              label="担当"
+              label="担当者"
               value={ticket.assigneePrincipalId ?? ''}
               disabled={busy}
               onChange={(value) => {
@@ -179,7 +192,7 @@ export default function TicketAttributePanel({
           )}
         </Field>
 
-        <Field label="優先度">
+        <Field label="優先度" feedback={feedback.priority}>
           {editable ? (
             <FieldSelect
               label="優先度"
@@ -199,7 +212,7 @@ export default function TicketAttributePanel({
           )}
         </Field>
 
-        <Field label="期限">
+        <Field label="期限" feedback={feedback.dueDate}>
           <BlankableField
             value={dueDate}
             placeholder="期限を設定"
@@ -218,7 +231,7 @@ export default function TicketAttributePanel({
           />
         </Field>
 
-        <Field label="ラベル">
+        <Field label="ラベル" feedback={feedback.labels}>
           <TicketLabelBar
             attached={ticket.labels}
             allLabels={allLabels}
@@ -300,7 +313,7 @@ export default function TicketAttributePanel({
               )}
             </Field>
 
-            <Field label="親">
+            <Field label="親" feedback={feedback.parent}>
               {editable ? (
                 <>
                   <button
@@ -308,7 +321,8 @@ export default function TicketAttributePanel({
                     onClick={() => setParentPickerOpen((v) => !v)}
                     disabled={busy}
                     aria-expanded={parentPickerOpen}
-                    aria-label="親を変更"
+                    // 見えている値（キーか「なし」）を名前に含め、押すと何が起きるかを足す。
+                    aria-label={`親 ${parentTicket ? formatTicketKey(projectKey, parentTicket.number) : 'なし'} を変更`}
                     className="min-h-9 rounded-md border border-surface-3 bg-surface-1 px-2 text-sm hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50"
                   >
                     {parentTicket ? formatTicketKey(projectKey, parentTicket.number) : 'なし'}
@@ -345,7 +359,7 @@ export default function TicketAttributePanel({
               )}
             </Field>
 
-            <Field label="開始日">
+            <Field label="開始日" feedback={feedback.startDate}>
               <BlankableField
                 value={startDate}
                 placeholder="開始日を設定"
@@ -364,7 +378,7 @@ export default function TicketAttributePanel({
               />
             </Field>
 
-            <Field label="見積り">
+            <Field label="見積り" feedback={feedback.storyPoints}>
               <BlankableField
                 value={storyPoints === null ? null : `${storyPoints} pt`}
                 placeholder="見積りを設定"
@@ -398,7 +412,9 @@ export default function TicketAttributePanel({
               {reporterName ? <span>{reporterName}</span> : <Muted>不明なユーザー</Muted>}
             </Field>
           </dl>
-          <p className="mt-3 text-xs text-[var(--color-text-muted)]">スプリントへの移動は一覧の操作バーから</p>
+          <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+            スプリントへの出し入れは、バックログで行を選んだときの選択中の帯から
+          </p>
         </Collapsible.Panel>
       </Collapsible.Root>
     </div>

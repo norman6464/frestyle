@@ -147,7 +147,7 @@ export default function BacklogFilterBar({
   return (
     <div role="group" aria-label="チケットの絞り込み" className="border-b border-surface-3 px-4 pb-3 pt-3 sm:px-6">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[12rem] flex-1">
+        <div className="relative min-w-[9rem] flex-1 sm:min-w-[12rem]">
           <FsIcon name="search"
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]"
           />
@@ -182,8 +182,10 @@ export default function BacklogFilterBar({
         </button>
 
         {onCreate && (
-          <Button onClick={onCreate} className="shrink-0">
-            課題をつくる
+          // 狭い画面では「＋」だけにして検索・フィルターと 1 行に収める（名前は同じ「課題をつくる」）。
+          <Button onClick={onCreate} className="shrink-0" aria-label="課題をつくる">
+            <FsIcon name="plus" className="h-4 w-4 sm:hidden" />
+            <span className="hidden sm:inline">課題をつくる</span>
           </Button>
         )}
       </div>

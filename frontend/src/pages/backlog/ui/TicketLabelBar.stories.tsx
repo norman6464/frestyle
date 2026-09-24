@@ -37,7 +37,7 @@ export const 編集できる: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('不具合')).toBeInTheDocument();
     await expect(canvas.getByText('要調査')).toBeInTheDocument();
-    await expect(canvas.getByLabelText('ラベルを付ける')).toBeInTheDocument();
+    await expect(canvas.getByLabelText('ラベルを追加')).toBeInTheDocument();
   },
 };
 
@@ -46,7 +46,7 @@ export const 読むだけではボタンを出さない: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('不具合')).toBeInTheDocument();
-    await expect(canvas.queryByLabelText('ラベルを付ける')).toBeNull();
+    await expect(canvas.queryByLabelText('ラベルを追加')).toBeNull();
   },
 };
 
@@ -62,7 +62,7 @@ export const ラベルが0件で読むだけなら何も出さない: Story = {
 export const ピッカーを開く: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByLabelText('ラベルを付ける'));
+    await userEvent.click(canvas.getByLabelText('ラベルを追加'));
     await expect(canvas.getByLabelText('ラベルを絞り込む')).toBeInTheDocument();
     // 付いているものにはチェックが付く。
     await expect(canvas.getByLabelText('ラベル 不具合 を外す')).toBeInTheDocument();
@@ -73,7 +73,7 @@ export const ピッカーを開く: Story = {
 export const 絞り込み: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByLabelText('ラベルを付ける'));
+    await userEvent.click(canvas.getByLabelText('ラベルを追加'));
     await userEvent.type(canvas.getByLabelText('ラベルを絞り込む'), '今週');
     await expect(canvas.getByLabelText('ラベル 今週 を付ける')).toBeInTheDocument();
     await expect(canvas.queryByLabelText('ラベル 検索 を付ける')).toBeNull();
@@ -83,7 +83,7 @@ export const 絞り込み: Story = {
 export const 新しいラベルを作る: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByLabelText('ラベルを付ける'));
+    await userEvent.click(canvas.getByLabelText('ラベルを追加'));
     await userEvent.type(canvas.getByLabelText('新しいラベルの名前'), '緊急対応');
     await userEvent.click(canvas.getByRole('button', { name: '作る' }));
     await waitFor(async () => {
@@ -103,7 +103,7 @@ export const 名前が重複すると断られる: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByLabelText('ラベルを付ける'));
+    await userEvent.click(canvas.getByLabelText('ラベルを追加'));
     await userEvent.type(canvas.getByLabelText('新しいラベルの名前'), '不具合');
     await userEvent.click(canvas.getByRole('button', { name: '作る' }));
     await waitFor(async () => {
