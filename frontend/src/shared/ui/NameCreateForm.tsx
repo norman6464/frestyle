@@ -59,11 +59,11 @@ export default function NameCreateForm({
         setName('');
       }}
       onKeyDown={(event) => {
-        // 変換中の Esc は変換の取り消し。欄まで閉じると打ちかけの字が消える。
-        if (!onCancel || event.key !== 'Escape' || event.nativeEvent.isComposing) return;
+        // 変換中の Esc は変換の取り消し。欄まで閉じると打ちかけの字が消える
+        // （Safari は変換中の keydown を isComposing ではなく keyCode 229 で知らせる）。
+        if (!onCancel || event.key !== 'Escape' || event.nativeEvent.isComposing || event.keyCode === 229) return;
+        // 伝播は止めない。切替の一覧などの中に置いたときは、同じ Esc で外の一覧ごと閉じる。
         event.preventDefault();
-        // 外側のメニューやダイアログまで同じ Esc で閉じないよう、ここで止める。
-        event.stopPropagation();
         onCancel();
       }}
     >

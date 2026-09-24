@@ -56,8 +56,9 @@ export default function LinkUrlForm({ editor, initialHref, canRemove, onClose, c
       className={`flex flex-wrap items-center gap-1 ${className}`}
       onSubmit={handleSubmit}
       onKeyDown={(keyEvent) => {
-        // 変換中の Esc は変換の取り消し。欄まで閉じると打ちかけの字が消える。
-        if (keyEvent.key !== 'Escape' || keyEvent.nativeEvent.isComposing) return;
+        // 変換中の Esc は変換の取り消し。欄まで閉じると打ちかけの字が消える
+        // （Safari は変換中の keydown を isComposing ではなく keyCode 229 で知らせる）。
+        if (keyEvent.key !== 'Escape' || keyEvent.nativeEvent.isComposing || keyEvent.keyCode === 229) return;
         keyEvent.preventDefault();
         // 外側のダイアログやパネルが同じ Esc で閉じないよう、ここで止める。
         keyEvent.stopPropagation();
