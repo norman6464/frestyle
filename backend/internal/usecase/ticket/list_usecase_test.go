@@ -24,20 +24,21 @@ func Test_チケット一覧_絞り込みをそのままrepositoryへ渡す(t *t
 	repo := &mockTicketRepo{}
 	statusID := "status-1"
 	repo.On("ListTickets", mock.Anything, repository.ListTicketsInput{
-		WorkspaceID: tkWS, ProjectID: tkProject, IncludeArchived: false, StatusID: &statusID,
-	}).Return([]repository.TicketWithAssignee{
+		WorkspaceID: tkWS, ProjectID: tkProject, IncludeArchived: false, StatusID: &statusID, Limit: 20, Offset: 40,
+	}).Return(repository.TicketList{Items: []repository.TicketWithAssignee{
 		{Ticket: domain.Ticket{ID: "t1"}},
 		{Ticket: domain.Ticket{ID: "t2"}, AssigneePrincipalID: &statusID},
-	}, nil)
+	}, Total: 2}, nil)
 
 	got, err := ticket.NewListTicketsUseCase(repo, &mockKBPermissionRepo{}).Execute(context.Background(), ticket.ListTicketsInput{
-		WorkspaceID: tkWS, ProjectID: tkProject, StatusID: &statusID,
+		WorkspaceID: tkWS, ProjectID: tkProject, StatusID: &statusID, Limit: 20, Offset: 40,
 	})
 	require.NoError(t, err)
-	require.Len(t, got, 2)
-	assert.Equal(t, "t1", got[0].Ticket.ID)
-	assert.Nil(t, got[0].AssigneePrincipalID, "担当が居なければ nil のまま運ぶ")
-	require.NotNil(t, got[1].AssigneePrincipalID)
+	require.Len(t, got.Items, 2)
+	assert.Equal(t, "t1", got.Items[0].Ticket.ID)
+	assert.Nil(t, got.Items[0].AssigneePrincipalID, "担当が居なければ nil のまま運ぶ")
+	require.NotNil(t, got.Items[1].AssigneePrincipalID)
+	assert.Equal(t, 2, got.Total)
 }
 
 func Test_チケット一覧_自分の担当はUserIDからprincipalを解決して渡す(t *testing.T) {
@@ -47,13 +48,13 @@ func Test_チケット一覧_自分の担当はUserIDからprincipalを解決し
 		Return(&domain.Principal{ID: "principal-me"}, nil)
 	repo.On("ListTickets", mock.Anything, repository.ListTicketsInput{
 		WorkspaceID: tkWS, ProjectID: tkProject, AssignedToMePrincipalID: strPtr("principal-me"),
-	}).Return([]repository.TicketWithAssignee{{Ticket: domain.Ticket{ID: "t1"}}}, nil)
+	}).Return(repository.TicketList{Items: []repository.TicketWithAssignee{{Ticket: domain.Ticket{ID: "t1"}}}, Total: 1}, nil)
 
 	got, err := ticket.NewListTicketsUseCase(repo, perms).Execute(context.Background(), ticket.ListTicketsInput{
 		WorkspaceID: tkWS, ProjectID: tkProject, AssignedToMe: true, UserID: 42,
 	})
 	require.NoError(t, err)
-	require.Len(t, got, 1)
+	require.Len(t, got.Items, 1)
 	perms.AssertExpectations(t)
 }
 

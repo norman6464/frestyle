@@ -473,66 +473,10 @@ func (f *ticketFakeRepo) isOverdue(t *domain.Ticket) bool {
 	return ok && s.Category != domain.TicketStatusCategoryDone
 }
 
-func (f *ticketFakeRepo) ListTickets(_ context.Context, in repository.ListTicketsInput) ([]repository.TicketWithAssignee, error) {
+func (f *ticketFakeRepo) ListTickets(_ context.Context, input repository.ListTicketsInput) (repository.TicketList, error) {
 	var out []repository.TicketWithAssignee
 	for _, t := range f.tickets {
-		if t.WorkspaceID != in.WorkspaceID || t.ProjectID != in.ProjectID {
-			continue
-		}
-		if t.DeletedAt != nil {
-			continue
-		}
-		if t.ArchivedAt != nil && !in.IncludeArchived {
-			continue
-		}
-		if in.StatusID != nil && t.StatusID != *in.StatusID {
-			continue
-		}
-		if in.TypeID != nil && t.TypeID != *in.TypeID {
-			continue
-		}
-		if in.AssigneePrincipalID != nil {
-			a, ok := f.assignments[t.ID]
-			if !ok || a.AssigneePrincipalID != *in.AssigneePrincipalID {
-				continue
-			}
-		}
-		if in.Unassigned {
-			if _, ok := f.assignments[t.ID]; ok {
-				continue
-			}
-		}
-		if in.AssignedToMePrincipalID != nil {
-			a, ok := f.assignments[t.ID]
-			if !ok || a.AssigneePrincipalID != *in.AssignedToMePrincipalID {
-				continue
-			}
-		}
-		if in.Overdue && !f.isOverdue(t) {
-			continue
-		}
-		if in.Q != nil {
-			q := strings.ToLower(*in.Q)
-			if !strings.Contains(strings.ToLower(t.Title), q) && !strings.Contains(strings.ToLower(t.PlainText), q) {
-				continue
-			}
-		}
-		if in.LabelID != nil {
-			has := false
-			for _, lID := range f.ticketLabels[t.ID] {
-				if lID == *in.LabelID {
-					has = true
-					break
-				}
-			}
-			if !has {
-				continue
-			}
-		}
-		if in.DueBefore != nil && (t.DueDate == nil || *t.DueDate > *in.DueBefore) {
-			continue
-		}
-		if in.StartAfter != nil && (t.StartDate == nil || *t.StartDate < *in.StartAfter) {
+		if !f.matchesTicketFilter(t, input) {
 			continue
 		}
 		row := repository.TicketWithAssignee{Ticket: *t}
@@ -547,7 +491,84 @@ func (f *ticketFakeRepo) ListTickets(_ context.Context, in repository.ListTicket
 	// （順不同のままだと並び替えが偶発的に不正な範囲を fracindex.Between へ渡し、
 	// テストが -race の有無に関わらずランダムに失敗する。実測）。
 	sort.Slice(out, func(i, j int) bool { return out[i].Ticket.Position < out[j].Ticket.Position })
-	return out, nil
+	list := repository.TicketList{Total: len(out)}
+	if input.Offset > 0 {
+		out = out[min(input.Offset, len(out)):]
+	}
+	if input.Limit > 0 && len(out) > input.Limit {
+		out = out[:input.Limit]
+	}
+	list.Items = out
+	return list, nil
+}
+
+func (f *ticketFakeRepo) matchesTicketFilter(t *domain.Ticket, input repository.ListTicketsInput) bool {
+	if t.WorkspaceID != input.WorkspaceID || t.ProjectID != input.ProjectID {
+		return false
+	}
+	if t.DeletedAt != nil {
+		return false
+	}
+	if t.ArchivedAt != nil && !input.IncludeArchived {
+		return false
+	}
+	if input.StatusID != nil && t.StatusID != *input.StatusID {
+		return false
+	}
+	if input.TypeID != nil && t.TypeID != *input.TypeID {
+		return false
+	}
+	if !f.matchesAssignee(t, input) {
+		return false
+	}
+	if input.Overdue && !f.isOverdue(t) {
+		return false
+	}
+	if input.Q != nil && !matchesQuery(t, *input.Q) {
+		return false
+	}
+	if input.LabelID != nil && !f.hasLabel(t.ID, *input.LabelID) {
+		return false
+	}
+	return withinDates(t, input)
+}
+
+func (f *ticketFakeRepo) matchesAssignee(t *domain.Ticket, input repository.ListTicketsInput) bool {
+	a, assigned := f.assignments[t.ID]
+	if input.AssigneePrincipalID != nil && (!assigned || a.AssigneePrincipalID != *input.AssigneePrincipalID) {
+		return false
+	}
+	if input.Unassigned && assigned {
+		return false
+	}
+	if input.AssignedToMePrincipalID != nil && (!assigned || a.AssigneePrincipalID != *input.AssignedToMePrincipalID) {
+		return false
+	}
+	return true
+}
+
+func matchesQuery(t *domain.Ticket, q string) bool {
+	q = strings.ToLower(q)
+	return strings.Contains(strings.ToLower(t.Title), q) || strings.Contains(strings.ToLower(t.PlainText), q)
+}
+
+func (f *ticketFakeRepo) hasLabel(ticketID, labelID string) bool {
+	for _, lID := range f.ticketLabels[ticketID] {
+		if lID == labelID {
+			return true
+		}
+	}
+	return false
+}
+
+func withinDates(t *domain.Ticket, input repository.ListTicketsInput) bool {
+	if input.DueBefore != nil && (t.DueDate == nil || *t.DueDate > *input.DueBefore) {
+		return false
+	}
+	if input.StartAfter != nil && (t.StartDate == nil || *t.StartDate < *input.StartAfter) {
+		return false
+	}
+	return true
 }
 
 func (f *ticketFakeRepo) GetTicketCounts(
@@ -1441,5 +1462,5 @@ func (f *ticketFakeRepo) CountTickets(ctx context.Context, in repository.ListTic
 	if err != nil {
 		return 0, err
 	}
-	return int64(len(list)), nil
+	return int64(list.Total), nil
 }

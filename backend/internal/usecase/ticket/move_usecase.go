@@ -68,12 +68,13 @@ func (u *MoveTicketUseCase) placementPosition(ctx context.Context, in MoveTicket
 	// 「隣の直後/直前にどのキーを挟むか」を専用クエリでは持っていないため、現役の一覧
 	// （position 順）をここで読み、アンカーの前後を自分で探す。ワークスペース内のチケット数は
 	// 実データで数百件規模（設計 artifact Ⅱ）なので、一覧をそのまま読む実装で十分間に合う。
-	tickets, err := u.repo.ListTickets(ctx, repository.ListTicketsInput{
+	list, err := u.repo.ListTickets(ctx, repository.ListTicketsInput{
 		WorkspaceID: in.WorkspaceID, ProjectID: projectID,
 	})
 	if err != nil {
 		return "", err
 	}
+	tickets := list.Items
 	idx := -1
 	for i, tk := range tickets {
 		if tk.Ticket.ID == *in.AnchorTicketID {

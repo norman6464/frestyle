@@ -374,8 +374,8 @@ WHERE t.workspace_id = $1 AND t.project_id = $2
   AND (NOT $12::boolean OR (t.due_date < CURRENT_DATE AND s.category <> 'done'))
   AND (
     $13::text IS NULL
-    OR t.title ILIKE '%' || $13::text || '%'
-    OR t.plain_text ILIKE '%' || $13::text || '%'
+    OR t.title ILIKE '%' || $14::text || '%'
+    OR t.plain_text ILIKE '%' || $14::text || '%'
     OR word_similarity($13::text, t.title) > 0.6
     OR word_similarity($13::text, t.plain_text) > 0.6
   )
@@ -395,6 +395,7 @@ type CountTicketsParams struct {
 	StartAfter              pgtext.NullDate
 	Overdue                 bool
 	Q                       sql.NullString
+	QLike                   sql.NullString
 }
 
 // 利用者が保存した絞り込み（ticket_saved_filters）の件数バッジ用。ListTickets と同じ条件に
@@ -417,6 +418,7 @@ func (q *Queries) CountTickets(ctx context.Context, arg CountTicketsParams) (int
 		arg.StartAfter,
 		arg.Overdue,
 		arg.Q,
+		arg.QLike,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -2318,7 +2320,9 @@ func (q *Queries) ListTicketTypes(ctx context.Context, arg ListTicketTypesParams
 }
 
 const listTickets = `-- name: ListTickets :many
-SELECT t.id, t.workspace_id, t.project_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.story_points, t.team_id, t.start_date, t.due_date, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at, a.assignee_principal_id, COALESCE(r."position", '')::text AS rank_position FROM tickets t
+SELECT t.id, t.workspace_id, t.project_id, t.number, t.type_id, t.status_id, t.parent_id, t.title, t.doc, t.plain_text, t.priority, t.story_points, t.team_id, t.start_date, t.due_date, t.closed_at, t.resolution, t.created_by_user_id, t.archived_at, t.deleted_at, t.created_at, t.updated_at, a.assignee_principal_id, COALESCE(r."position", '')::text AS rank_position,
+  COUNT(*) OVER()::bigint AS total_count
+FROM tickets t
 LEFT JOIN ticket_backlog_ranks r ON r.workspace_id = t.workspace_id AND r.ticket_id = t.id
 LEFT JOIN ticket_assignments a ON a.workspace_id = t.workspace_id AND a.ticket_id = t.id
 LEFT JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
@@ -2348,12 +2352,14 @@ WHERE t.workspace_id = $1 AND t.project_id = $2
   AND (NOT $12::boolean OR (t.due_date < CURRENT_DATE AND s.category <> 'done'))
   AND (
     $13::text IS NULL
-    OR t.title ILIKE '%' || $13::text || '%'
-    OR t.plain_text ILIKE '%' || $13::text || '%'
+    OR t.title ILIKE '%' || $14::text || '%'
+    OR t.plain_text ILIKE '%' || $14::text || '%'
     OR word_similarity($13::text, t.title) > 0.6
     OR word_similarity($13::text, t.plain_text) > 0.6
   )
 ORDER BY r."position"
+LIMIT $16
+OFFSET $15
 `
 
 type ListTicketsParams struct {
@@ -2370,6 +2376,9 @@ type ListTicketsParams struct {
 	StartAfter              pgtext.NullDate
 	Overdue                 bool
 	Q                       sql.NullString
+	QLike                   sql.NullString
+	RowOffset               int32
+	RowLimit                sql.NullInt32
 }
 
 type ListTicketsRow struct {
@@ -2397,6 +2406,7 @@ type ListTicketsRow struct {
 	UpdatedAt           time.Time
 	AssigneePrincipalID uuid.NullUUID
 	RankPosition        string
+	TotalCount          int64
 }
 
 // status_id / type_id / assignee_principal_id / label_id / due_before / start_after / q は
@@ -2430,6 +2440,9 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 		arg.StartAfter,
 		arg.Overdue,
 		arg.Q,
+		arg.QLike,
+		arg.RowOffset,
+		arg.RowLimit,
 	)
 	if err != nil {
 		return nil, err
@@ -2463,6 +2476,7 @@ func (q *Queries) ListTickets(ctx context.Context, arg ListTicketsParams) ([]Lis
 			&i.UpdatedAt,
 			&i.AssigneePrincipalID,
 			&i.RankPosition,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}

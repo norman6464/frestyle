@@ -98,6 +98,13 @@ type ListTicketsInput struct {
 	AssignedToMePrincipalID *string
 	Overdue                 bool
 	Q                       *string
+	Limit                   int
+	Offset                  int
+}
+
+type TicketList struct {
+	Items []TicketWithAssignee
+	Total int
 }
 
 // TicketCounts はバックログのサイドバー「保存した絞り込み」が表示する件数バッジ。
@@ -168,7 +175,7 @@ type TicketRepository interface {
 	// ResolveTicketIDByKey は projectKey（小文字）+ number から ticket_id を引く
 	// （domain.ParseTicketKey で分解した結果を渡す）。
 	ResolveTicketIDByKey(ctx context.Context, workspaceID, projectKey string, number int64) (string, error)
-	ListTickets(ctx context.Context, in ListTicketsInput) ([]TicketWithAssignee, error)
+	ListTickets(ctx context.Context, input ListTicketsInput) (TicketList, error)
 	// CountTickets は ListTickets と同じ条件に合うチケットを数える（利用者が保存した絞り込みの
 	// 件数バッジ用。一覧を引いてから数えると本文まで運ぶことになるので、数えるだけの経路を別に持つ）。
 	CountTickets(ctx context.Context, in ListTicketsInput) (int64, error)

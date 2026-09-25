@@ -661,13 +661,15 @@ func TestTicketRepository_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		// 一覧（フィルタ無し）。
-		all, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project})
+		allList, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project})
 		require.NoError(t, err)
+		all := allList.Items
 		require.Len(t, all, 2)
 
 		// status_id で絞り込み。
-		filtered, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project, StatusID: &statusID})
+		byLabelList, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project, StatusID: &statusID})
 		require.NoError(t, err)
+		filtered := byLabelList.Items
 		assert.Len(t, filtered, 2)
 
 		children, err := repo.ListTicketChildren(ctx, ws, project, root.ID)
@@ -891,8 +893,9 @@ func TestTicketRepository_Integration(t *testing.T) {
 		require.NotNil(t, detail.Ticket.TeamID, "詳細で担当チームが消えないこと")
 		assert.Equal(t, team.ID, *detail.Ticket.TeamID)
 
-		list, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project})
+		listList, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project})
 		require.NoError(t, err)
+		list := listList.Items
 		var listed *domain.Ticket
 		for i := range list {
 			if list[i].Ticket.ID == child.ID {
@@ -1174,26 +1177,29 @@ func TestTicketRepository_Integration(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		byLabel, err := repo.ListTickets(ctx, repository.ListTicketsInput{
+		byLabelList, err := repo.ListTickets(ctx, repository.ListTicketsInput{
 			WorkspaceID: ws, ProjectID: project, LabelID: &label.ID,
 		})
 		require.NoError(t, err)
+		byLabel := byLabelList.Items
 		require.Len(t, byLabel, 1)
 		assert.Equal(t, tagged.ID, byLabel[0].Ticket.ID)
 
 		dueBefore := "2026-02-01"
-		byDue, err := repo.ListTickets(ctx, repository.ListTicketsInput{
+		byDueList, err := repo.ListTickets(ctx, repository.ListTicketsInput{
 			WorkspaceID: ws, ProjectID: project, DueBefore: &dueBefore,
 		})
 		require.NoError(t, err)
+		byDue := byDueList.Items
 		require.Len(t, byDue, 1)
 		assert.Equal(t, tagged.ID, byDue[0].Ticket.ID)
 
 		startAfter := "2026-02-01"
-		byStart, err := repo.ListTickets(ctx, repository.ListTicketsInput{
+		byStartList, err := repo.ListTickets(ctx, repository.ListTicketsInput{
 			WorkspaceID: ws, ProjectID: project, StartAfter: &startAfter,
 		})
 		require.NoError(t, err)
+		byStart := byStartList.Items
 		require.Len(t, byStart, 1)
 		assert.NotEqual(t, tagged.ID, byStart[0].Ticket.ID, "start_afterは指定日以降のみ")
 	})
@@ -1243,44 +1249,65 @@ func TestTicketRepository_Integration(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		byUnassigned, err := repo.ListTickets(ctx, repository.ListTicketsInput{
+		byUnassignedList, err := repo.ListTickets(ctx, repository.ListTicketsInput{
 			WorkspaceID: ws, ProjectID: project, Unassigned: true,
 		})
 		require.NoError(t, err)
+		byUnassigned := byUnassignedList.Items
 		gotIDs := make([]string, len(byUnassigned))
 		for i, r := range byUnassigned {
 			gotIDs[i] = r.Ticket.ID
 		}
 		assert.ElementsMatch(t, []string{overdue.ID, unassignedTicket.ID}, gotIDs, "unassignedは担当の付いていない全件")
 
-		byAssignedToMe, err := repo.ListTickets(ctx, repository.ListTicketsInput{
+		byAssignedToMeList, err := repo.ListTickets(ctx, repository.ListTicketsInput{
 			WorkspaceID: ws, ProjectID: project, AssignedToMePrincipalID: &meP.ID,
 		})
 		require.NoError(t, err)
+		byAssignedToMe := byAssignedToMeList.Items
 		require.Len(t, byAssignedToMe, 1)
 		assert.Equal(t, mine.ID, byAssignedToMe[0].Ticket.ID)
 
-		byOverdue, err := repo.ListTickets(ctx, repository.ListTicketsInput{
+		byOverdueList, err := repo.ListTickets(ctx, repository.ListTicketsInput{
 			WorkspaceID: ws, ProjectID: project, Overdue: true,
 		})
 		require.NoError(t, err)
+		byOverdue := byOverdueList.Items
 		require.Len(t, byOverdue, 1)
 		assert.Equal(t, overdue.ID, byOverdue[0].Ticket.ID)
 
 		// q: ILIKE の中間一致（"担当"は「他人の担当」にだけ入っている）。
 		q := "担当"
-		byQ, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project, Q: &q})
+		byQList, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project, Q: &q})
 		require.NoError(t, err)
+		byQ := byQList.Items
 		require.Len(t, byQ, 1)
 		assert.Equal(t, othersTicket.ID, byQ[0].Ticket.ID)
 
 		// q: word_similarity によるあいまい検索（「コート」は「コード」の打ち間違い。
 		// ILIKE の中間一致では拾えない）。
 		typo := "認証コート"
-		byTypo, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project, Q: &typo})
+		byTypoList, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project, Q: &typo})
 		require.NoError(t, err)
+		byTypo := byTypoList.Items
 		require.Len(t, byTypo, 1, "打ち間違いが word_similarity で拾えていない")
 		assert.Equal(t, mine.ID, byTypo[0].Ticket.ID)
+
+		// q: メタ文字はリテラル扱い
+		// % を素通しすると '%%%' で全件一致になる
+		wild := "%"
+		byWildList, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project, Q: &wild})
+		require.NoError(t, err)
+		byWild := byWildList.Items
+		assert.Empty(t, byWild, "% が全件一致になっている")
+
+		partialList, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project, Limit: 2, Offset: 1})
+		require.NoError(t, err)
+		require.Len(t, partialList.Items, 2)
+		assert.Equal(t, 4, partialList.Total)
+		allList, err := repo.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project})
+		require.NoError(t, err)
+		assert.Equal(t, allList.Items[1].Ticket.ID, partialList.Items[0].Ticket.ID, "offset 1 は全件の 2 番目から始まる")
 
 		counts, err := repo.GetTicketCounts(ctx, ws, project, &meP.ID)
 		require.NoError(t, err)

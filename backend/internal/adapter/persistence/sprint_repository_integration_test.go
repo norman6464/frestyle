@@ -267,8 +267,9 @@ func TestSprintRepository_Integration(t *testing.T) {
 		assert.Equal(t, b, ranks[0].TicketID, "スプリントの中では入れ替わる")
 
 		// バックログの並びは触っていない（別の表なので影響しない）。
-		listed, err := tickets.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project})
+		list, err := tickets.ListTickets(ctx, repository.ListTicketsInput{WorkspaceID: ws, ProjectID: project})
 		require.NoError(t, err)
+		listed := list.Items
 		require.Len(t, listed, 2)
 		assert.Equal(t, a, listed[0].Ticket.ID, "バックログの並びは元のまま")
 

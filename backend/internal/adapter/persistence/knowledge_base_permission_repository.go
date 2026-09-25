@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -1081,16 +1080,6 @@ func (r *knowledgeBasePermissionRepository) ListSpacePageViewFacts(ctx context.C
 	return out, nil
 }
 
-// kbEscapeLike は LIKE / ILIKE の特殊文字（% _ \）をエスケープする。
-// LIKE の既定のエスケープ文字はバックスラッシュなので ESCAPE 句は書かない。
-// 生のまま渡すと「%」1 文字で全件一致になり、候補の天井まで無関係な行が埋まる。
-func kbEscapeLike(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `%`, `\%`)
-	s = strings.ReplaceAll(s, `_`, `\_`)
-	return s
-}
-
 func (r *knowledgeBasePermissionRepository) SearchWorkspacePageViewFacts(ctx context.Context, workspaceID string, userID uint64, query string) ([]repository.PageSearchViewFact, error) {
 	wsID, ok := kbParseID(workspaceID)
 	if !ok {
@@ -1104,7 +1093,7 @@ func (r *knowledgeBasePermissionRepository) SearchWorkspacePageViewFacts(ctx con
 	rows, err := r.queries(ctx).SearchWorkspacePageViewFacts(ctx, sqlcgen.SearchWorkspacePageViewFactsParams{
 		WorkspaceID: wsID,
 		UserID:      sql.NullInt64{Int64: uid, Valid: true},
-		Needle:      kbEscapeLike(query),
+		Needle:      escapeLike(query),
 	})
 	if err != nil {
 		return nil, err

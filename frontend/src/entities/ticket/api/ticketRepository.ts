@@ -232,6 +232,12 @@ export interface TicketTypeInput {
   color: string;
 }
 
+/**
+ * 一覧 1 回で取る件数
+ * backend の上限と同じ値（backlog は一覧を分割せず全件を描く）
+ */
+const TICKET_LIST_LIMIT = '200';
+
 const TicketRepository = {
   async enable(
     workspaceSlug: string,
@@ -249,7 +255,7 @@ const TicketRepository = {
     projectId: string,
     filter: TicketListFilter = {},
   ): Promise<Ticket[]> {
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = { limit: TICKET_LIST_LIMIT };
     if (filter.statusId) params.statusId = filter.statusId;
     if (filter.typeId) params.typeId = filter.typeId;
     if (filter.assigneePrincipalId) params.assigneePrincipalId = filter.assigneePrincipalId;

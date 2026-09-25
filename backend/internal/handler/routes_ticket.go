@@ -20,6 +20,8 @@ import (
 const (
 	ticketCreateCommentPerMinute = 30
 	ticketCreateCommentBurst     = 10
+	ticketListPerMinute          = 150
+	ticketListBurst              = 30
 )
 
 // registerTicketRoutes はチケットのエンドポイントを登録する。
@@ -196,7 +198,8 @@ func registerTicketRoutesWith(
 	tkGroup.PUT("/workspaces/:workspaceSlug/tickets/:ticketId/watch", h.Watch)
 
 	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/tickets/enable", h.Enable)
-	tkGroup.GET("/workspaces/:workspaceSlug/projects/:projectId/tickets", h.List)
+	tkGroup.GET("/workspaces/:workspaceSlug/projects/:projectId/tickets",
+		middleware.RateLimitPerMinutePerUser(ticketListPerMinute, ticketListBurst), h.List)
 	// 保存した絞り込みの件数バッジ（自分の担当・期限切れ・未割り当て・総数）。
 	tkGroup.GET("/workspaces/:workspaceSlug/projects/:projectId/tickets/counts", h.Counts)
 	tkGroup.POST("/workspaces/:workspaceSlug/projects/:projectId/tickets", h.Create)

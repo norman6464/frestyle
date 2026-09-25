@@ -51,7 +51,7 @@ describe('TicketRepository.fetchTickets', () => {
   it('GET /workspaces/:slug/projects/:projectId/tickets を叩き、omitempty のキーを null に正規化する', async () => {
     mockGet.mockResolvedValue({ data: { tickets: [wireTicket()] } });
     const list = await TicketRepository.fetchTickets('acme', 'p-1');
-    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/projects/p-1/tickets', { params: {} });
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/projects/p-1/tickets', { params: { limit: '200' } });
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
       id: 't-1',
@@ -79,7 +79,7 @@ describe('TicketRepository.fetchTickets', () => {
       archived: true,
     });
     expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/projects/p-1/tickets', {
-      params: { statusId: 'st-1', typeId: 'ty-1', assigneePrincipalId: 'p-1', archived: 'true' },
+      params: { limit: '200', statusId: 'st-1', typeId: 'ty-1', assigneePrincipalId: 'p-1', archived: 'true' },
     });
   });
 
@@ -93,7 +93,7 @@ describe('TicketRepository.fetchTickets', () => {
       q: '認証',
     });
     expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/acme/projects/p-1/tickets', {
-      params: { label: 'l-1', unassigned: 'true', assignedToMe: 'true', overdue: 'true', q: '認証' },
+      params: { limit: '200', label: 'l-1', unassigned: 'true', assignedToMe: 'true', overdue: 'true', q: '認証' },
     });
   });
 

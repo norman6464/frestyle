@@ -58,9 +58,9 @@ func Test_ラベル一式_作成一覧更新削除付け外し(t *testing.T) {
 	// 6) 一覧応答にも載り、?label= で絞り込める。
 	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets", "")
 	require.Equal(t, http.StatusOK, w.Code)
-	listTickets := decodeJSON[map[string][]map[string]any](t, w)
+	listTickets := readTickets(t, w)
 	found := false
-	for _, tk := range listTickets["tickets"] {
+	for _, tk := range listTickets {
 		if tk["id"] == target.ID {
 			ls, _ := tk["labels"].([]any)
 			found = len(ls) == 1
@@ -70,13 +70,13 @@ func Test_ラベル一式_作成一覧更新削除付け外し(t *testing.T) {
 
 	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?label="+labelID, "")
 	require.Equal(t, http.StatusOK, w.Code)
-	filtered := decodeJSON[map[string][]map[string]any](t, w)
-	require.Len(t, filtered["tickets"], 1, "?label= で絞り込める")
+	filtered := readTickets(t, w)
+	require.Len(t, filtered, 1, "?label= で絞り込める")
 
 	w = f.do(t, http.MethodGet, ticketProjectBase+"/tickets?label=00000000-0000-0000-0000-000000000000", "")
 	require.Equal(t, http.StatusOK, w.Code)
-	none := decodeJSON[map[string][]map[string]any](t, w)
-	assert.Empty(t, none["tickets"], "付いていないラベルで絞ると0件")
+	none := readTickets(t, w)
+	assert.Empty(t, none, "付いていないラベルで絞ると0件")
 
 	// 7) 除去は冪等。
 	w = f.do(t, http.MethodDelete, ticketAPIBase+"/tickets/"+target.ID+"/labels/"+labelID, "")
