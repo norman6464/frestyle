@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { AxiosError, type AxiosResponse } from 'axios';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useNotification } from '../useNotification';
 import type { Notification } from '@/entities/notification';
@@ -110,7 +111,7 @@ describe('useNotification', () => {
     expect(mockMarkAllAsRead).toHaveBeenCalled();
   });
 
-  it('既読の更新中は一覧を保持し、個別・一括操作の重複送信を防ぐ', async () => {
+  it('既読の更新中は一覧を保持し、処理中はその行だけにして、個別・一括操作の重複送信を防ぐ', async () => {
     let finish!: () => void;
     mockMarkAsRead.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
     const { result } = renderHook(() => useNotification());
@@ -118,7 +119,10 @@ describe('useNotification', () => {
 
     let pending!: Promise<void>;
     act(() => { pending = result.current.markAsRead(1); });
-    expect(result.current.loading).toBe(true);
+    // 一覧全体の「更新中」にはせず、押した行だけを処理中にする。
+    expect(result.current.markingIds.has(1)).toBe(true);
+    expect(result.current.markingAll).toBe(false);
+    expect(result.current.loading).toBe(false);
     expect(result.current.notifications).toHaveLength(2);
     await act(async () => {
       await result.current.markAsRead(1);
@@ -128,6 +132,7 @@ describe('useNotification', () => {
     expect(mockMarkAllAsRead).not.toHaveBeenCalled();
 
     await act(async () => { finish(); await pending; });
+    expect(result.current.markingIds.size).toBe(0);
     expect(result.current.loading).toBe(false);
   });
 
@@ -183,6 +188,26 @@ describe('useNotification', () => {
   });
 
   // 既読化に失敗しても finally で再取得しており、画面はサーバーの実状態に合う。
+  // 401・403 は「もう見てよい人ではない」。取得済みの通知（本文を含む）を画面に残さない。
+  it('再取得が 401・403 なら取得済みの通知を捨てる', async () => {
+    const { result } = renderHook(() => useNotification());
+    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+
+    const forbidden = new AxiosError('forbidden', undefined, undefined, undefined, {
+      status: 403, data: {}, statusText: '', headers: {}, config: {},
+    } as unknown as AxiosResponse);
+    mockGetAll.mockRejectedValue(forbidden);
+    mockGetUnreadCount.mockRejectedValue(forbidden);
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.notifications).toEqual([]);
+    expect(result.current.unreadCount).toBe(0);
+  });
+
   // この再取得が消えると「押したのに変わらない」状態に戻るため契約として固定する。
   describe('既読化に失敗したとき', () => {
     it('markAsRead が失敗しても再取得してサーバー状態に合わせる', async () => {

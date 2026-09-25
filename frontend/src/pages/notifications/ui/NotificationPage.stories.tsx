@@ -92,3 +92,44 @@ export const 未読なし: Story = {
     await expect(canvas.getByText('未読の通知はありません')).toBeVisible();
   },
 };
+
+/** 既読にする流れの見本の状態（見本ごとに beforeEach で作り直す）。 */
+const readFlow = { rows: [] as ReturnType<typeof notification>[] };
+
+/**
+ * 「既読にする」を押すと、そのボタンは消える。フォーカスはその行の題名へ移り、行き場を失わない。
+ * 処理中に押せなくなるのは押した行だけで、ほかの行はそのまま押せる。
+ */
+export const 既読にすると題名へ戻る: Story = {
+  beforeEach: () => {
+    readFlow.rows = [
+      notification(1, 'コメントに返信がありました', '「設計メモ」のコメントに返信が付きました。', false),
+      notification(2, 'チケットにコメントが届きました', '「画面遷移の確認」に確認事項が追加されました。', false),
+    ];
+  },
+  decorators: [
+    withApi({
+      '/notifications/1/read': () => {
+        readFlow.rows[0] = { ...readFlow.rows[0], isRead: true };
+        return undefined;
+      },
+      '/notifications/unread-count': () => readFlow.rows.filter((r) => !r.isRead).length,
+      '/notifications': () => readFlow.rows,
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(async () => {
+      await expect(canvas.getAllByRole('button', { name: '既読にする' })).toHaveLength(2);
+    });
+    const [first] = canvas.getAllByRole('button', { name: '既読にする' });
+    await userEvent.click(first);
+    await waitFor(async () => {
+      await expect(canvas.getAllByRole('button', { name: '既読にする' })).toHaveLength(1);
+    });
+    await waitFor(async () => {
+      await expect(canvas.getByText('コメントに返信がありました')).toHaveFocus();
+    });
+    await expect(canvas.getByRole('button', { name: '既読にする' })).toBeEnabled();
+  },
+};

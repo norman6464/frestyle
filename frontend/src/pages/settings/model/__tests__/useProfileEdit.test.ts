@@ -4,21 +4,12 @@ import { useProfileEdit } from '../useProfileEdit';
 
 const mockFetchProfile = vi.fn();
 const mockUpdateProfile = vi.fn();
-const mockShowToast = vi.fn();
 
 vi.mock('@/entities/user/api/profileRepository', () => ({
   default: {
     fetchProfile: (...args: unknown[]) => mockFetchProfile(...args),
     updateProfile: (...args: unknown[]) => mockUpdateProfile(...args),
   },
-}));
-
-vi.mock('@/shared/lib/hooks/useToast', () => ({
-  useToast: () => ({
-    showToast: mockShowToast,
-    toasts: [],
-    removeToast: vi.fn(),
-  }),
 }));
 
 const fixtureProfile = {
@@ -33,7 +24,6 @@ const fixtureProfile = {
 describe('useProfileEdit', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockShowToast.mockReset();
     mockFetchProfile.mockResolvedValue({ ...fixtureProfile });
     mockUpdateProfile.mockResolvedValue({ ...fixtureProfile });
   });
@@ -77,20 +67,75 @@ describe('useProfileEdit', () => {
     expect(result.current.form.displayName).toBe('新しい名前');
   });
 
-  it('handleUpdate成功時に Toast で成功メッセージが表示される', async () => {
+  it('handleUpdate が成功したら、その場に「保存しました」を出し、未保存の変更は無くなる', async () => {
     const { result } = renderHook(() => useProfileEdit());
-
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
+
+    act(() => {
+      result.current.updateField('displayName', '新しい名前');
+    });
+    expect(result.current.dirty).toBe(true);
 
     await act(async () => {
       await result.current.handleUpdate();
     });
 
-    // 成功時はインラインメッセージはクリアされ、 Toast 経由で通知される。
     expect(result.current.message).toBeNull();
-    expect(mockShowToast).toHaveBeenCalledWith('success', 'プロフィールを更新しました。');
+    expect(result.current.justSaved).toBe(true);
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it('氏名が空なら送らず、氏名の欄のエラーにする', async () => {
+    const { result } = renderHook(() => useProfileEdit());
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    act(() => {
+      result.current.updateField('displayName', '   ');
+    });
+    await act(async () => {
+      await result.current.handleUpdate();
+    });
+
+    expect(mockUpdateProfile).not.toHaveBeenCalled();
+    expect(result.current.nameError).toBe('氏名を入力してください。');
+    expect(result.current.message).toBeNull();
+
+    // 書き直したら欄のエラーは消える。
+    act(() => {
+      result.current.updateField('displayName', '太郎');
+    });
+    expect(result.current.nameError).toBeNull();
+  });
+
+  it('画像だけを保存するときは、文字の欄の書きかけを一緒に送らない', async () => {
+    const { result } = renderHook(() => useProfileEdit());
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    act(() => {
+      result.current.updateField('bio', 'まだ保存していない自己紹介');
+    });
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.saveAvatar('https://img.example.com/a.png');
+    });
+
+    expect(ok).toBe(true);
+    expect(mockUpdateProfile).toHaveBeenCalledWith({
+      displayName: 'テスト太郎',
+      bio: '自己紹介文',
+      avatarUrl: 'https://img.example.com/a.png',
+      status: '学習中',
+    });
+    expect(result.current.form.avatarUrl).toBe('https://img.example.com/a.png');
+    // 自己紹介の書きかけは残り、未保存のまま。
+    expect(result.current.form.bio).toBe('まだ保存していない自己紹介');
+    expect(result.current.dirty).toBe(true);
   });
 
   it('handleUpdate失敗時にエラーメッセージが表示される', async () => {

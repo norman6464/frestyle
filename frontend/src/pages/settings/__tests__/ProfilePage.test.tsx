@@ -13,10 +13,6 @@ vi.mock('../model/useProfileImageUpload', () => ({
 
 vi.mock('@/entities/user/api/profileRepository');
 
-vi.mock('@/shared/lib/hooks/useToast', () => ({
-  useToast: () => ({ showToast: vi.fn(), toasts: [], removeToast: vi.fn() }),
-}));
-
 const mockedRepo = vi.mocked(ProfileRepository);
 
 describe('ProfilePage', () => {
@@ -37,8 +33,8 @@ describe('ProfilePage', () => {
     render(<ProfilePage />);
 
     await waitFor(() => {
-      expect(screen.getByText('プロフィールを編集')).toBeInTheDocument();
-      expect(screen.getByText('基本情報を保存')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: 'プロフィール' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'プロフィールを保存' })).toBeInTheDocument();
     });
   });
 
@@ -72,22 +68,38 @@ describe('ProfilePage', () => {
     });
   });
 
-  it('送信中はボタンが「更新中...」になり無効化される', async () => {
+  it('送信中はボタンが「保存しています...」になり無効化される', async () => {
     mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テスト', bio: '', avatarUrl: '', status: '', updatedAt: '2026-04-28T00:00:00Z' });
     mockedRepo.updateProfile.mockReturnValue(new Promise(() => {}));
 
     render(<ProfilePage />);
 
     await waitFor(() => {
-      expect(screen.getByText('基本情報を保存')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'プロフィールを保存' })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('基本情報を保存'));
+    fireEvent.click(screen.getByRole('button', { name: 'プロフィールを保存' }));
 
     await waitFor(() => {
-      expect(screen.getByText('更新中...')).toBeInTheDocument();
-      expect(screen.getByText('更新中...').closest('button')).toBeDisabled();
+      expect(screen.getByRole('button', { name: '保存しています...' })).toBeDisabled();
     });
+  });
+
+  it('氏名が空なら送らず、氏名の欄のそばに理由を出す', async () => {
+    mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テスト', bio: '', avatarUrl: '', status: '', updatedAt: '2026-04-28T00:00:00Z' });
+
+    render(<ProfilePage />);
+
+    const name = await screen.findByDisplayValue('テスト');
+    fireEvent.change(name, { target: { value: '' } });
+    expect(screen.getByText('保存していない変更があります')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'プロフィールを保存' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('氏名')).toHaveAttribute('aria-invalid', 'true');
+    });
+    expect(screen.getByText('氏名を入力してください。')).toBeInTheDocument();
+    expect(mockedRepo.updateProfile).not.toHaveBeenCalled();
   });
 
   it('アバターのイニシャルが表示される', async () => {
@@ -110,8 +122,10 @@ describe('ProfilePage', () => {
     });
   });
 
-  it('画像アップロード成功時にアバターが更新される', async () => {
+  it('画像を選ぶと、その場で保存してアバターが更新される', async () => {
     mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テスト', bio: '', avatarUrl: '', status: '', updatedAt: '2026-04-28T00:00:00Z' });
+    // 前のテストで返らない応答にした設定を持ち越さない（clearAllMocks は実装を残す）。
+    mockedRepo.updateProfile.mockResolvedValue({ userId: 1, displayName: 'テスト', bio: '', avatarUrl: 'https://cdn.example.com/profiles/1/avatar.png', status: '', updatedAt: '2026-04-28T00:00:00Z' });
     mockUpload.mockResolvedValue('https://cdn.example.com/profiles/1/avatar.png');
 
     render(<ProfilePage />);
@@ -127,6 +141,13 @@ describe('ProfilePage', () => {
     await waitFor(() => {
       expect(mockUpload).toHaveBeenCalledWith(file);
     });
+    // 選んだ時点で保存する（保存ボタンを押さなくても反映される）。
+    await waitFor(() => {
+      expect(mockedRepo.updateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ avatarUrl: 'https://cdn.example.com/profiles/1/avatar.png' }),
+      );
+    });
+    expect(await screen.findByText('画像を保存しました。')).toBeInTheDocument();
   });
 
   it('画像アップロード失敗時にエラーメッセージが表示される', async () => {

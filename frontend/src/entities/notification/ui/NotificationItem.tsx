@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import type { Notification } from '../model/types';
 import { isAppPath } from '../lib/linkPath';
@@ -27,10 +27,35 @@ const TYPE_LABELS: Record<string, string> = {
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead: (id: number) => void;
+  /** この行を既読にしている最中（押した行だけを処理中にする）。 */
+  pending?: boolean;
+  /** ほかの操作（すべて既読など）の最中で、この行の「既読にする」を押せない。 */
   disabled?: boolean;
 }
 
-export default memo(function NotificationItem({ notification, onMarkAsRead, disabled = false }: NotificationItemProps) {
+export default memo(function NotificationItem({
+  notification,
+  onMarkAsRead,
+  pending = false,
+  disabled = false,
+}: NotificationItemProps) {
+  // 「既読にする」を押すと、既読になった時点でそのボタンは消える。押した人のフォーカスが
+  // 行き場を失わないよう、この行の題名へ移す（押したのがこの行のボタンのときだけ）。
+  const titleRef = useRef<HTMLElement | null>(null);
+  const markRequested = useRef(false);
+  useEffect(() => {
+    if (notification.isRead && markRequested.current) {
+      markRequested.current = false;
+      titleRef.current?.focus();
+    }
+  }, [notification.isRead]);
+  // 既読化に失敗して未読のまま処理が終わったら、フォーカス移動の予約を取り消す
+  // （あとで別の経路で既読になったときに、フォーカスが勝手に飛ばないように）。
+  useEffect(() => {
+    if (!pending && !notification.isRead) markRequested.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending]);
+
   // 飛び先があれば題名をリンクにする。行全体をリンクにしないのは、中に「既読にする」ボタンが
   // あって操作の入れ子になるため。押したら既読にしてから遷移する —— 未読のまま飛ぶと、
   // 戻ってきたときにまた未読が光る。既読化は待たない（遷移を止めない。失敗しても一覧の
@@ -60,6 +85,9 @@ export default memo(function NotificationItem({ notification, onMarkAsRead, disa
           {linked ? (
             <p className="mb-1 text-base font-semibold leading-relaxed [overflow-wrap:anywhere]">
               <Link
+                ref={(el) => {
+                  titleRef.current = el;
+                }}
                 to={linkPath}
                 onClick={() => {
                   if (!notification.isRead) onMarkAsRead(notification.id);
@@ -71,7 +99,15 @@ export default memo(function NotificationItem({ notification, onMarkAsRead, disa
               </Link>
             </p>
           ) : (
-            <p className="mb-1 text-base font-semibold leading-relaxed text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{notification.title}</p>
+            <p
+              ref={(el) => {
+                titleRef.current = el;
+              }}
+              tabIndex={-1}
+              className="mb-1 rounded-sm text-base font-semibold leading-relaxed text-[var(--color-text-primary)] outline-none [overflow-wrap:anywhere] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+            >
+              {notification.title}
+            </p>
           )}
           <p className="text-sm leading-relaxed text-[var(--color-text-muted)] [overflow-wrap:anywhere]">{notification.body}</p>
           {/* 時刻は情報なので faint（飾り用の淡さ）ではなく muted を使う。faint は白地で 1.5:1 しかない。 */}
@@ -82,7 +118,11 @@ export default memo(function NotificationItem({ notification, onMarkAsRead, disa
         {!notification.isRead && (
           <Button
             variant="ghost"
-            onClick={() => onMarkAsRead(notification.id)}
+            onClick={() => {
+              markRequested.current = true;
+              onMarkAsRead(notification.id);
+            }}
+            loading={pending}
             disabled={disabled}
             className="min-h-11 shrink-0 self-start"
           >
