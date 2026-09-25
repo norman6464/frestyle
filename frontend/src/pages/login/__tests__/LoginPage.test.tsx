@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { FirebaseError } from 'firebase/app';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { MemoryRouter } from 'react-router-dom';
@@ -20,14 +21,14 @@ vi.mock('@/shared/lib/auth/firebaseApp', () => ({
   getFirebaseAuth: vi.fn(() => ({ /* フェイクの Auth インスタンス */ })),
 }));
 
-function renderLoginPage() {
+function renderLoginPage(state?: unknown) {
   const store = configureStore({
     reducer: { auth: authReducer },
     preloadedState: { auth: { isAuthenticated: false, loading: false } },
   });
   return render(
     <Provider store={store}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[{ pathname: '/login', state }]}>
         <LoginPage />
       </MemoryRouter>
     </Provider>,
@@ -71,6 +72,12 @@ describe('LoginPage（Dex モード・既定）', () => {
   it('Google ログイン導線がある', () => {
     renderLoginPage();
     expect(screen.getByRole('button', { name: /Google/ })).toBeInTheDocument();
+  });
+
+  // ログインの戻り処理が失敗して戻ってきたときの理由は、成功の見た目ではなく失敗として出す。
+  it('戻り処理の失敗の理由を、失敗（alert）として出す', () => {
+    renderLoginPage({ loginError: 'ログインの検証に失敗しました。もう一度お試しください。' });
+    expect(screen.getByRole('alert')).toHaveTextContent('ログインの検証に失敗しました。');
   });
 
   it('アカウント作成への導線がフォームの下にあり、ロゴは 1 つだけ', () => {
@@ -176,5 +183,23 @@ describe('LoginPage（Firebase メールログインの送信）', () => {
     fireEvent.click(screen.getByRole('button', { name: 'ログイン' }));
 
     expect(signInWithEmailAndPassword).toHaveBeenCalledWith(expect.anything(), 'user@example.com', 'password123');
+  });
+
+  // 欄の直しで解ける失敗は欄のそばに出し、書き直したら消す（直したのに古い失敗が残り続けない）。
+  it('メールの形式の失敗はメールの欄に出し、書き直すと消える', async () => {
+    vi.mocked(signInWithEmailAndPassword).mockRejectedValue(new FirebaseError('auth/invalid-email', 'invalid'));
+
+    renderLoginPage();
+
+    fireEvent.change(screen.getByLabelText('メールアドレス'), { target: { value: 'user@' } });
+    fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'ログイン' }));
+
+    expect(await screen.findByText('メールアドレスの形式が正しくありません。')).toBeInTheDocument();
+    expect(screen.getByLabelText('メールアドレス')).toHaveAttribute('aria-invalid', 'true');
+
+    fireEvent.change(screen.getByLabelText('メールアドレス'), { target: { value: 'user@example.com' } });
+    expect(screen.queryByText('メールアドレスの形式が正しくありません。')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('メールアドレス')).toHaveAttribute('aria-invalid', 'false');
   });
 });

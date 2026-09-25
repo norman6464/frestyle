@@ -94,8 +94,15 @@ export function useSignupPage(): SignupPageState {
     mode,
     email,
     password,
-    setEmail: (value: string) => setEmail(value),
-    setPassword: (value: string) => setPassword(value),
+    // 書き直したら、前の失敗（欄のそばやフォームの上）を消す。直したのに古い失敗が残り続けないように。
+    setEmail: (value: string) => {
+      setEmail(value);
+      if (firebaseAuth.available) firebaseAuth.clearError();
+    },
+    setPassword: (value: string) => {
+      setPassword(value);
+      if (firebaseAuth.available) firebaseAuth.clearError();
+    },
     firebaseAuth,
     handleEmailSignUp,
     handleGoogleSignUp,

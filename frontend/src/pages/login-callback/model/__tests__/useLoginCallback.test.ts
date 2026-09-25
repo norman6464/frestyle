@@ -56,6 +56,30 @@ describe('useLoginCallback', () => {
     mockVerifyIdTokenNonce.mockReturnValue(true);
   });
 
+  // 時間がかかって「ログイン画面へ戻る」を押した後に交換が済んでも、離れた先で勝手に移らない。
+  it('受け渡しの途中で画面を離れたら、セッションを保存せず移動もしない', async () => {
+    mockSearchParams = 'code=test-code&state=my-state';
+    let resolveExchange!: (token: typeof TOKEN) => void;
+    mockExchangeCodeForToken.mockReturnValue(
+      new Promise((resolve) => {
+        resolveExchange = resolve;
+      }),
+    );
+
+    let unmount!: () => void;
+    await act(async () => {
+      ({ unmount } = renderHook(() => useLoginCallback()));
+    });
+    unmount();
+    await act(async () => {
+      resolveExchange(TOKEN);
+    });
+
+    expect(mockSaveDexSession).not.toHaveBeenCalled();
+    expect(authRepository.login).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
   it('state が一致すれば、検証値を添えて交換する', async () => {
     mockSearchParams = 'code=test-code&state=my-state';
     vi.mocked(authRepository.login).mockResolvedValue({ message: 'ログインしました。' });

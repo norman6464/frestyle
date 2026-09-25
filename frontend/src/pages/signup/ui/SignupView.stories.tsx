@@ -10,6 +10,7 @@ const firebase = (over: Partial<Extract<FirebaseAuthActions, { available: true }
   loading: false,
   errorMessage: null,
   errorField: null,
+  clearError: fn(),
   signInWithEmail: fn(async () => true),
   signUpWithEmail: fn(async () => true),
   signInWithGoogle: fn(async () => true),
@@ -81,7 +82,8 @@ export const パスワードが短い: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByLabelText('パスワード')).toHaveAttribute('aria-invalid', 'true');
-    await expect(canvas.queryByRole('alert', { name: /フォーム/ })).toBeNull();
+    // 失敗は欄のそばの 1 つだけ（フォームの上に同じ失敗を重ねない）。
+    await expect(canvas.getAllByRole('alert')).toHaveLength(1);
     await expect(canvas.getAllByText('パスワードは 6 文字以上にしてください。')).toHaveLength(1);
   },
 };

@@ -11,6 +11,7 @@ const firebase = (over: Partial<Extract<FirebaseAuthActions, { available: true }
   loading: false,
   errorMessage: null,
   errorField: null,
+  clearError: fn(),
   signInWithEmail: fn(async () => true),
   signUpWithEmail: fn(async () => true),
   signInWithGoogle: fn(async () => true),

@@ -30,6 +30,8 @@ export type FirebaseAuthActions =
       readonly errorMessage: string | null;
       /** 失敗がどの入力欄の直しで解けるか（欄のそばに出すため）。どの欄とも言えなければ null。 */
       readonly errorField: FirebaseErrorField | null;
+      /** 失敗の表示を消す（利用者が入力欄を書き直したとき。古い失敗を欄に残さない）。 */
+      readonly clearError: () => void;
       /** 成功したら true。失敗時は errorMessage が立ち false を返す（例外は投げない）。 */
       readonly signInWithEmail: (email: string, password: string) => Promise<boolean>;
       readonly signUpWithEmail: (email: string, password: string) => Promise<boolean>;
@@ -72,6 +74,11 @@ export function useFirebaseAuth(): FirebaseAuthActions {
     },
     [config],
   );
+
+  const clearError = useCallback(() => {
+    setErrorMessage(null);
+    setErrorField(null);
+  }, []);
 
   const signInWithEmail = useCallback(
     (email: string, password: string) =>
@@ -130,6 +137,7 @@ export function useFirebaseAuth(): FirebaseAuthActions {
     loading,
     errorMessage,
     errorField,
+    clearError,
     signInWithEmail,
     signUpWithEmail,
     signInWithGoogle,

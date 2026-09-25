@@ -93,7 +93,7 @@ describe('LoginCallback', () => {
 
     renderWithRoute('?code=test-code&state=test-state');
 
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'ログイン中' })).toBeInTheDocument();
     expect(screen.getByText('ログイン中...')).toBeInTheDocument();
   });
 

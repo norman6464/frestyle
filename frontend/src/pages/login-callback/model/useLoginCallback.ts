@@ -69,25 +69,37 @@ export function useLoginCallback() {
       return;
     }
 
+    // 受け渡しの途中で画面を離れたら（時間がかかって「ログイン画面へ戻る」を押したなど）、
+    // その後の手順（セッションの保存・確立・移動）を進めない。離れた先で勝手に画面が移らないように。
+    let cancelled = false;
+
     exchangeCodeForToken(cfg, code, flow.codeVerifier)
-      .then((token) => {
+      .then(async (token) => {
+        if (cancelled) return false;
         if (!verifyIdTokenNonce(token.idToken, flow.nonce)) {
           throw new CallbackVerificationError();
         }
         saveDexSession(token.idToken, token.refreshToken, token.expiresInSeconds);
-        return authRepository.login();
+        await authRepository.login();
+        return true;
       })
-      .then(() => {
+      .then((established) => {
+        if (!established || cancelled) return;
         dispatch(setAuthData());
         setAuthHint();
         navigate(consumePostLoginPath() ?? '/');
       })
       .catch((err) => {
+        if (cancelled) return;
         const message =
           err instanceof CallbackVerificationError
             ? 'ログインの検証に失敗しました。もう一度お試しください。'
             : classifyApiError(err, '認証に失敗しました');
         navigate('/login', loginErrorRedirect(message));
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [code, returnedState, error, dispatch, navigate]);
 }
