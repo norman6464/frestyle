@@ -79,7 +79,7 @@ describe('useLoginCallback', () => {
 
     expect(mockExchangeCodeForToken).not.toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/login', {
-      state: { toast: 'ログインの検証に失敗しました。もう一度お試しください。' },
+      state: { loginError: 'ログインの検証に失敗しました。もう一度お試しください。' },
     });
   });
 
@@ -104,7 +104,7 @@ describe('useLoginCallback', () => {
 
     expect(mockExchangeCodeForToken).not.toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/login', {
-      state: { toast: 'ログインの手続きが見つかりませんでした。もう一度お試しください。' },
+      state: { loginError: 'ログインの手続きが見つかりませんでした。もう一度お試しください。' },
     });
   });
 
@@ -118,7 +118,7 @@ describe('useLoginCallback', () => {
 
     expect(mockExchangeCodeForToken).not.toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/login', {
-      state: { toast: '現在ログインを受け付けていません。' },
+      state: { loginError: '現在ログインを受け付けていません。' },
     });
   });
 
@@ -146,7 +146,7 @@ describe('useLoginCallback', () => {
     expect(mockSaveDexSession).not.toHaveBeenCalled();
     expect(authRepository.login).not.toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/login', {
-      state: { toast: 'ログインの検証に失敗しました。もう一度お試しください。' },
+      state: { loginError: 'ログインの検証に失敗しました。もう一度お試しください。' },
     });
   });
 
@@ -185,7 +185,7 @@ describe('useLoginCallback', () => {
       renderHook(() => useLoginCallback());
     });
 
-    expect(mockNavigate).toHaveBeenCalledWith('/login', { state: { toast: '認証に失敗しました' } });
+    expect(mockNavigate).toHaveBeenCalledWith('/login', { state: { loginError: '認証に失敗しました' } });
   });
 
   it('セッション確立(login())に失敗したら案内つきでログイン画面へ戻す', async () => {
@@ -196,7 +196,7 @@ describe('useLoginCallback', () => {
       renderHook(() => useLoginCallback());
     });
 
-    expect(mockNavigate).toHaveBeenCalledWith('/login', { state: { toast: '認証に失敗しました' } });
+    expect(mockNavigate).toHaveBeenCalledWith('/login', { state: { loginError: '認証に失敗しました' } });
   });
 
   it('error が返っていれば交換しない', async () => {
@@ -207,7 +207,7 @@ describe('useLoginCallback', () => {
     });
 
     expect(mockNavigate).toHaveBeenCalledWith('/login', {
-      state: { toast: '認証エラーが発生しました' },
+      state: { loginError: '認証エラーが発生しました' },
     });
     expect(mockExchangeCodeForToken).not.toHaveBeenCalled();
   });
