@@ -93,7 +93,7 @@ describe('LoginCallback', () => {
 
     renderWithRoute('?code=test-code&state=test-state');
 
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'ログイン中' })).toBeInTheDocument();
     expect(screen.getByText('ログイン中...')).toBeInTheDocument();
   });
 
@@ -105,11 +105,11 @@ describe('LoginCallback', () => {
     });
   });
 
-  it('errorパラメータがある場合はトースト付きでログインページへリダイレクトする', async () => {
+  it('errorパラメータがある場合は失敗の理由を添えてログインページへリダイレクトする', async () => {
     renderWithRoute('?error=access_denied');
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/login', { state: { toast: '認証エラーが発生しました' } });
+      expect(mockNavigate).toHaveBeenCalledWith('/login', { state: { loginError: '認証エラーが発生しました' } });
     });
   });
 
@@ -129,13 +129,13 @@ describe('LoginCallback', () => {
     });
   });
 
-  it('認証失敗時にトースト付きでログインページへリダイレクトする', async () => {
+  it('認証失敗時に失敗の理由を添えてログインページへリダイレクトする', async () => {
     vi.mocked(authRepository.login).mockRejectedValue(new Error('認証失敗'));
 
     renderWithRoute('?code=invalid-code&state=test-state');
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/login', { state: { toast: '認証に失敗しました' } });
+      expect(mockNavigate).toHaveBeenCalledWith('/login', { state: { loginError: '認証に失敗しました' } });
     });
   });
 

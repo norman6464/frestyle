@@ -6,6 +6,16 @@ import InvitePage from './InvitePage';
 import { withApi, withRouter } from '../../../../.storybook/decorators';
 
 /**
+ * 既定は未ログイン（目印の Cookie を消す）。Cookie はブラウザに残り、ほかの見本（ログイン済みの
+ * 404 やヘッダーなど）から持ち越されるので、見本ごとに言い切る。ログイン済みの見本は、この内側で
+ * withSignedInHint が置き直す。
+ */
+const withSignedOutHint: Decorator = (Story) => {
+  document.cookie = 'fs_signed_in=; path=/; max-age=0';
+  return <Story />;
+};
+
+/**
  * 招待リンク（/invite#t=…）を開いた画面。ログイン前に見られ、ここでは参加できない
  * （参加はログイン後の /invitations）。
  *
@@ -16,7 +26,7 @@ const meta = {
   title: 'pages/invite/InvitePage',
   component: InvitePage,
   parameters: { layout: 'fullscreen' },
-  decorators: [withRouter],
+  decorators: [withSignedOutHint, withRouter],
 } satisfies Meta<typeof InvitePage>;
 
 export default meta;

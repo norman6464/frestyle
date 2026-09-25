@@ -42,23 +42,29 @@ function signedIn(value: boolean): Decorator {
   return Wrapped;
 }
 
-/** ログインしていない人が来たとき。トップとログインの両方を案内する。 */
+/**
+ * ログインしていない人が来たとき。本文の主ボタンは「ログイン画面へ」の 1 つだけ（同じ行き先の
+ * ボタンを並べない）。ヘッダーは公開ページ共通で、ロゴはホームへ・入口はログインとアカウント作成。
+ */
 export const 未ログイン: Story = {
   decorators: [signedIn(false)],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { name: 'ページが見つかりません' })).toBeVisible();
-    await expect(canvas.getByRole('link', { name: 'トップへ戻る' })).toBeVisible();
-    await expect(canvas.getByRole('link', { name: 'ログイン' })).toBeVisible();
+    await expect(canvas.getByRole('link', { name: 'ログイン画面へ' })).toHaveAttribute('href', '/login');
+    await expect(canvas.queryByRole('link', { name: 'トップへ戻る' })).toBeNull();
+    await expect(canvas.getByRole('link', { name: 'FreStyle ホーム' })).toHaveAttribute('href', '/');
+    await expect(canvas.getByRole('link', { name: 'アカウントを作成' })).toBeVisible();
   },
 };
 
-/** ログイン済みの人が来たとき。ホームへ戻る 1 つだけにする。 */
+/** ログイン済みの人が来たとき。ホームへ戻る 1 つだけにし、ログインや作成の入口は出さない。 */
 export const ログイン済み: Story = {
   decorators: [signedIn(true)],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('link', { name: 'ホームへ戻る' })).toBeVisible();
     await expect(canvas.queryByRole('link', { name: 'ログイン' })).toBeNull();
+    await expect(canvas.queryByRole('link', { name: 'アカウントを作成' })).toBeNull();
   },
 };

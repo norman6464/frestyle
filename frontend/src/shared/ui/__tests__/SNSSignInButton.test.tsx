@@ -3,42 +3,33 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import SNSSignInButton from '../SNSSignInButton';
 
 describe('SNSSignInButton', () => {
-  it('Googleログインボタンが表示される', () => {
-    render(<SNSSignInButton provider="google" onClick={vi.fn()} />);
+  it('渡した文言がボタンの名前になる（ログインと登録で文言を分ける）', () => {
+    const { rerender } = render(<SNSSignInButton provider="google" label="Google でログイン" onClick={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Google でログイン' })).toBeInTheDocument();
 
-    expect(screen.getByText('Googleでログイン')).toBeInTheDocument();
+    rerender(<SNSSignInButton provider="google" label="Google で登録" onClick={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Google で登録' })).toBeInTheDocument();
   });
 
-  it('クリックでonClickが呼ばれる', () => {
-    const mockOnClick = vi.fn();
-    render(<SNSSignInButton provider="google" onClick={mockOnClick} />);
+  it('押すと onClick が呼ばれる', () => {
+    const onClick = vi.fn();
+    render(<SNSSignInButton provider="google" label="Google でログイン" onClick={onClick} />);
 
-    fireEvent.click(screen.getByText('Googleでログイン'));
-    expect(mockOnClick).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Google でログイン' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it('Facebookログインボタンが表示される', () => {
-    render(<SNSSignInButton provider="facebook" onClick={vi.fn()} />);
+  it('印は同梱の絵で、外部の画像を読まず、読み上げから外す', () => {
+    const { container } = render(<SNSSignInButton provider="google" label="Google でログイン" onClick={vi.fn()} />);
 
-    expect(screen.getByText('Facebookでログイン')).toBeInTheDocument();
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('Xログインボタンが表示される', () => {
-    render(<SNSSignInButton provider="x" onClick={vi.fn()} />);
+  it('無効のときは押せない', () => {
+    const onClick = vi.fn();
+    render(<SNSSignInButton provider="google" label="Google でログイン" onClick={onClick} disabled />);
 
-    expect(screen.getByText('Xでログイン')).toBeInTheDocument();
-  });
-
-  it('プロバイダーアイコンが表示される', () => {
-    render(<SNSSignInButton provider="google" onClick={vi.fn()} />);
-
-    const img = screen.getByAltText('google');
-    expect(img).toBeInTheDocument();
-  });
-
-  it('ボタン要素としてレンダリングされる', () => {
-    render(<SNSSignInButton provider="google" onClick={vi.fn()} />);
-
-    expect(screen.getByRole('button')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Google でログイン' })).toBeDisabled();
   });
 });

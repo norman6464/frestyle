@@ -3,19 +3,17 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import SNSSignInButton from './SNSSignInButton';
 
 /**
- * 外部サービスのアカウントでログインするボタン。
- *
- * ロゴは各社が配っているものを指しているため、**インターネットに繋がっていないと絵が出ない**。
- * 絵が出なくても文字（「Googleでログイン」）だけで用は足りる作りにしてある。
+ * 外部の発行者（いまは Google だけ）でサインインするボタン。印は同梱の絵で、外部の画像を
+ * 読まない。文言は画面ごとに渡す（ログインは「Google でログイン」、登録は「Google で登録」）。
  */
 const meta = {
-  title: 'shared/SNSSignInButton',
+  title: 'shared/ui/SNSSignInButton',
   component: SNSSignInButton,
-  parameters: { layout: 'centered' },
-  args: { onClick: fn() },
+  parameters: { layout: 'padded' },
+  args: { provider: 'google', label: 'Google でログイン', onClick: fn() },
   decorators: [
     (Story) => (
-      <div className="w-80">
+      <div className="max-w-sm">
         <Story />
       </div>
     ),
@@ -25,38 +23,25 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Google。 */
-export const Google: Story = {
-  args: { provider: 'google' },
-  play: async ({ args, canvasElement }) => {
-    await userEvent.click(within(canvasElement).getByRole('button', { name: /Googleでログイン/ }));
+export const ログイン: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Google でログイン' }));
     await expect(args.onClick).toHaveBeenCalledTimes(1);
+    await expect(canvasElement.querySelector('img')).toBeNull();
   },
 };
 
-/** Facebook。 */
-export const Facebook: Story = {
-  args: { provider: 'facebook' },
+export const 登録: Story = {
+  args: { label: 'Google で登録' },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('button', { name: 'Google で登録' })).toBeVisible();
+  },
 };
 
-/** X（旧 Twitter）。 */
-export const X: Story = {
-  args: { provider: 'x' },
-};
-
-/** 3 つ並べたところ。ログイン画面での見え方。 */
-export const 並べたところ: Story = {
-  args: { provider: 'google' },
-  render: (args) => (
-    <div>
-      <SNSSignInButton {...args} provider="google" />
-      <SNSSignInButton {...args} provider="facebook" />
-      <SNSSignInButton {...args} provider="x" />
-    </div>
-  ),
-};
-
-/** 押せないとき（送信中など）。 */
-export const 押せない: Story = {
-  args: { provider: 'google', disabled: true },
+export const 無効: Story = {
+  args: { disabled: true },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('button', { name: 'Google でログイン' })).toBeDisabled();
+  },
 };

@@ -55,9 +55,9 @@ describe('AuthLayout', () => {
     expect(screen.getByText('フッター内容')).toBeInTheDocument();
   });
 
-  it('ブランドアイコン (favicon) が表示される', () => {
+  // ロゴは上部のヘッダーに 1 つだけ置く。カードの中に重ねて出さない（ロゴが縦に 2 つ並ばないように）。
+  it('カードの中にはロゴを出さない', () => {
     const { container } = render(<AuthLayout><div>テスト</div></AuthLayout>);
-    const img = container.querySelector('img[src="/favicon.svg"]');
-    expect(img).toBeTruthy();
+    expect(container.querySelector('img[src="/favicon.svg"]')).toBeNull();
   });
 });

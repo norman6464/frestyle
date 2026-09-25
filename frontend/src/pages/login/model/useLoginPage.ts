@@ -13,10 +13,12 @@ import {
   type AuthMode,
 } from '@/features/auth';
 import { setAuthHint } from '@/shared/lib/authHint';
+import { readLoginError } from '@/shared/lib/loginRedirect';
 import { classifyApiError } from '@/shared/lib/classifyApiError';
 
 export interface LoginPageState {
-  readonly flashMessage: string | null;
+  /** ログインの戻り処理が失敗して戻ってきたときの理由（失敗として出す）。 */
+  readonly loginError: string | null;
   /** どの発行者を出すか。ビルド時の設定で決まる（Firebase を優先。両方揃うことは通常無い）。 */
   readonly mode: AuthMode;
   readonly email: string;
@@ -54,11 +56,7 @@ export function useLoginPage(): LoginPageState {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
 
-  // 遷移元から渡される通知。鍵が 2 つあるのは呼び出し元が揃っていないため
-  // （コールバックは toast、ログアウト等は message で渡してくる）。片方だけ読むと、
-  // もう片方の経路の案内が黙って消える。
-  const navState = location.state as { toast?: string; message?: string } | null;
-  const flashMessage = navState?.toast ?? navState?.message ?? null;
+  const loginError = readLoginError(location.state);
 
   const mode = useMemo(() => resolveAuthMode(), []);
   const dexLogin = useOidcLogin();
@@ -97,12 +95,19 @@ export function useLoginPage(): LoginPageState {
   };
 
   return {
-    flashMessage,
+    loginError,
     mode,
     email,
     password,
-    setEmail: (value: string) => setEmail(value),
-    setPassword: (value: string) => setPassword(value),
+    // 書き直したら、前の失敗（欄のそばやフォームの上）を消す。直したのに古い失敗が残り続けないように。
+    setEmail: (value: string) => {
+      setEmail(value);
+      if (firebaseAuth.available) firebaseAuth.clearError();
+    },
+    setPassword: (value: string) => {
+      setPassword(value);
+      if (firebaseAuth.available) firebaseAuth.clearError();
+    },
     firebaseAuth,
     handleEmailSignIn,
     handleGoogleSignIn,

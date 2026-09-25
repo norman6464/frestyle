@@ -23,8 +23,8 @@ export default function AuthLayout({ children, title, description, footer, heade
 
         <main className="flex flex-1 flex-col items-center justify-center px-4 py-8 sm:py-12">
           <div className="w-full max-w-md rounded-2xl border border-surface-3 bg-surface-1 p-5 sm:p-8">
+            {/* ロゴは上部のヘッダーに 1 つだけ置く（カードの中に重ねて出さない）。 */}
             <div className="mb-7">
-              <img src="/favicon.svg" alt="" aria-hidden="true" className="mb-5 h-10 w-10" />
               {title && (
                 <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">{title}</h1>
               )}

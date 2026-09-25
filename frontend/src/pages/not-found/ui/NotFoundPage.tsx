@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useDocumentMeta } from '@/shared/lib/hooks/useDocumentMeta';
 import { hasAuthHint } from '@/shared/lib/authHint';
+import { PublicHeader } from '@/shared/ui';
 
 /**
  * 存在しない URL の受け皿。
@@ -25,54 +26,31 @@ export default function NotFoundPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-surface">
-    <div className="flex min-h-full flex-col [&_a]:min-h-11 [&_a]:focus-visible:outline [&_a]:focus-visible:outline-2 [&_a]:focus-visible:outline-brand-600">
-      <header className="flex-shrink-0 h-16 border-b border-surface-3 flex items-center px-4 sm:px-6">
-        <Link to="/" className="flex items-center gap-2" aria-label="FreStyle ホーム">
-          <img src="/brand-mark.svg" alt="" className="w-7 h-7 flex-shrink-0" />
-          <span className="text-sm font-semibold text-[var(--color-text-primary)]">FreStyle</span>
-        </Link>
-      </header>
+      <div className="flex min-h-full flex-col">
+        <PublicHeader />
 
-      <main className="flex-1 flex items-center justify-center px-4 py-16">
-        <div className="w-full max-w-md text-center">
-          <p className="text-sm font-semibold tracking-widest text-brand-700">404</p>
-          <h1 className="mt-2 text-2xl font-bold text-[var(--color-text-primary)]">
-            ページが見つかりません
-          </h1>
-          <p className="mt-4 text-sm leading-relaxed text-[var(--color-text-muted)]">
-            お探しのページは移動または削除された可能性があります。
-            <br />
-            URL に誤りがないかご確認ください。
-          </p>
+        <main className="flex flex-1 items-center justify-center px-4 py-16">
+          <div className="w-full max-w-md text-center">
+            <p className="font-mono text-sm font-semibold tracking-widest text-brand-700">404</p>
+            <h1 className="mt-2 text-2xl font-bold text-[var(--color-text-primary)]">ページが見つかりません</h1>
+            <p className="mt-4 text-sm leading-relaxed text-[var(--color-text-muted)]">
+              お探しのページは移動または削除された可能性があります。
+              <br />
+              URL に誤りがないかご確認ください。
+            </p>
 
-          <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            {signedIn ? (
+            {/* 行き先が同じボタンを 2 つ並べない。ログイン済みはホーム、未ログインはログイン画面へ。 */}
+            <div className="mt-8 flex justify-center">
               <Link
-                to="/"
-                className="inline-flex items-center justify-center px-5 py-2.5 rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors"
+                to={signedIn ? '/' : '/login'}
+                className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
               >
-                ホームへ戻る
+                {signedIn ? 'ホームへ戻る' : 'ログイン画面へ'}
               </Link>
-            ) : (
-              <>
-                <Link
-                  to="/"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors"
-                >
-                  トップへ戻る
-                </Link>
-                <Link
-                  to="/login"
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-md border border-surface-3 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-nav-hover)] transition-colors"
-                >
-                  ログイン
-                </Link>
-              </>
-            )}
+            </div>
           </div>
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
     </div>
   );
 }

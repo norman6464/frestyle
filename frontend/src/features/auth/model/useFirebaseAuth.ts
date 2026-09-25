@@ -9,7 +9,11 @@ import {
 } from 'firebase/auth';
 import { readFirebaseAuthConfig } from '@/shared/lib/auth/firebaseConfig';
 import { getFirebaseAuth } from '@/shared/lib/auth/firebaseApp';
-import { classifyFirebaseError } from '@/shared/lib/auth/firebaseErrorMessage';
+import {
+  classifyFirebaseError,
+  classifyFirebaseErrorField,
+  type FirebaseErrorField,
+} from '@/shared/lib/auth/firebaseErrorMessage';
 
 /**
  * GCIP（Firebase Authentication 互換）でのサインイン・サインアップ・
@@ -24,6 +28,10 @@ export type FirebaseAuthActions =
       readonly available: true;
       readonly loading: boolean;
       readonly errorMessage: string | null;
+      /** 失敗がどの入力欄の直しで解けるか（欄のそばに出すため）。どの欄とも言えなければ null。 */
+      readonly errorField: FirebaseErrorField | null;
+      /** 失敗の表示を消す（利用者が入力欄を書き直したとき。古い失敗を欄に残さない）。 */
+      readonly clearError: () => void;
       /** 成功したら true。失敗時は errorMessage が立ち false を返す（例外は投げない）。 */
       readonly signInWithEmail: (email: string, password: string) => Promise<boolean>;
       readonly signUpWithEmail: (email: string, password: string) => Promise<boolean>;
@@ -39,6 +47,7 @@ export function useFirebaseAuth(): FirebaseAuthActions {
   const config = useMemo(() => readFirebaseAuthConfig(), []);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorField, setErrorField] = useState<FirebaseErrorField | null>(null);
   // 多重送信を防ぐ（連打でサインイン要求が複数飛ぶのを防ぐ）。ページ遷移で
   // アンマウントされるまで生き続けてよいので useRef で十分（useOidcLogin と同じ形）。
   const inFlight = useRef(false);
@@ -50,11 +59,13 @@ export function useFirebaseAuth(): FirebaseAuthActions {
       inFlight.current = true;
       setLoading(true);
       setErrorMessage(null);
+      setErrorField(null);
       try {
         await action();
         return true;
       } catch (err) {
         setErrorMessage(classifyFirebaseError(err, fallback));
+        setErrorField(classifyFirebaseErrorField(err));
         return false;
       } finally {
         inFlight.current = false;
@@ -63,6 +74,11 @@ export function useFirebaseAuth(): FirebaseAuthActions {
     },
     [config],
   );
+
+  const clearError = useCallback(() => {
+    setErrorMessage(null);
+    setErrorField(null);
+  }, []);
 
   const signInWithEmail = useCallback(
     (email: string, password: string) =>
@@ -120,6 +136,8 @@ export function useFirebaseAuth(): FirebaseAuthActions {
     available: true,
     loading,
     errorMessage,
+    errorField,
+    clearError,
     signInWithEmail,
     signUpWithEmail,
     signInWithGoogle,
