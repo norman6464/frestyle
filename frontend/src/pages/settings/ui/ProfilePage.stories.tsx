@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { withApi, withRouter, withToast } from '../../../../.storybook/decorators';
 import ProfilePage from './ProfilePage';
 
@@ -69,4 +69,50 @@ export const 写真つき: Story = {
 /** 情報が取れなかったとき。 */
 export const 取得に失敗: Story = {
   decorators: [withApi({})],
+};
+
+const profile = {
+  userId: 7,
+  displayName: '山田 花子',
+  email: 'hanako@example.com',
+  avatarUrl: null,
+  bio: '',
+  status: '',
+};
+
+/** 書き換えたら、保存していない変更があることを保存ボタンのそばに出す。保存したらその場に「保存しました」。 */
+export const 書き換えて保存する: Story = {
+  decorators: [
+    withApi({
+      '/profile/me/update': (config: { data?: unknown }) => ({
+        ...profile,
+        ...(typeof config.data === 'string' ? JSON.parse(config.data) : {}),
+      }),
+      '/profile/me': profile,
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const status = await canvas.findByLabelText('ステータス');
+    await userEvent.type(status, '取り込み中');
+    await expect(canvas.getByText('保存していない変更があります')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'プロフィールを保存' }));
+    await waitFor(async () => {
+      await expect(canvas.getByText('保存しました')).toBeVisible();
+    });
+    await expect(canvas.queryByText('保存していない変更があります')).toBeNull();
+  },
+};
+
+/** 氏名が空なら送らず、氏名の欄のそばに理由を出す。 */
+export const 氏名が空: Story = {
+  decorators: [withApi({ '/profile/me': profile })],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const name = await canvas.findByDisplayValue('山田 花子');
+    await userEvent.clear(name);
+    await userEvent.click(canvas.getByRole('button', { name: 'プロフィールを保存' }));
+    await expect(name).toHaveAttribute('aria-invalid', 'true');
+    await expect(name).toHaveAccessibleDescription(/氏名を入力してください/);
+  },
 };

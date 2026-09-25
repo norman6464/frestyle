@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ProfileRepository } from '@/entities/user';
-import { useToast } from '@/shared/lib/hooks/useToast';
 import type { FormMessage } from '@/shared/ui/FormMessage';
 import type { Profile } from '@/entities/user';
 
@@ -11,6 +10,10 @@ import type { Profile } from '@/entities/user';
  * displayName は OIDC ログイン時に id_token の `name` claim を初期値として
  * セットするため（auth_handler.upsertUserFromIDToken）、 通常は氏名がそのまま入る。
  * ユーザは ProfilePage 上で自由に書き換え可能。
+ *
+ * 最後に保存できた値（saved）を持ち、フォームとの差で「保存していない変更」を判定する。
+ * 画像は選んだ時点で保存する（アップロードだけ済んで保存されないまま離れる、を無くす）。
+ * そのとき文字の欄の書きかけは一緒に保存しない（保存済みの値に画像だけを差し替えて送る）。
  */
 type ProfileForm = Pick<Profile, 'displayName' | 'bio' | 'avatarUrl' | 'status'>;
 
@@ -21,25 +24,40 @@ const EMPTY_FORM: ProfileForm = {
   status: '',
 };
 
+/** 保存しました、を出しておく時間。 */
+const SAVED_VISIBLE_MS = 4000;
+
+function sameText(a: ProfileForm, b: ProfileForm): boolean {
+  return a.displayName === b.displayName && a.bio === b.bio && a.status === b.status;
+}
+
 export function useProfileEdit() {
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM);
-  // 失敗系（取得エラー / バリデーション）はインライン表示を維持。
-  // 成功系（更新しました）は Toast で通知する（画面上部からバウンドで降りてくる）。
+  const [saved, setSaved] = useState<ProfileForm>(EMPTY_FORM);
+  // 取得や通信の失敗はフォームの上に出す（欄の直しで解けるもの＝氏名の空は欄のそばに出す）。
   const [message, setMessage] = useState<FormMessage | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // 取得できたか。取得に失敗したまま画像だけを保存すると、空の値で氏名などを上書きしてしまうので止める。
+  const [loaded, setLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { showToast } = useToast();
+  // 保存できたことを、押した保存ボタンのそばに少しの間だけ出す。
+  const [justSaved, setJustSaved] = useState(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const loadProfile = async () => {
       try {
         const data = await ProfileRepository.fetchProfile();
-        setForm({
+        const fetched = {
           displayName: data.displayName ?? '',
           bio: data.bio ?? '',
           avatarUrl: data.avatarUrl ?? '',
           status: data.status ?? '',
-        });
+        };
+        setForm(fetched);
+        setSaved(fetched);
+        setLoaded(true);
       } catch {
         setMessage({ type: 'error', text: 'プロフィール取得に失敗しました。' });
       } finally {
@@ -49,35 +67,73 @@ export function useProfileEdit() {
     loadProfile();
   }, []);
 
+  useEffect(() => () => {
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+  }, []);
+
+  const showSaved = useCallback(() => {
+    setJustSaved(true);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setJustSaved(false), SAVED_VISIBLE_MS);
+  }, []);
+
   const updateField = useCallback(<K extends keyof ProfileForm>(field: K, value: ProfileForm[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setJustSaved(false);
+    if (field === 'displayName') setNameError(null);
   }, []);
 
   const handleUpdate = useCallback(async () => {
     if (!form.displayName.trim()) {
-      setMessage({ type: 'error', text: '氏名を入力してください。' });
+      setNameError('氏名を入力してください。');
       return;
     }
     setSubmitting(true);
     try {
       await ProfileRepository.updateProfile(form);
-      // 成功時はインラインメッセージを消して Toast を出す。
+      setSaved(form);
       setMessage(null);
-      showToast('success', 'プロフィールを更新しました。');
+      showSaved();
     } catch {
       setMessage({ type: 'error', text: '通信エラーが発生しました。' });
     } finally {
       setSubmitting(false);
     }
-  }, [form, showToast]);
+  }, [form, showSaved]);
+
+  /**
+   * 画像だけを保存する（選んだ時点で呼ぶ）。保存済みの値に画像を差し替えて送るので、文字の欄の
+   * 書きかけは保存しない。成功したら true。
+   */
+  const saveAvatar = useCallback(
+    async (avatarUrl: string): Promise<boolean> => {
+      if (!loaded) return false;
+      try {
+        const next = { ...saved, avatarUrl };
+        await ProfileRepository.updateProfile(next);
+        setSaved(next);
+        setForm((prev) => ({ ...prev, avatarUrl }));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [saved, loaded],
+  );
 
   return {
     form,
     message,
     setMessage,
+    nameError,
     loading,
+    loaded,
     submitting,
+    justSaved,
+    /** 文字の欄に保存していない変更がある。 */
+    dirty: !loading && !sameText(form, saved),
     updateField,
     handleUpdate,
+    saveAvatar,
   };
 }

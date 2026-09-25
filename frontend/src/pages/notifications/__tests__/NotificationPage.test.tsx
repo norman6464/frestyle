@@ -24,7 +24,7 @@ describe('NotificationPage', () => {
       unreadCount: 0,
       loading: true,
       error: null,
-      markAsRead: mockMarkAsRead,
+      markingIds: new Set(), markingAll: false, markAsRead: mockMarkAsRead,
       markAllAsRead: mockMarkAllAsRead,
       refresh: vi.fn(),
     });
@@ -41,7 +41,7 @@ describe('NotificationPage', () => {
         { id: 2, type: 'ticket_commented', title: '対応済みのお知らせ', body: '既読の本文', isRead: true, linkPath: '', createdAt: '2026-09-20T10:00:00Z' },
       ],
       unreadCount: 1, loading: false, error: null,
-      markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
+      markingIds: new Set(), markingAll: false, markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
     });
     render(<MemoryRouter><NotificationPage /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: '未読' }));
@@ -56,7 +56,7 @@ describe('NotificationPage', () => {
     mockedUseNotification.mockReturnValue({
       notifications: [{ id: 1, type: 'ticket_mentioned', title: '確認済み', body: '既読の本文', isRead: true, linkPath: '', createdAt: '2026-09-21T10:00:00Z' }],
       unreadCount: 0, loading: false, error: null,
-      markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
+      markingIds: new Set(), markingAll: false, markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
     });
     render(<MemoryRouter><NotificationPage /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: '未読' }));
@@ -66,11 +66,11 @@ describe('NotificationPage', () => {
     expect(screen.getByText('既読の本文')).toBeInTheDocument();
   });
 
-  it('更新中も取得済みの通知を残し、既読操作の連打を防ぐ', () => {
+  it('すべて既読にしている最中も取得済みの通知を残し、既読操作の連打を防ぐ', () => {
     mockedUseNotification.mockReturnValue({
       notifications: [{ id: 1, type: 'ticket_mentioned', title: '確認のお願い', body: '表示を残す本文', isRead: false, linkPath: '', createdAt: '2026-09-21T10:00:00Z' }],
       unreadCount: 1, loading: true, error: null,
-      markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
+      markingIds: new Set(), markingAll: true, markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
     });
     render(<MemoryRouter><NotificationPage /></MemoryRouter>);
     expect(screen.getByText('表示を残す本文')).toBeInTheDocument();
@@ -79,13 +79,29 @@ describe('NotificationPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('通知を更新中...');
   });
 
+  it('1 件を既読にしている最中は、その行だけを処理中にし、ほかの行は押せる', () => {
+    mockedUseNotification.mockReturnValue({
+      notifications: [
+        { id: 1, type: 'ticket_mentioned', title: '一つ目', body: '本文1', isRead: false, linkPath: '', createdAt: '2026-09-21T10:00:00Z' },
+        { id: 2, type: 'ticket_mentioned', title: '二つ目', body: '本文2', isRead: false, linkPath: '', createdAt: '2026-09-21T09:00:00Z' },
+      ],
+      unreadCount: 2, loading: false, error: null,
+      markingIds: new Set([1]), markingAll: false, markAsRead: mockMarkAsRead, markAllAsRead: mockMarkAllAsRead, refresh: vi.fn(),
+    });
+    render(<MemoryRouter><NotificationPage /></MemoryRouter>);
+    const [first, second] = screen.getAllByRole('button', { name: '既読にする' });
+    expect(first).toHaveAttribute('aria-busy', 'true');
+    expect(second).toBeEnabled();
+    expect(screen.queryByText('通知を更新中...')).not.toBeInTheDocument();
+  });
+
   it('通知がない場合はEmptyStateが表示される', () => {
     mockedUseNotification.mockReturnValue({
       notifications: [],
       unreadCount: 0,
       loading: false,
       error: null,
-      markAsRead: mockMarkAsRead,
+      markingIds: new Set(), markingAll: false, markAsRead: mockMarkAsRead,
       markAllAsRead: mockMarkAllAsRead,
       refresh: vi.fn(),
     });
@@ -103,7 +119,7 @@ describe('NotificationPage', () => {
       unreadCount: 1,
       loading: false,
       error: null,
-      markAsRead: mockMarkAsRead,
+      markingIds: new Set(), markingAll: false, markAsRead: mockMarkAsRead,
       markAllAsRead: mockMarkAllAsRead,
       refresh: vi.fn(),
     });
@@ -123,7 +139,7 @@ describe('NotificationPage', () => {
       unreadCount: 1,
       loading: false,
       error: null,
-      markAsRead: mockMarkAsRead,
+      markingIds: new Set(), markingAll: false, markAsRead: mockMarkAsRead,
       markAllAsRead: mockMarkAllAsRead,
       refresh: vi.fn(),
     });
@@ -142,7 +158,7 @@ describe('NotificationPage', () => {
       unreadCount: 0,
       loading: false,
       error: null,
-      markAsRead: mockMarkAsRead,
+      markingIds: new Set(), markingAll: false, markAsRead: mockMarkAsRead,
       markAllAsRead: mockMarkAllAsRead,
       refresh: vi.fn(),
     });
@@ -158,7 +174,7 @@ describe('NotificationPage', () => {
       unreadCount: 0,
       loading: false,
       error: '通知の取得に失敗しました。',
-      markAsRead: mockMarkAsRead,
+      markingIds: new Set(), markingAll: false, markAsRead: mockMarkAsRead,
       markAllAsRead: mockMarkAllAsRead,
       refresh: vi.fn(),
       ...overrides,

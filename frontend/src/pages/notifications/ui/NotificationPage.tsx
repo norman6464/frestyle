@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNotification } from '../model/useNotification';
-import { Button, EmptyState, Loading, FsIcon, fsIcon } from '@/shared/ui';
+import { Button, EmptyState, Loading, FsIcon, PageFrame, PageHeader, fsIcon } from '@/shared/ui';
 import { NotificationItem } from '@/entities/notification';
 
 export default function NotificationPage() {
-  const { notifications, unreadCount, loading, error, markAsRead, markAllAsRead, refresh } =
+  const { notifications, unreadCount, loading, error, markingIds, markingAll, markAsRead, markAllAsRead, refresh } =
     useNotification();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const visibleNotifications = filter === 'unread'
@@ -13,29 +13,41 @@ export default function NotificationPage() {
   const initialLoading = loading && notifications.length === 0;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-8 sm:px-6 lg:pt-12">
-      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">通知</h1>
-          <p className="mt-3 text-base leading-relaxed text-[var(--color-text-muted)]">届いた知らせを、自分のペースで確認。</p>
-        </div>
-        {unreadCount > 0 && (
-          <Button
-            variant="secondary"
-            onClick={markAllAsRead}
-            disabled={loading}
-            className="min-h-11 shrink-0 self-start"
-          >
-            <FsIcon name="check" className="h-4 w-4" />
-            すべて既読にする
-          </Button>
-        )}
-      </header>
+    <PageFrame width="form" className="pb-24">
+      <PageHeader
+        title="通知"
+        description="届いた知らせを、自分のペースで確認。"
+        action={
+          unreadCount > 0 && (
+            <Button
+              variant="secondary"
+              onClick={() => void markAllAsRead()}
+              loading={markingAll}
+              disabled={loading || markingIds.size > 0}
+              className="min-h-11"
+            >
+              <FsIcon name="check" className="h-4 w-4" />
+              すべて既読にする
+            </Button>
+          )
+        }
+      />
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-surface-3 pb-4">
-        <div role="group" aria-label="表示する通知" className="flex gap-2">
-          <Button variant={filter === 'all' ? 'primary' : 'ghost'} aria-pressed={filter === 'all'} onClick={() => setFilter('all')} className="min-h-11">すべて</Button>
-          <Button variant={filter === 'unread' ? 'primary' : 'ghost'} aria-pressed={filter === 'unread'} onClick={() => setFilter('unread')} className="min-h-11">未読</Button>
+        {/* 表示の切り替え。選択中は主ボタンの青ではなく、上部の行き先と同じ「選ばれている」見た目にする
+            （「すべて既読にする」より目立たせない）。 */}
+        <div role="group" aria-label="表示する通知" className="flex gap-1 rounded-xl bg-surface-2 p-1">
+          {(['all', 'unread'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={filter === value}
+              onClick={() => setFilter(value)}
+              className="min-h-11 rounded-lg px-4 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 aria-pressed:bg-surface-1 aria-pressed:font-semibold aria-pressed:text-[var(--color-text-primary)] aria-pressed:shadow-sm"
+            >
+              {value === 'all' ? 'すべて' : '未読'}
+            </button>
+          ))}
         </div>
         <p role="status" className="text-sm tabular-nums text-[var(--color-text-muted)]">
           {loading && !initialLoading ? '通知を更新中...' : !loading && !error ? `${unreadCount}件の未読` : ''}
@@ -59,7 +71,7 @@ export default function NotificationPage() {
           </div>
           <Button
             variant="secondary"
-            onClick={refresh}
+            onClick={() => void refresh()}
             className="min-h-11 shrink-0"
           >
             再試行
@@ -71,7 +83,11 @@ export default function NotificationPage() {
         <ul aria-label={filter === 'unread' ? '未読の通知' : 'すべての通知'} className="space-y-3">
           {visibleNotifications.map((notification) => (
             <li key={notification.id}>
-              <NotificationItem notification={notification} onMarkAsRead={markAsRead} disabled={loading} />
+              <NotificationItem
+                notification={notification}
+                onMarkAsRead={(id) => void markAsRead(id)}
+                pending={markingIds.has(notification.id) || markingAll}
+              />
             </li>
           ))}
         </ul>
@@ -88,6 +104,6 @@ export default function NotificationPage() {
           </section>
         )
       )}
-    </div>
+    </PageFrame>
   );
 }
