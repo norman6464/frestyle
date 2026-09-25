@@ -38,6 +38,8 @@ export function useProfileEdit() {
   const [message, setMessage] = useState<FormMessage | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // 取得できたか。取得に失敗したまま画像だけを保存すると、空の値で氏名などを上書きしてしまうので止める。
+  const [loaded, setLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // 保存できたことを、押した保存ボタンのそばに少しの間だけ出す。
   const [justSaved, setJustSaved] = useState(false);
@@ -47,14 +49,15 @@ export function useProfileEdit() {
     const loadProfile = async () => {
       try {
         const data = await ProfileRepository.fetchProfile();
-        const loaded = {
+        const fetched = {
           displayName: data.displayName ?? '',
           bio: data.bio ?? '',
           avatarUrl: data.avatarUrl ?? '',
           status: data.status ?? '',
         };
-        setForm(loaded);
-        setSaved(loaded);
+        setForm(fetched);
+        setSaved(fetched);
+        setLoaded(true);
       } catch {
         setMessage({ type: 'error', text: 'プロフィール取得に失敗しました。' });
       } finally {
@@ -104,6 +107,7 @@ export function useProfileEdit() {
    */
   const saveAvatar = useCallback(
     async (avatarUrl: string): Promise<boolean> => {
+      if (!loaded) return false;
       try {
         const next = { ...saved, avatarUrl };
         await ProfileRepository.updateProfile(next);
@@ -114,7 +118,7 @@ export function useProfileEdit() {
         return false;
       }
     },
-    [saved],
+    [saved, loaded],
   );
 
   return {
@@ -123,6 +127,7 @@ export function useProfileEdit() {
     setMessage,
     nameError,
     loading,
+    loaded,
     submitting,
     justSaved,
     /** 文字の欄に保存していない変更がある。 */

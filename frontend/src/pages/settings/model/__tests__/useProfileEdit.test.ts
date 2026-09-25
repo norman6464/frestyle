@@ -111,6 +111,24 @@ describe('useProfileEdit', () => {
     expect(result.current.nameError).toBeNull();
   });
 
+  // 取得に失敗したまま画像だけを保存すると、空の値で氏名などを上書きしてしまう。
+  it('プロフィールを取得できていなければ、画像だけの保存はしない', async () => {
+    mockFetchProfile.mockRejectedValue(new Error('Network Error'));
+    const { result } = renderHook(() => useProfileEdit());
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.saveAvatar('https://img.example.com/a.png');
+    });
+
+    expect(ok).toBe(false);
+    expect(result.current.loaded).toBe(false);
+    expect(mockUpdateProfile).not.toHaveBeenCalled();
+  });
+
   it('画像だけを保存するときは、文字の欄の書きかけを一緒に送らない', async () => {
     const { result } = renderHook(() => useProfileEdit());
     await waitFor(() => {

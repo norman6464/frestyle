@@ -21,7 +21,7 @@ type AvatarResult = { tone: 'saved' | 'error'; text: string } | null;
  * - 氏名が空のときは氏名の欄のそばに出す
  */
 export default function ProfilePage() {
-  const { form, message, nameError, loading, submitting, justSaved, dirty, updateField, handleUpdate, saveAvatar } =
+  const { form, message, nameError, loading, loaded, submitting, justSaved, dirty, updateField, handleUpdate, saveAvatar } =
     useProfileEdit();
   const { upload, uploading } = useProfileImageUpload();
   const [savingAvatar, setSavingAvatar] = useState(false);
@@ -82,7 +82,7 @@ export default function ProfilePage() {
               variant="secondary"
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={avatarBusy || submitting}
+              disabled={!loaded || avatarBusy || submitting}
               loading={avatarBusy}
               className="min-h-11"
               aria-label="プロフィール画像を変更"
