@@ -72,18 +72,16 @@ describe('NotFoundPage', () => {
   });
 
   describe('未ログインのとき', () => {
-    it('トップとログインの導線を出す', () => {
+    it('ログイン画面への導線を 1 つだけ出す（同じ行き先のボタンを並べない）', () => {
       renderPage();
 
-      expect(screen.getByRole('link', { name: 'トップへ戻る' })).toHaveAttribute('href', '/');
-      expect(screen.getByRole('link', { name: 'ログイン' })).toHaveAttribute('href', '/login');
+      expect(screen.getByRole('link', { name: 'ログイン画面へ' })).toHaveAttribute('href', '/login');
+      expect(screen.queryByRole('link', { name: 'トップへ戻る' })).not.toBeInTheDocument();
     });
 
     it('ログイン済み向けのホーム導線は出さない', () => {
       renderPage();
 
-      // 未ログインでも「トップへ戻る」は出る（行き先は同じ / ）。ここで見ているのは、
-      // ログイン済みのときだけ出るラベルが混ざっていないこと。
       expect(screen.queryByRole('link', { name: 'ホームへ戻る' })).not.toBeInTheDocument();
     });
 

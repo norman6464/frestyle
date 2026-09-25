@@ -73,11 +73,14 @@ describe('LoginPage（Dex モード・既定）', () => {
     expect(screen.getByRole('button', { name: /Google/ })).toBeInTheDocument();
   });
 
-  it('アカウント作成への導線がヘッダーと本文の両方にある', () => {
+  it('アカウント作成への導線がフォームの下にあり、ロゴは 1 つだけ', () => {
     renderLoginPage();
-    // ヘッダーと本文の 2 箇所。
-    const signupLinks = screen.getAllByRole('link', { name: /アカウントを作成/ });
-    expect(signupLinks.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole('link', { name: '新規登録' })).toHaveAttribute('href', '/signup');
+    // 上部の帯は置かない。ロゴ（ホームへのリンク）は広い画面の左の面か、狭い画面のフォームの上の
+    // どちらか 1 つだけが見える（もう片方は CSS で隠す）。jsdom は CSS を当てないので両方が DOM にある。
+    for (const logo of screen.getAllByRole('link', { name: 'FreStyle ホーム' })) {
+      expect(logo).toHaveAttribute('href', '/');
+    }
   });
 });
 
@@ -134,7 +137,7 @@ describe('LoginPage（認可の設定が欠けているとき）', () => {
   it('フォームもボタンも出さず、押せない理由を画面に出す', () => {
     renderLoginPage();
     expect(screen.queryByLabelText('メールアドレス')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'ログインする' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ログイン' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Google/ })).not.toBeInTheDocument();
 
     const notice = screen.getByRole('status');
@@ -170,7 +173,7 @@ describe('LoginPage（Firebase メールログインの送信）', () => {
 
     fireEvent.change(screen.getByLabelText('メールアドレス'), { target: { value: 'user@example.com' } });
     fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: 'ログインする' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ログイン' }));
 
     expect(signInWithEmailAndPassword).toHaveBeenCalledWith(expect.anything(), 'user@example.com', 'password123');
   });

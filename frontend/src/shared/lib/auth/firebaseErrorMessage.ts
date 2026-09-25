@@ -16,6 +16,8 @@ const MESSAGES: Record<string, string> = {
   'auth/wrong-password': 'メールアドレスまたはパスワードが正しくありません。',
   'auth/user-not-found': 'メールアドレスまたはパスワードが正しくありません。',
   'auth/invalid-email': 'メールアドレスの形式が正しくありません。',
+  'auth/missing-email': 'メールアドレスを入力してください。',
+  'auth/missing-password': 'パスワードを入力してください。',
   'auth/email-already-in-use': 'このメールアドレスは既に登録されています。',
   'auth/weak-password': 'パスワードは 6 文字以上にしてください。',
   'auth/too-many-requests': '試行回数が多すぎます。しばらく待ってからお試しください。',
@@ -36,4 +38,28 @@ export function classifyFirebaseError(error: unknown, fallback: string): string 
     return MESSAGES[error.code] ?? fallback;
   }
   return fallback;
+}
+
+/** エラーがどの入力欄のものか（欄のそばに出すため）。どの欄とも言えない失敗は null。 */
+export type FirebaseErrorField = 'email' | 'password';
+
+const FIELDS: Record<string, FirebaseErrorField> = {
+  'auth/invalid-email': 'email',
+  'auth/missing-email': 'email',
+  'auth/email-already-in-use': 'email',
+  'auth/weak-password': 'password',
+  'auth/missing-password': 'password',
+};
+
+/**
+ * Firebase のエラーが、どの入力欄の直しで解けるかを返す。
+ *
+ * `auth/invalid-credential`（メールかパスワードのどちらかが違う）は、どちらと言うと
+ * 登録の有無が分かってしまうので欄に寄せない（フォーム全体の失敗として出す）。
+ */
+export function classifyFirebaseErrorField(error: unknown): FirebaseErrorField | null {
+  if (error instanceof FirebaseError) {
+    return FIELDS[error.code] ?? null;
+  }
+  return null;
 }

@@ -17,6 +17,7 @@ export { useOidcLogin } from './model/useOidcLogin';
 export type { OidcLogin } from './model/useOidcLogin';
 export { useFirebaseAuth } from './model/useFirebaseAuth';
 export type { FirebaseAuthActions } from './model/useFirebaseAuth';
+export type { FirebaseErrorField } from '@/shared/lib/auth/firebaseErrorMessage';
 export { useEmailVerification } from './model/useEmailVerification';
 export type { EmailVerification } from './model/useEmailVerification';
 export { default as AuthUnavailableNotice } from './ui/AuthUnavailableNotice';

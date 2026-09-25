@@ -22,7 +22,7 @@ test.describe('FreStyle smoke', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveTitle(/FreStyle/);
     // "/" は未ログインだとログイン画面へ送られる（公開ランディングは廃止した）。
-    // その公開ヘッダー(PublicHeader)に FreStyle ブランドが出ることを、
+    // ログイン画面のロゴ（BrandLogo。どの公開画面でも同じ名前でホームへのリンク）が出ることを、
     // 本番のコールドロードを見込んだ余裕のある timeout で待つ。
     await expect(
       page.getByRole('link', { name: 'FreStyle ホーム' })

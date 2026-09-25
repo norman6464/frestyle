@@ -99,6 +99,8 @@ describe('useFirebaseAuth', () => {
     expect(ok).toBe(false);
     if (result.current.available) {
       expect(result.current.errorMessage).toBe('メールアドレスまたはパスワードが正しくありません。');
+      // どちらが違うかは言わない（登録の有無を漏らさない）ので、欄には寄せない。
+      expect(result.current.errorField).toBeNull();
     }
   });
 
@@ -119,6 +121,8 @@ describe('useFirebaseAuth', () => {
     expect(ok).toBe(false);
     if (result.current.available) {
       expect(result.current.errorMessage).toBe('このメールアドレスは既に登録されています。');
+      // メールの欄の直しで解ける失敗なので、メールの欄に寄せる。
+      expect(result.current.errorField).toBe('email');
     }
   });
 

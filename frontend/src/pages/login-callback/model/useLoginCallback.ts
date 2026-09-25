@@ -14,6 +14,7 @@ import {
 } from '@/features/auth';
 import { setAuthHint } from '@/shared/lib/authHint';
 import { classifyApiError } from '@/shared/lib/classifyApiError';
+import { loginErrorRedirect } from '@/shared/lib/loginRedirect';
 
 /** state / nonce の検証に失敗したことを表す（発行者への通信自体は成功している）。 */
 class CallbackVerificationError extends Error {}
@@ -43,7 +44,7 @@ export function useLoginCallback() {
 
   useEffect(() => {
     if (error) {
-      navigate('/login', { state: { toast: '認証エラーが発生しました' } });
+      navigate('/login', loginErrorRedirect('認証エラーが発生しました'));
       return;
     }
     if (!code) {
@@ -54,23 +55,17 @@ export function useLoginCallback() {
     // 認可を始めたときに置いた値を取り出す（使い切り。残すと同じ値で 2 回試せる）。
     const flow = consumeAuthFlowState();
     if (!flow) {
-      navigate('/login', {
-        state: { toast: 'ログインの手続きが見つかりませんでした。もう一度お試しください。' },
-      });
+      navigate('/login', loginErrorRedirect('ログインの手続きが見つかりませんでした。もう一度お試しください。'));
       return;
     }
     if (!returnedState || returnedState !== flow.state) {
-      navigate('/login', {
-        state: { toast: 'ログインの検証に失敗しました。もう一度お試しください。' },
-      });
+      navigate('/login', loginErrorRedirect('ログインの検証に失敗しました。もう一度お試しください。'));
       return;
     }
 
     const cfg = readAuthConfig();
     if (cfg.status !== 'configured') {
-      navigate('/login', {
-        state: { toast: '現在ログインを受け付けていません。' },
-      });
+      navigate('/login', loginErrorRedirect('現在ログインを受け付けていません。'));
       return;
     }
 
@@ -88,11 +83,11 @@ export function useLoginCallback() {
         navigate(consumePostLoginPath() ?? '/');
       })
       .catch((err) => {
-        const toast =
+        const message =
           err instanceof CallbackVerificationError
             ? 'ログインの検証に失敗しました。もう一度お試しください。'
             : classifyApiError(err, '認証に失敗しました');
-        navigate('/login', { state: { toast } });
+        navigate('/login', loginErrorRedirect(message));
       });
   }, [code, returnedState, error, dispatch, navigate]);
 }

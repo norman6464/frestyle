@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { AuthLayout } from '@/widgets/auth-layout';
-import PublicHeader from '@/shared/ui/PublicHeader';
+import { PublicHeader } from '@/shared/ui';
 import { Button, FsIcon, Loading } from '@/shared/ui';
 import { useDocumentMeta } from '@/shared/lib/hooks/useDocumentMeta';
 import { rememberPostLoginPath } from '@/shared/lib/postLoginPath';
