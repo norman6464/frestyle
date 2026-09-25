@@ -231,7 +231,7 @@ describe('useProfileEdit', () => {
     });
   });
 
-  it('氏名が空の場合エラーメッセージが表示されAPIが呼ばれない', async () => {
+  it('氏名が空の場合は氏名の欄のエラーにし、APIを呼ばない', async () => {
     const { result } = renderHook(() => useProfileEdit());
 
     await waitFor(() => {
@@ -246,12 +246,13 @@ describe('useProfileEdit', () => {
       await result.current.handleUpdate();
     });
 
-    expect(result.current.message?.type).toBe('error');
-    expect(result.current.message?.text).toBe('氏名を入力してください。');
+    // 欄の直しで解ける失敗なので、フォームの上ではなく氏名の欄に出す。
+    expect(result.current.nameError).toBe('氏名を入力してください。');
+    expect(result.current.message).toBeNull();
     expect(mockUpdateProfile).not.toHaveBeenCalled();
   });
 
-  it('氏名が空白のみの場合エラーメッセージが表示されAPIが呼ばれない', async () => {
+  it('氏名が空白のみの場合も氏名の欄のエラーにし、APIを呼ばない', async () => {
     const { result } = renderHook(() => useProfileEdit());
 
     await waitFor(() => {
@@ -266,8 +267,9 @@ describe('useProfileEdit', () => {
       await result.current.handleUpdate();
     });
 
-    expect(result.current.message?.type).toBe('error');
-    expect(result.current.message?.text).toBe('氏名を入力してください。');
+    // 欄の直しで解ける失敗なので、フォームの上ではなく氏名の欄に出す。
+    expect(result.current.nameError).toBe('氏名を入力してください。');
+    expect(result.current.message).toBeNull();
     expect(mockUpdateProfile).not.toHaveBeenCalled();
   });
 
