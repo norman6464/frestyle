@@ -32,8 +32,11 @@ WHERE workspace_id = $1 AND id = $2
 RETURNING *;
 
 -- name: ChangeSprintState :one
-UPDATE sprints SET state = $3, updated_at = now()
-WHERE workspace_id = $1 AND id = $2
+UPDATE sprints
+SET state = sqlc.arg(new_state), updated_at = now()
+WHERE workspace_id = sqlc.arg(workspace_id)
+  AND id = sqlc.arg(id)
+  AND state = sqlc.arg(expected_state)
 RETURNING *;
 
 -- name: DeleteSprint :execrows
