@@ -2,9 +2,12 @@ package domain
 
 import "errors"
 
-// PageMaxDepth はページ階層の上限。ルートを1段目として数える。
+// PageMaxDepth はフロントエンドの MAX_TREE_DEPTH（entities/kb/lib/tree.ts）と揃えた上限。
+// ルートを1段目とし、301段目の保存を防ぐ。
 const PageMaxDepth = 300
 
+// errorはGoの定数にできないためvarを使う。errors.Newで作った同じ値を共有し、
+// 呼び出し元がerrors.Isでエラーの種類を判別できるようにする。
 var (
 	ErrPageDepthExceeded = errors.New("page hierarchy depth exceeded")
 	ErrPageCycle         = errors.New("cannot move a page under itself or its descendant")

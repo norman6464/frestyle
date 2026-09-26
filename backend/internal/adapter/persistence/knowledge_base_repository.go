@@ -609,6 +609,7 @@ func (r *knowledgeBaseRepository) CreatePage(ctx context.Context, page *domain.P
 	err = r.runInTx(ctx, func(qtx *sqlcgen.Queries) error {
 		if _, err := qtx.LockPageHierarchy(ctx, wsID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
+				// SELECT対象のworkspace行が存在しない場合。ロック競合は待機し、0行にはならない。
 				return repository.ErrWorkspaceNotFound
 			}
 			return err
@@ -775,6 +776,7 @@ func (r *knowledgeBaseRepository) MovePage(ctx context.Context, workspaceID, pag
 	return r.runInTx(ctx, func(qtx *sqlcgen.Queries) error {
 		if _, err := qtx.LockPageHierarchy(ctx, wsID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
+				// workspace行がない場合（待機中に削除された場合も含む）は、対象なしとして返す。
 				return repository.ErrWorkspaceNotFound
 			}
 			return err
@@ -793,6 +795,8 @@ func (r *knowledgeBaseRepository) MovePage(ctx context.Context, workspaceID, pag
 		}
 		dimensions, err := qtx.GetPageDepthAndHeight(ctx, sqlcgen.GetPageDepthAndHeightParams{WorkspaceID: wsID, PageID: pgID})
 		if errors.Is(err, sql.ErrNoRows) {
+			// このSQLはpage_pathsの自己行を起点にする。正常なページは作成時に自己行も同時保存するため、
+			// 0行なら移動対象として見つからない扱い。自己行だけが欠けた異常状態はこのSQLでは区別できない。
 			return repository.ErrPageNotFound
 		}
 		if err != nil {

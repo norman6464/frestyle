@@ -313,7 +313,10 @@ WHERE pages.workspace_id = sqlc.arg(workspace_id)
       WHERE pp.workspace_id = sqlc.arg(workspace_id) AND pp.ancestor_id = sqlc.arg(page_id)
   );
 
--- ページ階層の変更はワークスペース単位で直列化する。検査と保存の間の移動を防ぐ。
+-- 作成と移動は同じ workspace 行をトランザクション終了までロックする。
+-- 例えば「ページに子を追加」と「そのページを299段目の下へ移動」が並行すると、
+-- どちらも変更前の深さで検査を通り、子が301段になる可能性がある。
+-- FOR UPDATE で後続処理を待たせ、先行処理の確定後に深さを読み直して防ぐ。
 -- name: LockPageHierarchy :one
 SELECT id FROM workspaces WHERE id = $1 FOR UPDATE;
 
