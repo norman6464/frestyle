@@ -333,6 +333,35 @@ func (q *Queries) GetPageAcrossWorkspaces(ctx context.Context, id uuid.UUID) (Pa
 	return i, err
 }
 
+const getPageDepthAndHeight = `-- name: GetPageDepthAndHeight :one
+SELECT
+    (SELECT MAX(p.depth) + 1 FROM page_paths p
+     WHERE p.workspace_id = pp.workspace_id AND p.page_id = pp.page_id)::integer AS depth,
+    (SELECT MAX(p.depth) FROM page_paths p
+     WHERE p.workspace_id = pp.workspace_id AND p.ancestor_id = pp.page_id)::integer AS height
+FROM page_paths pp
+WHERE pp.workspace_id = $1 AND pp.page_id = $2 AND pp.ancestor_id = pp.page_id
+`
+
+type GetPageDepthAndHeightParams struct {
+	WorkspaceID uuid.UUID
+	PageID      uuid.UUID
+}
+
+type GetPageDepthAndHeightRow struct {
+	Depth  int32
+	Height int32
+}
+
+// depth はルート=1の段数、height は自分から最深子孫までの距離。
+// アーカイブ済みも含める（復元による上限回避を防ぐ）。自己行がない場合は返さない。
+func (q *Queries) GetPageDepthAndHeight(ctx context.Context, arg GetPageDepthAndHeightParams) (GetPageDepthAndHeightRow, error) {
+	row := q.db.QueryRowContext(ctx, getPageDepthAndHeight, arg.WorkspaceID, arg.PageID)
+	var i GetPageDepthAndHeightRow
+	err := row.Scan(&i.Depth, &i.Height)
+	return i, err
+}
+
 const getPageSnapshot = `-- name: GetPageSnapshot :one
 SELECT ps.page_id, ps.doc, ps.built_at FROM page_snapshots ps
 JOIN pages p ON p.id = ps.page_id
@@ -1085,6 +1114,21 @@ func (q *Queries) ListPageBlockIDs(ctx context.Context, arg ListPageBlockIDsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockPageHierarchy = `-- name: LockPageHierarchy :one
+SELECT id FROM workspaces WHERE id = $1 FOR UPDATE
+`
+
+// 作成と移動は同じ workspace 行をトランザクション終了までロックする。
+// 例えば「ページに子を追加」と「そのページを299段目の下へ移動」が並行すると、
+// どちらも変更前の深さで検査を通り、子が301段になる可能性がある。
+// FOR UPDATE で後続処理を待たせ、先行処理の確定後に深さを読み直して防ぐ。
+func (q *Queries) LockPageHierarchy(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, lockPageHierarchy, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
 }
 
 const movePageSubtreeToSpace = `-- name: MovePageSubtreeToSpace :execrows

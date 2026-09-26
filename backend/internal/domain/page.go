@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-// Page はナレッジの 1 ページ。ページ同士は ParentID で木構造をなす（無限入れ子）。
+// Page はナレッジの 1 ページ。ページ同士は ParentID で木構造をなす（上限 PageMaxDepth）。
 //
 // 兄弟の並び順は整数の連番ではなく分数インデックス（internal/pkg/fracindex が採番する文字列キー）
 // で持つ。1 行動かすたびに後続を振り直す UPDATE を避けるため。DB 側は position 列を

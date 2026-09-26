@@ -313,6 +313,24 @@ WHERE pages.workspace_id = sqlc.arg(workspace_id)
       WHERE pp.workspace_id = sqlc.arg(workspace_id) AND pp.ancestor_id = sqlc.arg(page_id)
   );
 
+-- 作成と移動は同じ workspace 行をトランザクション終了までロックする。
+-- 例えば「ページに子を追加」と「そのページを299段目の下へ移動」が並行すると、
+-- どちらも変更前の深さで検査を通り、子が301段になる可能性がある。
+-- FOR UPDATE で後続処理を待たせ、先行処理の確定後に深さを読み直して防ぐ。
+-- name: LockPageHierarchy :one
+SELECT id FROM workspaces WHERE id = $1 FOR UPDATE;
+
+-- name: GetPageDepthAndHeight :one
+-- depth はルート=1の段数、height は自分から最深子孫までの距離。
+-- アーカイブ済みも含める（復元による上限回避を防ぐ）。自己行がない場合は返さない。
+SELECT
+    (SELECT MAX(p.depth) + 1 FROM page_paths p
+     WHERE p.workspace_id = pp.workspace_id AND p.page_id = pp.page_id)::integer AS depth,
+    (SELECT MAX(p.depth) FROM page_paths p
+     WHERE p.workspace_id = pp.workspace_id AND p.ancestor_id = pp.page_id)::integer AS height
+FROM page_paths pp
+WHERE pp.workspace_id = $1 AND pp.page_id = $2 AND pp.ancestor_id = pp.page_id;
+
 -- name: InsertPagePathSelf :exec
 -- closure の自己参照行（depth=0）。ページ作成と同じトランザクションで張る。
 INSERT INTO page_paths (workspace_id, page_id, ancestor_id, depth)

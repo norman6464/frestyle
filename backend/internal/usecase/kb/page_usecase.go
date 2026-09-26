@@ -34,7 +34,8 @@ var (
 	// 成功したように見える**ため。断って、やり直せるようにする。
 	ErrPageAnchorNotSibling = errors.New("anchor page is not a sibling under the destination")
 	// ErrPageCycle は自分自身または自分の子孫の下への移動に返す（木が壊れる）。
-	ErrPageCycle = errors.New("cannot move a page under itself or its descendant")
+	// repositoryも同じエラーを返すためdomainの値を共有する。ここでerrors.Newすると別の値になり、errors.Isで一致しない。
+	ErrPageCycle = domain.ErrPageCycle
 	// ErrInvalidPageIcon は domain.PageIcon.Valid() を満たさない値を設定しようとしたときに返す。
 	ErrInvalidPageIcon = errors.New("invalid page icon")
 	// ErrPageEditorRequired は本文書き換えの入力に編集者（EditorUserID）が無いときに返す。
