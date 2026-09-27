@@ -53,8 +53,7 @@ export default memo(function NotificationItem({
   // （あとで別の経路で既読になったときに、フォーカスが勝手に飛ばないように）。
   useEffect(() => {
     if (!pending && !notification.isRead) markRequested.current = false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending]);
+  }, [pending, notification.isRead]);
 
   // 飛び先があれば題名をリンクにする。行全体をリンクにしないのは、中に「既読にする」ボタンが
   // あって操作の入れ子になるため。押したら既読にしてから遷移する —— 未読のまま飛ぶと、

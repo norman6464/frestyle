@@ -75,6 +75,7 @@ const hoisted = vi.hoisted(() => ({
   useParams: vi.fn(() => ({ pageId: 'p1' }) as { pageId?: string }),
   // 本文エディタと題名が何回描かれたか（描き直しの範囲の検査で使う）。
   renders: { editor: 0, title: 0 },
+  metaRenders: 0,
   editorProps: {
     current: null as null | {
       value?: { type: 'doc'; content: unknown[] };
@@ -186,6 +187,19 @@ vi.mock('@/shared/ui/RichTextEditor', async (importOriginal) => {
           </div>
         </div>
       );
+    },
+  };
+});
+
+// 保存状態の行は本物を描き、描かれた回数だけ数える（KbPage が描き直されたかの目印）。
+vi.mock('../KbPageMeta', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../KbPageMeta')>();
+  const Real = actual.default;
+  return {
+    ...actual,
+    default: (props: Parameters<typeof Real>[0]) => {
+      hoisted.metaRenders += 1;
+      return <Real {...props} />;
     },
   };
 });
@@ -1883,13 +1897,16 @@ describe('KbPage の描き直しの範囲', () => {
     expect(hoisted.renders).toEqual({ editor: 0, title: 0 });
   });
 
-  it('星を押しても、本文エディタと題名を描き直さない', async () => {
+  it('星を押しても、本文エディタと題名を描き直さない（ページの部品そのものも描き直さない）', async () => {
     hoisted.addFavorite.mockResolvedValue(undefined);
     await renderReady();
+    hoisted.metaRenders = 0;
 
     fireEvent.click(await screen.findByRole('button', { name: 'お気に入りに追加' }));
     await waitFor(() => expect(hoisted.addFavorite).toHaveBeenCalled());
+    await screen.findByRole('button', { name: 'お気に入りから外す' });
 
     expect(hoisted.renders).toEqual({ editor: 0, title: 0 });
+    expect(hoisted.metaRenders).toBe(0);
   });
 });

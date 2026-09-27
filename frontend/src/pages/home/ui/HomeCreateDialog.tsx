@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode, type Ref } from 'react';
+import { useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Dialog } from '@base-ui/react/dialog';
 import { Tabs } from '@base-ui/react/tabs';
@@ -236,7 +236,9 @@ function PageForm({ workspaces, initialWorkspaceSlug, onPendingChange }: PageFor
   const navigate = useNavigate();
   const ids = { ws: useId(), space: useId(), title: useId(), template: useId() };
   const [workspaceSlug, setWorkspaceSlug] = useState(initialWorkspaceSlug ?? workspaces[0]?.slug ?? '');
-  const [spaceId, setSpaceId] = useState('');
+  // 自分で選んだスペース。'' は「まだ選んでいない」で、候補が読めたら先頭を選んだものとして扱う
+  // （effect で先頭を入れると、候補が届いた直後にもう 1 回描き直す）。
+  const [chosenSpaceId, setSpaceId] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [title, setTitle] = useState('');
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -246,13 +248,10 @@ function PageForm({ workspaces, initialWorkspaceSlug, onPendingChange }: PageFor
 
   const workspace = workspaces.find((w) => w.slug === workspaceSlug) ?? null;
   const spaces = useCreatableSpaces(workspaceSlug || null);
+  const spaceId = chosenSpaceId !== '' ? chosenSpaceId : spaces.status === 'ready' ? (spaces.data[0]?.id ?? '') : '';
   const templates = usePageTemplates(workspaceSlug || null, spaceId || null);
   const space = spaces.data.find((s) => s.id === spaceId) ?? null;
 
-  // スペースの候補が読めたら先頭を選ぶ。ワークスペースを替えたときは下の changeWorkspace が外してある。
-  useEffect(() => {
-    if (spaces.status === 'ready' && spaceId === '' && spaces.data.length > 0) setSpaceId(spaces.data[0].id);
-  }, [spaces.status, spaces.data, spaceId]);
 
   const changeWorkspace = (slug: string) => {
     setWorkspaceSlug(slug);
@@ -273,10 +272,13 @@ function PageForm({ workspaces, initialWorkspaceSlug, onPendingChange }: PageFor
     setPending(true);
     onPendingChange(true);
     setFailure(null);
+    // 雛形から作るかどうかは try の外で決める（try/catch の中の条件式は React Compiler が扱えず、
+    // 部品ごと対象から外す）。
+    const create = templateId
+      ? () => KbRepository.createPageFromTemplate(workspace.slug, space.id, { templateId, title: title.trim() })
+      : () => KbRepository.createPage(workspace.slug, space.id, { title: title.trim() });
     try {
-      const page = templateId
-        ? await KbRepository.createPageFromTemplate(workspace.slug, space.id, { templateId, title: title.trim() })
-        : await KbRepository.createPage(workspace.slug, space.id, { title: title.trim() });
+      const page = await create();
       navigate(`/kb/${encodeURIComponent(page.id)}`);
     } catch (cause) {
       setFailure(createFailureMessage(cause, 'page'));
@@ -403,7 +405,8 @@ function TicketForm({ workspaces, initialWorkspaceSlug, onPendingChange }: Ticke
   const creatable = workspaces.filter((w) => w.canCreateTickets);
   const initial = creatable.some((w) => w.slug === initialWorkspaceSlug) ? (initialWorkspaceSlug ?? '') : '';
   const [workspaceSlug, setWorkspaceSlug] = useState(initial || (creatable.length === 1 ? creatable[0].slug : ''));
-  const [projectId, setProjectId] = useState('');
+  // 自分で選んだプロジェクト。'' は「まだ選んでいない」で、候補が読めたら先頭を選んだものとして扱う。
+  const [chosenProjectId, setProjectId] = useState('');
   const [title, setTitle] = useState('');
   const [titleError, setTitleError] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -412,12 +415,11 @@ function TicketForm({ workspaces, initialWorkspaceSlug, onPendingChange }: Ticke
 
   const workspace = creatable.find((w) => w.slug === workspaceSlug) ?? null;
   const projects = useProjects(workspace?.slug ?? null);
+  const projectId =
+    chosenProjectId !== '' ? chosenProjectId : projects.status === 'ready' ? (projects.data[0]?.id ?? '') : '';
   const project = projects.data.find((p) => p.id === projectId) ?? null;
   const ready = useProjectReady(workspace?.slug ?? null, project?.id ?? null);
 
-  useEffect(() => {
-    if (projects.status === 'ready' && projectId === '' && projects.data.length > 0) setProjectId(projects.data[0].id);
-  }, [projects.status, projects.data, projectId]);
 
   const changeWorkspace = (slug: string) => {
     setWorkspaceSlug(slug);

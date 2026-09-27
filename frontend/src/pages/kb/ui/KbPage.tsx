@@ -20,7 +20,6 @@ import { useKbPageDoc } from '../model/useKbPageDoc';
 import { createSubpage } from '../model/createSubpage';
 import { resolveEntryPageId } from '../model/resolveEntryPage';
 import { useKbImageResolver } from '../model/useKbImageResolver';
-import { useKbPageFavorite } from '../model/useKbPageFavorite';
 import { destinationAfterDeletion } from '../lib/deletionDestination';
 import { useDocOutline } from '../model/useDocOutline';
 import {
@@ -47,7 +46,7 @@ import KbSuggestionsPanel from './KbSuggestionsPanel';
 import KbRightRail from './KbRightRail';
 import type { KbRailTab } from '../model/railTabs';
 import KbTocPanel from './KbTocPanel';
-import KbFavoriteButton from './KbFavoriteButton';
+import KbFavoriteControl from './KbFavoriteControl';
 import KbPageMoreActions from './KbPageMoreActions';
 import KbPageBreadcrumb from './KbPageBreadcrumb';
 import { SharePanel } from '@/features/permission-sharing';
@@ -466,16 +465,6 @@ export default function KbPage() {
   // 目次の飛び先（本文の見出しの DOM）を探す起点。
   const articleRef = useRef<HTMLElement | null>(null);
 
-  // お気に入りの星。初期値は応答（isFavorite）。旧応答では undefined = 入れていない扱い。
-  const favorite = useKbPageFavorite(data?.workspaceSlug, data?.page.id, data?.isFavorite ?? false);
-  const handleToggleFavorite = useCallback(async () => {
-    const failure = favorite.favorite ? 'お気に入りから外せませんでした' : 'お気に入りに追加できませんでした';
-    try {
-      await favorite.toggle();
-    } catch {
-      showToast('error', failure);
-    }
-  }, [favorite, showToast]);
 
   // 「この版に戻す」の確認ダイアログ。KbRowActions の削除確認と同じ形 —
   // 確定した瞬間に閉じ、実行(失敗時の知らせ)は非同期のまま進める。
@@ -762,7 +751,12 @@ export default function KbPage() {
                 {data.canComment && !data.canEdit && (
                   <KbSuggestEditButton active={suggestionDraft.open} onToggle={handleToggleSuggestDraft} />
                 )}
-                <KbFavoriteButton favorite={favorite.favorite} pending={favorite.pending} onToggle={() => void handleToggleFavorite()} />
+                <KbFavoriteControl
+                  key={data.page.id}
+                  workspaceSlug={data.workspaceSlug}
+                  pageId={data.page.id}
+                  initial={data.isFavorite ?? false}
+                />
                 {/* 目次はレールの既定のタブ。閉じた後に開き直す入口としてもここに置く。 */}
                 <button
                   type="button"

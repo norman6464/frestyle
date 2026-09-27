@@ -121,4 +121,19 @@ describe('useResizablePanel', () => {
     const { result } = renderHook(() => useResizablePanel({ storageKey: 'width-key', minWidth: 288 }));
     expect(result.current.width).toBe(288);
   });
+
+  it('画面の幅が変わったら、幅の上限（aria-valuemax に使う）も変わる', () => {
+    const original = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1600 });
+    const { result } = renderHook(() => useResizablePanel({ side: 'right', maxWidthRatio: 0.5 }));
+    expect(result.current.maxWidth).toBe(800);
+
+    act(() => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1000 });
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    expect(result.current.maxWidth).toBe(500);
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: original });
+  });
 });

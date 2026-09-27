@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export type ResizablePanelSide = 'left' | 'right';
 
@@ -27,6 +27,11 @@ export interface UseResizablePanelResult {
   onHandleMouseDown: (event: React.MouseEvent) => void;
   /** ハンドルの onKeyDown に渡す（← / → で操作。マウス操作の代替）。 */
   onHandleKeyDown: (event: React.KeyboardEvent) => void;
+  /**
+   * 今の画面での幅の上限（px。ハンドルの aria-valuemax に使う）。画面の幅の変化（resize）を
+   * 聞いて求め直す（呼び出し側の部品で window.innerWidth を読むと、React Compiler が 1 回しか求めない）。
+   */
+  maxWidth: number;
 }
 
 const DEFAULT_WIDTH = 288;
@@ -86,6 +91,13 @@ export function useResizablePanel(options: UseResizablePanelOptions = {}): UseRe
     readInitialWidth(storageKey, defaultWidth, minWidth, maxWidthRatio),
   );
   const [isResizing, setIsResizing] = useState(false);
+  // 画面の幅。幅の上限（aria-valuemax）は画面の幅から決まるので、変わったら描き直す。
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window === 'undefined' ? 0 : window.innerWidth));
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const persist = useCallback((value: number) => {
     if (!storageKey) return;
@@ -138,5 +150,6 @@ export function useResizablePanel(options: UseResizablePanelOptions = {}): UseRe
     });
   }, [minWidth, maxWidthRatio, persist]);
 
-  return { width, isResizing, onHandleMouseDown, onHandleKeyDown };
+  const maxWidth = Math.round(viewportWidth * maxWidthRatio);
+  return { width, isResizing, onHandleMouseDown, onHandleKeyDown, maxWidth };
 }

@@ -38,10 +38,13 @@ export default function HomeFavoritesSection({
   const shown = favorites.data.slice(0, expanded ? favorites.data.length : initialCount);
   const canExpand = favorites.status === 'ready' && favorites.data.length > initialCount;
 
-  // ワークスペースを替えたら広げた状態も戻す（前の範囲の続きに見せない）。
-  useEffect(() => {
+  // ワークスペースを替えたら広げた状態も戻す（前の範囲の続きに見せない）。effect で戻すと
+  // 広げたまま 1 回描いてしまうので、描いている途中で前のワークスペースと比べる。
+  const [expandedFor, setExpandedFor] = useState(workspaceSlug);
+  if (expandedFor !== workspaceSlug) {
+    setExpandedFor(workspaceSlug);
     setExpanded(false);
-  }, [workspaceSlug]);
+  }
 
   return (
     <section aria-labelledby="home-favorites-heading" className="min-w-0">
