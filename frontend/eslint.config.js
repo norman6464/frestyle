@@ -165,20 +165,13 @@ export default defineConfig([globalIgnores(['dist', 'coverage']), {
   },
 }, {
   // React Compiler をかける範囲には、コンパイラと同じ解析で「React の決まりに反する書き方」
-  // （描画中に ref を読み書きする・props や state を書き換える など）を見つける検査も
+  // （描画中に ref を読み書きする・effect の中で同期的に state を変える など）を見つける検査も
   // 効かせる。反する部品はコンパイラが黙って対象から外す（壊れはしないが速くもならない）ので、
   // lint で気づけるようにする。全体に効かせると既存のコードの書き直しが要るので、範囲は
   // コンパイラと同じ定数から読む（vite-plugins/react-compiler-scope.js）。
   files: REACT_COMPILER_DIRS.map((dir) => `${dir}/**/*.{ts,tsx}`),
   ignores: REACT_COMPILER_IGNORES,
-  rules: {
-    ...reactHooks.configs.flat['recommended-latest'].rules,
-    // effect の中で同期的に state を変える書き方（描いた直後にもう 1 回描き直す）は、コンパイラの
-    // 最適化を止めない（止めるのは描画中の ref の読み書きなど）。サイドバーには 10 か所あり、
-    // 直すには木の読み込み（useKbTree）の組み立て直しが要るので、この検査だけ切っておく。
-    // 一覧と扱いは FRESTYLE-634 に記録した。直したら外す。
-    'react-hooks/set-state-in-effect': 'off',
-  },
+  rules: reactHooks.configs.flat['recommended-latest'].rules,
 }, {
   // ビルド・テストの設定ファイルは Node で動く（src はブラウザ）。
   // preview.tsx はブラウザで動くので含めない（Node のグローバルを許すと

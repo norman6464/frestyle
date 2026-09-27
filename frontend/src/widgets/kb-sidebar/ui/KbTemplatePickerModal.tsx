@@ -36,8 +36,15 @@ export interface KbTemplatePickerModalProps {
  *
  * 削除は KbRowActions と同じ流儀で ConfirmModal による確認を経る。
  */
-export default function KbTemplatePickerModal({
-  isOpen,
+export default function KbTemplatePickerModal({ isOpen, ...props }: KbTemplatePickerModalProps) {
+  // 閉じている間は中身ごと外す。打ちかけ（選んだ雛形・題名・削除の確認）は中身の state に
+  // 持たせてあるので、閉じれば捨てられ、次に開いたときは常に一覧の頭から始まる。
+  // 閉じたあとに effect で片付けると、閉じた直後にもう 1 回描き直すことになる。
+  if (!isOpen) return null;
+  return <TemplatePicker {...props} />;
+}
+
+function TemplatePicker({
   templates,
   loading,
   error,
@@ -45,7 +52,7 @@ export default function KbTemplatePickerModal({
   onConfirm,
   onDelete,
   onClose,
-}: KbTemplatePickerModalProps) {
+}: Omit<KbTemplatePickerModalProps, 'isOpen'>) {
   const titleId = useId();
   const [selected, setSelected] = useState<KbPageTemplate | null>(null);
   const [title, setTitle] = useState('');
@@ -54,19 +61,7 @@ export default function KbTemplatePickerModal({
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // 閉じたら打ちかけの状態を持ち越さない（次に開いたとき常に一覧の頭から）。
   useEffect(() => {
-    if (isOpen) return;
-    setSelected(null);
-    setTitle('');
-    setSubmitting(false);
-    setSubmitError(null);
-    setConfirmingDeleteId(null);
-    setDeleteError(null);
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       // 削除の確認モーダルが出ている間は、Escape は ConfirmModal 側の onCancel だけが処理する
       // （ここで onClose すると、確認モーダルごとピッカー全体が閉じてしまう）。
@@ -74,9 +69,7 @@ export default function KbTemplatePickerModal({
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, onClose, confirmingDeleteId]);
-
-  if (!isOpen) return null;
+  }, [onClose, confirmingDeleteId]);
 
   const selectTemplate = (template: KbPageTemplate) => {
     setSelected(template);

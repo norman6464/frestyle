@@ -1,3 +1,4 @@
+import { Profiler, createElement, type ReactNode } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useKbPageTemplates } from '../useKbPageTemplates';
@@ -152,5 +153,45 @@ describe('useKbPageTemplates.createPageFromTemplate', () => {
     await expect(
       result.current.createPageFromTemplate({ templateId: 't-1', title: 'x' }),
     ).rejects.toThrow();
+  });
+});
+
+describe('useKbPageTemplates の描き直し', () => {
+  /** 画面に反映された回数（React の commit）を数える入れもの。 */
+  function counted() {
+    const commits = { count: 0 };
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(Profiler, { id: 'templates', onRender: () => (commits.count += 1) }, children);
+    return { commits, wrapper };
+  }
+
+  it('開いた描画の中で読み込み中にする（読み込み中にするためにもう 1 回描き直さない）', () => {
+    hoisted.listPageTemplates.mockImplementation(() => new Promise(() => {}));
+    const { commits, wrapper } = counted();
+    const { result, rerender } = renderHook(({ open }) => useKbPageTemplates(SLUG, SPACE, open), {
+      initialProps: { open: false },
+      wrapper,
+    });
+    commits.count = 0;
+
+    rerender({ open: true });
+
+    expect(result.current.loading).toBe(true);
+    expect(commits.count).toBe(1);
+  });
+
+  it('閉じた描画の中で一覧を畳む（畳むためにもう 1 回描き直さない）', async () => {
+    const { commits, wrapper } = counted();
+    const { result, rerender } = renderHook(({ open }) => useKbPageTemplates(SLUG, SPACE, open), {
+      initialProps: { open: true },
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.templates).toHaveLength(2));
+    commits.count = 0;
+
+    rerender({ open: false });
+
+    expect(result.current.templates).toEqual([]);
+    expect(commits.count).toBe(1);
   });
 });

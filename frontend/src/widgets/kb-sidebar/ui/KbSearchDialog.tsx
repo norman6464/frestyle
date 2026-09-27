@@ -36,8 +36,6 @@ export default function KbSearchDialog({ workspaceSlug, spaces, initialQuery = '
   const navigate = useNavigate();
   const listboxId = useId();
   const [query, setQuery] = useState(initialQuery);
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [pages, setPages] = useState<KbSearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   // 速く打ったときに、古い応答が新しい結果を上書きしないための世代番号。
   const generation = useRef(0);
@@ -45,32 +43,36 @@ export default function KbSearchDialog({ workspaceSlug, spaces, initialQuery = '
   const [attempt, setAttempt] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 問い合わせの結果は「どの問い合わせの結果か」の鍵と一緒に持ち、状態（はじめ・検索中・結果・失敗）は
+  // そこから導く。状態を別に持って effect の頭で「検索中」にすると、1 文字打つたびに
+  // 前の状態のまま 1 回描いてから、検索中にしてもう 1 回描き直すことになる。
+  const needle = query.trim();
+  const requestKey = `${workspaceSlug} ${attempt} ${needle}`;
+  const [result, setResult] = useState<{ key: string; pages: KbSearchResult[] | null } | null>(null);
+  const current = result?.key === requestKey ? result : null;
+  const status: 'idle' | 'loading' | 'done' | 'error' =
+    needle === '' ? 'idle' : current === null ? 'loading' : current.pages === null ? 'error' : 'done';
+  const pages = status === 'done' ? (current?.pages ?? []) : [];
+
   useEffect(() => {
     // 空入力に戻したときも世代を進める。進めないと、消す前に飛ばした検索の応答が
     // まだ有効な世代のまま届き、空の入力に古い結果が再表示される。
     const token = ++generation.current;
-    const needle = query.trim();
-    if (needle === '') {
-      setStatus('idle');
-      setPages([]);
-      return undefined;
-    }
-    setStatus('loading');
+    if (needle === '') return undefined;
     const timer = setTimeout(() => {
       KbRepository.searchPages(workspaceSlug, needle)
         .then((found) => {
           if (token !== generation.current) return;
-          setPages(found);
+          setResult({ key: requestKey, pages: found });
           setSelectedIndex(0);
-          setStatus('done');
         })
         .catch(() => {
           if (token !== generation.current) return;
-          setStatus('error');
+          setResult({ key: requestKey, pages: null });
         });
     }, 250);
     return () => clearTimeout(timer);
-  }, [workspaceSlug, query, attempt]);
+  }, [workspaceSlug, needle, requestKey]);
 
   const view = buildSearchView(pages, spaces);
 

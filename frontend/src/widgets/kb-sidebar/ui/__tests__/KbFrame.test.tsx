@@ -1,3 +1,4 @@
+import { Profiler } from 'react';
 import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -1906,5 +1907,103 @@ describe('描き直す範囲（React Compiler）', () => {
 
     // 描き直すのは、開いた「親」の行と、新しく見えた「子」の行の 2 つだけ。ほかの 3 行はそのまま。
     expect(actionsRenders.count - before).toBe(2);
+  });
+});
+
+describe('描いた直後にもう 1 回描き直さない（effect の中で state を合わせない）', () => {
+  // 画面に反映された回数（React の commit）を数える。effect の中で state を合わせると、
+  // 古い state のまま 1 回反映してから、合わせた state でもう 1 回反映することになる。
+  function renderCounted(props: { workspaceSlug?: string; spaceId?: string; activePageId?: string } = {}) {
+    const commits = { count: 0 };
+    const ui = (next: typeof props) => (
+      <Profiler
+        id="kb-frame"
+        onRender={() => {
+          commits.count += 1;
+        }}
+      >
+        <MemoryRouter initialEntries={['/kb']}>
+          <KbFrame spaceId="space-1" {...next} />
+        </MemoryRouter>
+      </Profiler>
+    );
+    const view = render(ui(props));
+    return { commits, rerender: (next: typeof props) => view.rerender(ui(next)) };
+  }
+
+  it('スペースが変わったら、その描画の中で前のスペースの木を片付ける', async () => {
+    hoisted.fetchSpaces.mockResolvedValue([space('space-1', '開発部'), space('space-2', '営業部')]);
+    const { commits, rerender } = renderCounted();
+    await screen.findByText('設計メモ');
+    hoisted.fetchPageTree.mockImplementation(() => new Promise(() => {}));
+    commits.count = 0;
+
+    rerender({ spaceId: 'space-2' });
+
+    expect(screen.queryByText('設計メモ')).not.toBeInTheDocument();
+    expect(commits.count).toBe(1);
+  });
+
+  it('ワークスペースが変わったら、その描画の中でスペースの一覧を読み込み直しに入る', async () => {
+    const { commits, rerender } = renderCounted({ workspaceSlug: 'acme' });
+    await screen.findByText('設計メモ');
+    hoisted.fetchSpaces.mockImplementation(() => new Promise(() => {}));
+    hoisted.fetchPageTree.mockImplementation(() => new Promise(() => {}));
+    commits.count = 0;
+
+    rerender({ workspaceSlug: 'beta' });
+
+    await waitFor(() => expect(hoisted.fetchSpaces).toHaveBeenCalledWith('beta'));
+    expect(screen.queryByText('設計メモ')).not.toBeInTheDocument();
+    expect(commits.count).toBe(1);
+  });
+
+  it('木が届いたら、今のページの祖先を同じ描画の中で開く', async () => {
+    let resolveTree: (value: KbPageTree) => void = () => {};
+    hoisted.fetchPageTree.mockImplementation(
+      () =>
+        new Promise<KbPageTree>((resolve) => {
+          resolveTree = resolve;
+        }),
+    );
+    const { commits } = renderCounted({ activePageId: 'child' });
+    await screen.findByRole('navigation', { name: '開発部 の画面' });
+    await waitFor(() => expect(hoisted.fetchPageTree).toHaveBeenCalled());
+    commits.count = 0;
+
+    await act(async () => {
+      resolveTree(tree([{ id: 'p1', title: '親', children: ['child'] }]));
+    });
+
+    expect(screen.getByText('child')).toBeInTheDocument();
+    expect(commits.count).toBe(1);
+  });
+
+  it('画面が移ったら、引き出しはその描画の中で閉じる', async () => {
+    const { commits } = renderCounted();
+    await screen.findByText('設計メモ');
+    fireEvent.click(screen.getByRole('button', { name: 'ページの一覧を開く' }));
+    expect(screen.getByRole('dialog', { name: 'ページ' })).toBeInTheDocument();
+    commits.count = 0;
+
+    fireEvent.click(screen.getByRole('link', { name: '設計メモ' }));
+
+    expect(screen.queryByRole('dialog', { name: 'ページ' })).not.toBeInTheDocument();
+    expect(commits.count).toBe(1);
+  });
+
+  it('スペースの一覧の再試行は、押した描画の中で読み込み中に戻す', async () => {
+    hoisted.fetchMySpaces.mockRejectedValueOnce(new Error('boom'));
+    const { commits } = renderCounted();
+    await screen.findByText('設計メモ');
+    fireEvent.click(screen.getByRole('button', { name: 'スペース「開発部」を切り替える' }));
+    await screen.findByText('スペースを読み込めませんでした');
+    hoisted.fetchMySpaces.mockImplementation(() => new Promise(() => {}));
+    commits.count = 0;
+
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+
+    expect(screen.queryByText('スペースを読み込めませんでした')).not.toBeInTheDocument();
+    expect(commits.count).toBe(1);
   });
 });

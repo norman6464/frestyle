@@ -9,6 +9,7 @@ export interface KbPageTemplatesState {
 }
 
 const EMPTY: KbPageTemplatesState = { templates: [], loading: false, error: null };
+const LOADING: KbPageTemplatesState = { templates: [], loading: true, error: null };
 
 const LOAD_FAILED =
   'テンプレートを読み込めませんでした。通信が切れたか、このワークスペースを見る立場でなくなっています。開き直すと最新の状態が出ます。';
@@ -52,7 +53,17 @@ export function useKbPageTemplates(
   spaceId: string | undefined,
   open: boolean,
 ) {
-  const [state, setState] = useState<KbPageTemplatesState>(EMPTY);
+  // 宛先の鍵。閉じている・宛先が未確定なら null。
+  const targetKey = targetOf(workspaceSlug, spaceId, open)?.key ?? null;
+  const [state, setState] = useState<KbPageTemplatesState>(() => (targetKey ? LOADING : EMPTY));
+  // 宛先が変わったら（開いた・閉じた・スペースが変わった）、描いている途中で一覧を合わせる
+  // （閉じたら畳む・開いたら読み込み中）。effect で合わせると、前の一覧のまま 1 回描いてから
+  // もう 1 回描き直すことになる。前回の宛先を state に持って比べる（React が勧める形）。
+  const [stateKey, setStateKey] = useState(targetKey);
+  if (targetKey !== stateKey) {
+    setStateKey(targetKey);
+    setState(targetKey ? LOADING : EMPTY);
+  }
 
   // いま見ている宛先。応答が着地してよいかをこれで判定する。
   const active = useRef<TemplatesTarget | null>(null);
@@ -60,17 +71,18 @@ export function useKbPageTemplates(
   // 古い一覧で上書きされる取り違えを見分ける（useKbComments と同じ理由）。
   const seq = useRef(0);
 
-  const load = useCallback(async (to: TemplatesTarget) => {
+  const load = useCallback((to: TemplatesTarget) => {
     const request = ++seq.current;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const templates = await KbRepository.listPageTemplates(to.workspaceSlug, to.spaceId);
-      if (active.current?.key !== to.key || seq.current !== request) return;
-      setState({ templates, loading: false, error: null });
-    } catch {
-      if (active.current?.key !== to.key || seq.current !== request) return;
-      setState({ ...EMPTY, error: LOAD_FAILED });
-    }
+    // state は応答が届いてから書く（読み込み中の印は、宛先が変わったときに描いている途中で立ててある）。
+    KbRepository.listPageTemplates(to.workspaceSlug, to.spaceId)
+      .then((templates) => {
+        if (active.current?.key !== to.key || seq.current !== request) return;
+        setState({ templates, loading: false, error: null });
+      })
+      .catch(() => {
+        if (active.current?.key !== to.key || seq.current !== request) return;
+        setState({ ...EMPTY, error: LOAD_FAILED });
+      });
   }, []);
 
   // 宛先は effect の中で組み立てる（描画ごとに作り直すオブジェクトを依存に入れると毎回走る）。
@@ -79,12 +91,12 @@ export function useKbPageTemplates(
     const target = targetOf(workspaceSlug, spaceId, open);
     active.current = target;
     if (!target) {
-      // ピッカーを閉じた（または宛先が未確定）。連番を進めて、飛んでいる応答を無効にする。
+      // ピッカーを閉じた（または宛先が未確定）。連番を進めて、飛んでいる応答を無効にする
+      // （一覧はもう描いている途中で畳んである）。
       seq.current += 1;
-      setState(EMPTY);
       return;
     }
-    void load(target);
+    load(target);
   }, [workspaceSlug, spaceId, open, load]);
 
   /**
