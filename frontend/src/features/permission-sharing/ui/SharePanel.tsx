@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { SharePrincipal, ShareRole, ShareRow as ShareRowData } from '../model/types';
 import ShareRow from './ShareRow';
 import { ROLES, displayName } from '../model/labels';
-import { Button, FsIcon } from '@/shared/ui';
+import { Button, EmptyNotice, ErrorNotice, FsIcon, SkeletonRows } from '@/shared/ui';
 import { SHARE_SELECT_CLASS } from './selectClass';
 
 export interface SharePanelProps {
@@ -135,24 +135,11 @@ export default function SharePanel({
           )}
         </div>
 
-        {loading && (
-          // 件数は分からないので 2 行に固定する（実際の件数に寄せると、
-          // 読み込みのたびに高さが跳ねる）。
-          <div className="flex flex-col gap-1.5" role="status" aria-label="権限を読み込み中">
-            <div className="h-8 animate-skeleton rounded bg-surface-2" />
-            <div className="h-8 animate-skeleton rounded bg-surface-2" />
-          </div>
-        )}
+        {loading && <SkeletonRows label="権限を読み込み中" shape="blocks" size="sm" />}
 
-        {!loading && error && (
-          <p role="alert" className="py-2 text-sm leading-relaxed text-danger-ink">
-            {error}
-          </p>
-        )}
+        {!loading && error && <ErrorNotice variant="inline" message={error} className="py-2" />}
 
-        {!loading && !error && rows.length === 0 && (
-          <p className="mt-0.5 text-xs leading-relaxed text-[var(--color-text-muted)]">{emptyNote}</p>
-        )}
+        {!loading && !error && rows.length === 0 && <EmptyNotice title={emptyNote} className="mt-0.5" />}
 
         {!loading && rows.length > 0 && (
           <ul className="flex flex-col gap-0.5">

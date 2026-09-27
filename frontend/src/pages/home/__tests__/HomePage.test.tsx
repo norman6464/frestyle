@@ -124,7 +124,7 @@ describe('HomePage', () => {
     // 候補は別の器（ポータル）へ後から描かれるので、出てくるまで待つ。
     await user.click(await screen.findByRole('option', { name: '営業チーム' }));
     expect(screen.queryByText('A のお気に入り')).not.toBeInTheDocument();
-    expect(screen.getByText('お気に入りを読み込んでいます')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'お気に入りを読み込んでいます' })).toBeInTheDocument();
   });
 
   it('画面を離れたら履歴の取得を中断する', () => {

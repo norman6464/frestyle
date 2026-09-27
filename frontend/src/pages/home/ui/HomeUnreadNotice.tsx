@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FsIcon } from '@/shared/ui';
+import { ErrorNotice, FsIcon } from '@/shared/ui';
 import type { HomeResource } from '../model/useHomeResource';
 
 export interface HomeUnreadNoticeProps {
@@ -17,16 +17,12 @@ export default function HomeUnreadNotice({ unread, wide }: HomeUnreadNoticeProps
   if (unread.status === 'loading') return null;
   if (unread.status === 'error') {
     return (
-      <p className="flex flex-wrap items-center gap-2 text-sm text-[var(--color-text-muted)]">
-        <span role="alert">未読の通知の件数を取得できませんでした。</span>
-        <button
-          type="button"
-          onClick={unread.retry}
-          className="inline-flex min-h-11 items-center rounded-md font-medium text-brand-700 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-        >
-          再試行
-        </button>
-      </p>
+      <ErrorNotice
+        variant="inline"
+        politeness="polite"
+        message="未読の通知の件数を取得できませんでした。"
+        onRetry={unread.retry}
+      />
     );
   }
   if (unread.data <= 0) return null;

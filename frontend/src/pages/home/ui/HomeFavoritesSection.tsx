@@ -2,10 +2,9 @@ import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { KbRepository, type KbFavoritePage, type KbSpace, type KbWorkspace } from '@/entities/kb';
 import { KbSearchDialog } from '@/widgets/kb-sidebar';
-import { FieldSelect, FsIcon } from '@/shared/ui';
+import { EmptyNotice, ErrorNotice, FieldSelect, FsIcon, SkeletonRows } from '@/shared/ui';
 import { homeRowLink, homeTextLink } from '../lib/homeStyles';
 import type { HomeResource } from '../model/useHomeResource';
-import { HomeLoadingRows, HomePanelEmpty, HomePanelError } from './HomePanelState';
 
 export interface HomeFavoritesSectionProps {
   workspaces: HomeResource<KbWorkspace[]>;
@@ -64,22 +63,22 @@ export default function HomeFavoritesSection({
 
       {workspaces.status === 'error' && (
         <div className="mt-4">
-          <HomePanelError message="ワークスペースを取得できませんでした。" onRetry={workspaces.retry} />
+          <ErrorNotice message="ワークスペースを取得できませんでした。" onRetry={workspaces.retry} />
         </div>
       )}
       {workspaces.status === 'ready' && (
         <>
-          {favorites.status === 'loading' && <HomeLoadingRows label="お気に入りを読み込んでいます" rows={initialCount} />}
+          {favorites.status === 'loading' && <SkeletonRows label="お気に入りを読み込んでいます" rows={initialCount} className="py-4" />}
           {favorites.status === 'error' && (
             <div className="mt-4">
-              <HomePanelError message="お気に入りを取得できませんでした。" onRetry={favorites.retry} />
+              <ErrorNotice message="お気に入りを取得できませんでした。" onRetry={favorites.retry} />
             </div>
           )}
           {favorites.status === 'ready' && shown.length === 0 && (
             <div className="mt-4">
-              <HomePanelEmpty title="このワークスペースにお気に入りはありません">
+              <EmptyNotice variant="panel" title="このワークスペースにお気に入りはありません">
                 <p>ページを開いて、上部の星から追加できます。</p>
-              </HomePanelEmpty>
+              </EmptyNotice>
             </div>
           )}
           {favorites.status === 'ready' && shown.length > 0 && (

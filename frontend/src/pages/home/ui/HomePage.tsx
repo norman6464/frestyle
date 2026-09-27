@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
-import { Button, FsIcon, PageFrame } from '@/shared/ui';
+import { Button, FsIcon, PageFrame, SkeletonRows } from '@/shared/ui';
 import { homeStrongLink } from '../lib/homeStyles';
 import { useFavoritesWorkspace } from '../model/useFavoritesWorkspace';
 import { useHomeWorkspaces } from '../model/useHomeWorkspaces';
@@ -14,7 +14,6 @@ import HomeAssignedSection from './HomeAssignedSection';
 import HomeCreateDialog from './HomeCreateDialog';
 import HomeFavoritesSection from './HomeFavoritesSection';
 import HomeFirstRun from './HomeFirstRun';
-import { HomeLoadingRows } from './HomePanelState';
 import HomeResumeSection from './HomeResumeSection';
 import HomeUnreadNotice from './HomeUnreadNotice';
 
@@ -82,7 +81,7 @@ export default function HomePage() {
       <PageFrame className="pb-24">
         {header}
         <div className="mt-8">
-          <HomeLoadingRows label="ホームを読み込んでいます" rows={4} />
+          <SkeletonRows label="ホームを読み込んでいます" rows={4} className="py-4" />
         </div>
       </PageFrame>
     );

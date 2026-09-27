@@ -2,6 +2,7 @@ import type { KbCommentThread } from '@/entities/kb';
 import type { CommentAnchor } from '@/shared/ui/RichTextEditor';
 import KbCommentComposer from './KbCommentComposer';
 import KbCommentThreadCard from './KbCommentThreadCard';
+import { EmptyNotice, ErrorNotice, SkeletonRows } from '@/shared/ui';
 
 export interface KbCommentsPanelProps {
   threads: KbCommentThread[];
@@ -89,34 +90,11 @@ export default function KbCommentsPanel({
         </div>
       )}
 
-      {loading && (
-        // 件数は分からないので 2 行に固定する（実際の件数に寄せると、読み込みのたびに高さが跳ねる）。
-        <div className="flex flex-col gap-1.5" role="status" aria-label="コメントを読み込み中">
-          <div className="h-16 animate-skeleton rounded bg-surface-2" />
-          <div className="h-16 animate-skeleton rounded bg-surface-2" />
-        </div>
-      )}
+      {loading && <SkeletonRows label="コメントを読み込み中" shape="blocks" size="lg" />}
 
-      {!loading && error && (
-        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm leading-relaxed text-danger-ink">
-          <p>{error}</p>
-          {onRetry && (
-            <button
-              type="button"
-              onClick={onRetry}
-              className="inline-flex min-h-9 items-center rounded-md border border-surface-3 bg-surface-1 px-3 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-2"
-            >
-              再読み込み
-            </button>
-          )}
-        </div>
-      )}
+      {!loading && error && <ErrorNotice variant="inline" message={error} onRetry={onRetry} />}
 
-      {!loading && !error && threads.length === 0 && (
-        <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
-          まだコメントはありません。
-        </p>
-      )}
+      {!loading && !error && threads.length === 0 && <EmptyNotice title="まだコメントはありません。" />}
 
       {!loading && !error && unresolved.length > 0 && (
         <section aria-label="未解決のスレッド">

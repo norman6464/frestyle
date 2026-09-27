@@ -3,6 +3,7 @@ import type { KbPageVersion } from '@/entities/kb';
 import Button from '@/shared/ui/Button';
 import KbVersionListItem from './KbVersionListItem';
 import KbVersionSaveForm from './KbVersionSaveForm';
+import { EmptyNotice, ErrorNotice, SkeletonRows } from '@/shared/ui';
 
 export interface KbVersionsPanelProps {
   versions: KbPageVersion[];
@@ -65,25 +66,11 @@ export default function KbVersionsPanel({
         </div>
       )}
 
-      {loading && (
-        // 件数は分からないので 2 行に固定する（KbCommentsPanel と同じ理由）。
-        <div className="flex flex-col gap-1.5" role="status" aria-label="履歴を読み込み中">
-          <div className="h-12 animate-skeleton rounded bg-surface-2" />
-          <div className="h-12 animate-skeleton rounded bg-surface-2" />
-        </div>
-      )}
+      {loading && <SkeletonRows label="履歴を読み込み中" shape="blocks" />}
 
-      {!loading && error && (
-        <p role="alert" className="text-sm leading-relaxed text-danger-ink">
-          {error}
-        </p>
-      )}
+      {!loading && error && <ErrorNotice variant="inline" message={error} />}
 
-      {!loading && !error && versions.length === 0 && (
-        <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
-          まだ版がありません。
-        </p>
-      )}
+      {!loading && !error && versions.length === 0 && <EmptyNotice title="まだ版がありません。" />}
 
       {!loading && !error && versions.length > 0 && (
         <ul className="flex flex-col gap-2">
