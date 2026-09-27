@@ -46,7 +46,7 @@ describe('resolveEntryPageId', () => {
 
     const result = await resolveEntryPageId('acme');
 
-    expect(result).toBe('p1');
+    expect(result).toEqual({ pageId: 'p1', fromLastVisited: false });
     expect(hoisted.fetchWorkspaces).not.toHaveBeenCalled();
     expect(hoisted.fetchSpaces).toHaveBeenCalledWith('acme');
   });
@@ -56,7 +56,7 @@ describe('resolveEntryPageId', () => {
 
     const result = await resolveEntryPageId();
 
-    expect(result).toBe('last-page');
+    expect(result).toEqual({ pageId: 'last-page', fromLastVisited: true });
     expect(hoisted.fetchWorkspaces).not.toHaveBeenCalled();
   });
 
@@ -67,7 +67,7 @@ describe('resolveEntryPageId', () => {
 
     const result = await resolveEntryPageId();
 
-    expect(result).toBe('p1');
+    expect(result).toEqual({ pageId: 'p1', fromLastVisited: false });
   });
 
   it('ページが無いスペースは飛ばして次のスペースを見る', async () => {
@@ -82,7 +82,7 @@ describe('resolveEntryPageId', () => {
 
     const result = await resolveEntryPageId();
 
-    expect(result).toBe('p1');
+    expect(result).toEqual({ pageId: 'p1', fromLastVisited: false });
   });
 
   it('どこにも 1 枚も無ければ null を返す', async () => {

@@ -73,18 +73,37 @@ export function useTicketComments(workspaceSlug: string | undefined, ticketId: s
     if (active.current) void load(active.current);
   }, [load]);
 
-  const applyIfCurrent = useCallback((to: Target, apply: (comments: TicketComment[]) => TicketComment[]) => {
-    if (active.current?.key !== to.key) return;
-    writeCount.current += 1;
-    setState((prev) => ({ ...prev, comments: apply(prev.comments) }));
-  }, []);
+  /**
+   * 書き込みの応答を、書き込みを始めたときと同じ閲覧のままなら反映する。
+   *
+   * **宛先（key）の一致だけでは足りない** — 閉じてすぐ同じチケットを開き直すと key は同じだが、
+   * それは別の閲覧で、開き直しの取得に書き込みの結果がもう入っていることがある。始めたときの
+   * seq も確かめ、開き直しのあとに前の応答を重ねない（発言が二重に増える。useKbComments と同じ）。
+   *
+   * 同じチケットのまま書き込み中に取り直し（refresh・開き直し）が挟まったときは、その取得に
+   * 書き込みの結果が入っているかどうか手元では分からない（backend が書き終える前に読んだかもしれない）。
+   * 応答を重ねも捨てもせず、もう一度取り直して backend の今の一覧に合わせる。
+   */
+  const applyIfCurrent = useCallback(
+    (to: Target, request: number, apply: (comments: TicketComment[]) => TicketComment[]) => {
+      if (active.current?.key !== to.key) return;
+      if (seq.current !== request) {
+        void load(active.current);
+        return;
+      }
+      writeCount.current += 1;
+      setState((prev) => ({ ...prev, comments: apply(prev.comments) }));
+    },
+    [load],
+  );
 
   const createComment = useCallback(
     async (body: TicketCommentBlock[], parentCommentId?: string) => {
       const to = active.current;
       if (!to) throw new Error('ticket comments: no active target');
+      const request = seq.current;
       const created = await TicketRepository.createTicketComment(to.workspaceSlug, to.ticketId, body, parentCommentId);
-      applyIfCurrent(to, (comments) => [...comments, created]);
+      applyIfCurrent(to, request, (comments) => [...comments, created]);
       return created;
     },
     [applyIfCurrent],
@@ -94,8 +113,9 @@ export function useTicketComments(workspaceSlug: string | undefined, ticketId: s
     async (commentId: string, body: TicketCommentBlock[]) => {
       const to = active.current;
       if (!to) throw new Error('ticket comments: no active target');
+      const request = seq.current;
       const updated = await TicketRepository.updateTicketComment(to.workspaceSlug, to.ticketId, commentId, body);
-      applyIfCurrent(to, (comments) =>
+      applyIfCurrent(to, request, (comments) =>
         comments.map((c) =>
           c.id === commentId
             ? { ...c, body: updated.body, edited: updated.edited, updatedAt: updated.updatedAt }
@@ -110,8 +130,9 @@ export function useTicketComments(workspaceSlug: string | undefined, ticketId: s
     async (commentId: string) => {
       const to = active.current;
       if (!to) throw new Error('ticket comments: no active target');
+      const request = seq.current;
       await TicketRepository.deleteTicketComment(to.workspaceSlug, to.ticketId, commentId);
-      applyIfCurrent(to, (comments) => comments.filter((c) => c.id !== commentId));
+      applyIfCurrent(to, request, (comments) => comments.filter((c) => c.id !== commentId));
     },
     [applyIfCurrent],
   );
@@ -121,8 +142,9 @@ export function useTicketComments(workspaceSlug: string | undefined, ticketId: s
     async (commentId: string, emoji: string, userId: number) => {
       const to = active.current;
       if (!to) throw new Error('ticket comments: no active target');
+      const request = seq.current;
       await TicketRepository.addTicketCommentReaction(to.workspaceSlug, to.ticketId, commentId, emoji);
-      applyIfCurrent(to, (comments) =>
+      applyIfCurrent(to, request, (comments) =>
         comments.map((c) =>
           c.id === commentId
             ? c.reactions.some((r) => r.userId === userId && r.emoji === emoji)
@@ -140,8 +162,9 @@ export function useTicketComments(workspaceSlug: string | undefined, ticketId: s
     async (commentId: string, emoji: string, userId: number) => {
       const to = active.current;
       if (!to) throw new Error('ticket comments: no active target');
+      const request = seq.current;
       await TicketRepository.removeTicketCommentReaction(to.workspaceSlug, to.ticketId, commentId, emoji);
-      applyIfCurrent(to, (comments) =>
+      applyIfCurrent(to, request, (comments) =>
         comments.map((c) =>
           c.id === commentId
             ? { ...c, reactions: c.reactions.filter((r) => !(r.userId === userId && r.emoji === emoji)) }

@@ -68,6 +68,7 @@ const hoisted = vi.hoisted(() => ({
   /** 枠（KbFrame）が本文へ渡すスペース。パンくずのスペースの段の検査で差し込む。 */
   frameSpace: null as null | { id: string; key: string; name: string; visibility: 'workspace' | 'private'; createdAt: string },
   getLastVisitedPageId: vi.fn(),
+  forgetVisitedPageIfMatches: vi.fn(),
   emit: vi.fn(),
   showToast: vi.fn(),
   navigate: vi.fn(),
@@ -129,6 +130,7 @@ vi.mock('@/entities/kb', async (importOriginal) => {
       removeFavorite: hoisted.removeFavorite,
     },
     getLastVisitedPageId: hoisted.getLastVisitedPageId,
+    forgetVisitedPageIfMatches: hoisted.forgetVisitedPageIfMatches,
     // スパイしつつ実物へ転送する（購読側の配線もこのテストの検査対象のため）。
     emitKbTreeEvent: (event: Parameters<typeof actual.emitKbTreeEvent>[0]) => {
       hoisted.emit(event);
@@ -336,12 +338,12 @@ describe('KbPage の配線', () => {
     expect(within(nav).getByText('親ページ')).toHaveAttribute('aria-current', 'page');
   });
 
-  it('自分か祖先が削除されたら一覧へ戻る（サーバー応答の祖先で判定する）', async () => {
+  it('祖先が削除されたら、残っている一番近い親へ移る（最上段の祖先ならスペースの概要へ）', async () => {
     renderPage();
     await screen.findByRole('navigation', { name: 'ページの場所' });
 
-    // 祖先（anc-1）が消えたら CASCADE で自分も消えている — 一覧へ戻る。
-    // 祖先はサーバー応答から取るので、サイドバーの現役の木に載っていない
+    // 祖先（anc-1）が消えたら CASCADE で自分も消えている。anc-1 は最上段なので、残る親は無く
+    // スペースの概要へ移る。祖先はサーバー応答から取るので、サイドバーの現役の木に載っていない
     // （アーカイブ済みの）ページを開いていても判定できる。
     //
     // 購読が張られるより先に emit すると、イベントは誰にも届かないまま捨てられる
@@ -350,7 +352,7 @@ describe('KbPage の配線', () => {
     // 動かない」が「イベントが届いていないだけ」で通る空検証になる。
     await waitFor(() => {
       emitKbTreeEvent({ type: 'page-deleted', pageId: 'anc-1' });
-      expect(hoisted.navigate).toHaveBeenCalledWith('/kb');
+      expect(hoisted.navigate).toHaveBeenCalledWith('/kb/spaces/s1', { replace: true });
     });
 
     // 購読が生きていると分かったうえで、無関係なページの削除では動かないことを見る。
@@ -359,12 +361,38 @@ describe('KbPage の配線', () => {
       emitKbTreeEvent({ type: 'page-deleted', pageId: 'unrelated' });
     });
     expect(hoisted.navigate).not.toHaveBeenCalled();
+  });
 
-    // 自分自身の削除でも戻る。
-    act(() => {
+  it('開いているページ自身が削除されたら親へ移り、前回開いたページの記録からも外す', async () => {
+    renderPage();
+    await screen.findByRole('navigation', { name: 'ページの場所' });
+
+    await waitFor(() => {
       emitKbTreeEvent({ type: 'page-deleted', pageId: 'p1' });
+      expect(hoisted.navigate).toHaveBeenCalledWith('/kb/anc-1', { replace: true });
     });
-    await waitFor(() => expect(hoisted.navigate).toHaveBeenCalledWith('/kb'));
+    // 記録を残すと、素の /kb の入口が「前回のページ」として消したページを選び、
+    // 「ページを開けません」になる。
+    expect(hoisted.forgetVisitedPageIfMatches).toHaveBeenCalledWith('p1');
+    // 一覧（素の /kb）へは戻さない。
+    expect(hoisted.navigate).not.toHaveBeenCalledWith('/kb');
+  });
+
+  it('途中の祖先が削除されたら、その 1 つ上の祖先へ移る', async () => {
+    hoisted.resolvePage.mockResolvedValue({
+      ...resolved(true),
+      ancestors: [
+        { id: 'anc-top', title: '最上段' },
+        { id: 'anc-mid', title: '途中' },
+      ],
+    });
+    renderPage();
+    await screen.findByRole('navigation', { name: 'ページの場所' });
+
+    await waitFor(() => {
+      emitKbTreeEvent({ type: 'page-deleted', pageId: 'anc-mid' });
+      expect(hoisted.navigate).toHaveBeenCalledWith('/kb/anc-top', { replace: true });
+    });
   });
 
   it('開いているワークスペースが削除されたら一覧へ戻る（配下ごと消えるため）', async () => {
@@ -1498,8 +1526,37 @@ describe('KbPage の入口解決（素の /kb）', () => {
     hoisted.getLastVisitedPageId.mockReturnValue('p9');
     renderEntry();
 
-    await waitFor(() => expect(hoisted.navigate).toHaveBeenCalledWith('/kb/p9', { replace: true }));
+    await waitFor(() =>
+      expect(hoisted.navigate).toHaveBeenCalledWith('/kb/p9', { replace: true, state: { fromLastVisited: true } }),
+    );
     expect(hoisted.fetchWorkspaces).not.toHaveBeenCalled();
+  });
+
+  it('直近に開いたページへ移って開けなければ、行き止まりを出さずに入口へ戻して選び直す', async () => {
+    // 別の人が消した・アーカイブ済みの子孫ごと消えた、など手元では気づけない理由で記録が古いことがある。
+    hoisted.useParams.mockReturnValue({ pageId: 'p9' });
+    hoisted.resolvePage.mockRejectedValue(new Error('404'));
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/kb/p9', state: { fromLastVisited: true } }]}>
+        <KbPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(hoisted.navigate).toHaveBeenCalledWith('/kb', { replace: true }));
+    expect(screen.queryByText('ページを開けません')).not.toBeInTheDocument();
+  });
+
+  it('直接開いたページが開けないときは、入口へ戻さず「ページを開けません」を出す', async () => {
+    hoisted.useParams.mockReturnValue({ pageId: 'p9' });
+    hoisted.resolvePage.mockRejectedValue(new Error('404'));
+    render(
+      <MemoryRouter initialEntries={['/kb/p9']}>
+        <KbPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('ページを開けません')).toBeInTheDocument();
+    expect(hoisted.navigate).not.toHaveBeenCalledWith('/kb', { replace: true });
   });
 
   it('閲覧履歴が無ければ、最初に見つかったページへ移る', async () => {
@@ -1594,6 +1651,22 @@ describe('KbPage の操作バーと右レール', () => {
     fireEvent.click(within(toc).getByRole('button', { name: 'ファイル名' }));
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect((scrollIntoView.mock.instances[0] as HTMLElement).getAttribute('data-block-id')).toBe('h-2');
+  });
+
+  it('目次は書きながら変わる（見出しを足すと、保存を待たずに増える）', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: '目次' }));
+    expect(await screen.findByText(/見出しがありません/)).toBeInTheDocument();
+
+    act(() => {
+      hoisted.editorProps.current?.onChange?.({
+        type: 'doc',
+        content: [{ type: 'heading', attrs: { level: 2, id: 'h-new' }, content: [{ type: 'text', text: '書き足した見出し' }] }],
+      });
+    });
+
+    const toc = await screen.findByRole('navigation', { name: '目次' });
+    expect(await within(toc).findByRole('button', { name: '書き足した見出し' })).toBeInTheDocument();
   });
 
   it('見出しが無ければ目次はそう伝える', async () => {
@@ -1715,5 +1788,34 @@ describe('KbPage が枠へ知らせる位置', () => {
       activePageId: 'p1',
       showPagePanel: undefined,
     });
+  });
+});
+
+describe('KbPage の行き止まりと、ほかの場所での変更の反映', () => {
+  it('ページを開けないときは、枠が知っているスペースの概要へ戻れる', async () => {
+    hoisted.frameSpace = { id: 's1', key: 's-1', name: 'バックエンド定例', visibility: 'workspace', createdAt: '' };
+    hoisted.resolvePage.mockRejectedValue(new Error('404'));
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'バックエンド定例 の概要へ' }));
+    expect(hoisted.navigate).toHaveBeenCalledWith('/kb/spaces/s1');
+  });
+
+  it('サイドバーで改名されたら、本文の題名とパンくずも変わる', async () => {
+    renderPage();
+    await screen.findByRole('navigation', { name: 'ページの場所' });
+    const base = resolved(true).page;
+
+    // 購読が張られるまで繰り返し emit する（上の削除の検査と同じ理由）。
+    await waitFor(() => {
+      emitKbTreeEvent({ type: 'page-updated', page: { ...base, title: '改名した題名' } });
+      expect(screen.getByLabelText('ページの題名')).toHaveValue('改名した題名');
+    });
+
+    act(() => {
+      emitKbTreeEvent({ type: 'page-updated', page: { ...base, id: 'anc-1', title: '改名した親' } });
+    });
+    const nav = screen.getByRole('navigation', { name: 'ページの場所' });
+    expect(within(nav).getByRole('link', { name: '改名した親' })).toHaveAttribute('href', '/kb/anc-1');
   });
 });
