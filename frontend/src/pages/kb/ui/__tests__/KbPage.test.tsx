@@ -1867,6 +1867,22 @@ describe('KbPage の描き直しの範囲', () => {
     expect(hoisted.renders).toEqual({ editor: 0, title: 0 });
   });
 
+  it('提案の下書きを打っても、本文エディタと題名を描き直さない', async () => {
+    hoisted.resolvePage.mockResolvedValue(resolved(false)); // commenter
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: '変更を提案する' }));
+    await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(true));
+    hoisted.renders.editor = 0;
+    hoisted.renders.title = 0;
+
+    act(() => {
+      hoisted.editorProps.current?.onChange?.({ type: 'doc', content: [{ type: 'paragraph' }] });
+      hoisted.editorProps.current?.onChange?.({ type: 'doc', content: [{ type: 'paragraph' }, { type: 'paragraph' }] });
+    });
+
+    expect(hoisted.renders).toEqual({ editor: 0, title: 0 });
+  });
+
   it('星を押しても、本文エディタと題名を描き直さない', async () => {
     hoisted.addFavorite.mockResolvedValue(undefined);
     await renderReady();
