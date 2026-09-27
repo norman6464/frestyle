@@ -59,6 +59,20 @@ describe('KbSpaceLayout', () => {
     expect(screen.getByText('acme / 開発部')).toBeInTheDocument();
   });
 
+  it('別のスペースへ移った直後、前のスペースの中身を新しい URL の下に描かない', () => {
+    // URL は space-2 に変わったが、解決はまだ前の space-1 のまま（解決し直す effect の前の描画）。
+    hoisted.useKbSpaceEntry.mockReturnValue({
+      ...EMPTY,
+      workspaceSlug: 'acme',
+      space: { id: 'space-1', name: '開発部', role: 'editor' },
+      retry: hoisted.retry,
+    });
+    renderAt('/kb/spaces/space-2/pages');
+
+    expect(screen.queryByText(/開発部/)).toBeNull();
+    expect(screen.getByRole('status', { name: '読み込み中' })).toBeInTheDocument();
+  });
+
   it('スペースが見つからなければ、行き止まりにせずスペースの入口へ戻れる', () => {
     hoisted.useKbSpaceEntry.mockReturnValue({ ...EMPTY, notFound: true, retry: hoisted.retry });
     renderAt('/kb/spaces/space-9');

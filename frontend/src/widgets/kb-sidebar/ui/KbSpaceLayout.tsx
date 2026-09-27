@@ -34,9 +34,13 @@ export default function KbSpaceLayout() {
   // 画面どうしを移るたびに木を取り直さない。
   useKbFrameLocation({ workspaceSlug: workspaceSlug ?? undefined, spaceId: space?.id });
 
+  // URL のスペースと解決済みのスペースがそろうまで子を描かない。別のスペースへ移った直後の
+  // 描画（解決し直す effect の前）では、まだ前のスペースを持っている。そのまま描くと、新しい
+  // URL の下に前のスペースの中身を出し、前のスペースの一覧まで取りに行く。
+  const resolvedHere = !spaceId || space?.id === spaceId;
   const outlet = useMemo<KbSpaceOutlet | null>(
-    () => (workspaceSlug && space ? { workspaceSlug, space } : null),
-    [workspaceSlug, space],
+    () => (workspaceSlug && space && resolvedHere ? { workspaceSlug, space } : null),
+    [workspaceSlug, space, resolvedHere],
   );
 
   return (
