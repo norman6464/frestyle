@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { reflectWrite } from '@/shared/api/queryCache';
 import {
   NOTE_NEW_PAGE_TITLE,
   KbRepository,
   kbMySpacesQuery,
+  kbPageTreeQuery,
   kbSpacesQuery,
+  refreshKbPageTrees,
+  reflectKbPageInTrees,
   kbWorkspacesQuery,
   emitKbTreeEvent,
   collectKbAncestorIds,
   forgetVisitedPageIfMatches,
   getLastVisitedPageId,
-  subscribeKbTreeEvents,
-  replaceKbPageInTree,
   moveKbPageInTree,
   type KbDropTarget,
   type KbPage,
@@ -39,10 +40,6 @@ export interface UseKnowledgeBaseTreeOptions {
   spaceId: string;
   /** URL が指しているページ。祖先を自動で開くために使う。 */
   activePageId?: string;
-}
-
-function emptySpaceState(): KbSpaceState {
-  return { loading: true, error: null, tree: null };
 }
 
 /**
@@ -110,31 +107,45 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
       ? 'スペースを読み込めませんでした'
       : null;
 
-  // 今のスペースの木。state の写しを ref に持つことはしない — 描いている途中で state を
-  // 合わせるとき、ref は書けない（描画中に ref を書き換えるのは React の決まりに反する）ので、
-  // 写しが古いまま残る。前の値を元に作る更新は、必ず setSpaceState((prev) => ...) で書く。
-  const [spaceState, setSpaceState] = useState<KbSpaceState>(emptySpaceState);
   const [expandedPageIds, setExpandedPageIds] = useState<ReadonlySet<string>>(new Set());
+  // アーカイブ済みを見ているか。現役とアーカイブ済みは鍵の違う別の木なので、切り替えても
+  // 前のスコープの木は出ない（切り替えた直後だけ前の木が見える、が起きない）。
+  const [archivedMode, setArchivedModeState] = useState(false);
+
+  // 今のスペースの木。すべてのページの画面・素の /kb の入口と同じ問い合わせを使う。スペース
+  // （ワークスペースと spaceId の組）ごとの鍵なので、別のスペースへ移ったら前の木は出ず読み込み中になる。
+  // 取り直しの間も持っている木は出したまま（一瞬空になり、開いていた段も畳まれて見えるのを避ける）。
+  // 読み込み中と失敗を出すのは、木が 1 度も取れていないときだけ。
+  const hasTreeScope = activeSlug !== null && spaceId !== '';
+  const treeResult = useQuery({ ...kbPageTreeQuery(activeSlug ?? '', spaceId, archivedMode), enabled: hasTreeScope });
+  const tree = treeResult.data ?? null;
+  const treeLoading = hasTreeScope && tree === null && (treeResult.isPending || treeResult.isFetching);
+  const treeError = tree === null && treeResult.isError && !treeResult.isFetching;
+  // 呼び出し側（KbFrame）が読む形。描くたびに作り直すと、木を使う控えがすべて外れる。
+  const spaceState = useMemo<KbSpaceState>(
+    () => ({ loading: treeLoading, error: treeError ? 'ページを読み込めませんでした' : null, tree }),
+    [treeLoading, treeError, tree],
+  );
+
   // 木を持っているスペース（ワークスペースと spaceId の組）。変わったら（切替・別ページへの
-  // 遷移）、描いている途中で前のスペースの木と開閉を捨てる（取りに行くのは下の effect）。
+  // 遷移）、描いている途中で前のスペースの開閉を捨てる。
   const treeKey = `${activeSlug ?? ''} ${spaceId}`;
   const [treeFor, setTreeFor] = useState(treeKey);
   // 祖先を開いた相手（今のページと木）。どちらかが変わったら、今のページの祖先を開く。
   //
   // 木が届いたときだけでなく、**既に読み込んだ木の中で別のページへ移動したとき**も開く
-  // （リンクを辿ると、開いたページが閉じた枝の中に隠れたままになるため）。
+  // （リンクを辿ると、開いたページが閉じた枝の中に隠れたままになるため）。作ったページを
+  // 開いたときも、その祖先（作った先の親）がここで開く。
   const [ancestorsFor, setAncestorsFor] = useState<{ pageId?: string; tree: KbPageTree | null }>({
     pageId: activePageId,
     tree: null,
   });
   if (treeFor !== treeKey) {
     setTreeFor(treeKey);
-    setSpaceState(emptySpaceState());
     setExpandedPageIds(new Set());
-  } else if (ancestorsFor.pageId !== activePageId || ancestorsFor.tree !== spaceState.tree) {
-    setAncestorsFor({ pageId: activePageId, tree: spaceState.tree });
-    const ancestors =
-      activePageId && spaceState.tree ? collectKbAncestorIds(spaceState.tree.pages, activePageId) : [];
+  } else if (ancestorsFor.pageId !== activePageId || ancestorsFor.tree !== tree) {
+    setAncestorsFor({ pageId: activePageId, tree });
+    const ancestors = activePageId && tree ? collectKbAncestorIds(tree.pages, activePageId) : [];
     if (ancestors.length > 0) {
       setExpandedPageIds((prev) => {
         // 既に全部開いていれば新しい集合を作らない（作ると、開閉は変わらないのに木の全行を描き直す）。
@@ -144,29 +155,8 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
     }
   }
 
-  /** setTree はいまのスペースの木だけを差し替える。 */
-  const setTree = useCallback((tree: KbPageTree | null) => {
-    setSpaceState((prev) => ({ ...prev, tree }));
-  }, []);
   // 移動が走っているか。同じスペースの移動を重ねないための札。
   const moving = useRef(false);
-  // アーカイブ済みを見ているか。
-  const [archivedMode, setArchivedModeState] = useState(false);
-  // 木を取りに行く関数が**常に「いまのスコープ」で取る**ようにするための控え。
-  //
-  // state を直接読むと、その関数を作った時点のスコープが閉じ込められる。書き換えの
-  // 完了後に木を取り直す経路（アーカイブ・復帰）は await をまたぐので、その間に
-  // 切り替えられると**古いスコープで取りに行き、その結果が新しい表示に入る**。
-  // ref から読めば、誰がいつ呼んでも取りに行く先はいまのスコープになる。
-  const archivedModeRef = useRef(false);
-
-  // 切り替えを速く繰り返したときに、古い応答が新しい表示を上書きするのを防ぐ。
-  // 「最後に投げた要求」だけを採用する（AbortController でも良いが、採用可否だけなら世代番号で足りる）。
-  const generation = useRef(0);
-  // 木そのものの要求連番。generation（ワークスペース/スペースの世代）だけだと、同じ
-  // スペースへの要求どうしの追い越しを防げない — 削除後の取り直しより先に投げた古い応答が
-  // 後から届くと、消したはずのページが木に蘇る（選ぶと 404）。最後に投げた要求だけを採用する。
-  const treeSeq = useRef(0);
 
   const { refetch: refetchWorkspaces } = workspacesResult;
   const retryWorkspaces = useCallback(() => {
@@ -179,62 +169,19 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   }, [refetchSpaces]);
 
   /**
-   * いまのスペースの木を取りに行く。state は応答が届いてから書く（読み込み中の印は呼ぶ側が立てる）。
-   */
-  const fetchSpaceTree = useCallback(() => {
-    if (!activeSlug || !spaceId) return;
-    const token = generation.current;
-    const seq = ++treeSeq.current;
-    KbRepository.fetchPageTree(activeSlug, spaceId, { archived: archivedModeRef.current })
-      .then((tree) => {
-        if (token !== generation.current || seq !== treeSeq.current) return;
-        setSpaceState({ loading: false, error: null, tree });
-      })
-      .catch(() => {
-        if (token !== generation.current || seq !== treeSeq.current) return;
-        setSpaceState((prev) => ({ loading: false, error: 'ページを読み込めませんでした', tree: prev.tree }));
-      });
-  }, [activeSlug, spaceId]);
-
-  /**
-   * 木を取り直す（作成・アーカイブ・削除のあと・再試行）。取り直しの間も前の木は出したまま
-   * （一瞬空になり、開いていた段も畳まれて見えるのを避ける）。
+   * 木を取り直させる（作成・アーカイブ・削除のあと）。現役とアーカイブ済みの両方が古くなる
+   * （アーカイブは現役からアーカイブ済みへ移す操作）。取り直しの間も前の木は出したまま。
    */
   const loadSpaceTree = useCallback(() => {
     if (!activeSlug || !spaceId) return;
-    setSpaceState((prev) => ({ loading: true, error: null, tree: prev.tree }));
-    fetchSpaceTree();
-  }, [activeSlug, spaceId, fetchSpaceTree]);
+    void refreshKbPageTrees(queryClient, activeSlug, spaceId);
+  }, [activeSlug, spaceId, queryClient]);
 
-  // スペースが変わったら（切替・別ページへの遷移）取りに行く。前の木と開閉は、上で描いている
-  // 途中に捨ててある。fetchSpaceTree はワークスペースと spaceId が変わったときだけ作り直される。
-  useEffect(() => {
-    fetchSpaceTree();
-  }, [fetchSpaceTree]);
-
-  /**
-   * 現役とアーカイブ済みを切り替える。
-   *
-   * 取得済みの木は**捨てる**。同じスペースでも中身がまったく別なので、残しておくと
-   * 切り替えた直後だけ前のスコープの木が見える。
-   */
-  const setArchivedMode = useCallback(
-    (next: boolean) => {
-      // 切り替え前に投げた要求を採用しない（古いスコープの木が後から届く）。
-      generation.current += 1;
-      // ref を先に更新する。この後の取り直しは必ず新しいスコープで走る。
-      archivedModeRef.current = next;
-      setArchivedModeState(next);
-      setExpandedPageIds(new Set());
-      // 取得済みの木は**捨てる**。同じスペースでも中身がまったく別なので、残しておくと
-      // 切り替えた直後だけ前のスコープの木が見える（loadSpaceTree は「取得中も前の木を
-      // 残す」設計だが、それはページ作成・改名などの部分更新向け。アーカイブ切替では
-      // 中身ごと変わるので、ここで空にしてから取りに行く）。
-      setSpaceState(emptySpaceState());
-      fetchSpaceTree();
-    },
-    [fetchSpaceTree],
-  );
+  /** 現役とアーカイブ済みを切り替える。開いていた段は畳む（中身がまったく別なので）。 */
+  const setArchivedMode = useCallback((next: boolean) => {
+    setArchivedModeState(next);
+    setExpandedPageIds(new Set());
+  }, []);
 
   /**
    * ワークスペースを作る。**失敗は握り潰さず投げる。**
@@ -347,7 +294,7 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
       // 動かせるかは、今描いている木（利用者がドラッグした木）で判定する。更新関数の中で
       // 判定して結果を外へ書き出す形にはしない — 更新関数は呼んだその場では走らないので、
       // 直後に読むとまだ書かれていないことがある（実際、たまたま動いていただけだった）。
-      const current = spaceState.tree;
+      const current = tree;
       if (!current) throw new Error('invalid drop target');
       const pages = moveKbPageInTree(current.pages, pageId, target);
       // 動かせない指定（自分自身・自分の子孫の中・落下先が無い）は、投げる前に断る。
@@ -355,9 +302,12 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
 
       // 動かす前の木を控える。これが唯一の巻き戻し先。
       const previous = current;
-      const optimistic = { ...current, pages };
+      const treeQueryKey = kbPageTreeQuery(activeSlug, spaceId, archivedMode).queryKey;
       moving.current = true;
-      setTree(optimistic);
+      // 取りに行っている途中の木があとから届いて、先に動かした並びを上書きしないよう止めてから動かす。
+      await queryClient.cancelQueries({ queryKey: treeQueryKey, exact: true });
+      // 控えに入った木（同じ部分は前の木の物を使い回した形）を、巻き戻すときの目印にする。
+      const optimistic = queryClient.setQueryData(treeQueryKey, { ...current, pages });
       // 子として入れたときは、その段を開いておく。開かないと、動かしたページが
       // 畳まれた段の中に入り、成功したのに画面から消えたように見える。
       if (target.kind === 'into') {
@@ -380,15 +330,15 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
       try {
         await KbRepository.movePage(activeSlug, pageId, request);
       } catch (error) {
-        // 自分が描いた木がまだ表示されているときだけ戻す。別のものに変わっていたら
-        // （スコープの切り替え・取り直し）、そちらのほうが新しいので触らない。
-        setSpaceState((prev) => (prev.tree === optimistic ? { ...prev, tree: previous } : prev));
+        // 自分が描いた木がまだ控えにあるときだけ戻す。別のものに変わっていたら
+        // （取り直し）、そちらのほうが新しいので触らない。
+        queryClient.setQueryData(treeQueryKey, (prev) => (prev === optimistic ? previous : prev));
         throw error;
       } finally {
         moving.current = false;
       }
     },
-    [activeSlug, spaceState.tree, setTree],
+    [activeSlug, spaceId, archivedMode, tree, queryClient],
   );
 
   const togglePage = useCallback((pageId: string) => {
@@ -400,32 +350,8 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
     });
   }, []);
 
-  // ページ画面（/p）での作成・更新（改名・アイコン）を木に映す。作成は木ごと取り直し
-  // （親子関係の差し込み位置をこちらで計算しない — サーバーの並び順が正）、
-  // 更新は値が変わっただけなので 1 枚差し替えで足りる。
-  useEffect(() => {
-    return subscribeKbTreeEvents((event) => {
-      if (event.type === 'page-created') {
-        if (event.page.spaceId !== spaceId) return;
-        const parentId = event.page.parentId;
-        if (parentId) {
-          setExpandedPageIds((prev) => (prev.has(parentId) ? prev : new Set([...prev, parentId])));
-        }
-        loadSpaceTree();
-        return;
-      }
-      if (event.type === 'page-updated') {
-        if (event.page.spaceId !== spaceId) return;
-        setSpaceState((prev) => {
-          if (!prev.tree) return prev;
-          const pages = replaceKbPageInTree(prev.tree.pages, event.page);
-          if (pages === prev.tree.pages) return prev;
-          return { ...prev, tree: { ...prev.tree, pages } };
-        });
-        return;
-      }
-    });
-  }, [spaceId, loadSpaceTree]);
+  // ページ画面（/p）での作成・更新（改名・アイコン・カバー）は、ページ画面が木の控えを直接
+  // 直す（refreshKbPageTrees / reflectKbPageInTrees）。ここで知らせを聞く必要は無い。
 
   /**
    * ページを作る。**失敗は握り潰さず投げる。**
@@ -465,18 +391,13 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
     async (pageId: string, title: string): Promise<KbPage> => {
       if (!activeSlug) throw new Error('workspace is not selected');
       const page = await KbRepository.renamePage(activeSlug, pageId, title);
-      setSpaceState((prev) => {
-        if (!prev.tree) return prev;
-        const pages = replaceKbPageInTree(prev.tree.pages, page);
-        if (pages === prev.tree.pages) return prev;
-        return { ...prev, tree: { ...prev.tree, pages } };
-      });
+      await reflectKbPageInTrees(queryClient, activeSlug, page);
       // 本文（開いているページの題名・パンくず）へも知らせる。木だけ差し替えると、そのページを
       // 開いていた本文は古い題名のまま残る。自分にも届くが、木の差し替えは冪等。
       emitKbTreeEvent({ type: 'page-updated', page });
       return page;
     },
-    [activeSlug],
+    [activeSlug, queryClient],
   );
 
   /**
@@ -494,7 +415,7 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
       if (
         lastVisited &&
         (lastVisited === pageId ||
-          (spaceState.tree && collectKbAncestorIds(spaceState.tree.pages, lastVisited).includes(pageId)))
+          (tree && collectKbAncestorIds(tree.pages, lastVisited).includes(pageId)))
       ) {
         forgetVisitedPageIfMatches(lastVisited);
       }
@@ -504,12 +425,13 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
       emitKbTreeEvent({ type: 'page-deleted', pageId });
       loadSpaceTree();
     },
-    [activeSlug, spaceState.tree, loadSpaceTree],
+    [activeSlug, tree, loadSpaceTree],
   );
 
+  const { refetch: refetchTree } = treeResult;
   const retrySpace = useCallback(() => {
-    loadSpaceTree();
-  }, [loadSpaceTree]);
+    void refetchTree();
+  }, [refetchTree]);
 
   return {
     workspaces,
@@ -537,6 +459,8 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
     archivedMode,
     setArchivedMode,
     retrySpace,
+    /** ほかの口（テンプレートから作るなど）でページを作ったあとに、木を取り直させる。 */
+    refreshTree: loadSpaceTree,
   };
 }
 

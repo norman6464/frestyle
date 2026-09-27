@@ -23,3 +23,23 @@ export async function reflectWrite<TData>(
   }
   queryClient.setQueryData(queryKey, update(prev));
 }
+
+/**
+ * reflectWriteAll は reflectWrite の、鍵の先頭が一致するものすべて版。1 つの書き込みが
+ * 複数の結果に効くとき（ページの改名が、現役とアーカイブ済みの両方の木に効く）に使う。
+ * 止める・差し替える・持っていなければ取り直させる、の約束は reflectWrite と同じ。
+ */
+export async function reflectWriteAll<TData>(
+  queryClient: QueryClient,
+  queryKey: QueryKey,
+  update: (prev: TData) => TData,
+): Promise<void> {
+  await queryClient.cancelQueries({ queryKey });
+  for (const [key, prev] of queryClient.getQueriesData<TData>({ queryKey })) {
+    if (prev === undefined) {
+      void queryClient.invalidateQueries({ queryKey: key, exact: true });
+    } else {
+      queryClient.setQueryData<TData>(key, update(prev));
+    }
+  }
+}

@@ -1,0 +1,30 @@
+import type { QueryClient } from '@tanstack/react-query';
+import { reflectWriteAll } from '@/shared/api/queryCache';
+import { kbKeys } from '../api/kbQueries';
+import { replaceKbPageInTree } from '../lib/tree';
+import type { KbPage, KbPageTree } from './types';
+
+/**
+ * ページの木の控え（kbPageTreeQuery）を、ページの書き込みに合わせて直す。左の列の木・すべての
+ * ページ・入口の解決が同じ木を使うので、ここを通せばどこで書き込んでもすべてに届く。
+ */
+
+/**
+ * ページを作った・消した・アーカイブした・戻したあとに、そのスペースの木（現役とアーカイブ済み）を
+ * 取り直させる。**兄弟のどこに入るか・子孫ごと何が消えるかを決めるのはサーバー**なので、手元で
+ * 組み立てずに取り直す。取り直しの間も持っている木は出したまま（一瞬空にならない）。
+ */
+export function refreshKbPageTrees(queryClient: QueryClient, workspaceSlug: string, spaceId: string): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: kbKeys.pageTrees(workspaceSlug, spaceId) });
+}
+
+/**
+ * 題名・アイコンなど、ページの値そのものが変わったときに、そのスペースの木の 1 枚だけを差し替える
+ * （木ごと取り直すと、開いていた段が一瞬畳まれて見える）。変わっていなければ木を作り直さない。
+ */
+export function reflectKbPageInTrees(queryClient: QueryClient, workspaceSlug: string, page: KbPage): Promise<void> {
+  return reflectWriteAll<KbPageTree>(queryClient, kbKeys.pageTrees(workspaceSlug, page.spaceId), (tree) => {
+    const pages = replaceKbPageInTree(tree.pages, page);
+    return pages === tree.pages ? tree : { ...tree, pages };
+  });
+}

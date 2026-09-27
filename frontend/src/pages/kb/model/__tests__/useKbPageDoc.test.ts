@@ -1,7 +1,12 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
+import { queryWrapper } from '@/test/queryClient';
 import { useKbPageDoc } from '../useKbPageDoc';
+
+// 木の控えを直すのに共有の置き場を使うので、置き場の中で描く（テストごとに新しい置き場）。
+const renderHook: typeof rtlRenderHook = ((callback: Parameters<typeof rtlRenderHook>[0], options?: Parameters<typeof rtlRenderHook>[1]) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 function blockIdConflictError(): AxiosError {
   return new AxiosError('Conflict', 'ERR_BAD_REQUEST', undefined, undefined, {
@@ -21,7 +26,7 @@ const hoisted = vi.hoisted(() => ({
   clearPageIcon: vi.fn(),
   setPageCover: vi.fn(),
   clearPageCover: vi.fn(),
-  emit: vi.fn(),
+  reflect: vi.fn(),
   rememberVisitedPage: vi.fn(),
   forgetVisitedPageIfMatches: vi.fn(),
 }));
@@ -36,7 +41,7 @@ vi.mock('@/entities/kb', () => ({
     setPageCover: hoisted.setPageCover,
     clearPageCover: hoisted.clearPageCover,
   },
-  emitKbTreeEvent: hoisted.emit,
+  reflectKbPageInTrees: hoisted.reflect,
   rememberVisitedPage: hoisted.rememberVisitedPage,
   forgetVisitedPageIfMatches: hoisted.forgetVisitedPageIfMatches,
 }));
@@ -286,7 +291,7 @@ describe('useKbPageDoc', () => {
     }
   });
 
-  it('renameTitle は改名し、画面の題名を確定後の値へ差し替え、木にも知らせる', async () => {
+  it('renameTitle は改名し、画面の題名を確定後の値へ差し替え、木の控えも差し替える', async () => {
     const renamed = {
       id: 'p1',
       spaceId: 's1',
@@ -305,7 +310,7 @@ describe('useKbPageDoc', () => {
 
     expect(hoisted.renamePage).toHaveBeenCalledWith('w-3f2a9c', 'p1', '設計メモ v2');
     expect(result.current.data?.page.title).toBe('設計メモ v2');
-    expect(hoisted.emit).toHaveBeenCalledWith({ type: 'page-updated', page: renamed });
+    expect(hoisted.reflect).toHaveBeenCalledWith(expect.anything(), 'w-3f2a9c', renamed);
   });
 
   it('renameTitle の失敗は投げ、画面の題名は変えない', async () => {
@@ -315,10 +320,10 @@ describe('useKbPageDoc', () => {
 
     await expect(result.current.renameTitle('だめな改名')).rejects.toThrow();
     expect(result.current.data?.page.title).toBe('設計メモ');
-    expect(hoisted.emit).not.toHaveBeenCalled();
+    expect(hoisted.reflect).not.toHaveBeenCalled();
   });
 
-  it('changeIcon は設定すると page.icon を確定後の値へ差し替え、木にも知らせる', async () => {
+  it('changeIcon は設定すると page.icon を確定後の値へ差し替え、木の控えも差し替える', async () => {
     const withIcon = {
       id: 'p1',
       spaceId: 's1',
@@ -341,7 +346,7 @@ describe('useKbPageDoc', () => {
       value: '📘',
     });
     expect(result.current.data?.page.icon).toEqual({ type: 'emoji', value: '📘' });
-    expect(hoisted.emit).toHaveBeenCalledWith({ type: 'page-updated', page: withIcon });
+    expect(hoisted.reflect).toHaveBeenCalledWith(expect.anything(), 'w-3f2a9c', withIcon);
   });
 
   it('changeIcon は null で解除する（clearPageIcon を呼ぶ）', async () => {
@@ -376,10 +381,10 @@ describe('useKbPageDoc', () => {
       result.current.changeIcon({ type: 'emoji', value: 'x' }),
     ).rejects.toThrow();
     expect(result.current.data?.page.icon).toBeUndefined();
-    expect(hoisted.emit).not.toHaveBeenCalled();
+    expect(hoisted.reflect).not.toHaveBeenCalled();
   });
 
-  it('changeCover は key を設定すると page・cover を確定後の値へ差し替え、木にも知らせる', async () => {
+  it('changeCover は key を設定すると page・cover を確定後の値へ差し替え、木の控えも差し替える', async () => {
     const page = {
       id: 'p1',
       spaceId: 's1',
@@ -399,7 +404,7 @@ describe('useKbPageDoc', () => {
 
     expect(hoisted.setPageCover).toHaveBeenCalledWith('w-3f2a9c', 'p1', 'kb/w-1/p1/1.bin');
     expect(result.current.data?.cover).toEqual(cover);
-    expect(hoisted.emit).toHaveBeenCalledWith({ type: 'page-updated', page });
+    expect(hoisted.reflect).toHaveBeenCalledWith(expect.anything(), 'w-3f2a9c', page);
   });
 
   it('changeCover は null で解除する（clearPageCover を呼ぶ）', async () => {
@@ -431,7 +436,7 @@ describe('useKbPageDoc', () => {
 
     await expect(result.current.changeCover('kb/w-1/p1/1.bin')).rejects.toThrow();
     expect(result.current.data?.cover).toBeUndefined();
-    expect(hoisted.emit).not.toHaveBeenCalled();
+    expect(hoisted.reflect).not.toHaveBeenCalled();
   });
 
   it('ページを移っても、書きかけの保存は**書いた時点のページ**へ送る（移った先を潰さない）', async () => {
@@ -521,9 +526,11 @@ describe('useKbPageDoc', () => {
     });
     expect(result.current.data?.page.id).toBe('p2');
     expect(result.current.data?.page.title).toBe('別ページ');
-    // 改名自体はサーバーで成立しているので、木への知らせは出す。
-    expect(hoisted.emit).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'page-updated' }),
+    // 改名自体はサーバーで成立しているので、木の控えは差し替える（宛先は改名した旧ページ）。
+    expect(hoisted.reflect).toHaveBeenCalledWith(
+      expect.anything(),
+      'w-3f2a9c',
+      expect.objectContaining({ id: 'p1', title: '旧ページの新題名' }),
     );
   });
 

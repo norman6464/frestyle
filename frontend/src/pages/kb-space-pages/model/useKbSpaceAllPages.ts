@@ -1,10 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
-import { KbRepository, type KbPage, type KbPageTreeNode } from '@/entities/kb';
+import { useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { kbPageTreeQuery, type KbPage, type KbPageTree, type KbPageTreeNode } from '@/entities/kb';
 
 export interface KbFlatPage {
   page: KbPage;
   depth: number;
 }
+
+interface KbFlatPages {
+  pages: KbFlatPage[];
+  hasHiddenChildren: boolean;
+}
+
+const NO_PAGES: KbFlatPage[] = [];
 
 /** flatten は木を深さ優先で平坦な一覧に開く（親の直後に子が並ぶ）。 */
 function flatten(nodes: KbPageTreeNode[], depth: number): KbFlatPage[] {
@@ -16,31 +24,31 @@ function flatten(nodes: KbPageTreeNode[], depth: number): KbFlatPage[] {
   return out;
 }
 
+function toFlatPages(tree: KbPageTree): KbFlatPages {
+  return { pages: flatten(tree.pages, 0), hasHiddenChildren: tree.hasHiddenChildren };
+}
+
+/**
+ * スペースのすべてのページ（現役）を、親の直後に子が並ぶ一覧で返す。
+ *
+ * 左の列と同じ木（kbPageTreeQuery）から導くので、取ってあれば取り直さず、左の列やページの
+ * 画面でページを作った・改名したらこの一覧にもそのまま届く。読み込み中と失敗を出すのは、
+ * 木が 1 度も取れていないときだけ。
+ */
 export function useKbSpaceAllPages(workspaceSlug: string, spaceId: string) {
-  const [pages, setPages] = useState<KbFlatPage[]>([]);
-  const [hasHiddenChildren, setHasHiddenChildren] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const result = useQuery({ ...kbPageTreeQuery(workspaceSlug, spaceId), select: toFlatPages });
+  const missing = result.data === undefined;
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    KbRepository.fetchPageTree(workspaceSlug, spaceId)
-      .then((tree) => {
-        setPages(flatten(tree.pages, 0));
-        setHasHiddenChildren(tree.hasHiddenChildren);
-      })
-      .catch(() => {
-        setError('ページを読み込めませんでした。');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [workspaceSlug, spaceId]);
+  const { refetch } = result;
+  const retry = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  return { pages, hasHiddenChildren, loading, error, retry: load };
+  return {
+    pages: result.data?.pages ?? NO_PAGES,
+    hasHiddenChildren: result.data?.hasHiddenChildren ?? false,
+    loading: missing && (result.isPending || result.isFetching),
+    error: missing && result.isError && !result.isFetching ? 'ページを読み込めませんでした。' : null,
+    retry,
+  };
 }
