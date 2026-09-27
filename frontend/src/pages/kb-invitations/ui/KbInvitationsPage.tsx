@@ -1,9 +1,7 @@
-import { useState, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { KbWorkspaceTabs, useWorkspaceList, type KbInvitation, type KbIssuedInvitation } from '@/entities/kb';
-import { Button, ConfirmModal, FsIcon, fsIcon } from '@/shared/ui';
-import { useKbFrameLocation } from '@/widgets/kb-sidebar';
-import EmptyState from '@/shared/ui/EmptyState';
+import { useState } from 'react';
+import type { KbInvitation, KbIssuedInvitation } from '@/entities/kb';
+import { Button, ConfirmModal, FsIcon } from '@/shared/ui';
+import { KbAdminOnlyNotice, useKbWorkspaceAdminOutlet } from '@/widgets/kb-sidebar';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useKbInvitations } from '../model/useKbInvitations';
 import { inviteFailure } from '../lib/invitationMessages';
@@ -16,19 +14,17 @@ import KbInvitationsSection from './KbInvitationsSection';
  *
  * メンバー管理（役割・停止・削除）とはタブで分けてある。招くことと名簿を直すことは別の作業で、
  * ワークスペース単位の設定（権限など）はこれから増えるため、1 枚に積み上げない。
+ *
+ * ワークスペースの引き当て・admin の判定・見出しとタブは親ルート（KbWorkspaceAdminLayout）が持つ。
  */
 export default function KbInvitationsPage() {
-  const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
-  const navigate = useNavigate();
+  const { workspaceSlug } = useKbWorkspaceAdminOutlet();
   const { showToast } = useToast();
-  const { workspaces } = useWorkspaceList();
   const invitations = useKbInvitations(workspaceSlug);
   // 招待ダイアログ。issuedForDialog は「再送」の結果（新しいリンク）を見せるために開くときの中身。
   const [inviteOpen, setInviteOpen] = useState(false);
   const [issuedForDialog, setIssuedForDialog] = useState<KbIssuedInvitation | null>(null);
   const [revoking, setRevoking] = useState<KbInvitation | null>(null);
-
-  const workspaceName = workspaces.find((w) => w.slug === workspaceSlug)?.name;
 
   const openInviteDialog = () => {
     setIssuedForDialog(null);
@@ -55,27 +51,11 @@ export default function KbInvitationsPage() {
     }
   };
 
-  // ナレッジの枠（文脈バーのワークスペース側）の中に出す。スペースを持たない画面なので
-  // 左の列（ページの木）は出さない。
-  useKbFrameLocation({ workspaceSlug, showPagePanel: false });
-  const body = (content: ReactNode) => <div className="min-h-0 flex-1 overflow-y-auto">{content}</div>;
+  // 親ルートが admin と確かめたあとでも、途中で役割が変わると API が拒む。
+  if (invitations.error === 'forbidden') return <KbAdminOnlyNotice headingLevel={2} />;
 
-  if (invitations.error === 'forbidden') {
-    return body(
-      <EmptyState
-        headingLevel={1}
-        icon={fsIcon('lock')}
-        title="この画面は admin だけが開けます"
-        description="メンバーを招くこと、招待の再送と取り消しは、このワークスペースの admin だけが行えます。"
-        action={{ label: 'ナレッジへ戻る', onClick: () => navigate('/kb') }}
-      />,
-    );
-  }
-
-  return body(
-    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:pt-12">
-      <KbWorkspaceTabs workspaceSlug={workspaceSlug ?? ''} workspaceName={workspaceName} active="invitations" />
-
+  return (
+    <>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <p className="max-w-xl text-sm text-[var(--color-text-muted)]">
           メールアドレスに招待を送ります。相手が承諾すると、このワークスペースのメンバーになります。
@@ -121,6 +101,6 @@ export default function KbInvitationsPage() {
         }}
         onCancel={() => setRevoking(null)}
       />
-    </div>,
+    </>
   );
 }

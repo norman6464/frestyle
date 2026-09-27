@@ -28,6 +28,10 @@ const KbFrameLayout = lazyWithReload(
   () => import('@/widgets/kb-sidebar').then((m) => ({ default: m.KbFrameLayout })),
   'KbFrameLayout',
 );
+const KbWorkspaceAdminLayout = lazyWithReload(
+  () => import('@/widgets/kb-sidebar').then((m) => ({ default: m.KbWorkspaceAdminLayout })),
+  'KbWorkspaceAdminLayout',
+);
 const KbSpaceLayout = lazyWithReload(
   () => import('@/widgets/kb-sidebar').then((m) => ({ default: m.KbSpaceLayout })),
   'KbSpaceLayout',
@@ -149,9 +153,12 @@ export default function App() {
           <Route path="/kb/:pageId" element={<KbPage />} />
           {/* ワークスペース単位の管理。役割変更・停止 / 復帰・削除（members）と、email での招待
               （invitations）。見出しは共通で、タブで行き来する。ワークスペース自体の設定なので
-              /kb/{pageId} と違い workspaceSlug を URL に出す。 */}
-          <Route path="/kb/:workspaceSlug/members" element={<KbMembersPage />} />
-          <Route path="/kb/:workspaceSlug/invitations" element={<KbInvitationsPage />} />
+              /kb/{pageId} と違い workspaceSlug を URL に出す。ワークスペースの引き当て・admin の
+              判定・見出しとタブは親ルート KbWorkspaceAdminLayout が 1 か所で持つ。 */}
+          <Route element={<KbWorkspaceAdminLayout />}>
+            <Route path="/kb/:workspaceSlug/members" element={<KbMembersPage />} />
+            <Route path="/kb/:workspaceSlug/invitations" element={<KbInvitationsPage />} />
+          </Route>
           {/*
             スペース単位の 4 画面。「workspaceSlug を URL に持たず spaceId だけで解決する」流儀。/kb/spaces はスペース未選択の入口（自分がアクセス
             できる最初のスペースへ移す）を兼ねる。スペースの解決と、読み込み中・見つからない・

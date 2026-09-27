@@ -9,7 +9,7 @@ import { authReducer } from '@/entities/user';
 import { ToastProvider } from '@/app/providers/ToastProvider';
 import ToastContainer from '@/app/providers/ToastContainer';
 import apiClient from '@/shared/api/axios';
-import { KbFrameLayout, KbSpaceLayout } from '@/widgets/kb-sidebar';
+import { KbFrameLayout, KbSpaceLayout, KbWorkspaceAdminLayout } from '@/widgets/kb-sidebar';
 
 /*
  * story を単体で描くための「まわりの装置」。
@@ -78,6 +78,14 @@ export function kbFrameRoute(pattern: string, path: string): Decorator {
  */
 export function kbSpaceRoute(pattern: string, path: string): Decorator {
   return routeDecorator(pattern, path, [<KbFrameLayout key="frame" />, <KbSpaceLayout key="space" />]);
+}
+
+/**
+ * kbWorkspaceAdminRoute — ワークスペースの管理（メンバー・招待）の画面を、本番と同じく枠の親ルートと、
+ * その下の管理の親ルート（KbWorkspaceAdminLayout）の中に置く。admin の判定・見出しとタブは親ルートが出す。
+ */
+export function kbWorkspaceAdminRoute(pattern: string, path: string): Decorator {
+  return routeDecorator(pattern, path, [<KbFrameLayout key="frame" />, <KbWorkspaceAdminLayout key="admin" />]);
 }
 
 /** 親ルートを外から順に重ねる（先頭がいちばん外）。 */

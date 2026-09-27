@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { AxiosError } from 'axios';
 import KbMembersPage from './KbMembersPage';
-import { kbFrameRoute, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
+import { kbWorkspaceAdminRoute, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
 
 const member = (over: Record<string, unknown>) => ({
   principalId: 'p-1',
@@ -57,7 +57,9 @@ const meta = {
   component: KbMembersPage,
   parameters: { layout: 'fullscreen' },
   // 通知の箱は枠ごと包む（枠も通知を出す）。デコレータは先に書いたものほど内側になる。
-  decorators: [kbFrameRoute('/kb/:workspaceSlug/members', '/kb/acme/members'), withToast],
+  // ルート（枠と管理の親ルート）は各 story で API の見本より内側に置く。親ルートがワークスペースを
+  // 確かめるまで画面を描かないので、API の見本が画面の内側にあると差し替えが効かない。
+  decorators: [withToast],
 } satisfies Meta<typeof KbMembersPage>;
 
 export default meta;
@@ -65,7 +67,7 @@ type Story = StoryObj<typeof meta>;
 
 /** admin が開いた通常の一覧。自分自身には操作を出さず、役割の無いメンバーもそれと分かる形で出す。 */
 export const ふつう: Story = {
-  decorators: [withApi(baseApi())],
+  decorators: [kbWorkspaceAdminRoute('/kb/:workspaceSlug/members', '/kb/acme/members'), withApi(baseApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(async () => {
@@ -81,6 +83,7 @@ export const ふつう: Story = {
 /** 停止中のメンバーが混ざっている。行が沈み、復帰ボタンだけが目立つ。 */
 export const 停止中のメンバーがいる: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/members', '/kb/acme/members'),
     withApi(
       baseApi({
         '/kb/workspaces/acme/admin/members': [
@@ -101,28 +104,42 @@ export const 停止中のメンバーがいる: Story = {
   },
 };
 
-/** admin でない相手が開くと 403 → 入口そのものを出さない画面になる。 */
+const notAdminProfile = {
+  userId: 9,
+  displayName: '一般メンバー',
+  email: 'b@example.com',
+  bio: '',
+  avatarUrl: '',
+  status: '',
+  updatedAt: '2026-01-01T00:00:00Z',
+};
+
+/** admin でない相手が開くと、名簿の API を呼ばずに親ルートが案内を出す（見出しとタブも出さない）。 */
 export const admin以外は開けない: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/members', '/kb/acme/members'),
     withApi({
-      '/profile/me': {
-        userId: 9,
-        displayName: '一般メンバー',
-        email: 'b@example.com',
-        bio: '',
-        avatarUrl: '',
-        status: '',
-        updatedAt: '2026-01-01T00:00:00Z',
-      },
-      '/kb/workspaces/acme/admin/members': stubError(403, 'forbidden'),
+      '/profile/me': notAdminProfile,
+      '/kb/workspaces': [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:00:00Z', canManage: false }],
     }),
   ],
   play: async ({ canvasElement }) => {
-    await waitFor(async () => {
-      await expect(
-        within(canvasElement).getByText('この画面は admin だけが開けます'),
-      ).toBeInTheDocument();
-    });
+    const canvas = within(canvasElement);
+    await expect(
+      await canvas.findByRole('heading', { level: 1, name: 'この画面は admin だけが開けます' }),
+    ).toBeVisible();
+    await expect(canvas.queryByRole('heading', { name: 'メンバーと招待' })).toBeNull();
+  },
+};
+
+/** 開いたあとに admin でなくなると、名簿の API が 403 で拒む。同じ案内に差し替える。 */
+export const 開いたあとに役割が変わると開けない: Story = {
+  decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/members', '/kb/acme/members'),
+    withApi(baseApi({ '/profile/me': notAdminProfile, '/kb/workspaces/acme/admin/members': stubError(403, 'forbidden') })),
+  ],
+  play: async ({ canvasElement }) => {
+    await expect(await within(canvasElement).findByText('この画面は admin だけが開けます')).toBeInTheDocument();
   },
 };
 
@@ -135,6 +152,7 @@ export const admin以外は開けない: Story = {
  */
 export const 役割を変更する: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/members', '/kb/acme/members'),
     withApi(
       (() => {
         let role = 'editor';
@@ -166,6 +184,7 @@ export const 役割を変更する: Story = {
 /** 停止は確認を挟み、確定するとその場で「停止中」に変わる（同じ理由で一覧のスタブを可変にする）。 */
 export const 停止する: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/members', '/kb/acme/members'),
     withApi(
       (() => {
         let suspended = false;
@@ -202,7 +221,7 @@ export const 停止する: Story = {
 
 /** 削除は確認ダイアログを挟む。取り消せば何も起きない。モーダルは document.body へポータルされる。 */
 export const 削除は確認してから: Story = {
-  decorators: [withApi(baseApi())],
+  decorators: [kbWorkspaceAdminRoute('/kb/:workspaceSlug/members', '/kb/acme/members'), withApi(baseApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await canvas.findByText('佐藤 花子');
@@ -220,7 +239,7 @@ export const 削除は確認してから: Story = {
 
 /** 「役割なし」を選ぶと確認を挟む。取り消せば役割はそのまま。 */
 export const 役割を外すのは確認してから: Story = {
-  decorators: [withApi(baseApi())],
+  decorators: [kbWorkspaceAdminRoute('/kb/:workspaceSlug/members', '/kb/acme/members'), withApi(baseApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await canvas.findByText('佐藤 花子');
@@ -238,6 +257,7 @@ export const 役割を外すのは確認してから: Story = {
 /** 409（最後の admin 等）が返ったら、トーストで理由を知らせるだけで行は変わらない。 */
 export const 競合したら理由をトーストで知らせる: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/members', '/kb/acme/members'),
     withApi(
       baseApi({
         '/kb/workspaces/acme/members/2/suspend': stubError(409, 'last_workspace_admin'),
@@ -270,6 +290,7 @@ const deletedWorkspaces: string[] = [];
  */
 export const ワークスペースを削除する: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/members', '/kb/acme/members'),
     withApi(
       baseApi({
         // 削除の宛先。一覧（…/admin/members）は baseApi の先頭で先に拾われる。

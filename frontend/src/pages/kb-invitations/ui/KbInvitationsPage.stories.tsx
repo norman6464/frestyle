@@ -3,7 +3,7 @@ import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { AxiosError } from 'axios';
 import type { KbInvitation } from '@/entities/kb';
 import KbInvitationsPage from './KbInvitationsPage';
-import { kbFrameRoute, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
+import { kbWorkspaceAdminRoute, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
 
 /** apiClient のスタブがそのまま投げても getApiError（AxiosError 前提）が読めるよう、本物の AxiosError を作る。 */
 function stubError(status: number, serverCode: string) {
@@ -88,7 +88,9 @@ const meta = {
   component: KbInvitationsPage,
   parameters: { layout: 'fullscreen' },
   // 通知の箱は枠ごと包む（枠も通知を出す）。デコレータは先に書いたものほど内側になる。
-  decorators: [kbFrameRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'), withToast],
+  // ルート（枠と管理の親ルート）は各 story で API の見本より内側に置く。親ルートがワークスペースを
+  // 確かめるまで画面を描かないので、API の見本が画面の内側にあると差し替えが効かない。
+  decorators: [withToast],
 } satisfies Meta<typeof KbInvitationsPage>;
 
 export default meta;
@@ -96,7 +98,7 @@ type Story = StoryObj<typeof meta>;
 
 /** 招待がまだ無い状態。見出しとタブが出て、「メンバーを招く」から始められる。 */
 export const 招待がまだない: Story = {
-  decorators: [withApi({ ...invitationApi([]), ...baseApi() })],
+  decorators: [kbWorkspaceAdminRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'), withApi({ ...invitationApi([]), ...baseApi() })],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { level: 1, name: 'メンバーと招待' })).toBeVisible();
@@ -111,7 +113,7 @@ export const 招待がまだない: Story = {
 
 /** 「メンバーを招く」で email を入れると招待ができ、リンクがこの場でだけ出る。 */
 export const 招待を作ってリンクを受け取る: Story = {
-  decorators: [withApi({ ...invitationApi([]), ...baseApi() })],
+  decorators: [kbWorkspaceAdminRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'), withApi({ ...invitationApi([]), ...baseApi() })],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(async () => {
@@ -140,6 +142,7 @@ export const 招待を作ってリンクを受け取る: Story = {
 /** 承諾待ちと期限切れは表に、結果が出たものは畳んだ「過去の招待」に。再送で新しいリンクが出て、取消で表から消える。 */
 export const 招待の一覧と再送と取消: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'),
     withApi({
       ...invitationApi([
         invitation(),
@@ -188,6 +191,7 @@ export const 招待の一覧と再送と取消: Story = {
 /** 上限や間隔で断られたときは、理由をダイアログの中に出す（閉じない）。 */
 export const 同じ宛先に続けて送ると断られる: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'),
     withApi({
       '/kb/workspaces/acme/invitations': (config: { method?: string; data?: unknown }) => {
         if (config.method === 'post') return stubError(429, 'resend_too_soon')();
@@ -211,6 +215,7 @@ export const 同じ宛先に続けて送ると断られる: Story = {
 /** メールアドレスの形が違うときは、欄の下に出す。 */
 export const メールアドレスの形が違う: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'),
     withApi({
       '/kb/workspaces/acme/invitations': (config: { method?: string; data?: unknown }) => {
         if (config.method === 'post') return stubError(400, 'invalid_request')();
@@ -237,6 +242,7 @@ export const メールアドレスの形が違う: Story = {
 /** メールを送れなかった。招待はできているので、リンクを渡すか再送する案内を出す。 */
 export const メールを送れなかった: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'),
     withApi({
       '/kb/workspaces/acme/invitations': (config: { method?: string }) => {
         if (config.method === 'post') return { invitation: invitation({ id: 'inv-new' }), token: 'fresh-token-abc', mailStatus: 'failed' };
@@ -261,6 +267,7 @@ export const メールを送れなかった: Story = {
 /** メールを送らない運用（backend が mailStatus を返さない、または disabled）。従来の文言。 */
 export const メールを送らない運用: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'),
     withApi({
       '/kb/workspaces/acme/invitations': (config: { method?: string }) => {
         if (config.method === 'post') return { invitation: invitation({ id: 'inv-new' }), token: 'fresh-token-abc' };
@@ -281,9 +288,28 @@ export const メールを送らない運用: Story = {
   },
 };
 
-/** admin 以外。権限操作 API の 404（実在を教えない）を「開けない」として受け、画面ごと差し替える。 */
+/** admin 以外。招待の API を呼ばずに親ルートが案内を出す（見出しとタブも出さない）。 */
 export const admin以外は開けない: Story = {
   decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'),
+    withApi({
+      ...baseApi(),
+      '/kb/workspaces': [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:00:00Z', canManage: false }],
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      await canvas.findByRole('heading', { level: 1, name: 'この画面は admin だけが開けます' }),
+    ).toBeVisible();
+    await expect(canvas.queryByRole('button', { name: 'メンバーを招く' })).not.toBeInTheDocument();
+  },
+};
+
+/** 開いたあとに admin でなくなると、権限操作 API が 404（実在を教えない）で拒む。同じ案内に差し替える。 */
+export const 開いたあとに役割が変わると開けない: Story = {
+  decorators: [
+    kbWorkspaceAdminRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'),
     withApi({
       '/kb/workspaces/acme/invitations': stubError(404, 'not_found'),
       ...baseApi(),
@@ -292,7 +318,7 @@ export const admin以外は開けない: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
-      await canvas.findByRole('heading', { level: 1, name: 'この画面は admin だけが開けます' }),
+      await canvas.findByRole('heading', { level: 2, name: 'この画面は admin だけが開けます' }),
     ).toBeVisible();
     await expect(canvas.queryByRole('button', { name: 'メンバーを招く' })).not.toBeInTheDocument();
   },
