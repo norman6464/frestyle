@@ -75,7 +75,7 @@ export default function TicketDetailPane({ band, onClose, autoFocus, children }:
         aria-label="詳細の幅を変更する"
         aria-valuenow={Math.round(resize.width)}
         aria-valuemin={MIN_WIDTH}
-        aria-valuemax={Math.round(window.innerWidth * MAX_WIDTH_RATIO)}
+        aria-valuemax={resize.maxWidth}
         tabIndex={0}
         onMouseDown={resize.onHandleMouseDown}
         onKeyDown={resize.onHandleKeyDown}

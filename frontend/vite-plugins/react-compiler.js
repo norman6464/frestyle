@@ -1,6 +1,6 @@
 import babel from '@rolldown/plugin-babel';
 import { reactCompilerPreset } from '@vitejs/plugin-react';
-import { REACT_COMPILER_DIRS } from './react-compiler-scope.js';
+import { REACT_COMPILER_DIRS, REACT_COMPILER_EXCLUDED_DIRS } from './react-compiler-scope.js';
 
 /*
  * React Compiler。部品と hook に「前と同じ値なら計算も描き直しもしない」を自動で付ける
@@ -16,12 +16,20 @@ import { REACT_COMPILER_DIRS } from './react-compiler-scope.js';
 export function reactCompiler() {
   const preset = reactCompilerPreset();
   preset.rolldown.filter.id = {
-    include: REACT_COMPILER_DIRS.map((dir) => new RegExp(`/${escapeRegExp(dir)}/.+\\.tsx?$`)),
-    exclude: [/\/__tests__\//, /\.stories\.tsx$/],
+    include: REACT_COMPILER_DIRS.map((dir) => new RegExp(`/${dirPattern(dir)}/.+\\.tsx?$`)),
+    exclude: [
+      /\/__tests__\//,
+      /\.stories\.tsx$/,
+      ...REACT_COMPILER_EXCLUDED_DIRS.map((dir) => new RegExp(`/${dirPattern(dir)}/`)),
+    ],
   };
   return babel({ presets: [preset] });
 }
 
-function escapeRegExp(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** 範囲のフォルダを正規表現へ。`*` はフォルダ名 1 つ（`src/pages/<画面>/ui` をまとめて指せる）。 */
+function dirPattern(dir) {
+  return dir
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('[^/]+');
 }

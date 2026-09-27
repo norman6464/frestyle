@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
+import { useLocalToday } from '@/shared/lib/hooks/useLocalToday';
 import { FsIcon, PageFrame, SkeletonRows } from '@/shared/ui';
 import { homeStrongLink } from '../lib/homeStyles';
 import { useFavoritesWorkspace } from '../model/useFavoritesWorkspace';
@@ -17,9 +18,6 @@ import HomeFirstRun from './HomeFirstRun';
 import HomeResumeSection from './HomeResumeSection';
 import HomeUnreadNotice from './HomeUnreadNotice';
 
-function todayString(now = new Date()): string {
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
 
 /**
  * マイホーム。「知識を残し、その知識を使って仕事を進める」ための再開地点。
@@ -34,6 +32,8 @@ function todayString(now = new Date()): string {
  */
 export default function HomePage() {
   const wide = useMediaQuery('(min-width: 1024px)');
+  // 期限切れの判定に使う「今日」。日付が変わったら更新する（開いたまま日付をまたいでもずれない）。
+  const today = useLocalToday();
   const workspaces = useHomeWorkspaces();
   const recent = useRecentPages();
   const latest = recent.status === 'ready' ? (recent.data[0] ?? null) : null;
@@ -77,7 +77,7 @@ export default function HomePage() {
   }
 
   const resume = <HomeResumeSection recent={recent} references={references} workspaceName={workspaceName} wide={wide} />;
-  const assignedSection = <HomeAssignedSection assigned={assigned} wide={wide} today={todayString()} />;
+  const assignedSection = <HomeAssignedSection assigned={assigned} wide={wide} today={today} />;
   const favoritesSection = (
     <HomeFavoritesSection
       workspaces={workspaces}

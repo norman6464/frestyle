@@ -27,6 +27,11 @@ export interface UseResizablePanelResult {
   onHandleMouseDown: (event: React.MouseEvent) => void;
   /** ハンドルの onKeyDown に渡す（← / → で操作。マウス操作の代替）。 */
   onHandleKeyDown: (event: React.KeyboardEvent) => void;
+  /**
+   * 今の画面での幅の上限（px。ハンドルの aria-valuemax に使う）。この hook を呼ぶたびに画面の幅から
+   * 求め直す（呼び出し側の部品で求めると、React Compiler が 1 回しか求めない）。
+   */
+  maxWidth: number;
 }
 
 const DEFAULT_WIDTH = 288;
@@ -138,5 +143,6 @@ export function useResizablePanel(options: UseResizablePanelOptions = {}): UseRe
     });
   }, [minWidth, maxWidthRatio, persist]);
 
-  return { width, isResizing, onHandleMouseDown, onHandleKeyDown };
+  const maxWidth = Math.round((typeof window === 'undefined' ? 0 : window.innerWidth) * maxWidthRatio);
+  return { width, isResizing, onHandleMouseDown, onHandleKeyDown, maxWidth };
 }

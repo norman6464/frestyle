@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
+import { useId, useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import {
   KB_ROLE_DESCRIPTION,
@@ -54,22 +54,33 @@ export default function KbInviteDialog({ isOpen, issued: issuedProp, onInvite, o
   const [submitting, setSubmitting] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [issued, setIssued] = useState<KbIssuedInvitation | null>(null);
+  const [issued, setIssued] = useState<KbIssuedInvitation | null>(isOpen ? (issuedProp ?? null) : null);
   const { copiedId, copyToClipboard } = useCopyToClipboard();
 
-  // 開くたびに白紙から（再送で開いたときは、その結果のリンクから）。
-  useEffect(() => {
-    if (!isOpen) return;
-    setEmail('');
-    setName('');
-    setRole('editor');
-    setSubmitting(false);
-    setEmailError(null);
-    setFormError(null);
-    setIssued(issuedProp ?? null);
-  }, [isOpen, issuedProp]);
+  // 開くたびに白紙から（再送で開いたときは、その結果のリンクから）。effect で戻すと前の中身の
+  // まま 1 回描いてしまうので、描いている途中で前の開閉・前の再送の結果と比べる。
+  const [shownFor, setShownFor] = useState({ isOpen, issuedProp });
+  if (shownFor.isOpen !== isOpen || shownFor.issuedProp !== issuedProp) {
+    setShownFor({ isOpen, issuedProp });
+    if (isOpen) {
+      setEmail('');
+      setName('');
+      setRole('editor');
+      setSubmitting(false);
+      setEmailError(null);
+      setFormError(null);
+      setIssued(issuedProp ?? null);
+    }
+  }
 
   const stopPropagation = (event: SyntheticEvent) => event.stopPropagation();
+
+  const reportFailure = (cause: unknown) => {
+    const failure = inviteFailure(cause);
+    if (failure.where === 'email') setEmailError(failure.text);
+    else if (failure.where === 'form') setFormError(failure.text);
+    else onFailureToast(failure.text);
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -77,17 +88,16 @@ export default function KbInviteDialog({ isOpen, issued: issuedProp, onInvite, o
     setSubmitting(true);
     setEmailError(null);
     setFormError(null);
+    // try の中の条件式・try … finally は React Compiler が扱えず、部品ごと対象から外すので、
+    // 送るものと失敗の出し分けは外で組み立てる。
+    const input = { email, name: name.trim() || undefined, role };
     try {
-      const result = await onInvite({ email, name: name.trim() || undefined, role });
+      const result = await onInvite(input);
       setIssued(result);
     } catch (cause) {
-      const failure = inviteFailure(cause);
-      if (failure.where === 'email') setEmailError(failure.text);
-      else if (failure.where === 'form') setFormError(failure.text);
-      else onFailureToast(failure.text);
-    } finally {
-      setSubmitting(false);
+      reportFailure(cause);
     }
+    setSubmitting(false);
   };
 
   const inviteUrl = issued ? buildInviteUrl(window.location.origin, issued.token) : '';

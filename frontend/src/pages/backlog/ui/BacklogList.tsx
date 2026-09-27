@@ -5,7 +5,7 @@ import EmptyState from '@/shared/ui/EmptyState';
 import Loading from '@/shared/ui/Loading';
 import FsIllustration from '@/shared/ui/icons/FsIllustration';
 import { useContainerNarrowerThan } from '@/shared/lib/hooks/useContainerNarrowerThan';
-import { localTodayISO } from '../lib/dueDate';
+import { useLocalToday } from '@/shared/lib/hooks/useLocalToday';
 import type { WriteOutcome } from '../lib/writeOutcome';
 import BacklogRow, { BACKLOG_TABLE_GRID, type BacklogRowLayout } from './BacklogRow';
 import BacklogGroup from './BacklogGroup';
@@ -103,8 +103,9 @@ export default function BacklogList({
 }: BacklogListProps) {
   // 畳んだ段だけを覚える。既定は開いた状態なので、スプリントが増えても勝手に隠れない。
   const [closed, setClosed] = useState<Record<string, boolean>>({});
-  // 期限超過の判定に使う「今日」。行ごとに Date を作らず、描画 1 回につき 1 回だけ求める。
-  const today = localTodayISO();
+  // 期限超過の判定に使う「今日」。行ごとに Date を作らず、日付が変わったときだけ変わる値を全行へ渡す
+  // （描いている途中で new Date() から求めると、コンパイラが 1 回しか求めず日付をまたげない）。
+  const today = useLocalToday();
   // 読み込み中・0 件・失敗のときは一覧の器を描かないので、器が付いた・作り直されたときに
   // 測り直せるよう callback ref で受ける。
   const [containerRef, narrow] = useContainerNarrowerThan<HTMLDivElement>(BACKLOG_TABLE_MIN_WIDTH);
