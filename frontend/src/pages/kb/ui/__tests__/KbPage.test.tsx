@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
 import KbPage from '../KbPage';
+import { KbFrameContext } from '@/widgets/kb-sidebar';
+import { KbFrameLocationContext } from '@/widgets/kb-sidebar/model/kbFrameLocation';
 import { emitKbTreeEvent } from '@/entities/kb';
 import type { CommentAnchor, CommentBadgeCounts, EditorCommand } from '@/shared/ui/RichTextEditor';
 
@@ -63,7 +65,7 @@ const hoisted = vi.hoisted(() => ({
   fetchPageTree: vi.fn(),
   addFavorite: vi.fn(),
   removeFavorite: vi.fn(),
-  /** 枠（KbFrame）の偽物が本文へ渡すスペース。パンくずのスペースの段の検査で差し込む。 */
+  /** 枠（KbFrame）が本文へ渡すスペース。パンくずのスペースの段の検査で差し込む。 */
   frameSpace: null as null | { id: string; key: string; name: string; visibility: 'workspace' | 'private'; createdAt: string },
   getLastVisitedPageId: vi.fn(),
   emit: vi.fn(),
@@ -144,23 +146,6 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...actual, useNavigate: () => hoisted.navigate, useParams: () => hoisted.useParams() };
 });
 
-// ナレッジの枠（文脈バーと左の木）は自前のテストで検証済み。ここでは画面の配線だけを見る。
-// 本文は枠の中身（children）なので、偽物もそれだけは描く。
-// KbPageGlyph は KbBacklinksSection が使う実物のまま残す（丸ごと偽物にすると、
-// KbBacklinksSection が展開したときに未定義のコンポーネントで落ちる）。
-vi.mock('@/widgets/kb-sidebar', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/widgets/kb-sidebar')>();
-  return {
-    ...actual,
-    KbFrame: ({ children }: { children?: ReactNode }) => (
-      <actual.KbFrameContext.Provider value={{ space: hoisted.frameSpace }}>
-        <nav aria-label="枠の偽物" />
-        {children}
-      </actual.KbFrameContext.Provider>
-    ),
-  };
-});
-
 // エディタは重い（tiptap 実体）ので、渡された props を捕まえる薄い偽物に差し替える。
 // /page の run は本物の createSubpage を通る（そこが配線の検査対象）。
 vi.mock('@/shared/ui/RichTextEditor', async (importOriginal) => {
@@ -231,11 +216,20 @@ function fakeEditor() {
   } as never;
 }
 
+/**
+ * 本文は枠（KbFrameLayout が描く KbFrame）の中に入り、枠が木のために持っているスペースを
+ * コンテキストで受け取る。枠そのものは自前のテストで検証済みなので、ここでは渡る箱だけを置く。
+ */
+function FrameSpace({ children }: { children: ReactNode }) {
+  return <KbFrameContext.Provider value={{ space: hoisted.frameSpace }}>{children}</KbFrameContext.Provider>;
+}
+
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/kb/p1']}>
       <KbPage />
     </MemoryRouter>,
+    { wrapper: FrameSpace },
   );
 }
 
@@ -1683,5 +1677,43 @@ describe('KbPage の操作バーと右レール', () => {
     renderPage();
     const nav = await screen.findByRole('navigation', { name: 'ページの場所' });
     expect(within(nav).queryByRole('link', { name: '別のスペース' })).not.toBeInTheDocument();
+  });
+});
+
+describe('KbPage が枠へ知らせる位置', () => {
+  it('ページを取得するまではスペースを知らせず（枠は前の木のまま）、取得したらそのスペースを知らせる', async () => {
+    let resolvePage: (value: ReturnType<typeof resolved>) => void = () => {};
+    hoisted.resolvePage.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvePage = resolve;
+        }),
+    );
+    const report = vi.fn();
+    render(
+      <KbFrameLocationContext.Provider value={report}>
+        <MemoryRouter initialEntries={['/kb/p1']}>
+          <KbPage />
+        </MemoryRouter>
+      </KbFrameLocationContext.Provider>,
+    );
+
+    expect(report).toHaveBeenLastCalledWith({
+      workspaceSlug: undefined,
+      spaceId: undefined,
+      activePageId: 'p1',
+      showPagePanel: undefined,
+    });
+
+    await act(async () => {
+      resolvePage(resolved(true));
+    });
+
+    expect(report).toHaveBeenLastCalledWith({
+      workspaceSlug: 'w-3f2a9c',
+      spaceId: 's1',
+      activePageId: 'p1',
+      showPagePanel: undefined,
+    });
   });
 });

@@ -1,5 +1,6 @@
-export { default as KbFrame } from './ui/KbFrame';
-export type { KbFrameProps } from './ui/KbFrame';
+export { default as KbFrameLayout } from './ui/KbFrameLayout';
+export { useKbFrameLocation } from './model/kbFrameLocation';
+export type { KbFrameLocation } from './model/kbFrameLocation';
 export { KbFrameContext, useKbFrameSpace } from './model/kbFrameContext';
 export type { KbFrameValue } from './model/kbFrameContext';
 export { default as KbPageGlyph } from './ui/KbPageGlyph';

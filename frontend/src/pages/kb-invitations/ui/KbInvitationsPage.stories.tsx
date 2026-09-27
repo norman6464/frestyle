@@ -3,7 +3,7 @@ import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { AxiosError } from 'axios';
 import type { KbInvitation } from '@/entities/kb';
 import KbInvitationsPage from './KbInvitationsPage';
-import { routerWithParam, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
+import { kbFrameRoute, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
 
 /** apiClient のスタブがそのまま投げても getApiError（AxiosError 前提）が読めるよう、本物の AxiosError を作る。 */
 function stubError(status: number, serverCode: string) {
@@ -87,7 +87,8 @@ const meta = {
   title: 'pages/kb-invitations/KbInvitationsPage',
   component: KbInvitationsPage,
   parameters: { layout: 'fullscreen' },
-  decorators: [withToast, routerWithParam('/kb/:workspaceSlug/invitations', '/kb/acme/invitations')],
+  // 通知の箱は枠ごと包む（枠も通知を出す）。デコレータは先に書いたものほど内側になる。
+  decorators: [kbFrameRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'), withToast],
 } satisfies Meta<typeof KbInvitationsPage>;
 
 export default meta;

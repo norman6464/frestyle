@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactElement } from 'react';
 import type { Decorator } from '@storybook/react-vite';
 import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import axios from 'axios';
@@ -9,6 +9,7 @@ import { authReducer } from '@/entities/user';
 import { ToastProvider } from '@/app/providers/ToastProvider';
 import ToastContainer from '@/app/providers/ToastContainer';
 import apiClient from '@/shared/api/axios';
+import { KbFrameLayout } from '@/widgets/kb-sidebar';
 
 /*
  * story を単体で描くための「まわりの装置」。
@@ -52,15 +53,31 @@ export function routerAt(initialPath: string): Decorator {
  * （`/kb/:pageId` のような形）に嵌めないと常に undefined になる。
  */
 export function routerWithParam(pattern: string, path: string): Decorator {
+  return routeDecorator(pattern, path);
+}
+
+/**
+ * kbFrameRoute — ナレッジの画面を、本番と同じく枠の親ルート（KbFrameLayout）の中に置く。
+ *
+ * ナレッジの画面は文脈バーと左の列（ページの木）を自分では描かず、親ルートの枠へ
+ * 「今どこに居るか」を知らせるだけ。routerWithParam だけで描くと本文しか出ない。
+ * 枠は木を取りに行くので、`withApi` にワークスペース・スペース・木の見本も要る。
+ * 枠も通知を出すので、`withToast` はこれより外側に置く（decorators の配列では後ろに書く。
+ * 先に書いたものほど内側になる）。
+ */
+export function kbFrameRoute(pattern: string, path: string): Decorator {
+  return routeDecorator(pattern, path, <KbFrameLayout />);
+}
+
+function routeDecorator(pattern: string, path: string, layout?: ReactElement): Decorator {
   // story ごとに `parameters.routerState` で、開いたときの location.state を差し込める
   // （「どこから来たか」で振る舞いが変わる画面を、router を重ねずに描くため）。
   const Wrapped: Decorator = (Story, { parameters }) => {
     const state = (parameters as { routerState?: unknown }).routerState;
+    const route = <Route path={pattern} element={<Story />} />;
     return (
       <MemoryRouter initialEntries={[state === undefined ? path : { ...parsePath(path), state }]}>
-        <Routes>
-          <Route path={pattern} element={<Story />} />
-        </Routes>
+        <Routes>{layout ? <Route element={layout}>{route}</Route> : route}</Routes>
       </MemoryRouter>
     );
   };

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { AxiosError } from 'axios';
 import KbMembersPage from './KbMembersPage';
-import { routerWithParam, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
+import { kbFrameRoute, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
 
 const member = (over: Record<string, unknown>) => ({
   principalId: 'p-1',
@@ -56,7 +56,8 @@ const meta = {
   title: 'pages/kb-members/KbMembersPage',
   component: KbMembersPage,
   parameters: { layout: 'fullscreen' },
-  decorators: [withToast, routerWithParam('/kb/:workspaceSlug/members', '/kb/acme/members')],
+  // 通知の箱は枠ごと包む（枠も通知を出す）。デコレータは先に書いたものほど内側になる。
+  decorators: [kbFrameRoute('/kb/:workspaceSlug/members', '/kb/acme/members'), withToast],
 } satisfies Meta<typeof KbMembersPage>;
 
 export default meta;

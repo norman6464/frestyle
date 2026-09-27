@@ -24,6 +24,10 @@ const InvitePage = lazyWithReload(() => import('@/pages/invite').then((m) => ({ 
 const HomePage = lazyWithReload(() => import('@/pages/home').then((m) => ({ default: m.HomePage })), 'HomePage');
 const SettingsPage = lazyWithReload(() => import('@/pages/settings').then((m) => ({ default: m.SettingsPage })), 'SettingsPage');
 const KbPage = lazyWithReload(() => import('@/pages/kb').then((m) => ({ default: m.KbPage })), 'KbPage');
+const KbFrameLayout = lazyWithReload(
+  () => import('@/widgets/kb-sidebar').then((m) => ({ default: m.KbFrameLayout })),
+  'KbFrameLayout',
+);
 const AssignedPage = lazyWithReload(
   () => import('@/pages/assigned').then((m) => ({ default: m.AssignedPage })),
   'AssignedPage',
@@ -131,9 +135,29 @@ export default function App() {
           ナレッジ（workspaces → spaces → pages の木）。テナントは URL に出さない。
           ページの URL は /kb/{pageId}、ページ未選択の入口は素の /kb（続きのページへ
           resolveEntryPageId が即座に移す。空振りだけ「まだページがありません」を出す）。
+
+          ナレッジの画面は、文脈バーと左の列（ページの木）の枠を共通の親ルート（KbFrameLayout）が
+          1 回だけ描き、本文だけを差し替える。画面を移っても枠を作り直さない（木を取り直さず、
+          開いていたフォルダも閉じない）。今いるスペースは各画面が枠へ知らせる。
         */}
-        <Route path="/kb" element={<KbPage />} />
-        <Route path="/kb/:pageId" element={<KbPage />} />
+        <Route element={<KbFrameLayout />}>
+          <Route path="/kb" element={<KbPage />} />
+          <Route path="/kb/:pageId" element={<KbPage />} />
+          {/* ワークスペース単位の管理。役割変更・停止 / 復帰・削除（members）と、email での招待
+              （invitations）。見出しは共通で、タブで行き来する。ワークスペース自体の設定なので
+              /kb/{pageId} と違い workspaceSlug を URL に出す。 */}
+          <Route path="/kb/:workspaceSlug/members" element={<KbMembersPage />} />
+          <Route path="/kb/:workspaceSlug/invitations" element={<KbInvitationsPage />} />
+          {/*
+            スペース単位の 4 画面。「workspaceSlug を URL に持たず spaceId だけで解決する」流儀。/kb/spaces はスペース未選択の入口（自分がアクセス
+            できる最初のスペースへ移す）を兼ねる。
+          */}
+          <Route path="/kb/spaces" element={<KbSpaceOverviewPage />} />
+          <Route path="/kb/spaces/:spaceId" element={<KbSpaceOverviewPage />} />
+          <Route path="/kb/spaces/:spaceId/pages" element={<KbSpaceAllPagesPage />} />
+          <Route path="/kb/spaces/:spaceId/favorites" element={<KbSpaceFavoritesPage />} />
+          <Route path="/kb/spaces/:spaceId/members" element={<KbSpaceMembersPage />} />
+        </Route>
         {/* 旧 URL の受け皿。ワークスペース単体（/kb/:workspaceSlug）の形は新しい
             /kb/:pageId と区別できないため対応しない。ページ付きの旧 URL
             （/kb/:slug/pages/:pageId）だけこの受け皿で写す。 */}
@@ -153,20 +177,6 @@ export default function App() {
         <Route path="/backlog/:projectId/settings" element={<KbBacklogPage view="settings" />} />
         <Route path="/backlog/:projectId/archive" element={<KbBacklogPage view="archive" />} />
         <Route path="/tickets/:ticketId" element={<KbTicketPage />} />
-        {/* ワークスペース単位の管理。役割変更・停止 / 復帰・削除（members）と、email での招待
-            （invitations）。見出しは共通で、タブで行き来する。ワークスペース自体の設定なので
-            /kb/{pageId} と違い workspaceSlug を URL に出す。 */}
-        <Route path="/kb/:workspaceSlug/members" element={<KbMembersPage />} />
-        <Route path="/kb/:workspaceSlug/invitations" element={<KbInvitationsPage />} />
-        {/*
-          スペース単位の 4 画面。「workspaceSlug を URL に持たず spaceId だけで解決する」流儀。/kb/spaces はスペース未選択の入口（自分がアクセス
-          できる最初のスペースへ移す）を兼ねる。
-        */}
-        <Route path="/kb/spaces" element={<KbSpaceOverviewPage />} />
-        <Route path="/kb/spaces/:spaceId" element={<KbSpaceOverviewPage />} />
-        <Route path="/kb/spaces/:spaceId/pages" element={<KbSpaceAllPagesPage />} />
-        <Route path="/kb/spaces/:spaceId/favorites" element={<KbSpaceFavoritesPage />} />
-        <Route path="/kb/spaces/:spaceId/members" element={<KbSpaceMembersPage />} />
         <Route path="/notifications" element={<NotificationPage />} />
         {/* 自分宛の招待。通知の飛び先で、/invite からログインした後の戻り先。 */}
         <Route path="/invitations" element={<InvitationsPage />} />
