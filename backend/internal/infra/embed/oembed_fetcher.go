@@ -21,6 +21,8 @@ const (
 	maxBodyBytes       = 512 * 1024 // OGP 抽出に要るのは <head> の一部のみ
 	cacheTTL           = 30 * time.Minute
 	cacheMaxEntries    = 256
+	cacheMaxBytes      = 2 * 1024 * 1024
+	cacheMaxKeyBytes   = 2048
 	userAgent          = "FreStyle/1.0 (+https://frestyle.dev)"
 )
 
@@ -54,7 +56,7 @@ func NewFetcher() *Fetcher {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	dialer := &net.Dialer{Timeout: defaultHTTPTimeout}
 	transport.DialContext = safeDialContext(defaultResolve, dialer.DialContext)
-	f := &Fetcher{cache: newCache(cacheMaxEntries)}
+	f := &Fetcher{cache: newCache(cacheMaxEntries, cacheMaxBytes)}
 	f.client = &http.Client{
 		Timeout:       defaultHTTPTimeout,
 		Transport:     transport,
@@ -70,7 +72,7 @@ func NewFetcherWithClient(c *http.Client) *Fetcher {
 	if c == nil {
 		c = &http.Client{Timeout: defaultHTTPTimeout}
 	}
-	return &Fetcher{client: c, cache: newCache(cacheMaxEntries)}
+	return &Fetcher{client: c, cache: newCache(cacheMaxEntries, cacheMaxBytes)}
 }
 
 // checkRedirect はリダイレクト追跡のホップごとに呼ばれる。IP の安全性は safeDialContext が
@@ -98,14 +100,20 @@ func (f *Fetcher) Resolve(ctx context.Context, raw string) (*Card, error) {
 		return nil, err
 	}
 	key := u.String()
-	if c, ok := f.cache.get(key); ok {
-		return c, nil
+	// 鍵は再エスケープで入力の約 3 倍まで伸びるので、入力ではなく鍵の長さで保持を決める
+	cacheable := len(key) <= cacheMaxKeyBytes
+	if cacheable {
+		if c, ok := f.cache.get(key); ok {
+			return c, nil
+		}
 	}
 	card, err := f.resolveOGP(ctx, u)
 	if err != nil {
 		return nil, err
 	}
-	f.cache.set(key, card)
+	if cacheable {
+		f.cache.set(key, card)
+	}
 	return card, nil
 }
 
@@ -176,6 +184,10 @@ func (f *Fetcher) resolveOGP(ctx context.Context, u *url.URL) (*Card, error) {
 	if card.Title == "" {
 		card.Title = u.Host
 	}
+	card.Title = truncateAndClone(card.Title, maxTitleBytes)
+	card.Description = truncateAndClone(card.Description, maxDescriptionBytes)
+	card.ImageURL = truncateAndClone(card.ImageURL, maxImageURLBytes)
+	card.SiteName = truncateAndClone(card.SiteName, maxSiteNameBytes)
 	return card, nil
 }
 
@@ -212,41 +224,68 @@ func extractTitleTag(html string) string {
 type cacheEntry struct {
 	card    *Card
 	expires time.Time
+	size    int
 }
 
 type cache struct {
-	mu      sync.Mutex
-	max     int
-	entries map[string]cacheEntry
+	mu       sync.Mutex
+	max      int
+	maxBytes int
+	bytes    int
+	entries  map[string]cacheEntry
 }
 
-func newCache(max int) *cache {
-	return &cache{max: max, entries: make(map[string]cacheEntry)}
+func newCache(maxEntries, maxBytes int) *cache {
+	return &cache{max: maxEntries, maxBytes: maxBytes, entries: make(map[string]cacheEntry)}
 }
 
-func (c *cache) get(k string) (*Card, bool) {
+func entrySize(key string, card *Card) int {
+	return len(key) + len(card.URL) + len(card.Title) + len(card.Description) + len(card.ImageURL) + len(card.SiteName) + len(card.Provider)
+}
+
+func (c *cache) get(key string) (*Card, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	e, ok := c.entries[k]
+	entry, ok := c.entries[key]
 	if !ok {
 		return nil, false
 	}
-	if time.Now().After(e.expires) {
-		delete(c.entries, k)
+	if time.Now().After(entry.expires) {
+		c.removeLocked(key)
 		return nil, false
 	}
-	return e.card, true
+	return entry.card, true
 }
 
-func (c *cache) set(k string, v *Card) {
+func (c *cache) set(key string, card *Card) {
+	size := entrySize(key, card)
+	if size > c.maxBytes {
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if len(c.entries) >= c.max {
-		// 単純な oldest 1 件削除（厳密 LRU でなく first-iteration なので acceptable）。
-		for key := range c.entries {
-			delete(c.entries, key)
-			break
-		}
+	c.removeLocked(key)
+	for len(c.entries) > 0 && c.overBudgetWith(size) {
+		c.evictOneLocked()
 	}
-	c.entries[k] = cacheEntry{card: v, expires: time.Now().Add(cacheTTL)}
+	c.entries[key] = cacheEntry{card: card, expires: time.Now().Add(cacheTTL), size: size}
+	c.bytes += size
+}
+
+func (c *cache) overBudgetWith(size int) bool {
+	return len(c.entries) >= c.max || c.bytes+size > c.maxBytes
+}
+
+func (c *cache) evictOneLocked() {
+	for key := range c.entries {
+		c.removeLocked(key)
+		return
+	}
+}
+
+func (c *cache) removeLocked(key string) {
+	if entry, ok := c.entries[key]; ok {
+		c.bytes -= entry.size
+		delete(c.entries, key)
+	}
 }

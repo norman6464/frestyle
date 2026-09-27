@@ -188,7 +188,7 @@ func Test_解決_リダイレクト先が安全でなければ拒否(t *testing.
 		return d.DialContext(ctx, network, realAddr)
 	}
 
-	f := &Fetcher{cache: newCache(cacheMaxEntries)}
+	f := &Fetcher{cache: newCache(cacheMaxEntries, cacheMaxBytes)}
 	transport := &http.Transport{
 		DialContext:     safeDialContext(fakeResolve, dial),
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // 自己署名の httptest サーバ相手のテスト専用

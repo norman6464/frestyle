@@ -8,6 +8,8 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/infra/embed"
 )
 
+const maxEmbedURLBytes = 2048
+
 // EmbedHandler は外部 URL のメタ情報 (OGP / oEmbed) を取得して返す。
 // SSRF / DNS rebinding 対策は infra/embed.Fetcher 内で完結している
 // （NewFetcher が組む http.Transport.DialContext が接続のたびに解決先 IP を検査する。
@@ -26,6 +28,10 @@ func (h *EmbedHandler) Resolve(c *gin.Context) {
 	raw := c.Query("url")
 	if raw == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "url query parameter is required"})
+		return
+	}
+	if len(raw) > maxEmbedURLBytes {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "embed_url_too_long"})
 		return
 	}
 	card, err := h.fetcher.Resolve(c.Request.Context(), raw)
