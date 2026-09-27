@@ -13,6 +13,11 @@ export interface TicketTypeAdminProps {
 const HIERARCHY_LABEL: Record<number, string> = { 1: '束ね（1）', 0: '標準（0）', [-1]: '小作業（-1）' };
 const DEFAULT_COLOR = '#2563eb';
 
+/** 種別を追加できなかったときの文言（try/catch の中の条件式を部品の外へ出すため）。 */
+function typeCreateError(cause: unknown): string {
+  return getApiError(cause).serverCode === 'type_name_taken' ? '同じ名前の種別が既にあります。' : '種別を追加できませんでした。';
+}
+
 /** 種別の管理表（TicketStatusAdmin と同じ形）。 */
 export default function TicketTypeAdmin({ types, onCreate, onSetDefault, onArchive }: TicketTypeAdminProps) {
   const [rowMessage, setRowMessage] = useState<Record<string, string>>({});
@@ -52,11 +57,11 @@ export default function TicketTypeAdmin({ types, onCreate, onSetDefault, onArchi
       setHierarchyLevel(0);
       setColor(DEFAULT_COLOR);
     } catch (cause) {
-      const code = getApiError(cause).serverCode;
-      setFormError(code === 'type_name_taken' ? '同じ名前の種別が既にあります。' : '種別を追加できませんでした。');
-    } finally {
-      setSaving(false);
+      setFormError(typeCreateError(cause));
     }
+    // finally にしない（React Compiler が try … finally を扱えず、この部品ごと対象から外す）。
+    // catch は投げ直さず try の中で return もしないので、ここに置いても必ず通る。
+    setSaving(false);
   };
 
   return (

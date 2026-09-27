@@ -208,7 +208,7 @@ export const 行のどこを押しても開く: Story = {
     await expect(row).not.toBeNull();
     // 担当の升（押せる物ではない所）を押す。
     await userEvent.click(within(canvasElement).getByText('未割当'));
-    await expect(args.onOpen).toHaveBeenCalledTimes(1);
+    await expect(args.onOpen).toHaveBeenCalledWith(baseTicket.id);
   },
 };
 
@@ -236,7 +236,7 @@ export const カードで選択中なら詳細をひらける: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('選択中')).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: /詳細をひらく/ }));
-    await expect(args.onOpenDetail).toHaveBeenCalledTimes(1);
+    await expect(args.onOpenDetail).toHaveBeenCalledWith(baseTicket.id);
     await expect(args.onOpen).not.toHaveBeenCalled();
   },
 };
@@ -248,7 +248,7 @@ export const 状態を変えても行は開かない: Story = {
     // 候補は別の器（ポータル）へ描かれるので、探す場所が canvas ではなく document になる。
     await userEvent.click(canvas.getByLabelText(`${baseTicket.title} の状態`));
     await userEvent.click(await within(document.body).findByRole('option', { name: 'リリース' }));
-    await expect(args.onChangeStatus).toHaveBeenCalledWith('st-5');
+    await expect(args.onChangeStatus).toHaveBeenCalledWith(baseTicket.id, 'st-5');
     await expect(args.onOpen).not.toHaveBeenCalled();
   },
 };

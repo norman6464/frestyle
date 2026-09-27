@@ -18,48 +18,49 @@ export interface TicketWatchButtonProps {
  * 外れるのを防ぐ（backend の PUT も同じ形で受ける）。
  */
 export default function TicketWatchButton({ workspaceSlug, ticketId }: TicketWatchButtonProps) {
-  const [watching, setWatching] = useState(false);
-  const [count, setCount] = useState(0);
-  const [ready, setReady] = useState(false);
+  // 監視の状態は「どのチケットの状態か」の鍵と一緒に持つ。今のチケットの状態がまだ無い間
+  // （取得中・取れなかった）は出さない。effect の頭で「未取得」へ戻すと、描いた直後にもう 1 回描き直す。
+  const key = `${workspaceSlug} ${ticketId}`;
+  const [watch, setWatch] = useState<{ key: string; watching: boolean; count: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const { showToast } = useToast();
 
   useEffect(() => {
     let alive = true;
-    setReady(false);
     TicketRepository.fetchTicketWatchState(workspaceSlug, ticketId)
       .then((state) => {
-        if (!alive) return;
-        setWatching(state.watching);
-        setCount(state.count);
-        setReady(true);
+        if (alive) setWatch({ key: `${workspaceSlug} ${ticketId}`, watching: state.watching, count: state.count });
       })
       .catch(() => {
         // 取れなくてもチケットは読める。押せないまま黙って畳む（fail-open）。
-        if (alive) setReady(false);
       });
     return () => {
       alive = false;
     };
   }, [workspaceSlug, ticketId]);
 
+  const current = watch?.key === key ? watch : null;
+  const watching = current?.watching ?? false;
+
   const toggle = useCallback(async () => {
     if (busy) return;
     setBusy(true);
+    // 知らせの文言は try の外で決める（try/catch の中の条件式と try … finally は React Compiler が
+    // 扱えず、部品ごと対象から外す）。
+    const failure = watching ? 'ウォッチを外せませんでした。' : 'ウォッチできませんでした。';
     try {
       const next = await TicketRepository.setTicketWatching(workspaceSlug, ticketId, !watching);
-      setWatching(next.watching);
-      setCount(next.count);
+      setWatch({ key, watching: next.watching, count: next.count });
     } catch {
       // 失敗したら見た目を変えない（押す前の状態のまま）。黙っていると押せなかったことに
       // 気づけないので、失敗は知らせる。
-      showToast('error', watching ? 'ウォッチを外せませんでした。' : 'ウォッチできませんでした。');
-    } finally {
-      setBusy(false);
+      showToast('error', failure);
     }
-  }, [busy, ticketId, watching, workspaceSlug, showToast]);
+    setBusy(false);
+  }, [busy, key, ticketId, watching, workspaceSlug, showToast]);
 
-  if (!ready) return null;
+  if (!current) return null;
+  const { count } = current;
 
 
   return (

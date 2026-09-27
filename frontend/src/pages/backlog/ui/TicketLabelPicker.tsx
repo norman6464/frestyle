@@ -13,6 +13,12 @@ export interface TicketLabelPickerProps {
 
 const DEFAULT_COLOR = '#2563eb';
 
+/** ラベルを作れなかったときの文言（try/catch の中の条件式を部品の外へ出すため）。 */
+function labelCreateError(cause: unknown): string {
+  const status = (cause as { response?: { status?: number } })?.response?.status;
+  return status === 409 ? 'その名前のラベルは既にあります。' : 'ラベルを作れませんでした。';
+}
+
 /**
  * ラベルの選択。浮かせずその場に展開し、絞り込み・付け外し・新規作成までをここで完結させる
  * （バックログ画面に管理用の 4 つ目のタブを足さない判断。付けるついでに作るのが自然なため）。
@@ -41,11 +47,11 @@ export default function TicketLabelPicker({ labels, attachedIds, onToggle, onCre
       await onCreate(trimmed, normalizeLabelColor(newColor));
       setNewName('');
     } catch (cause) {
-      const status = (cause as { response?: { status?: number } })?.response?.status;
-      setError(status === 409 ? 'その名前のラベルは既にあります。' : 'ラベルを作れませんでした。');
-    } finally {
-      setCreating(false);
+      setError(labelCreateError(cause));
     }
+    // finally にしない（React Compiler が try … finally を扱えず、この部品ごと対象から外す）。
+    // catch は投げ直さず try の中で return もしないので、ここに置いても必ず通る。
+    setCreating(false);
   };
 
   return (

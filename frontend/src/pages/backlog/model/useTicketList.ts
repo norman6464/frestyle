@@ -8,6 +8,7 @@ import {
   type TicketListFilter,
   type UpdateTicketInput,
 } from '@/entities/ticket';
+import { reuseUnchanged } from '../lib/reuseUnchanged';
 
 export interface UseTicketListOptions {
   /** true でアーカイブ済みだけを見る（現役との「込み」は取れない。設計 Ⅳ-C）。 */
@@ -124,7 +125,8 @@ export function useTicketList(
         setState((prev) => ({ ...prev, loading: false }));
         return;
       }
-      setState((prev) => ({ ...prev, tickets, loading: false, error: null, busyId: null }));
+      // 中身の変わらないチケットは前の値を使い、変わった行だけを描き直させる（reuseUnchanged）。
+      setState((prev) => ({ ...prev, tickets: reuseUnchanged(prev.tickets, tickets), loading: false, error: null, busyId: null }));
     } catch {
       if (active.current?.key !== to.key || seq.current !== request) return;
       if (writeCount.current !== writesAtStart) {

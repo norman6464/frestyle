@@ -90,16 +90,22 @@ export default function SprintBoard({
   const runConfirmed = async () => {
     if (!confirming) return;
     setConfirmPending(true);
+    const { kind, sprintId } = confirming;
+    const run =
+      kind === 'delete'
+        ? () => remove(sprintId).catch(() => onError('スプリントを削除できませんでした。'))
+        : () => handleChangeState(sprintId, 'completed');
+    // finally にしない（React Compiler が try … finally を扱えず、この部品ごと対象から外す）。
+    // 失敗しても確認を閉じてから投げ直し、成功したら後ろで閉じる。
     try {
-      if (confirming.kind === 'delete') {
-        await remove(confirming.sprintId).catch(() => onError('スプリントを削除できませんでした。'));
-      } else {
-        await handleChangeState(confirming.sprintId, 'completed');
-      }
-    } finally {
+      await run();
+    } catch (cause) {
       setConfirmPending(false);
       setConfirming(null);
+      throw cause;
     }
+    setConfirmPending(false);
+    setConfirming(null);
   };
 
   const confirmText = confirming ? sprintConfirmText(confirming.kind, confirming.name, confirming.count) : null;

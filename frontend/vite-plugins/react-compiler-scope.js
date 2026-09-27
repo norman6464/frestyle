@@ -10,7 +10,7 @@
  * 画面の部品（ui）だけを入れ、データ取得の hook（model）はまだ入れない。取得の hook は
  * 共有キャッシュ（TanStack Query）へ置き換える予定で、その書き直しのときに入れる。
  */
-export const REACT_COMPILER_DIRS = ['src/widgets/kb-sidebar', 'src/pages/kb/ui'];
+export const REACT_COMPILER_DIRS = ['src/widgets/kb-sidebar', 'src/pages/kb/ui', 'src/pages/backlog/ui'];
 
 /** テストと見本は描画の外で数えたり差し替えたりするので、コンパイラにも lint にもかけない。 */
 export const REACT_COMPILER_IGNORES = ['**/__tests__/**', '**/*.stories.tsx'];

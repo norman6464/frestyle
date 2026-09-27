@@ -10,6 +10,8 @@ export interface BacklogProjectSwitcherProps {
   project: Project;
 }
 
+const NO_PROJECTS: Project[] = [];
+
 /**
  * BacklogProjectSwitcher はバックログの文脈の行（設計ボード ST08 の「FreStyle / プロジェクト FRE ▾」）の
  * 「プロジェクト FRE ▾」。押すと同じワークスペースのプロジェクトの一覧が開き、選ぶとそのバックログへ移る。
@@ -19,12 +21,21 @@ export interface BacklogProjectSwitcherProps {
  */
 export default function BacklogProjectSwitcher({ workspaceSlug, project }: BacklogProjectSwitcherProps) {
   const [open, setOpen] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
-  // 一覧の取得の状態。読み込み中・失敗・0 件を同じ「プロジェクトはありません」に
-  // 畳まない（失敗を「無い」と言い切ると、あるのに切り替えられないと誤解される）。
-  const [listStatus, setListStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  // 再試行の引き金（値に意味は無い。増えたら同じ問い合わせをもう一度投げる）。
+  // 再試行・開き直しの引き金（値に意味は無い。増えたら同じ問い合わせをもう一度投げる）。
+  // 開くたびにも増やす —— 閉じて開き直したときに、取り直しが終わるまで前の一覧（や解消した
+  // かもしれない失敗）を出さないため（開くたびに取り直すのは、閉じている間に増えた・消えた
+  // プロジェクトを拾うため）。
   const [attempt, setAttempt] = useState(0);
+  // 一覧の取得の結果は「どの問い合わせの結果か」の鍵と一緒に持つ。今の鍵の結果がまだ無い間が
+  // 読み込み中（effect の頭で「読み込み中」へ戻すと、描いた直後にもう 1 回描き直す）。
+  // 読み込み中・失敗・0 件を同じ「プロジェクトはありません」に畳まない（失敗を「無い」と
+  // 言い切ると、あるのに切り替えられないと誤解される）。
+  const requestKey = `${workspaceSlug ?? ''}#${attempt}`;
+  const [result, setResult] = useState<
+    { key: string; status: 'ready'; projects: Project[] } | { key: string; status: 'error' } | null
+  >(null);
+  const listStatus = result?.key === requestKey ? result.status : 'loading';
+  const projects = result?.key === requestKey && result.status === 'ready' ? result.projects : NO_PROJECTS;
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const key = project.key.toUpperCase();
@@ -36,16 +47,14 @@ export default function BacklogProjectSwitcher({ workspaceSlug, project }: Backl
   useEffect(() => {
     if (!open || !workspaceSlug) return;
     let alive = true;
-    setListStatus('loading');
+    const forKey = `${workspaceSlug}#${attempt}`;
     void ProjectRepository.fetchProjects(workspaceSlug)
       .then((list) => {
-        if (!alive) return;
-        setProjects(list);
-        setListStatus('ready');
+        if (alive) setResult({ key: forKey, status: 'ready', projects: list });
       })
       .catch(() => {
         // 一覧が取れなくても今のプロジェクトは開いたまま使える（fail-open）。失敗は失敗と示す。
-        if (alive) setListStatus('error');
+        if (alive) setResult({ key: forKey, status: 'error' });
       });
     return () => {
       alive = false;
@@ -57,7 +66,10 @@ export default function BacklogProjectSwitcher({ workspaceSlug, project }: Backl
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => {
+          if (!open) setAttempt((prev) => prev + 1);
+          setOpen(!open);
+        }}
         aria-expanded={open}
         // 見えている「プロジェクト FRE」を名前に含め、押すと何が起きるかを足す。
         aria-label={`プロジェクト ${key} を切り替える`}
