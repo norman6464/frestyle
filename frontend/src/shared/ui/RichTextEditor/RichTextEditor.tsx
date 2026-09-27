@@ -293,21 +293,21 @@ export default function RichTextEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasImageUpload]);
 
-  const editor = useEditor({
-    editable,
-    extensions: [
+  // tiptap（useEditor）は描き直しのたびに、渡した設定と今の設定を比べ、違えば setOptions で
+  // 入れ直す（view の更新まで走る）。機能一式・editorProps をその場で作ると毎回「違う」になり、
+  // 親が描き直すたびに入れ直していた。機能一式は生成時に固定される約束なので、入れ直しても
+  // 効かない。ここで固定し、実際に変わったとき（読み上げの名前など）だけ入れ直させる。
+  const extensions = useMemo(
+    () => [
       ...createEditorExtensions({ placeholder, slashItems, resolveImageSrc }),
       // コメント件数バッジ（decoration）。extensions は生成時に固定されるため、件数・クリック
       // ハンドラは ref 越しに渡す（commentBadgeCountsRef は上の useCommentBadgeSync が返す）。
       createCommentBadgesExtension(commentBadgeCountsRef, handleCommentBadgeClick),
     ],
-    // 読み込み側のリンク洗浄。doc JSON は API から丸ごと差し込めるので、エディタの入力・貼り付けを
-    // どれだけ固めても「危険な href がすでに入った doc」はここから入ってくる。開いた時点で落とす。
-    // id の穴埋めも同じ「editor へ渡す前に doc を整える」経路（stableBlockId.ts のコメント参照。
-    // 生成直後に別途 transaction を dispatch する案は act() の外での再レンダーを誘発し
-    // テストで実際に不具合を起こしたため、ここで先に埋める形にした）。
-    content: filledValue,
-    editorProps: {
+    [placeholder, slashItems, resolveImageSrc, commentBadgeCountsRef, handleCommentBadgeClick],
+  );
+  const editorProps = useMemo(
+    () => ({
       attributes: {
         class: 'focus:outline-none',
         role: 'textbox',
@@ -315,15 +315,28 @@ export default function RichTextEditor({
         'aria-label': ariaLabel,
       },
       // クリップボード/ドロップに画像ファイルがあればアップロードして挿入する。
-      handlePaste: (_view, event) => handleImageFiles(event.clipboardData?.files),
-      handleDrop: (_view, event) => {
+      handlePaste: (_view: unknown, event: ClipboardEvent) => handleImageFiles(event.clipboardData?.files),
+      handleDrop: (_view: unknown, event: DragEvent) => {
         if (event.dataTransfer?.files && handleImageFiles(event.dataTransfer.files)) {
           event.preventDefault();
           return true;
         }
         return false;
       },
-    },
+    }),
+    [ariaLabel, handleImageFiles],
+  );
+
+  const editor = useEditor({
+    editable,
+    extensions,
+    // 読み込み側のリンク洗浄。doc JSON は API から丸ごと差し込めるので、エディタの入力・貼り付けを
+    // どれだけ固めても「危険な href がすでに入った doc」はここから入ってくる。開いた時点で落とす。
+    // id の穴埋めも同じ「editor へ渡す前に doc を整える」経路（stableBlockId.ts のコメント参照。
+    // 生成直後に別途 transaction を dispatch する案は act() の外での再レンダーを誘発し
+    // テストで実際に不具合を起こしたため、ここで先に埋める形にした）。
+    content: filledValue,
+    editorProps,
     onCreate: ({ editor: currentEditor }) => {
       onCreateRef.current?.(currentEditor);
     },

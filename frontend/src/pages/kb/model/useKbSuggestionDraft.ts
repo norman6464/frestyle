@@ -5,7 +5,10 @@ import { getApiError } from '@/shared/lib/classifyApiError';
 export interface KbSuggestionDraftState {
   /** ドラフトモード中か。true の間だけ本文表示エリアが編集可能な下書きに切り替わる。 */
   open: boolean;
-  /** 下書き中の doc。open=false の間は null。 */
+  /**
+   * 下書きを始めたときの doc（エディタに最初に渡す値）。open=false の間は null。
+   * 打鍵の中身はエディタ自身が持ち、ここは打鍵では変わらない（最新の中身は送信のときに使う）。
+   */
   draft: unknown;
   /** createSuggestion が飛んでいる間 true。 */
   submitting: boolean;
@@ -28,6 +31,9 @@ const CLOSED: KbSuggestionDraftState = { open: false, draft: null, submitting: f
  * ドラフトモードのまま・入力を保持したまま呼び出し側（KbPage）が帯に表示する。
  * 成功したかどうかは submit の戻り値（boolean）で呼び出し側へ伝える
  * （成功トーストを出す・失敗トーストは出さない、という出し分けを呼び出し側に委ねるため）。
+ *
+ * **打鍵の最新の中身は ref に持つ**（state にすると 1 文字ごとにページ全体が描き直される）。
+ * 画面に出す中身はエディタが持っているので、ページが知る必要があるのは送信のときだけ。
  */
 export function useKbSuggestionDraft(workspaceSlug: string | undefined, pageId: string | undefined) {
   const [state, setState] = useState<KbSuggestionDraftState>(CLOSED);
@@ -37,25 +43,30 @@ export function useKbSuggestionDraft(workspaceSlug: string | undefined, pageId: 
   // いたら、もうこの state を持ち主が変わっているとみなし、成功/失敗のどちらでも触らない
   // （移った先のページの下書き state を、古いページへの送信結果で上書きしてしまうため）。
   const generation = useRef(0);
+  // 打鍵の最新の中身。送信のときだけ読む。
+  const latestDraft = useRef<unknown>(null);
 
   // ページを移ったら、書きかけの下書きを持ち越さない（共有・コメント・履歴の各パネルと同じ理由）。
   useEffect(() => {
     generation.current += 1;
+    latestDraft.current = null;
     setState(CLOSED);
   }, [workspaceSlug, pageId]);
 
   const start = useCallback((initialDoc: unknown) => {
     generation.current += 1;
+    latestDraft.current = initialDoc;
     setState({ open: true, draft: initialDoc, submitting: false, error: null });
   }, []);
 
   const cancel = useCallback(() => {
     generation.current += 1;
+    latestDraft.current = null;
     setState(CLOSED);
   }, []);
 
   const changeDraft = useCallback((doc: unknown) => {
-    setState((prev) => (prev.open ? { ...prev, draft: doc } : prev));
+    latestDraft.current = doc;
   }, []);
 
   /** submit は下書きを 1 回だけ提案として送る。成功したら true、失敗したら false を返す。 */
@@ -64,7 +75,7 @@ export function useKbSuggestionDraft(workspaceSlug: string | undefined, pageId: 
     const requestGeneration = generation.current;
     setState((prev) => ({ ...prev, submitting: true, error: null }));
     try {
-      await KbRepository.createSuggestion(workspaceSlug, pageId, state.draft);
+      await KbRepository.createSuggestion(workspaceSlug, pageId, latestDraft.current);
       if (generation.current === requestGeneration) setState(CLOSED);
       return true;
     } catch (cause) {
@@ -77,7 +88,7 @@ export function useKbSuggestionDraft(workspaceSlug: string | undefined, pageId: 
       }
       return false;
     }
-  }, [workspaceSlug, pageId, state.draft]);
+  }, [workspaceSlug, pageId]);
 
   return { ...state, start, cancel, changeDraft, submit };
 }

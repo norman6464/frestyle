@@ -40,13 +40,26 @@ describe('useKbSuggestionDraft', () => {
     expect(result.current.draft).toEqual(doc);
   });
 
-  it('changeDraft で下書きが更新される（APIへは送らない）', () => {
-    const { result } = renderHook(() => useKbSuggestionDraft('w-1', 'p-1'));
+  it('changeDraft は打鍵ごとに描き直さず（APIへも送らない）、送信のときに書き換え後の下書きを送る', async () => {
+    hoisted.createSuggestion.mockResolvedValue({ id: 's-1', doc, status: 'open', author: { userId: 1, name: '' }, createdAt: '2026-09-01T00:00:00Z' });
+    let renders = 0;
+    const { result } = renderHook(() => {
+      renders += 1;
+      return useKbSuggestionDraft('w-1', 'p-1');
+    });
     act(() => result.current.start(doc));
     const changed = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '書き換え後' }] }] };
+    const before = renders;
+
     act(() => result.current.changeDraft(changed));
-    expect(result.current.draft).toEqual(changed);
+    act(() => result.current.changeDraft(changed));
+
+    expect(renders).toBe(before);
     expect(hoisted.createSuggestion).not.toHaveBeenCalled();
+    await act(async () => {
+      await result.current.submit();
+    });
+    expect(hoisted.createSuggestion).toHaveBeenCalledWith('w-1', 'p-1', changed);
   });
 
   it('cancel でドラフトを破棄して閉じる', () => {
