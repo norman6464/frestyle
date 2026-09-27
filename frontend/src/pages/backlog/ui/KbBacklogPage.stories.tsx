@@ -104,6 +104,42 @@ export const アーカイブが空: Story = {
   },
 };
 
+/** URL のプロジェクトが見つからない。行き止まりにせず、バックログの入口へ戻れる。 */
+export const プロジェクトが見つからない: Story = {
+  decorators: [withApi(baseApi({ '/workspaces/acme/projects': { projects: [] } }))],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByRole('heading', { name: 'このプロジェクトは見つかりませんでした' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'バックログへ戻る' })).toBeVisible();
+    await expect(canvas.queryByRole('alert')).toBeNull();
+  },
+};
+
+/** プロジェクトを読み込めなかった。「見つからない」とは言わず、取り直せる。 */
+export const プロジェクトを読み込めない: Story = {
+  decorators: [
+    withApi(
+      baseApi({
+        '/kb/workspaces': (() => {
+          let calls = 0;
+          return () => {
+            calls += 1;
+            if (calls === 1) throw new Error('offline');
+            return workspaces;
+          };
+        })(),
+      }),
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByRole('alert')).toHaveTextContent('バックログを読み込めませんでした。');
+    await expect(canvas.queryByRole('heading', { name: 'このプロジェクトは見つかりませんでした' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '再試行' }));
+    await expect(await canvas.findByText('段1: チケットの骨格（9表）')).toBeVisible();
+  },
+};
+
 export const 設定の取得失敗を未有効化と取り違えない: Story = {
   decorators: [withApi(baseApi({ '/workspaces/acme/projects/p-1/ticket-statuses': () => { throw new Error('offline'); } }))],
   play: async ({ canvasElement }) => {

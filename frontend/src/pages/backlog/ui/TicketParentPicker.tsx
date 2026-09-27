@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { formatTicketKey, type Ticket } from '@/entities/ticket';
-import Loading from '@/shared/ui/Loading';
+import { ErrorNotice, Loading } from '@/shared/ui';
 
 export interface TicketParentPickerProps {
   /** プロジェクト内の現役チケット（対象自身は含めない）。 */
@@ -56,9 +56,7 @@ export default function TicketParentPicker({
 
       {loading && <Loading size="small" />}
       {!loading && error && (
-        <p role="alert" className="px-1 py-1 text-sm text-danger-ink">
-          {error}
-        </p>
+        <ErrorNotice variant="inline" message={error} className="px-1" />
       )}
       {!loading && !error && (
         <ul className="max-h-48 overflow-y-auto">

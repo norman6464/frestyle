@@ -1,5 +1,5 @@
 import { kbRoleLabel, type KbInvitation } from '@/entities/kb';
-import { Button, Disclosure, FsIcon, Loading } from '@/shared/ui';
+import { Button, Disclosure, EmptyNotice, ErrorNotice, FsIcon, Loading } from '@/shared/ui';
 import { INVITATION_STATUS_CLASS, INVITATION_STATUS_LABEL, formatInvitationDate } from '../lib/invitationMessages';
 
 export interface KbInvitationsSectionProps {
@@ -56,14 +56,9 @@ export default function KbInvitationsSection({
       {loading ? (
         <Loading className="min-h-24" message="招待を読み込んでいます" />
       ) : failed ? (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-3 bg-surface-1 p-4">
-          <p className="text-sm text-[var(--color-text-primary)]">招待の一覧を読み込めませんでした。</p>
-          <Button variant="secondary" onClick={onRetry} className="min-h-11">再読み込み</Button>
-        </div>
+        <ErrorNotice message="招待の一覧を読み込めませんでした。" onRetry={onRetry} />
       ) : open.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-surface-3 p-6 text-center text-sm text-[var(--color-text-muted)]">
-          承諾待ちの招待はありません。
-        </p>
+        <EmptyNotice variant="panel" title="承諾待ちの招待はありません。" />
       ) : (
         <div className="overflow-hidden rounded-xl border border-surface-3 bg-surface-1">
           <table role="table" aria-label="承諾待ちの招待" className="w-full border-collapse">

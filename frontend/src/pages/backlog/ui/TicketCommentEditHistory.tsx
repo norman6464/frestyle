@@ -1,5 +1,5 @@
 import { formatDateTime } from '@/shared/lib/formatters';
-import Loading from '@/shared/ui/Loading';
+import { EmptyNotice, ErrorNotice, Loading } from '@/shared/ui';
 import type { CommentEditsState } from '../model/useCommentEdits';
 import TicketCommentBody from './TicketCommentBody';
 
@@ -14,14 +14,12 @@ export default function TicketCommentEditHistory({ state, resolveMentionName }: 
 
   if (state.error) {
     return (
-      <p role="alert" className="text-sm text-danger-ink">
-        {state.error}
-      </p>
+      <ErrorNotice variant="inline" message={state.error} />
     );
   }
 
   if (state.edits.length === 0) {
-    return <p className="text-xs text-[var(--color-text-muted)]">編集履歴はありません</p>;
+    return <EmptyNotice title="編集履歴はありません" />;
   }
 
   return (

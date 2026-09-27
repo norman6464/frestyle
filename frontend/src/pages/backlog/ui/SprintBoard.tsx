@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ConfirmModal, EmptyState, FsIllustration, Loading, FsIcon, NameCreateForm } from '@/shared/ui';
+import { ConfirmModal, EmptyState, ErrorNotice, FsIllustration, Loading, FsIcon, NameCreateForm } from '@/shared/ui';
 import type { Ticket } from '@/entities/ticket';
 import { useSprints } from '../model/useSprints';
 import { useSprintTickets } from '../model/useSprintTickets';
@@ -37,7 +37,7 @@ export default function SprintBoard({
   tickets,
   onError,
 }: SprintBoardProps) {
-  const { sprints, loading, error, busyId, create, update, changeState, remove, removeTicket, moveTicket } =
+  const { sprints, loading, error, reload, busyId, create, update, changeState, remove, removeTicket, moveTicket } =
     sprintState;
   const { bySprint, reload: reloadMembership } = useSprintTickets(
     workspaceSlug,
@@ -108,9 +108,7 @@ export default function SprintBoard({
 
   if (error) {
     return (
-      <p role="alert" className="py-6 text-sm text-danger-ink">
-        {error}
-      </p>
+      <ErrorNotice message={error} onRetry={() => void reload()} className="my-6" />
     );
   }
 

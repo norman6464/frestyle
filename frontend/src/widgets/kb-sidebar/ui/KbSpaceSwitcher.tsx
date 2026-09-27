@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type Ref } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDismissOnOutside } from '@/shared/lib/hooks/useDismissOnOutside';
 import { useToast } from '@/shared/lib/hooks/useToast';
-import { NameCreateForm, FsIcon } from '@/shared/ui';
+import { ErrorNotice, FsIcon, NameCreateForm, SkeletonRows } from '@/shared/ui';
 import { KbRepository, type KbMySpace, type KbSpace } from '@/entities/kb';
 
 export interface KbSpaceSwitcherProps {
@@ -125,18 +125,16 @@ function KbSpaceSwitcherMenu({
       ref={ref}
       className="absolute left-0 top-full z-30 mt-1 max-h-[70vh] w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-surface-3 bg-surface-1 py-1 shadow-lg"
     >
-      {mySpaces === null && !loadFailed && <p className="px-3 py-1.5 text-sm text-[var(--color-text-muted)]">読み込み中…</p>}
+      {mySpaces === null && !loadFailed && (
+        <SkeletonRows label="スペースを読み込み中" shape="blocks" size="sm" className="px-3 py-1.5" />
+      )}
       {loadFailed && (
-        <div role="alert" className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-danger-ink">
-          <span>スペースを読み込めませんでした</span>
-          <button
-            type="button"
-            onClick={() => setAttempt((prev) => prev + 1)}
-            className="shrink-0 rounded px-1.5 py-1 text-xs underline hover:no-underline"
-          >
-            再試行
-          </button>
-        </div>
+        <ErrorNotice
+          variant="inline"
+          message="スペースを読み込めませんでした"
+          onRetry={() => setAttempt((prev) => prev + 1)}
+          className="px-3 py-1"
+        />
       )}
       {mySpaces?.map((s) => (
         <Link

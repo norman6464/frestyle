@@ -42,7 +42,7 @@ describe('BacklogProjectSwitcher', () => {
     hoisted.fetchProjects.mockReturnValue(new Promise(() => {}));
     renderSidebar();
     openSwitcher();
-    expect(screen.getByRole('status')).toHaveTextContent('読み込み中');
+    expect(screen.getByRole('status', { name: 'プロジェクトを読み込み中' })).toBeInTheDocument();
     expect(screen.queryByText(/プロジェクトはありません/)).not.toBeInTheDocument();
   });
 

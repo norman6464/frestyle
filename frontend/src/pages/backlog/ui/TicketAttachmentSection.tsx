@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import Loading from '@/shared/ui/Loading';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useTicketAttachments } from '../model/useTicketAttachments';
 import { ACCEPTED_ATTACHMENT_ACCEPT_ATTR } from '../config/attachmentUpload';
 import TicketAttachmentRow from './TicketAttachmentRow';
 import TicketPendingAttachmentRow from './TicketPendingAttachmentRow';
-import { FsIcon } from '@/shared/ui';
+import { EmptyNotice, ErrorNotice, FsIcon, Loading } from '@/shared/ui';
 
 export interface TicketAttachmentSectionProps {
   workspaceSlug: string;
@@ -77,13 +76,11 @@ export default function TicketAttachmentSection({
       className={`flex flex-col gap-1.5 rounded ${dragOver ? 'ring-2 ring-inset ring-brand-600' : ''}`}
     >
       {error && (
-        <p role="alert" className="text-sm text-danger-ink">
-          {error}
-        </p>
+        <ErrorNotice variant="inline" message={error} />
       )}
 
       {!error && attachments.length === 0 && pending.length === 0 && (
-        <p className="text-xs text-[var(--color-text-muted)]">添付はありません</p>
+        <EmptyNotice title="添付はありません" />
       )}
 
       {(attachments.length > 0 || pending.length > 0) && (

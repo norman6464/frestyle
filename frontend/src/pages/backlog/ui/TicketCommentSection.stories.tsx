@@ -84,7 +84,7 @@ export const 失敗: Story = {
     await waitFor(async () => {
       await expect(canvas.getByRole('alert')).toHaveTextContent('読み込めませんでした');
     });
-    await expect(canvas.getByRole('button', { name: '再読み込み' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: '再試行' })).toBeInTheDocument();
   },
 };
 

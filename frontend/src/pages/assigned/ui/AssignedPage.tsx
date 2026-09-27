@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Button, EmptyState, Loading, FsIcon, fsIcon } from '@/shared/ui';
+import { Button, EmptyState, ErrorNotice, Loading, FsIcon, fsIcon } from '@/shared/ui';
 import { STATUS_ICON, type TicketStatusCategory } from '@/entities/ticket';
 import { useAssignedTickets } from '../model/useAssignedTickets';
 import { dueState, localToday } from '../lib/dueDate';
@@ -40,14 +40,7 @@ export default function AssignedPage() {
       {loading && <Loading className="py-16" message="担当チケットを読み込み中…" />}
 
       {!loading && error && (
-        <div role="alert" className="flex flex-wrap items-center gap-4 rounded-2xl border border-surface-3 bg-surface-1 p-5">
-          <FsIcon name="alert-triangle" className="h-6 w-6 shrink-0 text-[var(--color-text-secondary)]" />
-          <div className="min-w-0 flex-1 basis-48">
-            <p className="text-sm font-semibold text-[var(--color-text-primary)]">{error}</p>
-            <p className="mt-1 text-sm text-[var(--color-text-muted)]">通信状況を確認して、もう一度読み込んでください。</p>
-          </div>
-          <Button variant="secondary" onClick={reload} className="min-h-11">再試行</Button>
-        </div>
+        <ErrorNotice message={error} description="通信状況を確認して、もう一度読み込んでください。" onRetry={reload} />
       )}
 
       {!loading && !error && total > 0 && (
