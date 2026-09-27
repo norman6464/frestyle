@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, waitFor, within } from 'storybook/test';
 import KbSpaceFavoritesPage from './KbSpaceFavoritesPage';
-import { kbFrameRoute, withApi, withToast } from '../../../../.storybook/decorators';
+import { kbSpaceRoute, withApi, withToast } from '../../../../.storybook/decorators';
 
 const workspaces = [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:00:00Z', canManage: true }];
 const mySpaces = [{ id: 'space-1', name: '開発部', role: 'editor' }];
@@ -13,7 +13,9 @@ const meta = {
   component: KbSpaceFavoritesPage,
   parameters: { layout: 'fullscreen' },
   // 通知の箱は枠ごと包む（枠も通知を出す）。デコレータは先に書いたものほど内側になる。
-  decorators: [kbFrameRoute('/kb/spaces/:spaceId/favorites', '/kb/spaces/space-1/favorites'), withToast],
+  // ルート（枠とスペースの親ルート）は各 story で API の見本より内側に置く。親ルートがスペースを
+  // 解決するまで画面を描かないので、API の見本が画面の内側にあると差し替えが効かない。
+  decorators: [withToast],
 } satisfies Meta<typeof KbSpaceFavoritesPage>;
 
 export default meta;
@@ -21,6 +23,7 @@ type Story = StoryObj<typeof meta>;
 
 export const ふつう: Story = {
   decorators: [
+    kbSpaceRoute('/kb/spaces/:spaceId/favorites', '/kb/spaces/space-1/favorites'),
     withApi({
       '/spaces/space-1/pages': { pages: [], hasHiddenChildren: false },
       '/favorites': [
@@ -43,6 +46,7 @@ export const ふつう: Story = {
 
 export const お気に入りが無い: Story = {
   decorators: [
+    kbSpaceRoute('/kb/spaces/:spaceId/favorites', '/kb/spaces/space-1/favorites'),
     withApi({
       '/spaces/space-1/pages': { pages: [], hasHiddenChildren: false },
       '/favorites': [],

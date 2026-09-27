@@ -1,4 +1,7 @@
 export { default as KbFrameLayout } from './ui/KbFrameLayout';
+export { default as KbSpaceLayout } from './ui/KbSpaceLayout';
+export { useKbSpaceOutlet } from './model/kbSpaceOutlet';
+export type { KbSpaceOutlet } from './model/kbSpaceOutlet';
 export { useKbFrameLocation } from './model/kbFrameLocation';
 export type { KbFrameLocation } from './model/kbFrameLocation';
 export { KbFrameContext, useKbFrameSpace } from './model/kbFrameContext';

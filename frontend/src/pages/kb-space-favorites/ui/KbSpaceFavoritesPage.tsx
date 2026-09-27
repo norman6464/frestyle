@@ -1,7 +1,7 @@
-import { Link, useParams, useNavigate } from 'react-router-dom';
-import { KbPageGlyph, useKbFrameLocation } from '@/widgets/kb-sidebar';
+import { Link } from 'react-router-dom';
+import { KbPageGlyph, useKbSpaceOutlet } from '@/widgets/kb-sidebar';
 import { Loading, fsIcon } from '@/shared/ui';
-import { useKbSpaceEntry, KbSpaceHeading } from '@/entities/kb';
+import { KbSpaceHeading } from '@/entities/kb';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useKbFavorites } from '../model/useKbFavorites';
 
@@ -11,53 +11,15 @@ import { useKbFavorites } from '../model/useKbFavorites';
  * 別のスペースのページが並ぶと、どこにいるのか分からなくなる）。
  */
 export default function KbSpaceFavoritesPage() {
-  const { spaceId } = useParams<{ spaceId?: string }>();
-  const navigate = useNavigate();
-
-  const { workspaceSlug, space, noSpaces, loading, error } = useKbSpaceEntry(spaceId, (id) =>
-    navigate(`/kb/spaces/${id}`, { replace: true }),
-  );
-
-  // 枠（左の木と文脈バー）へ今の位置を知らせる。スペースが決まるまでは undefined のまま
-  // （枠は前の木のまま）にして、同じスペースの画面どうしを移るたびに木を取り直さない。
-  useKbFrameLocation({ workspaceSlug: workspaceSlug ?? undefined, spaceId: space?.id });
+  const { workspaceSlug, space } = useKbSpaceOutlet();
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      {error && (
-        <div role="alert" className="flex flex-1 items-center justify-center px-6 py-8 text-center text-sm text-[var(--color-text-muted)]">
-          {error}
-        </div>
-      )}
-
-      {!error && noSpaces && (
-        <div className="flex flex-1 items-center justify-center px-6 text-center">
-          <div>
-            <h1 className="mb-2 text-lg font-semibold text-[var(--color-text-secondary)]">
-              アクセスできるスペースがありません
-            </h1>
-            <p className="text-sm text-[var(--color-text-muted)]">
-              左の列（狭い画面では左上のボタン）から、最初のスペースを作れます。
-            </p>
-          </div>
-        </div>
-      )}
-
-      {!error && !noSpaces && (loading || !space || !workspaceSlug) && (
-        <div role="status" className="flex flex-1 items-center justify-center py-8 text-sm text-[var(--color-text-muted)]">
-          読み込み中…
-        </div>
-      )}
-
-      {!error && !noSpaces && space && workspaceSlug && (
-        <>
-          <KbSpaceHeading space={space} title="お気に入り" />
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            <FavoritesList workspaceSlug={workspaceSlug} spaceId={space.id} />
-          </div>
-        </>
-      )}
-    </main>
+    <>
+      <KbSpaceHeading space={space} title="お気に入り" />
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <FavoritesList workspaceSlug={workspaceSlug} spaceId={space.id} />
+      </div>
+    </>
   );
 }
 

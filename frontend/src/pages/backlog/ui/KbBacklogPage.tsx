@@ -504,7 +504,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
             action={{ label: 'バックログへ戻る', onClick: () => navigate('/backlog') }}
           />
         ) : projectError ? (
-          <div className="flex flex-1 items-center justify-center px-4 sm:px-6">
+          <div className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
             <ErrorNotice message={projectError} onRetry={retryProject} className="w-full max-w-md" />
           </div>
         ) : noProjects ? (

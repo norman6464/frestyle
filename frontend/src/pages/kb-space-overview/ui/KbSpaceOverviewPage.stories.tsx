@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { expect, waitFor, within } from 'storybook/test';
-import { KbFrameLayout } from '@/widgets/kb-sidebar';
+import { KbFrameLayout, KbSpaceLayout } from '@/widgets/kb-sidebar';
 import KbSpaceOverviewPage from './KbSpaceOverviewPage';
-import { kbFrameRoute, withApi, withToast } from '../../../../.storybook/decorators';
+import { kbSpaceRoute, withApi, withToast } from '../../../../.storybook/decorators';
 
 const workspaces = [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:00:00Z', canManage: true }];
 const mySpaces = [{ id: 'space-1', name: '開発部', role: 'editor' }];
@@ -23,7 +23,7 @@ type Story = StoryObj<typeof meta>;
 // 突き合わせは前から順なので、細かい宛先を先に書く（/spaces が先だと木の要求まで拾う）。
 export const ふつう: Story = {
   decorators: [
-    kbFrameRoute('/kb/spaces/:spaceId', '/kb/spaces/space-1'),
+    kbSpaceRoute('/kb/spaces/:spaceId', '/kb/spaces/space-1'),
     withApi({
       '/spaces/space-1/pages': { pages: [], hasHiddenChildren: false },
       '/me/spaces': mySpaces,
@@ -52,8 +52,10 @@ export const 対象ワークスペースを引き継ぐ: Story = {
       <MemoryRouter initialEntries={['/kb/spaces?workspace=beta']}>
         <Routes>
           <Route element={<KbFrameLayout />}>
-            <Route path="/kb/spaces" element={<Story />} />
-            <Route path="/kb/spaces/:spaceId" element={<Story />} />
+            <Route element={<KbSpaceLayout />}>
+              <Route path="/kb/spaces" element={<Story />} />
+              <Route path="/kb/spaces/:spaceId" element={<Story />} />
+            </Route>
           </Route>
         </Routes>
       </MemoryRouter>
@@ -81,10 +83,50 @@ export const 対象ワークスペースを引き継ぐ: Story = {
 export const アクセスできるスペースが無い: Story = {
   // spaceId 無しの入口（/kb/spaces）でだけ再現する。特定の spaceId を指しての「見つからない」
   // とは別（そちらは別の文言になる。resolveKbSpace の doc 参照）。
-  decorators: [kbFrameRoute('/kb/spaces', '/kb/spaces'), withApi({ '/me/spaces': [], '/kb/workspaces': workspaces })],
+  decorators: [kbSpaceRoute('/kb/spaces', '/kb/spaces'), withApi({ '/me/spaces': [], '/kb/workspaces': workspaces })],
   play: async ({ canvasElement }) => {
     await expect(
       await within(canvasElement).findByText('アクセスできるスペースがありません'),
     ).toBeInTheDocument();
+  },
+};
+
+/** 指したスペースが見つからない。行き止まりにせず、スペースの入口へ戻れる（親ルートが出す）。 */
+export const スペースが見つからない: Story = {
+  decorators: [
+    kbSpaceRoute('/kb/spaces/:spaceId', '/kb/spaces/space-9'),
+    withApi({
+      '/spaces/space-1/pages': { pages: [], hasHiddenChildren: false },
+      '/me/spaces': mySpaces,
+      '/spaces': spaces,
+      '/kb/workspaces': workspaces,
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      await canvas.findByRole('heading', { level: 1, name: 'このスペースは見つかりませんでした' }),
+    ).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'スペース一覧へ戻る' })).toBeVisible();
+  },
+};
+
+/** スペースを読み込めない。「見つからない」とは言わず、取り直しを置く（親ルートが出す）。 */
+export const スペースを読み込めない: Story = {
+  decorators: [
+    kbSpaceRoute('/kb/spaces/:spaceId', '/kb/spaces/space-1'),
+    withApi({
+      '/me/spaces': () => {
+        throw new Error('offline');
+      },
+      '/spaces': spaces,
+      '/kb/workspaces': workspaces,
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText('スペースを読み込めませんでした。')).toBeVisible();
+    await expect(canvas.queryByRole('heading', { name: 'このスペースは見つかりませんでした' })).toBeNull();
+    await expect(canvas.getAllByRole('button', { name: '再試行' }).length).toBeGreaterThan(0);
   },
 };
