@@ -37,13 +37,14 @@ export default function KbCommentThreadCard({
   const handleToggle = async () => {
     if (toggling) return;
     setToggling(true);
+    // try の中の条件式は React Compiler が扱えず、部品ごと対象から外すので、外で選ぶ。
+    const toggle = resolved ? onReopen : onResolve;
     try {
-      await (resolved ? onReopen(thread.id) : onResolve(thread.id));
+      await toggle(thread.id);
     } catch {
       // 知らせは呼び出し側が出す。ここではボタンを押し直せる状態へ戻すだけ。
-    } finally {
-      setToggling(false);
     }
+    setToggling(false);
   };
 
   return (

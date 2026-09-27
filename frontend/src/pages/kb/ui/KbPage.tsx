@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { KbTemplatePickerModal, useKbFrameLocation, useKbFrameSpace, useKbPageTemplates } from '@/widgets/kb-sidebar';
 import {
-  RichTextEditor,
   emptyRichDoc,
   isRichDoc,
   type EditorCommand,
@@ -31,7 +30,8 @@ import {
   subscribeKbTreeEvents,
   type KbIcon,
 } from '@/entities/kb';
-import KbPageTitle from './KbPageTitle';
+import KbPageHeading from './KbPageHeading';
+import KbPageEditor from './KbPageEditor';
 import KbPageIconButton from './KbPageIconButton';
 import KbPageMeta from './KbPageMeta';
 import KbPageCover from './KbPageCover';
@@ -68,6 +68,38 @@ import { useKbPageSuggestions } from '../model/useKbPageSuggestions';
  * ページ未選択（素の /kb）では、続きを resolveEntryPageId に決めさせて
  * /kb/{pageId} へ即座に移る（見せるための画面ではなく、素通りする入口）。
  */
+/** 提案の採用に失敗したときの知らせ。 */
+function acceptFailureMessage(cause: unknown): string {
+  return getApiError(cause).serverCode === 'suggestion_stale'
+    ? 'この提案が作られた後にページが編集されています。最新の内容を確認してから、却下するか提案を出し直してもらってください。'
+    : '提案を採用できませんでした';
+}
+
+/**
+ * カバー画像を変える。ファイルならアップロードしてから設定し、null なら外す。
+ *
+ * アップロードが終わるまでに別ページへ移っていたら（currentPage が uploadTarget と違えば）
+ * 黙って結果を捨てる。部品の外に置くのは、try/catch の中の条件式を React Compiler が扱えず、
+ * 部品ごと対象から外すため。
+ */
+async function uploadAndChangeCover(
+  file: File | null,
+  uploadTarget: { workspaceSlug: string; pageId: string },
+  currentPage: () => { workspaceSlug: string; pageId: string } | null,
+  changeCover: (key: string | null) => Promise<void>,
+): Promise<void> {
+  if (!file) {
+    await changeCover(null);
+    return;
+  }
+  const key = await KbRepository.uploadPageImage(uploadTarget.workspaceSlug, uploadTarget.pageId, file);
+  const current = currentPage();
+  if (!current || current.workspaceSlug !== uploadTarget.workspaceSlug || current.pageId !== uploadTarget.pageId) {
+    return;
+  }
+  await changeCover(key);
+}
+
 /** 操作バーの、レールのタブを開く四角いボタン（見本 3a の mk-ob）。 */
 const RAIL_BUTTON_CLASS =
   'relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-surface-3 bg-surface-1 text-[var(--color-text-secondary)] shadow-sm transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11';
@@ -133,12 +165,15 @@ export default function KbPage() {
 
   // ページ未選択(素の /kb)のときだけ動く。続きのページが決まり次第そこへ移るので、
   // 「まだページがありません」を出すのは resolveEntryPageId が null を返したときだけ。
-  const [entryResolving, setEntryResolving] = useState(false);
+  // 解決の終わりは「どの入口（対象ワークスペース）について終わったか」で持つ。今の入口と
+  // 違えば解決中（effect の中で「解決中」を立てると、描いた直後にもう 1 回描き直す）。
+  const entryKey = pageId ? null : (navigationWorkspaceSlug ?? '');
+  const [entrySettledFor, setEntrySettledFor] = useState<string | null>(null);
+  const entryResolving = entryKey !== null && entrySettledFor !== entryKey;
   useEffect(() => {
-    if (pageId) return undefined;
+    if (entryKey === null) return undefined;
     let cancelled = false;
-    setEntryResolving(true);
-    resolveEntryPageId(navigationWorkspaceSlug)
+    resolveEntryPageId(entryKey || undefined)
       .then((entry) => {
         if (cancelled) return;
         if (entry) {
@@ -148,15 +183,17 @@ export default function KbPage() {
           );
           return;
         }
-        setEntryResolving(false);
+        setEntrySettledFor(entryKey);
       })
       .catch(() => {
-        if (!cancelled) setEntryResolving(false);
+        if (!cancelled) setEntrySettledFor(entryKey);
       });
     return () => {
       cancelled = true;
     };
-  }, [pageId, navigationWorkspaceSlug, navigate]);
+  }, [entryKey, navigate]);
+  // ページを開いたら入口の結果は捨てる（次に素の /kb へ来たときは解決し直す）。
+  if (pageId && entrySettledFor !== null) setEntrySettledFor(null);
 
   const retryEntry = Boolean(pageId && fromLastVisited && !loading && error);
   useEffect(() => {
@@ -178,10 +215,12 @@ export default function KbPage() {
 
   const handleChangeIcon = useCallback(
     async (icon: KbIcon | null) => {
+      // 知らせの文言は try の外で決める（try/catch の中の条件式は React Compiler が扱えず、部品ごと対象から外す）。
+      const failure = icon ? 'アイコンを変更できませんでした' : 'アイコンを外せませんでした';
       try {
         await changeIcon(icon);
       } catch (cause) {
-        showToast('error', icon ? 'アイコンを変更できませんでした' : 'アイコンを外せませんでした');
+        showToast('error', failure);
         // ピッカーを開いたままにするため、握り潰さず投げ直す（KbPageIconPicker 側の約束）。
         throw cause;
       }
@@ -204,23 +243,11 @@ export default function KbPage() {
     async (file: File | null) => {
       if (!data) return;
       const uploadTarget = { workspaceSlug: data.workspaceSlug, pageId: data.page.id };
+      const failure = file ? 'カバー画像を変更できませんでした' : 'カバー画像を外せませんでした';
       try {
-        if (file) {
-          const key = await KbRepository.uploadPageImage(uploadTarget.workspaceSlug, uploadTarget.pageId, file);
-          const current = currentPageRef.current;
-          if (
-            !current ||
-            current.workspaceSlug !== uploadTarget.workspaceSlug ||
-            current.pageId !== uploadTarget.pageId
-          ) {
-            return;
-          }
-          await changeCover(key);
-        } else {
-          await changeCover(null);
-        }
+        await uploadAndChangeCover(file, uploadTarget, () => currentPageRef.current, changeCover);
       } catch (cause) {
-        showToast('error', file ? 'カバー画像を変更できませんでした' : 'カバー画像を外せませんでした');
+        showToast('error', failure);
         throw cause;
       }
     },
@@ -262,16 +289,16 @@ export default function KbPage() {
   // '/' メニューの項目はエディタ生成時に固定される（RichTextEditor の契約）ので、
   // run の closure には ref を握らせ、実行時点の最新の data を読ませる。
   // 「ページ」という業務の語彙はこの画面が持ち、エディタは項目を並べるだけ。
+  // 描いている途中で ref を書き換えない（コンパイラが部品ごと対象から外す）。描き終えた直後に写す。
   const subpageContext = useRef({ data, navigate, showToast });
-  subpageContext.current = { data, navigate, showToast };
+  useLayoutEffect(() => {
+    subpageContext.current = { data, navigate, showToast };
+  }, [data, navigate, showToast]);
   // 題名で Enter → 本文の先頭へ（見出しから書き出しへ流れるように移る）。
   const [bodyFocusSignal, setBodyFocusSignal] = useState(0);
   // 共有パネルの開閉。ページを移ったら必ず閉じる（別のページの設定を開いたまま
   // 題名だけ変わると、どのページを共有しているのか読めなくなる）。
   const [shareOpen, setShareOpen] = useState(false);
-  useEffect(() => {
-    setShareOpen(false);
-  }, [pageId]);
   // 閉じている間は取りに行かない（開いていないパネルのために毎ページ 2 本引かない）。
   const share = useKbShare(
     shareOpen ? data?.workspaceSlug : undefined,
@@ -285,11 +312,6 @@ export default function KbPage() {
   // 広い画面では目次を開いた状態から始める（見本 3a の既定）。狭い画面では引き出しになるので閉じておく。
   const wide = useMediaQuery('(min-width: 768px)');
   const [rail, setRail] = useState<{ open: boolean; tab: KbRailTab }>(() => ({ open: wide, tab: 'toc' }));
-  useEffect(() => {
-    // ページを移ったら目次へ戻す（前のページのコメントや版を開いたまま題名だけ変わると読めない）。
-    // 狭い画面の引き出しは閉じる（本文の中のリンクから移ったときも取り残さない）。
-    setRail((prev) => ({ open: wide ? prev.open : false, tab: 'toc' }));
-  }, [pageId, wide]);
   const openRail = useCallback((tab: KbRailTab) => setRail({ open: true, tab }), []);
   // 操作バーのボタンは「そのタブで開く／同じタブが開いていれば閉じる」。
   const toggleRail = useCallback(
@@ -306,9 +328,6 @@ export default function KbPage() {
   // 本文の選択範囲から作りかけの錨（バブルメニューの「コメント」ボタン経由）。
   // ページを移ったら、前のページの選択に基づく作りかけを持ち越さない。
   const [pendingAnchor, setPendingAnchor] = useState<CommentAnchor | null>(null);
-  useEffect(() => {
-    setPendingAnchor(null);
-  }, [pageId]);
 
   const handleCreateThread = useCallback(
     async (body: unknown[], anchor?: CommentAnchor) => {
@@ -379,21 +398,24 @@ export default function KbPage() {
   // 閉じていた場合、KbCommentsPanel（と中のスレッドカード）はこの後の再描画で初めて
   // DOM に現れるため、スクロールは「パネルが開いた（＝commentsOpen）」と「まだ果たして
   // いないスクロール先が有る」の両方が揃ってから行う（下の useEffect）。
-  const [scrollToThreadId, setScrollToThreadId] = useState<string | null>(null);
+  // 押すたびに新しい依頼（seq）を作り、果たした依頼は ref に覚える。同じスレッドを 2 回押しても
+  // 2 回運ぶ。果たしたことを state に書き戻すと、effect の中で state を変えることになる。
+  const [scrollRequest, setScrollRequest] = useState<{ threadId: string; seq: number } | null>(null);
+  const scrolledSeq = useRef(0);
   const handleCommentBadgeClick = useCallback(
     (blockId: string) => {
       const target = comments.threads.find((thread) => thread.blockId === blockId && !thread.resolvedAt);
       openRail('comments');
-      setScrollToThreadId(target?.id ?? null);
+      if (target) setScrollRequest((prev) => ({ threadId: target.id, seq: (prev?.seq ?? 0) + 1 }));
     },
     [comments.threads, openRail],
   );
   useEffect(() => {
-    if (!commentsOpen || !scrollToThreadId) return;
+    if (!commentsOpen || !scrollRequest || scrollRequest.seq === scrolledSeq.current) return;
+    scrolledSeq.current = scrollRequest.seq;
     // 凝ったハイライトは持たせない(最低限、見える位置まで運ぶだけで十分)。
-    document.getElementById(`comment-thread-${scrollToThreadId}`)?.scrollIntoView({ behavior: 'smooth' });
-    setScrollToThreadId(null);
-  }, [commentsOpen, scrollToThreadId]);
+    document.getElementById(`comment-thread-${scrollRequest.threadId}`)?.scrollIntoView({ behavior: 'smooth' });
+  }, [commentsOpen, scrollRequest]);
 
   // 版の一覧は useKbPageVersions が「履歴のタブが開いているか」を見て自分でゲートする
   // (useKbComments と違い、版一覧は常設のバッジを持たないので開いている間だけ取りに行く)。
@@ -402,9 +424,6 @@ export default function KbPage() {
   // 「雛形から作る」ピッカー（/template コマンド用）の開閉。共有・コメント・履歴と同じ理由で
   // ページを移ったら必ず閉じる。一覧の取得はピッカーが開いている間だけ行う（open ゲート）。
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
-  useEffect(() => {
-    setTemplatePickerOpen(false);
-  }, [pageId]);
   const templates = useKbPageTemplates(data?.workspaceSlug, data?.page.spaceId, templatePickerOpen);
 
   /**
@@ -450,19 +469,35 @@ export default function KbPage() {
   // お気に入りの星。初期値は応答（isFavorite）。旧応答では undefined = 入れていない扱い。
   const favorite = useKbPageFavorite(data?.workspaceSlug, data?.page.id, data?.isFavorite ?? false);
   const handleToggleFavorite = useCallback(async () => {
+    const failure = favorite.favorite ? 'お気に入りから外せませんでした' : 'お気に入りに追加できませんでした';
     try {
       await favorite.toggle();
     } catch {
-      showToast('error', favorite.favorite ? 'お気に入りから外せませんでした' : 'お気に入りに追加できませんでした');
+      showToast('error', failure);
     }
   }, [favorite, showToast]);
 
   // 「この版に戻す」の確認ダイアログ。KbRowActions の削除確認と同じ形 —
   // 確定した瞬間に閉じ、実行(失敗時の知らせ)は非同期のまま進める。
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
-  useEffect(() => {
-    setRestoreConfirmOpen(false);
-  }, [pageId]);
+
+  // ページを移ったら、そのページについて開いていたもの（共有・コメントの作りかけ・雛形の選択・
+  // 版の復元の確認）を閉じ、右の欄は目次へ戻す（前のページのコメントや版を開いたまま題名だけ
+  // 変わると読めない）。狭い画面になったら右の欄の引き出しを閉じる（本文の中のリンクから
+  // 移ったときも取り残さない）。effect で戻すと前のページのまま 1 回描いてしまうので、
+  // 描いている途中で前の値と比べて戻す。
+  const [uiScope, setUiScope] = useState({ pageId, wide });
+  if (uiScope.pageId !== pageId || uiScope.wide !== wide) {
+    const pageChanged = uiScope.pageId !== pageId;
+    setUiScope({ pageId, wide });
+    if (pageChanged) {
+      setShareOpen(false);
+      setPendingAnchor(null);
+      setTemplatePickerOpen(false);
+      setRestoreConfirmOpen(false);
+    }
+    setRail((prev) => ({ open: wide ? prev.open : false, tab: 'toc' }));
+  }
 
   const handleCreateVersion = useCallback(
     async (note?: string) => {
@@ -543,12 +578,7 @@ export default function KbPage() {
         await suggestions.accept(suggestionId);
         await reloadPage(targetPageId);
       } catch (cause) {
-        showToast(
-          'error',
-          getApiError(cause).serverCode === 'suggestion_stale'
-            ? 'この提案が作られた後にページが編集されています。最新の内容を確認してから、却下するか提案を出し直してもらってください。'
-            : '提案を採用できませんでした',
-        );
+        showToast('error', acceptFailureMessage(cause));
         // KbSuggestionsPanel 側がボタンを押し直せる状態へ戻すため、再 throw する。
         throw cause;
       }
@@ -573,6 +603,28 @@ export default function KbPage() {
   // subpageContext のような ref 越しの読み出しが要らない — この呼び出しが
   // 「エディタ生成時に固定される」制約に触れるのはこの 1 点だけで、`run` の中身自体は
   // 常に最新のセッターを指したまま変わらない）。
+  // 題名の見出しと本文（KbPageHeading・KbPageEditor）は memo で包んである。渡す関数をここで固定し、
+  // ページの中の小さな操作（保存状態・右の欄のタブ・星）で見出しと本文を描き直さない。
+  const handleTitleEnter = useCallback(() => setBodyFocusSignal((prev) => prev + 1), []);
+  const handleNavigateToPage = useCallback((path: string) => navigate(path), [navigate]);
+  const handleRequestComment = useCallback(
+    (anchor: CommentAnchor) => {
+      setPendingAnchor(anchor);
+      openRail('comments');
+    },
+    [openRail],
+  );
+  const imageUploadTarget = data?.canEdit ? { workspaceSlug: data.workspaceSlug, pageId: data.page.id } : null;
+  const uploadWorkspaceSlug = imageUploadTarget?.workspaceSlug;
+  const uploadPageId = imageUploadTarget?.pageId;
+  const handleImageUpload = useMemo(
+    () =>
+      uploadWorkspaceSlug && uploadPageId
+        ? (file: File) => KbRepository.uploadPageImage(uploadWorkspaceSlug, uploadPageId, file)
+        : undefined,
+    [uploadWorkspaceSlug, uploadPageId],
+  );
+
   const extraSlashCommands = useMemo<EditorCommand[]>(
     () => [
       {
@@ -835,12 +887,13 @@ export default function KbPage() {
                 )}
               </div>
               <div key={data.page.id}>
-                {data.page.icon && <KbPageIconButton icon={data.page.icon} canEdit={false} onChange={handleChangeIcon} />}
-                <KbPageTitle
+                <KbPageHeading
+                  icon={data.page.icon}
                   title={data.page.title}
                   canEdit={data.canEdit}
                   onRename={handleRename}
-                  onEnter={() => setBodyFocusSignal((prev) => prev + 1)}
+                  onChangeIcon={handleChangeIcon}
+                  onEnter={handleTitleEnter}
                 />
               </div>
               <KbPageMeta
@@ -854,58 +907,22 @@ export default function KbPage() {
                 saveStatus={data.canEdit ? saveStatus : undefined}
                 access={data.canEdit ? 'edit' : data.canComment ? 'comment' : 'view'}
               />
-              {suggestionDraft.open ? (
-                // ドラフトモード中。value/onChange は useKbPageDoc の自動保存とは完全に
-                // 別系統のローカルなドラフト state（useKbSuggestionDraft）へ繋ぐ —
-                // ここで保存されるのは提案としてであって、本文そのものはまだ変わっていない。
-                <RichTextEditor
-                  value={isRichDoc(suggestionDraft.draft) ? suggestionDraft.draft : emptyRichDoc()}
-                  editable={true}
-                  onChange={suggestionDraft.changeDraft}
-                  ariaLabel={`${data.page.title} の本文（提案を編集中）`}
-                  onNavigateToPage={(path) => navigate(path)}
-                  resolveImageSrc={resolveImageSrc}
-                />
-              ) : versions.selected ? (
-                // 版のプレビュー中。揃うまで(取得中・失敗)は本文を出さない — 上の帯/読み込み/
-                // 失敗の表示に任せる。**コメント関連 props は渡さない**(editable=false と
-                // canComment 省略の組み合わせで RichTextEditor 自身がバブルメニュー自体を
-                // 出さなくなる — 過去の版に対しては、今のブロックIDに紐づく錨は意味を
-                // 持たないため)。
-                versions.selected.detail && (
-                  <RichTextEditor
-                    value={isRichDoc(versions.selected.detail.doc) ? versions.selected.detail.doc : emptyRichDoc()}
-                    editable={false}
-                    ariaLabel={`${data.page.title} の本文（読み取り専用・過去の版）`}
-                    onNavigateToPage={(path) => navigate(path)}
-                    resolveImageSrc={resolveImageSrc}
-                  />
-                )
-              ) : (
-                <RichTextEditor
-                  // doc は API から来る任意の JSON。形が違えば空の本文として扱い、画面を落とさない。
-                  value={isRichDoc(data.doc) ? data.doc : emptyRichDoc()}
-                  editable={data.canEdit}
-                  onChange={handleDocChange}
-                  ariaLabel={`${data.page.title} の本文`}
-                  extraSlashCommands={data.canEdit ? extraSlashCommands : undefined}
-                  onNavigateToPage={(path) => navigate(path)}
-                  onRequestComment={(anchor) => {
-                    setPendingAnchor(anchor);
-                    openRail('comments');
-                  }}
-                  canComment={data?.canComment ?? false}
-                  commentBadgeCounts={commentBadgeCounts}
-                  onCommentBadgeClick={handleCommentBadgeClick}
-                  focusSignal={bodyFocusSignal}
-                  onImageUpload={
-                    data.canEdit
-                      ? (file) => KbRepository.uploadPageImage(data.workspaceSlug, data.page.id, file)
-                      : undefined
-                  }
-                  resolveImageSrc={resolveImageSrc}
-                />
-              )}
+              <KbPageEditor
+                data={data}
+                draftOpen={suggestionDraft.open}
+                draft={suggestionDraft.draft}
+                onDraftChange={suggestionDraft.changeDraft}
+                preview={versions.selected}
+                onDocChange={handleDocChange}
+                extraSlashCommands={extraSlashCommands}
+                onNavigateToPage={handleNavigateToPage}
+                onRequestComment={handleRequestComment}
+                commentBadgeCounts={commentBadgeCounts}
+                onCommentBadgeClick={handleCommentBadgeClick}
+                focusSignal={bodyFocusSignal}
+                onImageUpload={handleImageUpload}
+                resolveImageSrc={resolveImageSrc}
+              />
               {/*
                 本文そのものの末尾（コメントパネル等とは別の場所）。通常の読了後に
                 スクロールして辿り着く位置に、逆リンクの折りたたみを置く。

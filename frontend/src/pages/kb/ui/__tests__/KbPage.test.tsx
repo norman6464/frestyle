@@ -73,6 +73,8 @@ const hoisted = vi.hoisted(() => ({
   showToast: vi.fn(),
   navigate: vi.fn(),
   useParams: vi.fn(() => ({ pageId: 'p1' }) as { pageId?: string }),
+  // 本文エディタと題名が何回描かれたか（描き直しの範囲の検査で使う）。
+  renders: { editor: 0, title: 0 },
   editorProps: {
     current: null as null | {
       value?: { type: 'doc'; content: unknown[] };
@@ -167,6 +169,7 @@ vi.mock('@/shared/ui/RichTextEditor', async (importOriginal) => {
       onCommentBadgeClick?: (blockId: string) => void;
     }) => {
       hoisted.editorProps.current = props;
+      hoisted.renders.editor += 1;
       // 目次の飛び先の検査のため、見出しだけは本物と同じ形（.ProseMirror の中の h2・data-block-id）で描く。
       const headings = (props.value?.content ?? []).filter(
         (node): node is { type: 'heading'; attrs?: { id?: string; level?: number }; content?: { text?: string }[] } =>
@@ -183,6 +186,19 @@ vi.mock('@/shared/ui/RichTextEditor', async (importOriginal) => {
           </div>
         </div>
       );
+    },
+  };
+});
+
+// 題名は本物を描き、描かれた回数だけ数える。
+vi.mock('../KbPageTitle', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../KbPageTitle')>();
+  const Real = actual.default;
+  return {
+    ...actual,
+    default: (props: Parameters<typeof Real>[0]) => {
+      hoisted.renders.title += 1;
+      return <Real {...props} />;
     },
   };
 });
@@ -1817,5 +1833,45 @@ describe('KbPage の行き止まりと、ほかの場所での変更の反映', 
     });
     const nav = screen.getByRole('navigation', { name: 'ページの場所' });
     expect(within(nav).getByRole('link', { name: '改名した親' })).toHaveAttribute('href', '/kb/anc-1');
+  });
+});
+
+describe('KbPage の描き直しの範囲', () => {
+  async function renderReady() {
+    renderPage();
+    await screen.findByLabelText('ページの題名');
+    await waitFor(() => expect(hoisted.editorProps.current).not.toBeNull());
+    hoisted.renders.editor = 0;
+    hoisted.renders.title = 0;
+  }
+
+  it('打鍵で保存状態が変わっても、本文エディタと題名を描き直さない', async () => {
+    await renderReady();
+
+    act(() => {
+      hoisted.editorProps.current?.onChange?.({ type: 'doc', content: [] });
+    });
+
+    expect(screen.getByText('未保存')).toBeInTheDocument();
+    expect(hoisted.renders).toEqual({ editor: 0, title: 0 });
+  });
+
+  it('右の欄のタブを切り替えても、本文エディタと題名を描き直さない', async () => {
+    await renderReady();
+
+    fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
+    await screen.findByRole('status', { name: '履歴を読み込み中' }).catch(() => undefined);
+
+    expect(hoisted.renders).toEqual({ editor: 0, title: 0 });
+  });
+
+  it('星を押しても、本文エディタと題名を描き直さない', async () => {
+    hoisted.addFavorite.mockResolvedValue(undefined);
+    await renderReady();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'お気に入りに追加' }));
+    await waitFor(() => expect(hoisted.addFavorite).toHaveBeenCalled());
+
+    expect(hoisted.renders).toEqual({ editor: 0, title: 0 });
   });
 });

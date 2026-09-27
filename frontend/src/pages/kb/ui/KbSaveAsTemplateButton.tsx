@@ -12,6 +12,11 @@ export interface KbSaveAsTemplateButtonProps {
   spaceId: string;
 }
 
+/** テンプレートとして保存できなかったときの文言。 */
+function templateSaveError(cause: unknown): string {
+  return getApiError(cause).status === 409 ? '同じ名前のテンプレートが既にあります。' : 'テンプレートとして保存できませんでした。';
+}
+
 /**
  * KbSaveAsTemplateButton は「テンプレートとして保存」の入口。
  *
@@ -49,19 +54,14 @@ export default function KbSaveAsTemplateButton({
     if (!trimmed || saving) return;
     setSaving(true);
     setError(null);
+    // try/catch の中の条件式は React Compiler が扱えず、部品ごと対象から外すので、外で決める。
+    const templateSpaceId = scope === 'space' ? spaceId : null;
     try {
-      await KbRepository.createPageTemplate(workspaceSlug, pageId, {
-        name: trimmed,
-        spaceId: scope === 'space' ? spaceId : null,
-      });
+      await KbRepository.createPageTemplate(workspaceSlug, pageId, { name: trimmed, spaceId: templateSpaceId });
       showToast('success', 'テンプレートとして保存しました');
       close();
     } catch (cause) {
-      setError(
-        getApiError(cause).status === 409
-          ? '同じ名前のテンプレートが既にあります。'
-          : 'テンプレートとして保存できませんでした。',
-      );
+      setError(templateSaveError(cause));
       setSaving(false);
     }
   };

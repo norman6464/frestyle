@@ -7,7 +7,7 @@
  * まずナレッジのサイドバー（ページの木）だけにかけ、ビルド時間の伸びと効果を測ってから広げる
  * （FRESTYLE-634）。広げるときはここにフォルダを足す。
  */
-export const REACT_COMPILER_DIRS = ['src/widgets/kb-sidebar'];
+export const REACT_COMPILER_DIRS = ['src/widgets/kb-sidebar', 'src/pages/kb/ui'];
 
 /** テストと見本は描画の外で数えたり差し替えたりするので、コンパイラにも lint にもかけない。 */
 export const REACT_COMPILER_IGNORES = ['**/__tests__/**', '**/*.stories.tsx'];
