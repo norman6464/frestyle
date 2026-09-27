@@ -2,7 +2,6 @@ import { useEffect, Suspense } from 'react';
 import { Routes, Route, useLocation, Navigate, useParams } from 'react-router-dom';
 import AuthInitializer from './providers/AuthInitializer';
 import Protected from './providers/Protected';
-import { AppShell } from '@/widgets/app-shell';
 import ErrorBoundary from './providers/ErrorBoundary';
 import Loading from '@/shared/ui/Loading';
 import { ToastProvider } from './providers/ToastProvider';
@@ -23,6 +22,8 @@ const InvitePage = lazyWithReload(() => import('@/pages/invite').then((m) => ({ 
 // 認証必要ページ
 const HomePage = lazyWithReload(() => import('@/pages/home').then((m) => ({ default: m.HomePage })), 'HomePage');
 const SettingsPage = lazyWithReload(() => import('@/pages/settings').then((m) => ({ default: m.SettingsPage })), 'SettingsPage');
+// ログイン後の親（枠とキャッシュの置き場）。最初に読む塊に入れない（app/layouts/AuthenticatedLayout）。
+const AuthenticatedLayout = lazyWithReload(() => import('./layouts/AuthenticatedLayout'), 'AuthenticatedLayout');
 const KbPage = lazyWithReload(() => import('@/pages/kb').then((m) => ({ default: m.KbPage })), 'KbPage');
 const KbFrameLayout = lazyWithReload(
   () => import('@/widgets/kb-sidebar').then((m) => ({ default: m.KbFrameLayout })),
@@ -129,7 +130,7 @@ export default function App() {
         element={
           <AuthInitializer>
             <Protected>
-              <AppShell />
+              <AuthenticatedLayout />
             </Protected>
           </AuthInitializer>
         }

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AxiosError, type AxiosResponse } from 'axios';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useNotification } from '../useNotification';
+import { useUnreadCount } from '@/entities/notification';
+import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 import type { Notification } from '@/entities/notification';
 
 const mockGetAll = vi.fn();
@@ -51,13 +53,13 @@ describe('useNotification', () => {
   });
 
   it('初期状態はloading=trueで空の通知リスト', () => {
-    const { result } = renderHook(() => useNotification());
+    const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
     expect(result.current.loading).toBe(true);
     expect(result.current.notifications).toEqual([]);
   });
 
   it('マウント時にAPIから通知一覧と未読数を取得する', async () => {
-    const { result } = renderHook(() => useNotification());
+    const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -77,7 +79,7 @@ describe('useNotification', () => {
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(0);
 
-    const { result } = renderHook(() => useNotification());
+    const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -98,7 +100,7 @@ describe('useNotification', () => {
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(0);
 
-    const { result } = renderHook(() => useNotification());
+    const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -114,7 +116,7 @@ describe('useNotification', () => {
   it('既読の更新中は一覧を保持し、処理中はその行だけにして、個別・一括操作の重複送信を防ぐ', async () => {
     let finish!: () => void;
     mockMarkAsRead.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
-    const { result } = renderHook(() => useNotification());
+    const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     let pending!: Promise<void>;
@@ -145,7 +147,7 @@ describe('useNotification', () => {
     });
 
     it('エラーを立てる（握りつぶさない）', async () => {
-      const { result } = renderHook(() => useNotification());
+      const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
@@ -157,7 +159,7 @@ describe('useNotification', () => {
       mockGetAll.mockReset().mockResolvedValueOnce(mockNotifications);
       mockGetUnreadCount.mockReset().mockResolvedValueOnce(1);
 
-      const { result } = renderHook(() => useNotification());
+      const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
       await waitFor(() => expect(result.current.notifications).toHaveLength(2));
 
       // 2 回目の取得だけ失敗させる
@@ -173,7 +175,7 @@ describe('useNotification', () => {
     });
 
     it('再取得に成功したらエラーが消える', async () => {
-      const { result } = renderHook(() => useNotification());
+      const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
       await waitFor(() => expect(result.current.error).toBeTruthy());
 
       mockGetAll.mockResolvedValue(mockNotifications);
@@ -190,7 +192,7 @@ describe('useNotification', () => {
   // 既読化に失敗しても finally で再取得しており、画面はサーバーの実状態に合う。
   // 401・403 は「もう見てよい人ではない」。取得済みの通知（本文を含む）を画面に残さない。
   it('再取得が 401・403 なら取得済みの通知を捨てる', async () => {
-    const { result } = renderHook(() => useNotification());
+    const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
     await waitFor(() => expect(result.current.notifications).toHaveLength(2));
 
     const forbidden = new AxiosError('forbidden', undefined, undefined, undefined, {
@@ -211,7 +213,7 @@ describe('useNotification', () => {
   // この再取得が消えると「押したのに変わらない」状態に戻るため契約として固定する。
   describe('既読化に失敗したとき', () => {
     it('markAsRead が失敗しても再取得してサーバー状態に合わせる', async () => {
-      const { result } = renderHook(() => useNotification());
+      const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
       await waitFor(() => expect(result.current.loading).toBe(false));
 
       mockMarkAsRead.mockRejectedValue(new Error('API Error'));
@@ -229,7 +231,7 @@ describe('useNotification', () => {
     });
 
     it('markAllAsRead が失敗しても再取得する', async () => {
-      const { result } = renderHook(() => useNotification());
+      const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
       await waitFor(() => expect(result.current.loading).toBe(false));
 
       mockMarkAllAsRead.mockRejectedValue(new Error('API Error'));
@@ -242,5 +244,21 @@ describe('useNotification', () => {
       expect(mockGetAll).toHaveBeenCalledTimes(2);
       expect(result.current.unreadCount).toBe(0);
     });
+  });
+
+  it('既読にしたら、ほかの場所で読んでいる未読数（ヘッダーの鈴）も変わる', async () => {
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => ({ page: useNotification(), bell: useUnreadCount() }), {
+      wrapper: queryWrapper(client),
+    });
+    await waitFor(() => expect(result.current.bell.data).toBe(1));
+
+    mockGetUnreadCount.mockResolvedValue(0);
+    await act(async () => {
+      await result.current.page.markAsRead(1);
+    });
+
+    await waitFor(() => expect(result.current.bell.data).toBe(0));
+    expect(result.current.page.unreadCount).toBe(0);
   });
 });

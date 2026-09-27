@@ -8,6 +8,7 @@ import TicketRepository from '@/entities/ticket/api/ticketRepository';
 import { NotificationRepository } from '@/entities/notification/api/notificationRepository';
 import ProfileRepository from '@/entities/user/api/profileRepository';
 import { createMockStorage } from '@/test/mockStorage';
+import { queryWrapper } from '@/test/queryClient';
 
 const workspace = { slug: 'team-a', name: '開発チーム', createdAt: '', canManage: false, canCreateTickets: true };
 
@@ -41,7 +42,7 @@ function renderHome() {
   return render(
     <MemoryRouter>
       <HomePage />
-    </MemoryRouter>,
+    </MemoryRouter>, { wrapper: queryWrapper() },
   );
 }
 

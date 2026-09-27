@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Decorator } from '@storybook/react-vite';
 import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import axios from 'axios';
@@ -253,3 +254,25 @@ export function withApi(stubs: ApiStubs): Decorator {
 export function withRawPut(stubs: ApiStubs = { '': undefined }): Decorator {
   return withStubbedAdapter(axios, stubs);
 }
+
+/**
+ * withQueryClient — 取得した結果の置き場（TanStack Query のキャッシュ）を配る。preview.tsx で
+ * すべての見本にかける。本番は app/layouts/AuthenticatedLayout が配る。
+ *
+ * 見本 1 つにつき 1 回だけ作る（描き直しのたびに作ると結果が消えて取り直し続ける）。前の見本の
+ * 結果は持ち越さない。取り直しはしない（失敗の見本がすぐに失敗を出すように）。
+ */
+export function withQueryClient(): Decorator {
+  const Wrapped: Decorator = (Story) => {
+    const [client] = useState(
+      () => new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }),
+    );
+    return (
+      <QueryClientProvider client={client}>
+        <Story />
+      </QueryClientProvider>
+    );
+  };
+  return Wrapped;
+}
+

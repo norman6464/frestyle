@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ProfilePage from '../ui/ProfilePage';
 import { ProfileRepository } from '@/entities/user';
+import { queryWrapper } from '@/test/queryClient';
 
 const mockUpload = vi.fn();
 vi.mock('../model/useProfileImageUpload', () => ({
@@ -22,7 +23,7 @@ describe('ProfilePage', () => {
 
   it('ローディング中はスピナーが表示される', () => {
     mockedRepo.fetchProfile.mockReturnValue(new Promise(() => {}));
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     expect(document.querySelector('.animate-spin')).toBeInTheDocument();
   });
@@ -30,7 +31,7 @@ describe('ProfilePage', () => {
   it('プロファイル取得後にフォームが表示される', async () => {
     mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テストユーザー', bio: '自己紹介文', avatarUrl: '', status: '', updatedAt: '2026-04-28T00:00:00Z' });
 
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 2, name: 'プロフィール' })).toBeInTheDocument();
@@ -41,7 +42,7 @@ describe('ProfilePage', () => {
   it('プロファイル取得失敗時にエラーが表示される', async () => {
     mockedRepo.fetchProfile.mockRejectedValue(new Error('取得失敗'));
 
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(screen.getByText('プロフィール取得に失敗しました。')).toBeInTheDocument();
@@ -51,7 +52,7 @@ describe('ProfilePage', () => {
   it('プロファイル取得後に氏名欄が表示される', async () => {
     mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テストユーザー', bio: '自己紹介文', avatarUrl: '', status: '', updatedAt: '2026-04-28T00:00:00Z' });
 
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('テストユーザー')).toBeInTheDocument();
@@ -61,7 +62,7 @@ describe('ProfilePage', () => {
   it('プロファイル取得後に自己紹介欄が表示される', async () => {
     mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テスト', bio: 'テスト自己紹介', avatarUrl: '', status: '', updatedAt: '2026-04-28T00:00:00Z' });
 
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('テスト自己紹介')).toBeInTheDocument();
@@ -72,7 +73,7 @@ describe('ProfilePage', () => {
     mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テスト', bio: '', avatarUrl: '', status: '', updatedAt: '2026-04-28T00:00:00Z' });
     mockedRepo.updateProfile.mockReturnValue(new Promise(() => {}));
 
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'プロフィールを保存' })).toBeInTheDocument();
@@ -88,7 +89,7 @@ describe('ProfilePage', () => {
   it('氏名が空なら送らず、氏名の欄のそばに理由を出す', async () => {
     mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テスト', bio: '', avatarUrl: '', status: '', updatedAt: '2026-04-28T00:00:00Z' });
 
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     const name = await screen.findByDisplayValue('テスト');
     fireEvent.change(name, { target: { value: '' } });
@@ -105,7 +106,7 @@ describe('ProfilePage', () => {
   it('アバターのイニシャルが表示される', async () => {
     mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テストユーザー', bio: '', avatarUrl: '', status: '', updatedAt: '2026-04-28T00:00:00Z' });
 
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(screen.getByText('テ')).toBeInTheDocument();
@@ -115,7 +116,7 @@ describe('ProfilePage', () => {
   it('カメラボタンが表示される', async () => {
     mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テスト', bio: '', avatarUrl: '', status: '', updatedAt: '2026-04-28T00:00:00Z' });
 
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(screen.getByLabelText('プロフィール画像を変更')).toBeInTheDocument();
@@ -128,7 +129,7 @@ describe('ProfilePage', () => {
     mockedRepo.updateProfile.mockResolvedValue({ userId: 1, displayName: 'テスト', bio: '', avatarUrl: 'https://cdn.example.com/profiles/1/avatar.png', status: '', updatedAt: '2026-04-28T00:00:00Z' });
     mockUpload.mockResolvedValue('https://cdn.example.com/profiles/1/avatar.png');
 
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(screen.getByLabelText('プロフィール画像を変更')).toBeInTheDocument();
@@ -154,7 +155,7 @@ describe('ProfilePage', () => {
     mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テスト', bio: '', avatarUrl: '', status: '', updatedAt: '2026-04-28T00:00:00Z' });
     mockUpload.mockResolvedValue(null);
 
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(screen.getByLabelText('プロフィール画像を変更')).toBeInTheDocument();
@@ -172,7 +173,7 @@ describe('ProfilePage', () => {
   it('ステータス入力フィールドが表示される', async () => {
     mockedRepo.fetchProfile.mockResolvedValue({ userId: 1, displayName: 'テスト', bio: '', avatarUrl: '', status: '学習中', updatedAt: '2026-04-28T00:00:00Z' });
 
-    render(<ProfilePage />);
+    render(<ProfilePage />, { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('学習中')).toBeInTheDocument();

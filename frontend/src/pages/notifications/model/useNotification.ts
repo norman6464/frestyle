@@ -1,11 +1,14 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { NotificationRepository } from '@/entities/notification';
+import { useQueryClient } from '@tanstack/react-query';
+import { NotificationRepository, notificationKeys, unreadCountQuery, useUnreadCount } from '@/entities/notification';
 import type { Notification } from '@/entities/notification';
 import { classifyApiError, getApiError } from '@/shared/lib/classifyApiError';
 
 export function useNotification() {
+  const queryClient = useQueryClient();
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  // 未読数はヘッダーの鈴・ホームと共有する（ここで既読にした結果がその場で届く）。
+  const unreadCount = useUnreadCount().data ?? 0;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // 既読にしている最中の行。押せなくするのはその行だけ（ほかの行は続けて既読にできる）。
@@ -21,12 +24,12 @@ export function useNotification() {
   const fetchData = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      const [notifs, count] = await Promise.all([
+      // 未読数は共有の値を取り直す（古さを問わず必ず取り直し、ほかの画面の表示も合わせる）。
+      const [notifs] = await Promise.all([
         NotificationRepository.getAll(),
-        NotificationRepository.getUnreadCount(),
+        queryClient.fetchQuery({ ...unreadCountQuery(), staleTime: 0 }),
       ]);
       setNotifications(notifs);
-      setUnreadCount(count);
       setError(null);
     } catch (err) {
       // 取得できなかったことを空配列で表すと「通知は 0 件」と区別がつかず、
@@ -36,13 +39,13 @@ export function useNotification() {
       const { status } = getApiError(err);
       if (status === 401 || status === 403) {
         setNotifications([]);
-        setUnreadCount(0);
+        queryClient.setQueryData(notificationKeys.unreadCount(), 0);
       }
       setError(classifyApiError(err, '通知の取得に失敗しました。'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     fetchData();

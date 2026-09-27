@@ -1,4 +1,5 @@
 import type { Preview } from '@storybook/react-vite';
+import { withQueryClient } from './decorators';
 // アプリと同じ見た目で検証できるよう、本体のグローバル CSS を通す。
 // これが無いと --color-* トークンも prose も効かず、見本にならない。
 import '../src/app/styles/index.css';
@@ -11,6 +12,9 @@ import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
 
 const preview: Preview = {
+  // 取得した結果の置き場（TanStack Query）。見本ごとに作り直し、前の見本の結果を持ち越さない。
+  // 取り直しはしない（失敗の見本がすぐに失敗を出すように）。本番は app/layouts/AuthenticatedLayout が配る。
+  decorators: [withQueryClient()],
   parameters: {
     controls: {
       matchers: {

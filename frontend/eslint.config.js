@@ -5,6 +5,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import pluginQuery from '@tanstack/eslint-plugin-query';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import { readdirSync } from 'node:fs';
 import tseslint from 'typescript-eslint';
@@ -138,7 +139,11 @@ const selfReferenceConfigs = entitySlices.map((slice) => ({
   },
 }));
 
-export default defineConfig([globalIgnores(['dist', 'coverage']), {
+export default defineConfig([globalIgnores(['dist', 'coverage']),
+  // TanStack Query の決まり（鍵に使う値の漏れ・不安定な依存・QueryClient の作り直しなど）。
+  // 取得の置き場の決まりは shared/README.md の「サーバーの状態」。
+  ...pluginQuery.configs['flat/recommended'],
+{
   files: ['**/*.{js,jsx,ts,tsx}'],
   extends: [
     js.configs.recommended,
