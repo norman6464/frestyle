@@ -82,7 +82,7 @@ export const 対象ワークスペースを引き継ぐ: Story = {
 
 export const アクセスできるスペースが無い: Story = {
   // spaceId 無しの入口（/kb/spaces）でだけ再現する。特定の spaceId を指しての「見つからない」
-  // とは別（そちらは別の文言になる。resolveKbSpace の doc 参照）。
+  // とは別（そちらは別の文言になる。locateKbSpace の doc 参照）。
   decorators: [kbSpaceRoute('/kb/spaces', '/kb/spaces'), withApi({ '/me/spaces': [], '/kb/workspaces': workspaces })],
   play: async ({ canvasElement }) => {
     await expect(

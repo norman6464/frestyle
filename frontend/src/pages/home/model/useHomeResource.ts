@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { UseQueryResult } from '@tanstack/react-query';
 
 export type HomeResourceStatus = 'loading' | 'ready' | 'error';
 
@@ -53,4 +54,25 @@ export function useHomeResource<T>(
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const current = loaded !== null && key !== null && loaded.key === key && loaded.attempt === attempt ? loaded : null;
   return current ? { data: current.data, status: current.status, retry } : { data: initial, status: 'loading', retry };
+}
+
+/**
+ * 共有の問い合わせ（TanStack Query）の結果を、ホームの枠の形に合わせる。ヘッダーや左の列と
+ * 同じ結果を使う枠（所属のワークスペース・未読数など）はこちらを通す。
+ *
+ * - 前提が揃わず読まない間（enabled: false）と、結果がまだ無い間は loading（失敗のあと
+ *   再試行を押して取り直している間も含む）
+ * - 失敗を出すのは結果が 1 度も取れていないときだけ。持っている結果は、取り直しの間も・
+ *   取り直しに失敗しても出し続ける
+ *
+ * useHomeResource の「失敗したら前の結果を残さない」と違うのは、共有の問い合わせは画面に
+ * 戻ったときなどに裏で取り直すため。一時的な失敗で、出ていた一覧を消したり失敗の表示に
+ * 差し替えたりしない（見る立場を失った場合は、作るときなどにサーバーが断る）。
+ */
+export function toHomeResource<T>(result: UseQueryResult<T>, initial: T): HomeResource<T> {
+  if (result.data !== undefined) {
+    return { data: result.data, status: 'ready', retry: () => void result.refetch() };
+  }
+  const status: HomeResourceStatus = result.isError && !result.isFetching ? 'error' : 'loading';
+  return { data: initial, status, retry: () => void result.refetch() };
 }

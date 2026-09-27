@@ -101,7 +101,8 @@ export const 招待がまだない: Story = {
   decorators: [kbWorkspaceAdminRoute('/kb/:workspaceSlug/invitations', '/kb/acme/invitations'), withApi({ ...invitationApi([]), ...baseApi() })],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('heading', { level: 1, name: 'メンバーと招待' })).toBeVisible();
+    // 親ルートがワークスペースの一覧を読み終えてから見出しとタブを出す。
+    await expect(await canvas.findByRole('heading', { level: 1, name: 'メンバーと招待' })).toBeVisible();
     await expect(canvas.getByText('ワークスペース · Acme 社')).toBeVisible();
     await expect(canvas.getByRole('link', { name: 'メンバー' })).toHaveAttribute('href', '/kb/acme/members');
     await expect(canvas.getByRole('link', { name: '招待' })).toHaveAttribute('aria-current', 'page');

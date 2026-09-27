@@ -1,12 +1,18 @@
 import { Profiler } from 'react';
-import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { act, render as rtlRender, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import KbFrame from '../KbFrame';
 import type { KbPageRowProps } from '../KbPageRow';
 import type { KbRowActionsProps } from '../KbRowActions';
-import { emitKbTreeEvent, subscribeKbTreeEvents } from '@/entities/kb';
+import { emitKbTreeEvent, subscribeKbTreeEvents, useWorkspaceList } from '@/entities/kb';
 import type { KbMySpace, KbPage, KbPageTree, KbSpace, KbWorkspace } from '@/entities/kb';
+import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
+import { kbKeys } from '@/entities/kb/api/kbQueries';
+
+/** 描くたびに新しいキャッシュを配る（左の列は取得した結果の置き場の下で動く）。 */
+const render: typeof rtlRender = ((ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
+  rtlRender(ui, { wrapper: queryWrapper(), ...options })) as typeof rtlRender;
 
 const hoisted = vi.hoisted(() => ({
   fetchWorkspaces: vi.fn(),
@@ -62,6 +68,28 @@ vi.mock('@/shared/lib/hooks/useToast', () => ({
   useToast: () => ({ showToast: hoisted.showToast, toasts: [], removeToast: vi.fn() }),
 }));
 
+// 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせ
+// ——中から本体を読む——は本物の取得を呼んでしまう）。
+vi.mock('@/entities/kb/api/kbRepository', () => ({
+  default: {
+    fetchWorkspaces: hoisted.fetchWorkspaces,
+    fetchSpaces: hoisted.fetchSpaces,
+    fetchMySpaces: hoisted.fetchMySpaces,
+    fetchPageTree: hoisted.fetchPageTree,
+    createPage: hoisted.createPage,
+    renamePage: hoisted.renamePage,
+    deletePage: hoisted.deletePage,
+    archivePage: hoisted.archivePage,
+    unarchivePage: hoisted.unarchivePage,
+    movePage: hoisted.movePage,
+    createWorkspace: hoisted.createWorkspace,
+    deleteWorkspace: hoisted.deleteWorkspace,
+    createSpace: hoisted.createSpace,
+    renameSpace: hoisted.renameSpace,
+    searchPages: hoisted.searchPages,
+  },
+}));
+
 vi.mock('@/entities/kb', async () => {
   // ツリーの平坦化と祖先探索は本物を使う（そこは entities 側でテスト済みで、
   // ここで別実装を差し込むと「サイドバーは通るが本番は壊れる」形になる）。
@@ -70,23 +98,6 @@ vi.mock('@/entities/kb', async () => {
   );
   return {
     ...actual,
-    KbRepository: {
-      fetchWorkspaces: hoisted.fetchWorkspaces,
-      fetchSpaces: hoisted.fetchSpaces,
-      fetchMySpaces: hoisted.fetchMySpaces,
-      fetchPageTree: hoisted.fetchPageTree,
-      createPage: hoisted.createPage,
-      renamePage: hoisted.renamePage,
-      deletePage: hoisted.deletePage,
-      archivePage: hoisted.archivePage,
-      unarchivePage: hoisted.unarchivePage,
-      movePage: hoisted.movePage,
-      createWorkspace: hoisted.createWorkspace,
-      deleteWorkspace: hoisted.deleteWorkspace,
-      createSpace: hoisted.createSpace,
-      renameSpace: hoisted.renameSpace,
-      searchPages: hoisted.searchPages,
-    },
     getLastVisitedPageId: hoisted.getLastVisitedPageId,
     forgetVisitedPageIfMatches: hoisted.forgetVisitedPageIfMatches,
   };
@@ -436,6 +447,32 @@ describe('KbFrame', () => {
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
     expect(await screen.findByText('設計メモ')).toBeInTheDocument();
+  });
+
+  it('一覧を持っているうちの取り直しに失敗しても、失敗の表示で一覧を隠さない', async () => {
+    // 画面に戻ったときなどの裏の取り直しが一時的に失敗しただけで、出ていた一覧を下げない。
+    const client = createTestQueryClient();
+    render(
+      <MemoryRouter initialEntries={['/kb']}>
+        <KbFrame spaceId="space-1" />
+      </MemoryRouter>,
+      { wrapper: queryWrapper(client) },
+    );
+    await screen.findByText('設計メモ');
+
+    hoisted.fetchWorkspaces.mockRejectedValueOnce(new Error('boom'));
+    hoisted.fetchSpaces.mockRejectedValueOnce(new Error('boom'));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: kbKeys.workspaces() });
+    });
+    await waitFor(() => expect(client.getQueryState(kbKeys.spaces('acme'))?.status).toBe('error'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(screen.queryByText('ワークスペースを読み込めませんでした')).not.toBeInTheDocument();
+    expect(screen.queryByText('スペースを読み込めませんでした')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'スペース「開発部」を切り替える' })).toBeInTheDocument();
   });
 
   it('ワークスペースを切り替えたら、前のスペースを先に捨てる', async () => {
@@ -1344,6 +1381,46 @@ describe('スペースの切替（文脈バー）', () => {
     );
   });
 
+  it('作ったスペースは、次に開いた一覧に出る（作った本人の役割を知るため取り直す）', async () => {
+    hoisted.fetchMySpaces.mockResolvedValue([mySpace('space-1', '開発部')]);
+    renderSidebar();
+    await screen.findByText('設計メモ');
+    fireEvent.click(screen.getByRole('button', { name: 'スペース「開発部」を切り替える' }));
+    await screen.findByRole('link', { name: '開発部' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを作成' }));
+    hoisted.createSpace.mockResolvedValue(space('space-2', '営業部'));
+    hoisted.fetchMySpaces.mockResolvedValue([mySpace('space-1', '開発部'), mySpace('space-2', '営業部', 'admin')]);
+    fireEvent.change(screen.getByLabelText('スペースの名前'), { target: { value: '営業部' } });
+    fireEvent.click(screen.getByRole('button', { name: 'スペースを作る' }));
+    await waitFor(() => expect(screen.queryByLabelText('スペースの名前')).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'スペース「開発部」を切り替える' }));
+
+    expect(await screen.findByRole('link', { name: '営業部' })).toBeInTheDocument();
+  });
+
+  it('見出しで改名したスペースは、取り直さずに一覧の名前も変わる', async () => {
+    hoisted.fetchMySpaces.mockResolvedValue([mySpace('space-1', '開発部')]);
+    renderSidebar();
+    await screen.findByText('設計メモ');
+    fireEvent.click(screen.getByRole('button', { name: 'スペース「開発部」を切り替える' }));
+    await screen.findByRole('link', { name: '開発部' });
+    fireEvent.click(screen.getByRole('button', { name: 'スペース「開発部」を切り替える' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '開発部 の操作' }));
+    fireEvent.click(screen.getByRole('button', { name: 'スペースの名前を変更' }));
+    const input = screen.getByRole('textbox', { name: 'スペースの名前' });
+    fireEvent.change(input, { target: { value: '技術部' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await screen.findByRole('button', { name: '技術部 の操作' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'スペース「技術部」を切り替える' }));
+
+    expect(await screen.findByRole('link', { name: '技術部' })).toBeInTheDocument();
+    expect(hoisted.fetchMySpaces).toHaveBeenCalledTimes(1);
+  });
+
   it('やめるでフォームを畳める（作らない）', async () => {
     renderSidebar();
     await screen.findByText('設計メモ');
@@ -1461,29 +1538,56 @@ describe('ページ画面からの通知に木が追従する', () => {
     expect(await screen.findByText('書き換わった題名')).toBeInTheDocument();
   });
 
-  it('workspace-created で他インスタンスが作った所属を一覧へ足す', async () => {
-    renderSidebar();
+  // 管理の画面（useWorkspaceList）と左の列は同じ問い合わせを使う。片方で作った・消した所属は、
+  // 知らせを待たずにもう片方の一覧にも出る。
+  function OtherPlace() {
+    const { createWorkspace, deleteWorkspace } = useWorkspaceList();
+    return (
+      <>
+        <button type="button" onClick={() => void createWorkspace({ name: '別会社' })}>
+          ほかで作る
+        </button>
+        <button type="button" onClick={() => void deleteWorkspace('beta')}>
+          ほかで消す
+        </button>
+      </>
+    );
+  }
+
+  function renderWithOtherPlace() {
+    const client = createTestQueryClient();
+    return rtlRender(
+      <MemoryRouter initialEntries={['/kb']}>
+        <KbFrame spaceId="space-1" />
+        <OtherPlace />
+      </MemoryRouter>,
+      { wrapper: queryWrapper(client) },
+    );
+  }
+
+  it('同じ一覧を使うほかの場所で作った所属が、切り替えの一覧に出る', async () => {
+    hoisted.createWorkspace.mockResolvedValue(workspace('other', '別会社'));
+    renderWithOtherPlace();
     await screen.findByText('設計メモ');
 
-    act(() => {
-      emitKbTreeEvent({ type: 'workspace-created', workspace: workspace('other', '別会社') });
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'ほかで作る' }));
+    await waitFor(() => expect(hoisted.createWorkspace).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole('button', { name: 'ワークスペース「Acme 社」を切り替える' }));
     expect(await screen.findByRole('button', { name: '別会社' })).toBeInTheDocument();
   });
 
-  it('workspace-deleted で他インスタンスが消した所属を一覧から外す', async () => {
+  it('同じ一覧を使うほかの場所で消した所属が、切り替えの一覧から外れる', async () => {
     hoisted.fetchWorkspaces.mockResolvedValue([workspace('acme', 'Acme 社'), workspace('beta', 'Beta 社')]);
-    renderSidebar();
+    hoisted.deleteWorkspace.mockResolvedValue(undefined);
+    renderWithOtherPlace();
     await screen.findByText('設計メモ');
 
-    act(() => {
-      emitKbTreeEvent({ type: 'workspace-deleted', workspaceSlug: 'beta' });
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'ほかで消す' }));
+    await waitFor(() => expect(hoisted.deleteWorkspace).toHaveBeenCalledWith('beta'));
 
     fireEvent.click(screen.getByRole('button', { name: 'ワークスペース「Acme 社」を切り替える' }));
-    expect(screen.queryByRole('button', { name: 'Beta 社' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Beta 社' })).not.toBeInTheDocument());
   });
 });
 
@@ -2021,7 +2125,9 @@ describe('描いた直後にもう 1 回描き直さない（effect の中で st
     expect(screen.queryByRole('dialog', { name: 'ページ' })).not.toBeInTheDocument();
   });
 
-  it('スペースの一覧の再試行は、押した描画の中で読み込み中に戻す', async () => {
+  // 取り直しの始まりは共有の問い合わせが次の刻みで知らせる。失敗の表示を残したままの描画を
+  // 挟まず、1 回の描き直しで読み込み中へ移ることを確かめる。
+  it('スペースの一覧の再試行は、1 回の描き直しで読み込み中に戻す', async () => {
     hoisted.fetchMySpaces.mockRejectedValueOnce(new Error('boom'));
     const { commits } = renderCounted();
     await screen.findByText('設計メモ');
@@ -2032,7 +2138,8 @@ describe('描いた直後にもう 1 回描き直さない（effect の中で st
 
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
-    expect(screen.queryByText('スペースを読み込めませんでした')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('スペースを読み込めませんでした')).not.toBeInTheDocument());
+    expect(screen.getByRole('status', { name: 'スペースを読み込み中' })).toBeInTheDocument();
     expect(commits.count).toBe(1);
   });
 });

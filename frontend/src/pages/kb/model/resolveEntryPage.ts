@@ -1,4 +1,5 @@
-import { KbRepository, getLastVisitedPageId } from '@/entities/kb';
+import type { QueryClient } from '@tanstack/react-query';
+import { KbRepository, getLastVisitedPageId, kbSpacesQuery, kbWorkspacesQuery } from '@/entities/kb';
 
 /**
  * resolveEntryPageId は素の /kb(ページ ID 無し)で最初に開くページの ID を決める。
@@ -16,13 +17,18 @@ import { KbRepository, getLastVisitedPageId } from '@/entities/kb';
  * ある —— 別の人が消した、アーカイブ済みの子孫ごと親が消された、など手元では気づけない。
  * `fromLastVisited` を見て、開けなかったら呼び出し側が入口へ戻して選び直す
  * (開けなかったページの記録は useKbPageDoc が消すので、2 回目は 3 へ落ちる)。
+ *
+ * ワークスペースとスペースの一覧は共有の問い合わせから読む(左の列が取ってあれば取り直さない)。
  */
 export interface EntryPage {
   pageId: string;
   fromLastVisited: boolean;
 }
 
-export async function resolveEntryPageId(workspaceSlug?: string): Promise<EntryPage | null> {
+export async function resolveEntryPageId(
+  queryClient: QueryClient,
+  workspaceSlug?: string,
+): Promise<EntryPage | null> {
   if (!workspaceSlug) {
     const lastVisited = getLastVisitedPageId();
     if (lastVisited) return { pageId: lastVisited, fromLastVisited: true };
@@ -30,10 +36,10 @@ export async function resolveEntryPageId(workspaceSlug?: string): Promise<EntryP
 
   const workspaces = workspaceSlug
     ? [{ slug: workspaceSlug }]
-    : await KbRepository.fetchWorkspaces();
+    : await queryClient.fetchQuery(kbWorkspacesQuery());
 
   for (const workspace of workspaces) {
-    const spaces = await KbRepository.fetchSpaces(workspace.slug);
+    const spaces = await queryClient.fetchQuery(kbSpacesQuery(workspace.slug));
     for (const space of spaces) {
       const tree = await KbRepository.fetchPageTree(workspace.slug, space.id);
       const first = tree.pages[0]?.page.id;

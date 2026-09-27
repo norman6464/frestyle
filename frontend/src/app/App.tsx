@@ -8,6 +8,7 @@ import { ToastProvider } from './providers/ToastProvider';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import ToastContainer from '@/app/providers/ToastContainer';
 import { lazyWithReload, clearLazyReloadFlags } from '@/shared/lib/lazyWithReload';
+import { hasAuthHint } from '@/shared/lib/authHint';
 
 /* v8 ignore start -- 以下はコード分割のためのルート表。各 `() => import(...)` は
    中身を持たない読み込み用の関数で、埋めるには全ページを描画するしかなく指標として
@@ -23,7 +24,9 @@ const InvitePage = lazyWithReload(() => import('@/pages/invite').then((m) => ({ 
 const HomePage = lazyWithReload(() => import('@/pages/home').then((m) => ({ default: m.HomePage })), 'HomePage');
 const SettingsPage = lazyWithReload(() => import('@/pages/settings').then((m) => ({ default: m.SettingsPage })), 'SettingsPage');
 // ログイン後の親（枠とキャッシュの置き場）。最初に読む塊に入れない（app/layouts/AuthenticatedLayout）。
-const AuthenticatedLayout = lazyWithReload(() => import('./layouts/AuthenticatedLayout'), 'AuthenticatedLayout');
+// ログインの確認と並べて読み始める（AuthenticatedRoute）。
+const loadAuthenticatedLayout = () => import('./layouts/AuthenticatedLayout');
+const AuthenticatedLayout = lazyWithReload(loadAuthenticatedLayout, 'AuthenticatedLayout');
 const KbPage = lazyWithReload(() => import('@/pages/kb').then((m) => ({ default: m.KbPage })), 'KbPage');
 const KbFrameLayout = lazyWithReload(
   () => import('@/widgets/kb-sidebar').then((m) => ({ default: m.KbFrameLayout })),
@@ -101,6 +104,27 @@ function NavigationToast() {
   return null;
 }
 
+/**
+ * ログインが要る画面の親。ログインの確認（AuthInitializer）を待つ間に、ログイン後の枠の塊を
+ * 読み始める。確認が済んでから読むと、確認 → 枠の塊 → 画面の塊 と順に待つことになる。
+ * ログインの手がかり（cookie）が無ければ読まない（ほぼログイン画面へ移るので、使わない塊を読ませない）。
+ */
+function AuthenticatedRoute() {
+  useEffect(() => {
+    if (!hasAuthHint()) return;
+    loadAuthenticatedLayout().catch(() => {
+      // 読めなければ、描くときに lazyWithReload が扱う（読み直し）。
+    });
+  }, []);
+  return (
+    <AuthInitializer>
+      <Protected>
+        <AuthenticatedLayout />
+      </Protected>
+    </AuthInitializer>
+  );
+}
+
 // LegacyKbPageRedirect は旧 /kb/:slug/pages/:pageId を /kb/:pageId へ写す。
 // slug は URL から消えた（テナントはページ ID から解決する）ので捨ててよい。
 function LegacyKbPageRedirect() {
@@ -126,15 +150,7 @@ export default function App() {
       {import.meta.env.DEV && <Route path="/dev/inkwell" element={<InkwellShowcasePage />} />}
 
       {/* 認証が必要（AppShell レイアウト内） */}
-      <Route
-        element={
-          <AuthInitializer>
-            <Protected>
-              <AuthenticatedLayout />
-            </Protected>
-          </AuthInitializer>
-        }
-      >
+      <Route element={<AuthenticatedRoute />}>
         {/* ホーム（ログイン後の入口）。 */}
         <Route path="/" element={<HomePage />} />
         <Route path="/settings" element={<SettingsPage />} />
