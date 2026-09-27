@@ -137,12 +137,15 @@ export const 読み込み中: Story = {
 /** 失敗。何が起きたかと、次にどうするかを書く。 */
 export const 失敗: Story = {
   args: {
-    error:
-      '権限を読めませんでした。通信が切れたか、このページの権限を変える立場でなくなっています。開き直すと最新の状態が出ます。',
+    error: '権限を読めませんでした。通信が切れたか、このページの権限を変える立場でなくなっています。',
+    onRetry: fn(),
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('alert')).toHaveTextContent(/権限を読めませんでした/);
+    // 行き止まりにせず、その場で取り直せる。
+    await userEvent.click(canvas.getByRole('button', { name: '再試行' }));
+    await expect(args.onRetry).toHaveBeenCalled();
   },
 };
 

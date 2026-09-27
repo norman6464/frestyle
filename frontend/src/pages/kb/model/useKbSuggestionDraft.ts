@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { KbRepository } from '@/entities/kb';
+import { useQueryClient } from '@tanstack/react-query';
+import { KbRepository, kbKeys } from '@/entities/kb';
 import { getApiError } from '@/shared/lib/classifyApiError';
 
 export interface KbSuggestionDraftState {
@@ -36,6 +37,7 @@ const CLOSED: KbSuggestionDraftState = { open: false, draft: null, submitting: f
  * 画面に出す中身はエディタが持っているので、ページが知る必要があるのは送信のときだけ。
  */
 export function useKbSuggestionDraft(workspaceSlug: string | undefined, pageId: string | undefined) {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<KbSuggestionDraftState>(CLOSED);
 
   // submit が送信中に「別のドラフト」へ移ったか（ページを移った・キャンセルした・新しい
@@ -76,6 +78,9 @@ export function useKbSuggestionDraft(workspaceSlug: string | undefined, pageId: 
     setState((prev) => ({ ...prev, submitting: true, error: null }));
     try {
       await KbRepository.createSuggestion(workspaceSlug, pageId, latestDraft.current);
+      // 送った提案をこのページの提案の一覧に出す（パネルを開いていれば取り直し、閉じていれば
+      // 次に開いたときに取り直す）。
+      void queryClient.invalidateQueries({ queryKey: kbKeys.suggestions(workspaceSlug, pageId) });
       if (generation.current === requestGeneration) setState(CLOSED);
       return true;
     } catch (cause) {
@@ -88,7 +93,7 @@ export function useKbSuggestionDraft(workspaceSlug: string | undefined, pageId: 
       }
       return false;
     }
-  }, [workspaceSlug, pageId]);
+  }, [workspaceSlug, pageId, queryClient]);
 
   return { ...state, start, cancel, changeDraft, submit };
 }

@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { FsIcon } from '@/shared/ui';
-import { KbRepository } from '@/entities/kb';
+import { KbRepository, kbKeys } from '@/entities/kb';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import Button from '@/shared/ui/Button';
@@ -34,6 +35,7 @@ export default function KbSaveAsTemplateButton({
   pageId,
   spaceId,
 }: KbSaveAsTemplateButtonProps) {
+  const queryClient = useQueryClient();
   const { showToast } = useToast();
   const nameId = useId();
   const [open, setOpen] = useState(false);
@@ -58,6 +60,9 @@ export default function KbSaveAsTemplateButton({
     const templateSpaceId = scope === 'space' ? spaceId : null;
     try {
       await KbRepository.createPageTemplate(workspaceSlug, pageId, { name: trimmed, spaceId: templateSpaceId });
+      // ワークスペース全体のテンプレートはどのスペースの一覧にも出るので、テンプレートの一覧を
+      // まとめて取り直させる（開いていない一覧は、次に開いたときに取り直す）。
+      void queryClient.invalidateQueries({ queryKey: kbKeys.templates(workspaceSlug) });
       showToast('success', 'テンプレートとして保存しました');
       close();
     } catch (cause) {

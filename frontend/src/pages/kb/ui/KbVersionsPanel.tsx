@@ -9,6 +9,8 @@ export interface KbVersionsPanelProps {
   versions: KbPageVersion[];
   loading: boolean;
   error: string | null;
+  /** 読めなかったときの取り直し。 */
+  onRetry?: () => void;
   /** 「版を残す」フォームは編集権限が要る。読むことは誰でもできる（canView）。 */
   canEdit: boolean;
   /** プレビュー中の版（無ければ null）。一覧の該当行をハイライトする。 */
@@ -30,6 +32,7 @@ export default function KbVersionsPanel({
   versions,
   loading,
   error,
+  onRetry,
   canEdit,
   selectedSeq,
   onCreateVersion,
@@ -68,7 +71,7 @@ export default function KbVersionsPanel({
 
       {loading && <SkeletonRows label="履歴を読み込み中" shape="blocks" />}
 
-      {!loading && error && <ErrorNotice variant="inline" message={error} />}
+      {!loading && error && <ErrorNotice variant="inline" message={error} onRetry={onRetry} />}
 
       {!loading && !error && versions.length === 0 && <EmptyNotice title="まだ版がありません。" />}
 

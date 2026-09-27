@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { KbRepository, type KbPage } from '@/entities/kb';
+import { useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { kbBacklinksQuery, type KbPage } from '@/entities/kb';
 
 export interface KbBacklinksState {
   /** このページを参照しているページの一覧。 */
@@ -7,9 +8,11 @@ export interface KbBacklinksState {
   loading: boolean;
   /** 失敗の理由。null なら失敗していない。 */
   error: string | null;
+  /** 読めなかったときの取り直し。 */
+  retry: () => void;
 }
 
-const EMPTY: KbBacklinksState = { pages: [], loading: false, error: null };
+const NO_PAGES: KbPage[] = [];
 
 const LOAD_FAILED = '参照しているページを読み込めませんでした。';
 
@@ -20,38 +23,24 @@ const LOAD_FAILED = '参照しているページを読み込めませんでし�
  * （useKbComments がバッジ表示のため常時取得するのと同じ考え方 — 件数バッジ相当の表示
  * （セクションの見出しに件数を出す）に使うには、閉じている間も取れていないといけない）。
  *
- * 読み取り専用で書き込みが無いデータなので、useKbComments / useKbPageVersions のような
- * seq・writeCount を使った書き込み競合ガードは持たない。**唯一守るのは宛先チェック**
- * （応答が返る前に別ページへ移っていたら、古い応答で新しいページの状態を上書きしない）—
- * useKbPageDoc と同じ、単純な世代番号（generation ref）だけで足りる。
+ * 一覧は共有の問い合わせ（kbBacklinksQuery）から読む。ページごとの鍵なので、別ページへ
+ * 移ったら前のページの一覧は出ず、遅れて届いた前のページの応答が新しいページを上書きしない。
+ * 読み込み中と失敗を出すのは、一覧が 1 度も取れていないときだけ。
  */
-export function useKbBacklinks(
-  workspaceSlug: string | undefined,
-  pageId: string | undefined,
-): KbBacklinksState {
-  const [state, setState] = useState<KbBacklinksState>(EMPTY);
-  // 速く行き来したときに、古い応答が新しいページの状態を上書きしないための世代番号。
-  const generation = useRef(0);
+export function useKbBacklinks(workspaceSlug: string | undefined, pageId: string | undefined): KbBacklinksState {
+  const hasTarget = workspaceSlug !== undefined && pageId !== undefined;
+  const result = useQuery({ ...kbBacklinksQuery(workspaceSlug ?? '', pageId ?? ''), enabled: hasTarget });
+  const missing = result.data === undefined;
 
-  useEffect(() => {
-    if (!workspaceSlug || !pageId) {
-      // ページが決まっていない。連番を進めて、飛んでいる応答を無効にする。
-      generation.current += 1;
-      setState(EMPTY);
-      return;
-    }
-    const token = ++generation.current;
-    setState({ pages: [], loading: true, error: null });
-    KbRepository.listBacklinks(workspaceSlug, pageId)
-      .then((pages) => {
-        if (token !== generation.current) return;
-        setState({ pages, loading: false, error: null });
-      })
-      .catch(() => {
-        if (token !== generation.current) return;
-        setState({ pages: [], loading: false, error: LOAD_FAILED });
-      });
-  }, [workspaceSlug, pageId]);
+  const { refetch } = result;
+  const retry = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
-  return state;
+  return {
+    pages: hasTarget ? (result.data ?? NO_PAGES) : NO_PAGES,
+    loading: hasTarget && missing && (result.isPending || result.isFetching),
+    error: hasTarget && missing && result.isError && !result.isFetching ? LOAD_FAILED : null,
+    retry,
+  };
 }

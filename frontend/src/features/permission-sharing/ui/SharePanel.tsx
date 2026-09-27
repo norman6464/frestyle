@@ -27,6 +27,8 @@ export interface SharePanelProps {
   loading: boolean;
   /** 失敗の理由。null なら失敗していない。 */
   error: string | null;
+  /** 読めなかったときの取り直し。読めているとき（書き込みの失敗など）は渡さない。 */
+  onRetry?: () => void;
   /** 書き込みが飛んでいる間 true（二重送信を止める）。 */
   saving: boolean;
   /** 付与。**成功したかを返す**（失敗したときに選択を消さないため）。 */
@@ -54,6 +56,7 @@ export default function SharePanel({
   candidates,
   loading,
   error,
+  onRetry,
   saving,
   onGrant,
   onRevoke,
@@ -137,7 +140,7 @@ export default function SharePanel({
 
         {loading && <SkeletonRows label="権限を読み込み中" shape="blocks" size="sm" />}
 
-        {!loading && error && <ErrorNotice variant="inline" message={error} className="py-2" />}
+        {!loading && error && <ErrorNotice variant="inline" message={error} onRetry={onRetry} className="py-2" />}
 
         {!loading && !error && rows.length === 0 && <EmptyNotice title={emptyNote} className="mt-0.5" />}
 

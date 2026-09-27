@@ -10,6 +10,8 @@ export interface KbSuggestionsPanelProps {
   suggestions: KbPageSuggestion[];
   loading: boolean;
   error: string | null;
+  /** 読めなかったときの取り直し。 */
+  onRetry?: () => void;
   /** 採用・却下ボタンは編集権限が要る。読むことは canView だけで誰でもできる。 */
   canEdit: boolean;
   /** 採用する。**失敗は投げてくる**（呼び出し側 KbPage がトーストで知らせたうえで再送する）。 */
@@ -33,6 +35,7 @@ export default function KbSuggestionsPanel({
   suggestions,
   loading,
   error,
+  onRetry,
   canEdit,
   onAccept,
   onReject,
@@ -53,7 +56,7 @@ export default function KbSuggestionsPanel({
     <div className="flex flex-col gap-3 p-3">
       {loading && <SkeletonRows label="提案を読み込み中" shape="blocks" size="lg" />}
 
-      {!loading && error && <ErrorNotice variant="inline" message={error} />}
+      {!loading && error && <ErrorNotice variant="inline" message={error} onRetry={onRetry} />}
 
       {!loading && !error && suggestions.length === 0 && <EmptyNotice title="まだ提案はありません。" />}
 

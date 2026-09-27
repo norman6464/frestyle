@@ -1318,7 +1318,15 @@ describe('題名で検索（モーダル）', () => {
   });
 
   it('検索に失敗したら再試行の導線を出し、押すともう一度問い合わせる', async () => {
-    hoisted.searchPages.mockRejectedValueOnce(new Error('boom'));
+    // 持ち越した語（設計）は開いてすぐ問い合わせるので、打ち直した語の 1 回目だけを失敗させる。
+    let failed = false;
+    hoisted.searchPages.mockImplementation(async (_slug: string, needle: string) => {
+      if (needle === 'け' && !failed) {
+        failed = true;
+        throw new Error('boom');
+      }
+      return [];
+    });
     const input = await openSearch();
     fireEvent.change(input, { target: { value: 'け' } });
 

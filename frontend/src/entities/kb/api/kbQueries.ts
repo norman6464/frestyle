@@ -25,6 +25,39 @@ export const kbKeys = {
   /** スペースのページの木（現役かアーカイブ済みのどちらか）。 */
   pageTree: (workspaceSlug: string, spaceId: string, archived: boolean) =>
     [...workspaceScope(workspaceSlug), 'space', spaceId, 'page-tree', archived ? 'archived' : 'active'] as const,
+  /** 1 枚のページの脇のもの（コメント・版・提案・共有・参照元）すべて。本文は入れない（shared/README.md）。 */
+  page: (workspaceSlug: string, pageId: string) => [...workspaceScope(workspaceSlug), 'page', pageId] as const,
+  /** このページを参照しているページ。 */
+  backlinks: (workspaceSlug: string, pageId: string) =>
+    [...workspaceScope(workspaceSlug), 'page', pageId, 'backlinks'] as const,
+  /** コメントのスレッド（未解決・解決済み込み）。 */
+  commentThreads: (workspaceSlug: string, pageId: string) =>
+    [...workspaceScope(workspaceSlug), 'page', pageId, 'comment-threads'] as const,
+  /** 版の一覧（新しい順）。 */
+  versions: (workspaceSlug: string, pageId: string) =>
+    [...workspaceScope(workspaceSlug), 'page', pageId, 'versions'] as const,
+  /** 版 1 件（本文込み）。版は書き換わらないので、取ったら取り直さない。 */
+  version: (workspaceSlug: string, pageId: string, seq: number) =>
+    [...workspaceScope(workspaceSlug), 'page', pageId, 'version', seq] as const,
+  /** 未処理の提案。 */
+  suggestions: (workspaceSlug: string, pageId: string) =>
+    [...workspaceScope(workspaceSlug), 'page', pageId, 'suggestions'] as const,
+  /** このページ自身に張った権限（主体は ID だけ）。 */
+  pageGrants: (workspaceSlug: string, pageId: string) =>
+    [...workspaceScope(workspaceSlug), 'page', pageId, 'grants'] as const,
+  /** このページに権限を張れる相手（表示名つき）。 */
+  grantablePrincipals: (workspaceSlug: string, pageId: string) =>
+    [...workspaceScope(workspaceSlug), 'page', pageId, 'grantable-principals'] as const,
+  /**
+   * テンプレートの一覧すべて。ワークスペース全体のテンプレートはどのスペースの一覧にも出るので、
+   * 作った・消したらこの鍵でまとめて直す。
+   */
+  templates: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'templates'] as const,
+  /** スペースで使えるテンプレート（そのスペース専用とワークスペース全体）。 */
+  spaceTemplates: (workspaceSlug: string, spaceId: string) =>
+    [...workspaceScope(workspaceSlug), 'templates', spaceId] as const,
+  /** ワークスペース全体の題名・本文検索（語ごと）。 */
+  search: (workspaceSlug: string, needle: string) => [...workspaceScope(workspaceSlug), 'search', needle] as const,
 };
 
 /** 所属ワークスペースの一覧。ヘッダー・左の列・管理の画面・ホーム・入口の解決が共有する。 */
@@ -59,5 +92,82 @@ export function kbPageTreeQuery(workspaceSlug: string, spaceId: string, archived
   return queryOptions({
     queryKey: kbKeys.pageTree(workspaceSlug, spaceId, archived),
     queryFn: () => KbRepository.fetchPageTree(workspaceSlug, spaceId, { archived }),
+  });
+}
+
+/** このページを参照しているページ。 */
+export function kbBacklinksQuery(workspaceSlug: string, pageId: string) {
+  return queryOptions({
+    queryKey: kbKeys.backlinks(workspaceSlug, pageId),
+    queryFn: () => KbRepository.listBacklinks(workspaceSlug, pageId),
+  });
+}
+
+/** コメントのスレッド。エディタの件数バッジとコメントの欄が共有する。 */
+export function kbCommentThreadsQuery(workspaceSlug: string, pageId: string) {
+  return queryOptions({
+    queryKey: kbKeys.commentThreads(workspaceSlug, pageId),
+    queryFn: () => KbRepository.listCommentThreads(workspaceSlug, pageId),
+  });
+}
+
+/** 版の一覧（新しい順）。 */
+export function kbPageVersionsQuery(workspaceSlug: string, pageId: string) {
+  return queryOptions({
+    queryKey: kbKeys.versions(workspaceSlug, pageId),
+    queryFn: () => KbRepository.listPageVersions(workspaceSlug, pageId),
+  });
+}
+
+/** 版 1 件（本文込み）。版は書き換わらないので、取ったら取り直さない。 */
+export function kbPageVersionQuery(workspaceSlug: string, pageId: string, seq: number) {
+  return queryOptions({
+    queryKey: kbKeys.version(workspaceSlug, pageId, seq),
+    queryFn: () => KbRepository.getPageVersion(workspaceSlug, pageId, seq),
+    staleTime: Infinity,
+  });
+}
+
+/** 未処理の提案。 */
+export function kbSuggestionsQuery(workspaceSlug: string, pageId: string) {
+  return queryOptions({
+    queryKey: kbKeys.suggestions(workspaceSlug, pageId),
+    queryFn: () => KbRepository.listOpenSuggestions(workspaceSlug, pageId),
+  });
+}
+
+/** このページ自身に張った権限（主体は ID だけ）。 */
+export function kbPageGrantsQuery(workspaceSlug: string, pageId: string) {
+  return queryOptions({
+    queryKey: kbKeys.pageGrants(workspaceSlug, pageId),
+    queryFn: () => KbRepository.listPageGrants(workspaceSlug, pageId),
+  });
+}
+
+/** このページに権限を張れる相手（表示名つき）。共有のパネルと、チケットの担当の名前引きが使う。 */
+export function kbGrantablePrincipalsQuery(workspaceSlug: string, pageId: string) {
+  return queryOptions({
+    queryKey: kbKeys.grantablePrincipals(workspaceSlug, pageId),
+    queryFn: () => KbRepository.listGrantablePrincipals(workspaceSlug, pageId),
+  });
+}
+
+/** スペースで使えるテンプレート（そのスペース専用とワークスペース全体）。 */
+export function kbSpaceTemplatesQuery(workspaceSlug: string, spaceId: string) {
+  return queryOptions({
+    queryKey: kbKeys.spaceTemplates(workspaceSlug, spaceId),
+    queryFn: () => KbRepository.listPageTemplates(workspaceSlug, spaceId),
+  });
+}
+
+/**
+ * ワークスペース全体の題名・本文検索。語ごとに控えるので、打ち直して前の語に戻ったときは
+ * 待たずに出す。ページは書き換わるので、開くたびに裏で取り直す（控えは古いものとして扱う）。
+ */
+export function kbSearchQuery(workspaceSlug: string, needle: string) {
+  return queryOptions({
+    queryKey: kbKeys.search(workspaceSlug, needle),
+    queryFn: () => KbRepository.searchPages(workspaceSlug, needle),
+    staleTime: 0,
   });
 }

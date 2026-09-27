@@ -1273,8 +1273,9 @@ describe('KbPage の履歴', () => {
 
     fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
+    // プレビューの帯が出てから、戻すボタンが無いことを確かめる（帯が出る前だと何も確かめていない）。
+    expect(await screen.findByRole('button', { name: '現在の版に戻る' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'この版に戻す' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '現在の版に戻る' })).toBeInTheDocument();
   });
 });
 

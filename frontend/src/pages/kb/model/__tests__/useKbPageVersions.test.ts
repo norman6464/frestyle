@@ -1,6 +1,10 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { queryWrapper } from '@/test/queryClient';
 import { useKbPageVersions } from '../useKbPageVersions';
+
+const renderHook: typeof rtlRenderHook = ((callback: Parameters<typeof rtlRenderHook>[0], options?: Parameters<typeof rtlRenderHook>[1]) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 const hoisted = vi.hoisted(() => ({
   listPageVersions: vi.fn(),
@@ -9,8 +13,9 @@ const hoisted = vi.hoisted(() => ({
   restorePageVersion: vi.fn(),
 }));
 
-vi.mock('@/entities/kb', () => ({
-  KbRepository: {
+// 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/kb/api/kbRepository', () => ({
+  default: {
     listPageVersions: hoisted.listPageVersions,
     getPageVersion: hoisted.getPageVersion,
     createPageVersion: hoisted.createPageVersion,
@@ -93,7 +98,7 @@ describe('useKbPageVersions の一覧取得（open ゲート）', () => {
     expect(result.current.versions).toHaveLength(0);
   });
 
-  it('閉じてすぐ開き直すと古い応答は捨てる（連番）', async () => {
+  it('閉じてすぐ開き直しても、飛んでいる取得を使い回す（同じページの一覧を 2 回取らない）', async () => {
     let settleFirst: (value: unknown) => void = () => {};
     hoisted.listPageVersions.mockImplementationOnce(
       () => new Promise((resolve) => { settleFirst = resolve; }),
@@ -105,15 +110,24 @@ describe('useKbPageVersions の一覧取得（open ゲート）', () => {
     );
 
     rerender({ open: false });
-    hoisted.listPageVersions.mockResolvedValue([version(9)]);
     rerender({ open: true });
-    await waitFor(() => expect(result.current.versions).toHaveLength(1));
-    expect(result.current.versions[0].seq).toBe(9);
-
     await act(async () => {
-      settleFirst([version(1), version(2)]);
+      settleFirst([version(2), version(1)]);
     });
-    expect(result.current.versions.map((v) => v.seq)).toEqual([9]);
+
+    await waitFor(() => expect(result.current.versions.map((v) => v.seq)).toEqual([2, 1]));
+    expect(hoisted.listPageVersions).toHaveBeenCalledTimes(1);
+  });
+
+  it('読み込めなかったら取り直せる', async () => {
+    hoisted.listPageVersions.mockRejectedValueOnce(new Error('boom'));
+    const { result } = renderHook(() => useKbPageVersions(SLUG, PAGE, true));
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+
+    act(() => result.current.retry());
+
+    await waitFor(() => expect(result.current.versions).toHaveLength(2));
+    expect(result.current.error).toBeNull();
   });
 });
 
@@ -127,7 +141,8 @@ describe('useKbPageVersions の作成（版を残す）', () => {
     });
 
     expect(hoisted.createPageVersion).toHaveBeenCalledWith(SLUG, PAGE, 'リリース前の状態');
-    expect(result.current.versions.map((v) => v.seq)).toEqual([3, 2, 1]);
+    await waitFor(() => expect(result.current.versions.map((v) => v.seq)).toEqual([3, 2, 1]));
+    expect(hoisted.listPageVersions).toHaveBeenCalledTimes(1);
   });
 
   it('パネルが閉じている（open=false）間は何もしない', async () => {
@@ -155,23 +170,42 @@ describe('useKbPageVersions の作成（版を残す）', () => {
     expect(result.current.versions).toHaveLength(2);
   });
 
-  it('取得中に作成が成功したら、後から着地する古い取得結果で上書きしない', async () => {
-    let resolveList: (versions: ReturnType<typeof version>[]) => void = () => {};
-    hoisted.listPageVersions.mockImplementation(
-      () => new Promise((resolve) => { resolveList = resolve; }),
-    );
+  it('最初の読み込み中に版を残したら、残した 1 件だけの一覧を作らずに取り直す。古い取得結果でも上書きしない', async () => {
+    let resolveFirst: (versions: ReturnType<typeof version>[]) => void = () => {};
+    hoisted.listPageVersions
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockResolvedValue([version(3), version(2), version(1)]);
     const { result } = renderHook(() => useKbPageVersions(SLUG, PAGE, true));
+    await waitFor(() => expect(hoisted.listPageVersions).toHaveBeenCalledTimes(1));
 
     await act(async () => {
       await result.current.createVersion();
     });
-    expect(result.current.versions.map((v) => v.seq)).toEqual([3]);
+    await act(async () => {
+      resolveFirst([]);
+    });
+
+    await waitFor(() => expect(result.current.versions.map((v) => v.seq)).toEqual([3, 2, 1]));
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('一覧を持っているうちの取り直しの途中で版を残しても、古い取得結果で足した版が消えない', async () => {
+    const { result } = renderHook(() => useKbPageVersions(SLUG, PAGE, true));
+    await waitFor(() => expect(result.current.versions).toHaveLength(2));
+    let resolveStale: (versions: ReturnType<typeof version>[]) => void = () => {};
+    hoisted.listPageVersions.mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve; }));
+    act(() => result.current.retry());
+    await waitFor(() => expect(hoisted.listPageVersions).toHaveBeenCalledTimes(2));
 
     await act(async () => {
-      resolveList([]);
+      await result.current.createVersion();
     });
-    expect(result.current.versions.map((v) => v.seq)).toEqual([3]);
-    expect(result.current.loading).toBe(false);
+    await act(async () => {
+      resolveStale([version(2), version(1)]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(result.current.versions.map((v) => v.seq)).toEqual([3, 2, 1]);
   });
 });
 

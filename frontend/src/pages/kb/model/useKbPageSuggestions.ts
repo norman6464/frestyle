@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { KbRepository, type KbPageSuggestion } from '@/entities/kb';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { reflectWrite } from '@/shared/api/queryCache';
+import { KbRepository, kbKeys, kbSuggestionsQuery, type KbPageSuggestion } from '@/entities/kb';
 
 export interface KbPageSuggestionsState {
   suggestions: KbPageSuggestion[];
@@ -8,122 +10,73 @@ export interface KbPageSuggestionsState {
   error: string | null;
 }
 
-const EMPTY: KbPageSuggestionsState = { suggestions: [], loading: false, error: null };
+const NO_SUGGESTIONS: KbPageSuggestion[] = [];
 
 const LOAD_FAILED =
-  '提案を読み込めませんでした。通信が切れたか、このページを見る立場でなくなっています。開き直すと最新の状態が出ます。';
-
-/** 一覧取得の宛先。応答が着地してよいかの判定にこれを使う（useKbPageVersions と同じ形）。 */
-interface SuggestionsTarget {
-  key: string;
-  workspaceSlug: string;
-  pageId: string;
-}
-
-function targetOf(
-  workspaceSlug: string | undefined,
-  pageId: string | undefined,
-  open: boolean,
-): SuggestionsTarget | null {
-  // パネルが開いている間だけ取りに行く（版一覧と同じ理由 — 常設のバッジを持たない）。
-  if (!open || !workspaceSlug || !pageId) return null;
-  return { key: `${workspaceSlug} ${pageId}`, workspaceSlug, pageId };
-}
+  '提案を読み込めませんでした。通信が切れたか、このページを見る立場でなくなっています。';
 
 /**
  * useKbPageSuggestions はページ 1 枚の open な提案一覧と、採用・却下を持つ。
  *
- * 一覧の取得は open（パネルが開いているか）ゲート付き（useKbPageVersions と同じ理由）。
- * 採用・却下は useKbComments の resolve/reopen と同じ mutate の形 — 宛先と要求の連番を
- * 確かめてから成功した応答を反映し、**失敗は投げる**（呼び出し側 KbPage がトーストで知らせる）。
- * 成功したら一覧からその提案を取り除くだけで、一覧を丸ごと引き直さない。
+ * 一覧は共有の問い合わせ（kbSuggestionsQuery）から読み、パネルが開いている間だけ取りに行く
+ * （版一覧と同じ理由 — 常設のバッジを持たない）。ページごとの鍵なので、別ページへ移ったら
+ * 前のページの一覧は出ない。
+ *
+ * 採用・却下は成功したら一覧からその提案を取り除く（一覧を丸ごと引き直さない）。取り除く前に
+ * 飛んでいる取得を止めるので、書き込みより前の古い一覧があとから届いて、処理した提案が
+ * 生き返ることはない（reflectWrite）。**失敗は投げる**（呼び出し側 KbPage がトーストで知らせる）。
  */
-export function useKbPageSuggestions(
-  workspaceSlug: string | undefined,
-  pageId: string | undefined,
-  open: boolean,
-) {
-  const [state, setState] = useState<KbPageSuggestionsState>(EMPTY);
+export function useKbPageSuggestions(workspaceSlug: string | undefined, pageId: string | undefined, open: boolean) {
+  const queryClient = useQueryClient();
+  const hasTarget = workspaceSlug !== undefined && pageId !== undefined;
+  const result = useQuery({ ...kbSuggestionsQuery(workspaceSlug ?? '', pageId ?? ''), enabled: open && hasTarget });
+  const missing = result.data === undefined;
+  const shown = open && hasTarget;
 
-  const active = useRef<SuggestionsTarget | null>(null);
-  const seq = useRef(0);
-  // 取得中に採用・却下が割り込んで成功したかの判定用（useKbComments の writeCount と同じ理由）。
-  const writeCount = useRef(0);
-  const target = targetOf(workspaceSlug, pageId, open);
-  const targetKey = target?.key ?? null;
+  const { refetch } = result;
+  const retry = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
-  const load = useCallback(async (to: SuggestionsTarget) => {
-    const request = ++seq.current;
-    const writesAtStart = writeCount.current;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const suggestions = await KbRepository.listOpenSuggestions(to.workspaceSlug, to.pageId);
-      if (active.current?.key !== to.key || seq.current !== request) return;
-      if (writeCount.current !== writesAtStart) {
-        // 取得中に採用・却下が成功していた。取得結果はそれより前のスナップショットで
-        // 古いので上書きしない（解決済みの提案が一覧に生き返って見えるのを防ぐ）。
-        setState((prev) => ({ ...prev, loading: false }));
-        return;
-      }
-      setState({ suggestions, loading: false, error: null });
-    } catch {
-      if (active.current?.key !== to.key || seq.current !== request) return;
-      if (writeCount.current !== writesAtStart) {
-        setState((prev) => ({ ...prev, loading: false }));
-        return;
-      }
-      setState({ ...EMPTY, error: LOAD_FAILED });
-    }
-  }, []);
-
-  useEffect(() => {
-    active.current = target;
-    if (!target) {
-      seq.current += 1;
-      setState(EMPTY);
-      return;
-    }
-    void load(target);
-    // target は毎描画で作り直すオブジェクトなので、鍵で比べる。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetKey, load]);
-
-  /**
-   * mutate は採用・却下を 1 回行い、成功したら一覧からその提案を取り除く。
-   * **失敗は投げる**（呼び出し側 KbPage がトーストで知らせる）。
-   */
-  const mutate = useCallback(
+  const settle = useCallback(
     async (
       suggestionId: string,
-      run: (to: SuggestionsTarget) => Promise<KbPageSuggestion>,
+      run: (slug: string, page: string) => Promise<KbPageSuggestion>,
     ): Promise<KbPageSuggestion> => {
-      const to = active.current;
-      if (!to) throw new Error('提案の一覧が確定していないため操作できません。');
-      const request = seq.current;
-      const result = await run(to);
-      if (active.current?.key === to.key && seq.current === request) {
-        writeCount.current += 1;
-        setState((prev) => ({
-          ...prev,
-          suggestions: prev.suggestions.filter((s) => s.id !== suggestionId),
-        }));
-      }
-      return result;
+      if (!workspaceSlug || !pageId) throw new Error('提案の一覧が確定していないため操作できません。');
+      const settled = await run(workspaceSlug, pageId);
+      await reflectWrite(queryClient, kbSuggestionsQuery(workspaceSlug, pageId).queryKey, (prev) =>
+        prev.filter((s) => s.id !== suggestionId),
+      );
+      return settled;
     },
-    [],
+    [workspaceSlug, pageId, queryClient],
   );
 
+  // 採用は本文へ反映して版を 1 つ切る。版の一覧を古いものにする（履歴のパネルに出る）。
   const accept = useCallback(
     (suggestionId: string) =>
-      mutate(suggestionId, (to) => KbRepository.acceptSuggestion(to.workspaceSlug, to.pageId, suggestionId)),
-    [mutate],
+      settle(suggestionId, async (slug, page) => {
+        const accepted = await KbRepository.acceptSuggestion(slug, page, suggestionId);
+        void queryClient.invalidateQueries({ queryKey: kbKeys.versions(slug, page) });
+        return accepted;
+      }),
+    [settle, queryClient],
   );
 
   const reject = useCallback(
     (suggestionId: string) =>
-      mutate(suggestionId, (to) => KbRepository.rejectSuggestion(to.workspaceSlug, to.pageId, suggestionId)),
-    [mutate],
+      settle(suggestionId, (slug, page) => KbRepository.rejectSuggestion(slug, page, suggestionId)),
+    [settle],
   );
 
-  return { ...state, accept, reject };
+  return {
+    suggestions: shown ? (result.data ?? NO_SUGGESTIONS) : NO_SUGGESTIONS,
+    // 一覧がまだ無い間だけ読み込み中・失敗を出す。持っている一覧は取り直しの間も失敗しても出し続ける。
+    loading: shown && missing && (result.isPending || result.isFetching),
+    error: shown && missing && result.isError && !result.isFetching ? LOAD_FAILED : null,
+    retry,
+    accept,
+    reject,
+  };
 }
