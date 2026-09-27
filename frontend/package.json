@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "sideEffects": [
+    "**/*.css",
+    "src/shared/ui/inkwell/index.ts"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/make-app-shell.mjs",

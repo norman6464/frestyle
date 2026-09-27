@@ -1,5 +1,7 @@
 // inkwell — 押下波紋 + 標高シャドウの触感的 UI プリミティブ群。
 // Roboto を自己ホストで読み込む（font-roboto を付けた要素のみに適用。全体フォントは不変）。
+// このファイルは package.json の sideEffects に載せてある。載せないと、部品だけを使う画面では
+// 本番のビルドがこの公開口ごと飛ばし、書体の CSS が落ちる。
 import '@fontsource/roboto/300.css';
 import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';

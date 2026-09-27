@@ -104,6 +104,18 @@ export { Modal } from './Modal';
 
 呼び出し側は `@/shared/ui` を参照し、`@/shared/ui/Button` のような内部直参照はしない。
 
+### 公開口に「読み込むだけの import」を書かない
+
+`package.json` の `sideEffects` で、読み込むだけで効くのは CSS と `shared/ui/inkwell/index.ts` だけと宣言している。
+これで本番のビルドは、公開口（index.ts）越しに使っていない部品を最初に読む塊へ入れない（ストアが `entities/user` の
+公開口から reducer を読んでも、プロフィールの問い合わせや TanStack Query まではついてこない）。
+
+その代わり、宣言に無いファイルの `import './x'`（読み込むだけの import）や、トップレベルで何かを登録するだけの
+ファイルは、本番のビルドで飛ばされることがある（開発サーバーとテストでは飛ばないので気づきにくい）。
+
+- CSS は、それを使う部品のファイルで直接 import する（CSS は宣言済みなので落ちない）
+- どうしても JS のファイルが読み込むだけで効く必要があるなら、`package.json` の `sideEffects` に足す
+
 ### 例外: barrel に載せないもの
 
 **重いモジュールを抱えるものは barrel から出さない。** `RichTextEditor` は中身が
