@@ -3,14 +3,18 @@ import { Editor, type JSONContent } from '@tiptap/react';
 import { createEditorExtensions } from '../editorExtensions';
 import { emptyRichDoc } from '../emptyRichDoc';
 
-let editor: Editor | null = null;
+// 作ったエディタはすべて覚えて、後片付けで全部壊す。1 つのテストで 2 つ作ったとき、変数 1 つに
+// 上書きして持つと 1 つ目が壊されずに残り、そのタイマー（prosemirror の選択・変更の監視）が
+// テストの環境を片付けたあとに走って document に触れ、テストの外でエラーになる。
+const editors: Editor[] = [];
 
 function makeEditor(content: JSONContent = emptyRichDoc()): Editor {
-  editor = new Editor({
+  const editor = new Editor({
     element: document.createElement('div'),
     extensions: createEditorExtensions(),
     content,
   });
+  editors.push(editor);
   return editor;
 }
 
@@ -25,8 +29,9 @@ function typeConfirmed(e: Editor, text: string) {
 const firstNode = (e: Editor) => e.getJSON().content?.[0];
 
 afterEach(() => {
-  editor?.destroy();
-  editor = null;
+  for (const editor of editors.splice(0)) {
+    if (!editor.isDestroyed) editor.destroy();
+  }
 });
 
 describe('MarkdownShortcuts（IME 確定経路でも効く変換）', () => {

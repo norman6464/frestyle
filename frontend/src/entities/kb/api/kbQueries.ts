@@ -58,6 +58,21 @@ export const kbKeys = {
     [...workspaceScope(workspaceSlug), 'templates', spaceId] as const,
   /** ワークスペース全体の題名・本文検索（語ごと）。 */
   search: (workspaceSlug: string, needle: string) => [...workspaceScope(workspaceSlug), 'search', needle] as const,
+  /** お気に入りのページ（スペースのお気に入りの画面・ホームが共有する）。 */
+  favorites: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'favorites'] as const,
+  /** ワークスペースの人（名指しの候補・表示名の解決）。 */
+  members: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'members'] as const,
+  /** 管理の画面のメンバー（役割・停止の状態つき）。 */
+  adminMembers: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'admin-members'] as const,
+  /** スペースのメンバー。 */
+  spaceMembers: (workspaceSlug: string, spaceId: string) =>
+    [...workspaceScope(workspaceSlug), 'space', spaceId, 'members'] as const,
+  /** ワークスペースから出している招待。 */
+  invitations: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'invitations'] as const,
+  /** 最近開いたページ（ワークスペースをまたぐ）。 */
+  recentPages: () => ['recent-pages'] as const,
+  /** 自分宛ての招待（ワークスペースをまたぐ）。 */
+  myInvitations: () => ['my-invitations'] as const,
 };
 
 /** 所属ワークスペースの一覧。ヘッダー・左の列・管理の画面・ホーム・入口の解決が共有する。 */
@@ -169,5 +184,65 @@ export function kbSearchQuery(workspaceSlug: string, needle: string) {
     queryKey: kbKeys.search(workspaceSlug, needle),
     queryFn: () => KbRepository.searchPages(workspaceSlug, needle),
     staleTime: 0,
+  });
+}
+
+/** お気に入りのページ。ページの星を付け外ししたら古いものにする。 */
+export function kbFavoritesQuery(workspaceSlug: string) {
+  return queryOptions({
+    queryKey: kbKeys.favorites(workspaceSlug),
+    queryFn: () => KbRepository.fetchFavorites(workspaceSlug),
+  });
+}
+
+/** ワークスペースの人。チケットの発言の名指し・担当の表示名が共有する。 */
+export function kbMembersQuery(workspaceSlug: string) {
+  return queryOptions({
+    queryKey: kbKeys.members(workspaceSlug),
+    queryFn: () => KbRepository.fetchMembers(workspaceSlug),
+  });
+}
+
+/** 管理の画面のメンバー（役割・停止の状態つき）。 */
+export function kbAdminMembersQuery(workspaceSlug: string) {
+  return queryOptions({
+    queryKey: kbKeys.adminMembers(workspaceSlug),
+    queryFn: () => KbRepository.fetchAdminMembers(workspaceSlug),
+  });
+}
+
+/** スペースのメンバー。 */
+export function kbSpaceMembersQuery(workspaceSlug: string, spaceId: string) {
+  return queryOptions({
+    queryKey: kbKeys.spaceMembers(workspaceSlug, spaceId),
+    queryFn: () => KbRepository.fetchSpaceMembers(workspaceSlug, spaceId),
+  });
+}
+
+/** ワークスペースから出している招待。 */
+export function kbInvitationsQuery(workspaceSlug: string) {
+  return queryOptions({
+    queryKey: kbKeys.invitations(workspaceSlug),
+    queryFn: () => KbRepository.fetchInvitations(workspaceSlug),
+  });
+}
+
+/**
+ * 最近開いたページ。ページを開くたびに変わるので、控えはすぐ出しつつ、画面を開くたびに
+ * 裏で取り直す（控えは古いものとして扱う）。
+ */
+export function kbRecentPagesQuery() {
+  return queryOptions({
+    queryKey: kbKeys.recentPages(),
+    queryFn: ({ signal }) => KbRepository.fetchRecentPages(signal),
+    staleTime: 0,
+  });
+}
+
+/** 自分宛ての招待。 */
+export function kbMyInvitationsQuery() {
+  return queryOptions({
+    queryKey: kbKeys.myInvitations(),
+    queryFn: () => KbRepository.fetchMyInvitations(),
   });
 }

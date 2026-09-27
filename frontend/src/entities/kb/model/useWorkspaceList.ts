@@ -38,7 +38,9 @@ export function useWorkspaceList() {
       await KbRepository.deleteWorkspace(slug);
       await reflectWrite(queryClient, kbWorkspacesQuery().queryKey, (prev) => prev.filter((w) => w.slug !== slug));
       // 中のもの（スペースの一覧など）はサーバーで一緒に消えている。控えにも残さない。
+      // 最近のページはワークスペースをまたぐ一覧なので、消えたページを出さないよう取り直させる。
       queryClient.removeQueries({ queryKey: kbKeys.workspace(slug) });
+      void queryClient.invalidateQueries({ queryKey: kbKeys.recentPages() });
       emitKbTreeEvent({ type: 'workspace-deleted', workspaceSlug: slug });
     },
     [queryClient],

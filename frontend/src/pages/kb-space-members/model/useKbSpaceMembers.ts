@@ -1,23 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
-import { KbRepository, type KbSpaceMember } from '@/entities/kb';
+import { useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
+import { kbSpaceMembersQuery, type KbSpaceMember } from '@/entities/kb';
 
+const NO_MEMBERS: KbSpaceMember[] = [];
+
+/** スペースのメンバー（共有の問い合わせ kbSpaceMembersQuery）。 */
 export function useKbSpaceMembers(workspaceSlug: string, spaceId: string) {
-  const [members, setMembers] = useState<KbSpaceMember[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    KbRepository.fetchSpaceMembers(workspaceSlug, spaceId)
-      .then(setMembers)
-      .catch(() => setError('メンバーを読み込めませんでした。'))
-      .finally(() => setLoading(false));
-  }, [workspaceSlug, spaceId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  return { members, loading, error, retry: load };
+  const result = useQuery(kbSpaceMembersQuery(workspaceSlug, spaceId));
+  const { loading, failed } = queryShownState(result);
+  const { refetch } = result;
+  const retry = useCallback(() => {
+    void refetch();
+  }, [refetch]);
+  return {
+    members: result.data ?? NO_MEMBERS,
+    loading,
+    error: failed ? 'メンバーを読み込めませんでした。' : null,
+    retry,
+  };
 }

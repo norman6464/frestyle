@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { KbRepository, type KbAdminWorkspaceMember, type KbGrantRole } from '@/entities/kb';
+import { useCallback, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { getApiError } from '@/shared/lib/classifyApiError';
+import {
+  KbRepository,
+  kbAdminMembersQuery,
+  kbKeys,
+  type KbAdminWorkspaceMember,
+  type KbGrantRole,
+} from '@/entities/kb';
 
 export interface KbAdminMembersState {
   members: KbAdminWorkspaceMember[];
@@ -11,68 +19,49 @@ export interface KbAdminMembersState {
   busyUserId: number | null;
 }
 
-const EMPTY: KbAdminMembersState = { members: [], loading: false, error: null, busyUserId: null };
+const NO_MEMBERS: KbAdminWorkspaceMember[] = [];
 
 /**
  * useKbAdminMembers はメンバー管理画面（段 7）の一覧取得と、役割変更・停止・復帰・削除の
  * 書き込みをまとめる。
  *
- * workspaceSlug が変わったら（違うワークスペースの管理画面を開き直した）取得をやり直す。
- * 応答は**要求を始めたときの宛先**が今も見られているときだけ反映する
- * （useKbComments と同じ理由 — 先に別ワークスペースへ移っていたら古い応答で上書きしない）。
+ * 一覧は共有の問い合わせ（kbAdminMembersQuery）から読む。ワークスペースごとの鍵なので、別の
+ * ワークスペースの管理画面へ移ったら前の一覧は出ない。
  *
- * 書き込みはすべて**楽観更新をせず、成功した後に一覧を丸ごと引き直す**。停止・復帰・役割変更・
- * 削除のどれも「最後の admin」の可否が他の行にも影響しうる操作の余地があり
+ * 書き込みはすべて**楽観更新をせず、成功した後に一覧を丸ごと取り直す**（取り直しを待ってから返す）。
+ * 停止・復帰・役割変更・削除のどれも「最後の admin」の可否が他の行にも影響しうる操作の余地があり
  * （例えば admin を 1 人に減らした直後は他の行の削除ボタンの意味が変わる）、
- * 差分をこちらで組み立てるより引き直す方が確実。
+ * 差分をこちらで組み立てるより取り直す方が確実。ワークスペースの人の一覧（名指しの候補）も
+ * 古いものにする。
  */
 export function useKbAdminMembers(workspaceSlug: string | undefined) {
-  const [state, setState] = useState<KbAdminMembersState>(EMPTY);
-  const active = useRef<string | null>(null);
-  const seq = useRef(0);
+  const queryClient = useQueryClient();
+  const active = workspaceSlug !== undefined;
+  const result = useQuery({ ...kbAdminMembersQuery(workspaceSlug ?? ''), enabled: active });
+  const { loading, failed } = queryShownState(result, active);
+  // 処理中の相手は、どのワークスペースで押したかと組で持つ（移った先の行を閉じない）。
+  const [busy, setBusy] = useState<{ workspaceSlug: string; userId: number } | null>(null);
 
-  const load = useCallback(async (slug: string) => {
-    const request = ++seq.current;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const members = await KbRepository.fetchAdminMembers(slug);
-      if (active.current !== slug || seq.current !== request) return;
-      setState({ members, loading: false, error: null, busyUserId: null });
-    } catch (cause) {
-      if (active.current !== slug || seq.current !== request) return;
-      const forbidden = getApiError(cause).status === 403;
-      setState({ ...EMPTY, error: forbidden ? 'forbidden' : 'unknown' });
-    }
-  }, []);
-
-  useEffect(() => {
-    active.current = workspaceSlug ?? null;
-    if (!workspaceSlug) {
-      seq.current += 1;
-      setState(EMPTY);
-      return;
-    }
-    void load(workspaceSlug);
-  }, [workspaceSlug, load]);
-
+  const { refetch } = result;
   const retry = useCallback(() => {
-    if (workspaceSlug) void load(workspaceSlug);
-  }, [workspaceSlug, load]);
+    void refetch();
+  }, [refetch]);
 
-  /** mutate は 1 回の書き込みを行い、成功したら一覧を引き直す。失敗は投げる（知らせは呼び出し側）。 */
+  /** mutate は 1 回の書き込みを行い、成功したら一覧を取り直す。失敗は投げる（知らせは呼び出し側）。 */
   const mutate = useCallback(
     async (userId: number, run: (slug: string) => Promise<void>) => {
-      const slug = active.current;
-      if (!slug) return;
-      setState((prev) => ({ ...prev, busyUserId: userId }));
+      if (!workspaceSlug) return;
+      const slug = workspaceSlug;
+      setBusy({ workspaceSlug: slug, userId });
       try {
         await run(slug);
-        if (active.current === slug) await load(slug);
+        void queryClient.invalidateQueries({ queryKey: kbKeys.members(slug) });
+        await queryClient.invalidateQueries({ queryKey: kbKeys.adminMembers(slug) });
       } finally {
-        if (active.current === slug) setState((prev) => ({ ...prev, busyUserId: null }));
+        setBusy((prev) => (prev?.workspaceSlug === slug && prev.userId === userId ? null : prev));
       }
     },
-    [load],
+    [workspaceSlug, queryClient],
   );
 
   const changeRole = useCallback(
@@ -100,5 +89,11 @@ export function useKbAdminMembers(workspaceSlug: string | undefined) {
     [mutate],
   );
 
+  const state: KbAdminMembersState = {
+    members: active ? (result.data ?? NO_MEMBERS) : NO_MEMBERS,
+    loading,
+    error: failed ? (getApiError(result.error).status === 403 ? 'forbidden' : 'unknown') : null,
+    busyUserId: busy !== null && busy.workspaceSlug === workspaceSlug ? busy.userId : null,
+  };
   return { ...state, retry, changeRole, suspend, restore, remove };
 }
