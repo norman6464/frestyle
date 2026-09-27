@@ -1,5 +1,5 @@
-import { useCallback, useState, ReactNode } from 'react';
-import { ToastContext, type ToastItem } from '@/shared/lib/hooks/useToastContext';
+import { useCallback, useMemo, useState, ReactNode } from 'react';
+import { ToastActionsContext, ToastListContext, type ToastItem } from '@/shared/lib/hooks/useToastContext';
 import type { ToastType } from '@/shared/ui/Toast';
 
 let toastId = 0;
@@ -8,11 +8,11 @@ let toastId = 0;
 const MAX_TOASTS = 3;
 
 /**
- * ToastProvider は ToastContext の React Context Provider。
+ * ToastProvider は通知の Context Provider。
  *
- * showToast / removeToast を Context として配り、`useToast()` hook 経由で
- * 任意の component から呼べるようにする。HMR を壊さないため hook と
- * 同居させず単体ファイルに切り出している。
+ * showToast / removeToast を `useToast()`、いま出ている一覧を `useToastList()` 経由で
+ * 任意の component から使えるようにする。2 つを別の Context で配る理由は
+ * useToastContext.ts を参照。HMR を壊さないため hook と同居させず単体ファイルに切り出している。
  */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -36,9 +36,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  // 関数の箱は一度作ったら中身を変えない（showToast / removeToast は useCallback で固定）。
+  const actions = useMemo(() => ({ showToast, removeToast }), [showToast, removeToast]);
+
   return (
-    <ToastContext.Provider value={{ toasts, showToast, removeToast }}>
-      {children}
-    </ToastContext.Provider>
+    <ToastActionsContext.Provider value={actions}>
+      <ToastListContext.Provider value={toasts}>{children}</ToastListContext.Provider>
+    </ToastActionsContext.Provider>
   );
 }

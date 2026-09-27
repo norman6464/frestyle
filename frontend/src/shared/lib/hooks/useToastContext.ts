@@ -9,17 +9,23 @@ export interface ToastItem {
   count: number;
 }
 
-export interface ToastContextValue {
-  toasts: ToastItem[];
+export interface ToastActions {
   showToast: (type: ToastType, message: string) => void;
   removeToast: (id: string) => void;
 }
 
 /**
- * ToastProvider と useToast hook で共有する React Context。
+ * ToastProvider と useToast / useToastList で共有する React Context。
  *
- * ToastProvider (component) と useToast (hook) を同一ファイルから export すると
+ * 「出す関数」と「いま出ている一覧」を別の Context に分けてある。Context は値が変わると
+ * それを読む部品を全部描き直す。画面のほとんどは showToast しか使わないので、一覧と同じ
+ * 箱で配ると、通知が出る・消えるたびにそれらが全部描き直される（ナレッジならサイドバーの
+ * 木の全行まで）。関数の箱は一度作ったら中身を変えないので、読む部品は描き直されない。
+ * 一覧を読むのは表示係（ToastContainer）だけ。
+ *
+ * ToastProvider (component) と hook を同一ファイルから export すると
  * react-refresh/only-export-components のルールに抵触し HMR が壊れるため、
  * Context オブジェクトをこの専用ファイルに切り出した。
  */
-export const ToastContext = createContext<ToastContextValue | null>(null);
+export const ToastActionsContext = createContext<ToastActions | null>(null);
+export const ToastListContext = createContext<ToastItem[] | null>(null);

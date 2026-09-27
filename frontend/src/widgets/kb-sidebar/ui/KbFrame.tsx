@@ -408,7 +408,12 @@ export default function KbFrame({
                 onMove={(pageId, target) => void doMovePage(pageId, target)}
                 onDragStart={setDraggingPageId}
                 onDragEnd={endDrag}
-                onDragOverRow={(pageId, zone) => setDropAt({ pageId, zone })}
+                // dragover はマウスを動かしている間ずっと届く。落とし先が前と同じなら前の値を
+                // そのまま返して描き直さない（毎回新しい値を渡すと、同じ行・同じ区画の上でも
+                // 木の全行を描き続ける）。
+                onDragOverRow={(pageId, zone) =>
+                  setDropAt((prev) => (prev?.pageId === pageId && prev.zone === zone ? prev : { pageId, zone }))
+                }
                 onDropOnRow={(pageId, zone) => void dropOnRow(pageId, zone)}
               />
             )}

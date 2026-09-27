@@ -75,5 +75,5 @@ FSD 移行の Phase 2 で骨格を作り、**Phase 5a で
 |---|---|---|
 | `LanguageBadge` / `LanguageIcon` | **shared/ui** | ホームの `FeatureCard` が技術ロゴ表示に使う。entity に置くとビジネス層が shared を参照する向きになり FSD 違反。中身も devicon スラッグと Tailwind クラスの対応表で FreStyle 固有ではない |
 | `Toast` | **shared/ui** | 見た目だけを持つ。状態を知らない |
-| `ToastContainer` | **app/providers** | `useToast` で状態を購読する。shared に置くと、hooks が features へ移った時点で「下位層が上位層を import する」違反になる |
+| `ToastContainer` | **app/providers** | `useToastList` で一覧を購読する（出す関数の `useToast` とは箱を分けてある。一覧まで読むと、通知が出るたびに showToast しか使わない部品まで描き直されるため）。shared に置くと、hooks が features へ移った時点で「下位層が上位層を import する」違反になる |
 | `PrimaryButton` | **削除** | `Button` に `variant="primary" fullWidth` を渡すだけのラッパ。`Button` の既定 variant がすでに primary なので名前が実態とずれており、`size` / `className` / ネイティブ属性も落としていた |

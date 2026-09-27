@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, fireEvent, within } from '@testing-librar
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import KbFrame from '../KbFrame';
+import type { KbPageRowProps } from '../KbPageRow';
 import { emitKbTreeEvent, subscribeKbTreeEvents } from '@/entities/kb';
 import type { KbMySpace, KbPage, KbPageTree, KbSpace, KbWorkspace } from '@/entities/kb';
 
@@ -23,6 +24,20 @@ const hoisted = vi.hoisted(() => ({
   searchPages: vi.fn(),
   showToast: vi.fn(),
 }));
+
+// 木の行が何回描き直されたかを数える（描き直す範囲の検査に使う）。中身は本物をそのまま描く。
+const rowRenders = vi.hoisted(() => ({ count: 0 }));
+vi.mock('../KbPageRow', async () => {
+  const actual = await vi.importActual<typeof import('../KbPageRow')>('../KbPageRow');
+  const Row = actual.default;
+  return {
+    ...actual,
+    default: (props: KbPageRowProps) => {
+      rowRenders.count += 1;
+      return <Row {...props} />;
+    },
+  };
+});
 
 // トーストは検査の対象。**失敗したときだけ知らせが出ること**を確かめるために捕まえる。
 vi.mock('@/shared/lib/hooks/useToast', () => ({
@@ -163,18 +178,20 @@ function rowOf(title: string): HTMLElement {
   return row;
 }
 
+/** dragEventAt は縦位置つきのドラッグのイベントを作る（MouseEvent で作る理由は上のとおり）。 */
+function dragEventAt(type: 'dragover' | 'drop', clientY: number): MouseEvent {
+  const event = new MouseEvent(type, { bubbles: true, clientY });
+  Object.defineProperty(event, 'dataTransfer', { value: { dropEffect: '' } });
+  return event;
+}
+
 function dragRowOnto(fromTitle: string, toTitle: string, clientY: number) {
   const from = rowOf(fromTitle);
   const to = rowOf(toTitle);
   stubRowRect(to);
   fireEvent.dragStart(from, { dataTransfer: { setData: vi.fn(), effectAllowed: '' } });
-  const withPosition = (type: string) => {
-    const event = new MouseEvent(type, { bubbles: true, clientY });
-    Object.defineProperty(event, 'dataTransfer', { value: { dropEffect: '' } });
-    return event;
-  };
-  fireEvent(to, withPosition('dragover'));
-  fireEvent(to, withPosition('drop'));
+  fireEvent(to, dragEventAt('dragover', clientY));
+  fireEvent(to, dragEventAt('drop', clientY));
 }
 
 describe('KbFrame', () => {
@@ -940,6 +957,27 @@ describe('KbFrame', () => {
 
       // 新しい木（アーカイブ側）が古い木で上書きされていないこと。
       await waitFor(() => expect(hoisted.showToast).toHaveBeenCalledWith('error', '移動できませんでした'));
+    });
+
+    it('落とし先が変わらない間は、木の行を描き直さない', async () => {
+      // dragover はマウスを動かしている間ずっと届く。同じ行・同じ区画の上にいる間も
+      // 描き直すと、ドラッグしている間じゅう木の全行を描き続けることになる。
+      renderSidebar();
+      await screen.findByText('2番目');
+      const to = rowOf('2番目');
+      stubRowRect(to);
+      fireEvent.dragStart(rowOf('1番目'), { dataTransfer: { setData: vi.fn(), effectAllowed: '' } });
+      // 最初の dragover で落とし先（2番目の中央＝子として）が決まる。
+      fireEvent(to, dragEventAt('dragover', 50));
+      const settled = rowRenders.count;
+
+      fireEvent(to, dragEventAt('dragover', 50));
+      fireEvent(to, dragEventAt('dragover', 60));
+      expect(rowRenders.count).toBe(settled);
+
+      // 区画が変わったら（下端＝直後へ）描き直す。数え方そのものが効いていることの確かめも兼ねる。
+      fireEvent(to, dragEventAt('dragover', 99));
+      expect(rowRenders.count).toBeGreaterThan(settled);
     });
 
     it('アーカイブ済みでは並べ替えを受け付けない', async () => {
