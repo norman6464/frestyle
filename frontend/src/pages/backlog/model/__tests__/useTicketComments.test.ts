@@ -208,11 +208,75 @@ describe('useTicketComments の開き直し', () => {
     rerender({ ticketId: TICKET });
     await waitFor(() => expect(result.current.comments).toHaveLength(1));
 
+    // 書き込みの応答は捨てて取り直す。取り直しにも送った発言は 1 つだけ入っている。
+    hoisted.fetchTicketComments.mockResolvedValue([created]);
     await act(async () => {
       resolveCreate(created);
       await sending;
     });
 
+    await waitFor(() => expect(hoisted.fetchTicketComments).toHaveBeenCalledTimes(3));
     expect(result.current.comments.map((c) => c.id)).toEqual(['c-new']);
+  });
+});
+
+describe('useTicketComments の書き込み中の取り直し', () => {
+  it('送信中に取り直し、その応答が送信より前の一覧だったとき、送った発言を落とさない', async () => {
+    const created = fixtureComment({ id: 'c-new' });
+    let resolveCreate: (value: TicketComment) => void = () => {};
+    hoisted.createTicketComment.mockImplementation(
+      () =>
+        new Promise<TicketComment>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    hoisted.fetchTicketComments.mockResolvedValueOnce([]);
+    const { result } = renderHook(() => useTicketComments(SLUG, TICKET));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let sending: Promise<unknown> = Promise.resolve();
+    act(() => {
+      sending = result.current.createComment([{ kind: 'text', text: 'x' }]);
+    });
+    hoisted.fetchTicketComments.mockResolvedValueOnce([]);
+    act(() => result.current.refresh());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    hoisted.fetchTicketComments.mockResolvedValue([created]);
+    await act(async () => {
+      resolveCreate(created);
+      await sending;
+    });
+
+    await waitFor(() => expect(result.current.comments.map((c) => c.id)).toEqual(['c-new']));
+  });
+
+  it('削除中に取り直し、その応答が削除より前の一覧だったとき、消した発言を残さない', async () => {
+    let finishDelete: () => void = () => {};
+    hoisted.deleteTicketComment.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDelete = resolve;
+        }),
+    );
+    hoisted.fetchTicketComments.mockResolvedValueOnce([fixtureComment({ id: 'c-1' })]);
+    const { result } = renderHook(() => useTicketComments(SLUG, TICKET));
+    await waitFor(() => expect(result.current.comments).toHaveLength(1));
+
+    let deleting: Promise<unknown> = Promise.resolve();
+    act(() => {
+      deleting = result.current.deleteComment('c-1');
+    });
+    hoisted.fetchTicketComments.mockResolvedValueOnce([fixtureComment({ id: 'c-1' })]);
+    act(() => result.current.refresh());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    hoisted.fetchTicketComments.mockResolvedValue([]);
+    await act(async () => {
+      finishDelete();
+      await deleting;
+    });
+
+    await waitFor(() => expect(result.current.comments).toEqual([]));
   });
 });

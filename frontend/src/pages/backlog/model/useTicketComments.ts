@@ -79,14 +79,22 @@ export function useTicketComments(workspaceSlug: string | undefined, ticketId: s
    * **宛先（key）の一致だけでは足りない** — 閉じてすぐ同じチケットを開き直すと key は同じだが、
    * それは別の閲覧で、開き直しの取得に書き込みの結果がもう入っていることがある。始めたときの
    * seq も確かめ、開き直しのあとに前の応答を重ねない（発言が二重に増える。useKbComments と同じ）。
+   *
+   * 同じチケットのまま書き込み中に取り直し（refresh・開き直し）が挟まったときは、その取得に
+   * 書き込みの結果が入っているかどうか手元では分からない（backend が書き終える前に読んだかもしれない）。
+   * 応答を重ねも捨てもせず、もう一度取り直して backend の今の一覧に合わせる。
    */
   const applyIfCurrent = useCallback(
     (to: Target, request: number, apply: (comments: TicketComment[]) => TicketComment[]) => {
-      if (active.current?.key !== to.key || seq.current !== request) return;
+      if (active.current?.key !== to.key) return;
+      if (seq.current !== request) {
+        void load(active.current);
+        return;
+      }
       writeCount.current += 1;
       setState((prev) => ({ ...prev, comments: apply(prev.comments) }));
     },
-    [],
+    [load],
   );
 
   const createComment = useCallback(

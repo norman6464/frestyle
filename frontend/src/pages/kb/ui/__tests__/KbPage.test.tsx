@@ -1526,8 +1526,37 @@ describe('KbPage の入口解決（素の /kb）', () => {
     hoisted.getLastVisitedPageId.mockReturnValue('p9');
     renderEntry();
 
-    await waitFor(() => expect(hoisted.navigate).toHaveBeenCalledWith('/kb/p9', { replace: true }));
+    await waitFor(() =>
+      expect(hoisted.navigate).toHaveBeenCalledWith('/kb/p9', { replace: true, state: { fromLastVisited: true } }),
+    );
     expect(hoisted.fetchWorkspaces).not.toHaveBeenCalled();
+  });
+
+  it('直近に開いたページへ移って開けなければ、行き止まりを出さずに入口へ戻して選び直す', async () => {
+    // 別の人が消した・アーカイブ済みの子孫ごと消えた、など手元では気づけない理由で記録が古いことがある。
+    hoisted.useParams.mockReturnValue({ pageId: 'p9' });
+    hoisted.resolvePage.mockRejectedValue(new Error('404'));
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/kb/p9', state: { fromLastVisited: true } }]}>
+        <KbPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(hoisted.navigate).toHaveBeenCalledWith('/kb', { replace: true }));
+    expect(screen.queryByText('ページを開けません')).not.toBeInTheDocument();
+  });
+
+  it('直接開いたページが開けないときは、入口へ戻さず「ページを開けません」を出す', async () => {
+    hoisted.useParams.mockReturnValue({ pageId: 'p9' });
+    hoisted.resolvePage.mockRejectedValue(new Error('404'));
+    render(
+      <MemoryRouter initialEntries={['/kb/p9']}>
+        <KbPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('ページを開けません')).toBeInTheDocument();
+    expect(hoisted.navigate).not.toHaveBeenCalledWith('/kb', { replace: true });
   });
 
   it('閲覧履歴が無ければ、最初に見つかったページへ移る', async () => {

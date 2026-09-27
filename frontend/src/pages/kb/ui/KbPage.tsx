@@ -96,6 +96,9 @@ export default function KbPage() {
   // ヘッダー/サイドバーのワークスペース切替から来たときだけ渡ってくる。
   // ページを開いているときは data.workspaceSlug が正なのでそちらを優先する。
   const navigationWorkspaceSlug = (location.state as { workspaceSlug?: string } | null)?.workspaceSlug;
+  // 素の /kb の入口が「前回開いたページ」を選んで移ってきたか。記録が古くて開けなければ、
+  // 行き止まりを出さずに入口へ戻して選び直す（resolveEntryPageId のコメント）。
+  const fromLastVisited = (location.state as { fromLastVisited?: boolean } | null)?.fromLastVisited === true;
   // 枠が今いると判断しているスペース（開けないページから戻る先に使う）。
   const frameSpace = useKbFrameSpace();
   // 枠（左の木と文脈バー）へ今の位置を知らせる。どのスペースの木かはページを取得して初めて
@@ -136,10 +139,13 @@ export default function KbPage() {
     let cancelled = false;
     setEntryResolving(true);
     resolveEntryPageId(navigationWorkspaceSlug)
-      .then((id) => {
+      .then((entry) => {
         if (cancelled) return;
-        if (id) {
-          navigate(`/kb/${id}`, { replace: true });
+        if (entry) {
+          navigate(
+            `/kb/${entry.pageId}`,
+            entry.fromLastVisited ? { replace: true, state: { fromLastVisited: true } } : { replace: true },
+          );
           return;
         }
         setEntryResolving(false);
@@ -151,6 +157,11 @@ export default function KbPage() {
       cancelled = true;
     };
   }, [pageId, navigationWorkspaceSlug, navigate]);
+
+  const retryEntry = Boolean(pageId && fromLastVisited && !loading && error);
+  useEffect(() => {
+    if (retryEntry) navigate('/kb', { replace: true });
+  }, [retryEntry, navigate]);
 
   const handleRename = useCallback(
     async (title: string) => {
@@ -609,13 +620,13 @@ export default function KbPage() {
             />
           )}
 
-          {pageId && loading && <Loading className="py-16" />}
+          {pageId && (loading || retryEntry) && <Loading className="py-16" />}
 
           {/*
             404 は「無い」と「見えない」の両方。どちらかを名指しすると、
             ID を総当たりするだけで隠したページの実在が分かってしまう。
           */}
-          {pageId && !loading && error && (
+          {pageId && !loading && !retryEntry && error && (
             <EmptyState
               headingLevel={1}
               icon={fsIcon('document-text')}

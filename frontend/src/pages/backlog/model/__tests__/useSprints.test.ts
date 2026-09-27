@@ -3,11 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useSprints } from '../useSprints';
 import type { Sprint } from '@/entities/sprint';
 
-const hoisted = vi.hoisted(() => ({ fetchSprints: vi.fn() }));
+const hoisted = vi.hoisted(() => ({ fetchSprints: vi.fn(), createSprint: vi.fn() }));
 
 vi.mock('@/entities/sprint', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/entities/sprint')>();
-  return { ...actual, SprintRepository: { fetchSprints: hoisted.fetchSprints } };
+  return {
+    ...actual,
+    SprintRepository: { fetchSprints: hoisted.fetchSprints, createSprint: hoisted.createSprint },
+  };
 });
 
 function sprint(id: string, name: string): Sprint {
@@ -53,5 +56,95 @@ describe('useSprints', () => {
 
     expect(result.current.sprints.map((s) => s.id)).toEqual(['s-2']);
     expect(result.current.loading).toBe(false);
+  });
+
+  it('前のプロジェクトで始めた操作が切り替えたあとに終わっても、今のプロジェクトの取得を横取りしない', async () => {
+    let finishCreate: () => void = () => {};
+    hoisted.createSprint.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCreate = resolve;
+        }),
+    );
+    let resolveB: (value: Sprint[]) => void = () => {};
+    hoisted.fetchSprints.mockImplementation((_slug: string, projectId: string) =>
+      projectId === 'p-1'
+        ? Promise.resolve([sprint('s-1', 'A のスプリント')])
+        : new Promise<Sprint[]>((resolve) => {
+            resolveB = resolve;
+          }),
+    );
+    const { result, rerender } = renderHook(({ projectId }) => useSprints('acme', projectId), {
+      initialProps: { projectId: 'p-1' },
+    });
+    await waitFor(() => expect(result.current.sprints.map((s) => s.id)).toEqual(['s-1']));
+
+    // A でスプリントを作っている途中に B へ移る。B の取得がまだ返らないうちに A の作成が終わる。
+    let creating: Promise<void> = Promise.resolve();
+    act(() => {
+      creating = result.current.create({ name: '次' });
+    });
+    rerender({ projectId: 'p-2' });
+    await act(async () => {
+      finishCreate();
+      await creating;
+    });
+    await act(async () => {
+      resolveB([sprint('s-2', 'B のスプリント')]);
+    });
+
+    expect(result.current.sprints.map((s) => s.id)).toEqual(['s-2']);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('切り替え先の取得に失敗したとき、前のプロジェクトの一覧を出したままにしない', async () => {
+    hoisted.fetchSprints.mockImplementation((_slug: string, projectId: string) =>
+      projectId === 'p-1' ? Promise.resolve([sprint('s-1', 'A のスプリント')]) : Promise.reject(new Error('network')),
+    );
+    const { result, rerender } = renderHook(({ projectId }) => useSprints('acme', projectId), {
+      initialProps: { projectId: 'p-1' },
+    });
+    await waitFor(() => expect(result.current.sprints.map((s) => s.id)).toEqual(['s-1']));
+
+    rerender({ projectId: 'p-2' });
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.sprints).toEqual([]);
+  });
+
+  it('切り替えた直後の描画から、前のプロジェクトの一覧を出さずに読み込み中にする', async () => {
+    hoisted.fetchSprints.mockImplementation((_slug: string, projectId: string) =>
+      projectId === 'p-1' ? Promise.resolve([sprint('s-1', 'A のスプリント')]) : new Promise<Sprint[]>(() => {}),
+    );
+    const seen: { ids: string[]; loading: boolean }[] = [];
+    const { result, rerender } = renderHook(
+      ({ projectId }) => {
+        const state = useSprints('acme', projectId);
+        seen.push({ ids: state.sprints.map((s) => s.id), loading: state.loading });
+        return state;
+      },
+      { initialProps: { projectId: 'p-1' } },
+    );
+    await waitFor(() => expect(result.current.sprints.map((s) => s.id)).toEqual(['s-1']));
+    seen.length = 0;
+
+    rerender({ projectId: 'p-2' });
+
+    expect(seen[0]).toEqual({ ids: [], loading: true });
+    expect(seen.every((s) => s.ids.length === 0)).toBe(true);
+  });
+
+  it('宛先が外れたら、読み込み中と失敗の表示も片付ける', async () => {
+    hoisted.fetchSprints.mockRejectedValue(new Error('network'));
+    const { result, rerender } = renderHook(({ projectId }) => useSprints('acme', projectId), {
+      initialProps: { projectId: 'p-1' as string | undefined },
+    });
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+
+    rerender({ projectId: undefined });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.loading).toBe(false);
+    expect(result.current.sprints).toEqual([]);
   });
 });
