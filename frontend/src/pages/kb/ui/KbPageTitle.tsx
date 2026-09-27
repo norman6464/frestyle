@@ -52,9 +52,8 @@ export default function KbPageTitle({ title, canEdit, onRename, onEnter }: KbPag
       setDraft(null);
     } catch {
       // 入力はそのまま残す。知らせは呼び出し側が出す。
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
 
   return (

@@ -60,9 +60,8 @@ export default function KbPageCoverButton({ cover, canEdit, onChange }: KbPageCo
       await onChange(file);
     } catch {
       // 知らせ（トースト）は呼び出し側の責務。ここでは何もしない。
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
 
   const clear = async () => {
@@ -75,9 +74,8 @@ export default function KbPageCoverButton({ cover, canEdit, onChange }: KbPageCo
       await onChange(null);
     } catch {
       // 知らせは呼び出し側。
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
 
   return (

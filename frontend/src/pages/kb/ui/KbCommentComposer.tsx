@@ -43,9 +43,8 @@ export default function KbCommentComposer({ onSubmit, placeholder, onCancel, aut
       setValue('');
     } catch {
       setError('送信できませんでした。もう一度お試しください。');
-    } finally {
-      setSubmitting(false);
     }
+    setSubmitting(false);
   };
 
   return (

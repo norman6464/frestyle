@@ -45,9 +45,8 @@ export default function KbSuggestionsPanel({
       await action(suggestionId);
     } catch {
       // 呼び出し側（KbPage）が既にトーストで知らせている。ここでは押し直せる状態に戻すだけ。
-    } finally {
-      setBusyId(null);
     }
+    setBusyId(null);
   };
 
   return (

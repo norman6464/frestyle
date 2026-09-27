@@ -38,9 +38,8 @@ export default function KbPageIconPicker({ current, onSelect, onClear, onClose }
       onClose();
     } catch {
       // 開いたまま。知らせは呼び出し側が出す。
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
 
   const submitDraft = async () => {
@@ -61,9 +60,8 @@ export default function KbPageIconPicker({ current, onSelect, onClear, onClose }
       onClose();
     } catch {
       // 開いたまま。知らせは呼び出し側が出す。
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
 
   return (

@@ -31,9 +31,8 @@ export default function KbVersionSaveForm({ onSubmit, onCancel }: KbVersionSaveF
       setNote('');
     } catch {
       setError('版を残せませんでした。もう一度お試しください。');
-    } finally {
-      setSubmitting(false);
     }
+    setSubmitting(false);
   };
 
   return (
