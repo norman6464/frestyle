@@ -1,5 +1,5 @@
 import Toast from '@/shared/ui/Toast';
-import { useToast } from '@/shared/lib/hooks/useToast';
+import { useToast, useToastList } from '@/shared/lib/hooks/useToast';
 
 /**
  * 画面上部中央に Toast を積む。pointer-events-none で本体クリックを邪魔しないように
@@ -11,7 +11,8 @@ import { useToast } from '@/shared/lib/hooks/useToast';
  * live region で包まない（包むと二重に読まれる）。見た目の順は失敗を上にする。
  */
 export default function ToastContainer() {
-  const { toasts, removeToast } = useToast();
+  const toasts = useToastList();
+  const { removeToast } = useToast();
   const errors = toasts.filter((toast) => toast.type === 'error');
   const others = toasts.filter((toast) => toast.type !== 'error');
 

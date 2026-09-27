@@ -6,10 +6,8 @@ const mockToasts: { id: string; type: 'success' | 'error' | 'info'; message: str
 const mockRemoveToast = vi.fn();
 
 vi.mock('@/shared/lib/hooks/useToast', () => ({
-  useToast: () => ({
-    toasts: mockToasts,
-    removeToast: mockRemoveToast,
-  }),
+  useToast: () => ({ removeToast: mockRemoveToast }),
+  useToastList: () => mockToasts,
 }));
 
 vi.mock('@/shared/ui/Toast', () => ({
