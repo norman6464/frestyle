@@ -21,7 +21,10 @@ const NO_PROJECTS: Project[] = [];
  */
 export default function BacklogProjectSwitcher({ workspaceSlug, project }: BacklogProjectSwitcherProps) {
   const [open, setOpen] = useState(false);
-  // 再試行の引き金（値に意味は無い。増えたら同じ問い合わせをもう一度投げる）。
+  // 再試行・開き直しの引き金（値に意味は無い。増えたら同じ問い合わせをもう一度投げる）。
+  // 開くたびにも増やす —— 閉じて開き直したときに、取り直しが終わるまで前の一覧（や解消した
+  // かもしれない失敗）を出さないため（開くたびに取り直すのは、閉じている間に増えた・消えた
+  // プロジェクトを拾うため）。
   const [attempt, setAttempt] = useState(0);
   // 一覧の取得の結果は「どの問い合わせの結果か」の鍵と一緒に持つ。今の鍵の結果がまだ無い間が
   // 読み込み中（effect の頭で「読み込み中」へ戻すと、描いた直後にもう 1 回描き直す）。
@@ -63,7 +66,10 @@ export default function BacklogProjectSwitcher({ workspaceSlug, project }: Backl
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => {
+          if (!open) setAttempt((prev) => prev + 1);
+          setOpen(!open);
+        }}
         aria-expanded={open}
         // 見えている「プロジェクト FRE」を名前に含め、押すと何が起きるかを足す。
         aria-label={`プロジェクト ${key} を切り替える`}

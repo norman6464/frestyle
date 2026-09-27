@@ -97,4 +97,19 @@ describe('BacklogProjectSwitcher', () => {
     expect(screen.queryByRole('link', { name: 'Design' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'プロジェクト P1 を切り替える' })).toHaveFocus();
   });
+
+  it('閉じて開き直したら、取り直しが終わるまで前の一覧を出さずに読み込み中にする', async () => {
+    hoisted.fetchProjects.mockResolvedValueOnce([current, project('p2', 'Design')]);
+    renderSidebar();
+    openSwitcher();
+    expect(await screen.findByRole('link', { name: /Design/ })).toBeInTheDocument();
+
+    // 閉じる（もう一度押す）。開き直すときの取得は返らないまま。
+    openSwitcher();
+    hoisted.fetchProjects.mockReturnValueOnce(new Promise(() => {}));
+    openSwitcher();
+
+    expect(screen.getByRole('status', { name: 'プロジェクトを読み込み中' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Design/ })).not.toBeInTheDocument();
+  });
 });
