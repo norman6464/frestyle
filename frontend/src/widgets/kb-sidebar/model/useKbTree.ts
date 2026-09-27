@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   NOTE_NEW_PAGE_TITLE,
   KbRepository,
+  kbMySpacesQuery,
+  kbSpacesQuery,
+  kbWorkspacesQuery,
   emitKbTreeEvent,
   collectKbAncestorIds,
   forgetVisitedPageIfMatches,
@@ -15,6 +19,9 @@ import {
   type KbSpace,
   type KbWorkspace,
 } from '@/entities/kb';
+
+const NO_WORKSPACES: KbWorkspace[] = [];
+const NO_SPACES: KbSpace[] = [];
 
 /** 今のスペースの読み込み状態。 */
 export interface KbSpaceState {
@@ -51,11 +58,19 @@ function emptySpaceState(): KbSpaceState {
 export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   const { workspaceSlug, spaceId, activePageId } = options;
 
-  const [workspaces, setWorkspaces] = useState<KbWorkspace[]>([]);
-  const [workspacesLoading, setWorkspacesLoading] = useState(true);
-  const [workspacesError, setWorkspacesError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const [activeSlug, setActiveSlug] = useState<string | null>(workspaceSlug ?? null);
+  // 所属ワークスペースの一覧。管理の画面・ホームなどと同じ問い合わせを使い、1 回だけ取る。
+  // 失敗したあと取り直している間は「読み込み中」に戻す（再試行を押したら失敗の表示を下げる）。
+  const workspacesResult = useQuery(kbWorkspacesQuery());
+  const workspaces = workspacesResult.data ?? NO_WORKSPACES;
+  const workspacesLoading = workspacesResult.isPending || (workspacesResult.isError && workspacesResult.isFetching);
+  const workspacesError =
+    workspacesResult.isError && !workspacesResult.isFetching ? 'ワークスペースを読み込めませんでした' : null;
+
+  // 選んだワークスペース（URL か切り替え）。選んでいなければ所属の先頭を開く。所属が 0 件なら選ばない。
+  const [chosenSlug, setChosenSlug] = useState<string | null>(workspaceSlug ?? null);
+  const activeSlug = chosenSlug ?? workspaces[0]?.slug ?? null;
   // URL 側が変わったら追従する（戻る / 進むでも表示が合う）。
   //
   // この hook では、外から渡る値が変わったときの合わせ込みを effect ではなく**描いている途中**で
@@ -66,23 +81,25 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   const [seenWorkspaceSlug, setSeenWorkspaceSlug] = useState(workspaceSlug);
   if (workspaceSlug !== seenWorkspaceSlug) {
     setSeenWorkspaceSlug(workspaceSlug);
-    if (workspaceSlug) setActiveSlug(workspaceSlug);
+    if (workspaceSlug) setChosenSlug(workspaceSlug);
+  }
+  // 選んでいたワークスペースが一覧から消えたら（どこかで削除した）、所属の先頭へ戻す。一覧に
+  // まだ載っていないだけ（一覧を読み込む前・URL で直接来た）なら、選んだまま待つ。
+  const [seenWorkspaces, setSeenWorkspaces] = useState(workspacesResult.data);
+  if (workspacesResult.data !== seenWorkspaces) {
+    setSeenWorkspaces(workspacesResult.data);
+    const listed = (list: KbWorkspace[] | undefined) => list?.some((w) => w.slug === chosenSlug) ?? false;
+    if (chosenSlug !== null && listed(seenWorkspaces) && !listed(workspacesResult.data)) setChosenSlug(null);
   }
 
-  const [spaces, setSpaces] = useState<KbSpace[]>([]);
-  const [spacesLoading, setSpacesLoading] = useState(activeSlug !== null);
-  const [spacesError, setSpacesError] = useState<string | null>(null);
-  // 一覧を持っているワークスペース。選んでいるワークスペースが変わったら、描いている途中で
-  // 前の一覧を捨てて読み込み中にする（取りに行くのは下の effect）。
-  const [spacesSlug, setSpacesSlug] = useState(activeSlug);
-  if (activeSlug !== spacesSlug) {
-    setSpacesSlug(activeSlug);
-    setSpaces([]);
-    setSpacesLoading(activeSlug !== null);
-    setSpacesError(null);
-  }
-  // スペース一覧の再試行の引き金（値に意味は無い。増えたら同じワークスペースの一覧を取り直す）。
-  const [spacesAttempt, setSpacesAttempt] = useState(0);
+  // 選んでいるワークスペースのスペース一覧（切替ドロップダウン・検索・バックログ導線が使う。
+  // 「今いるスペース」の決定そのものには関わらない — それは呼び出し側が spaceId で渡す）。
+  // ワークスペースごとの鍵で持つので、切り替えたら前の一覧は出ず、読み込み中になる。
+  const spacesResult = useQuery({ ...kbSpacesQuery(activeSlug ?? ''), enabled: activeSlug !== null });
+  const spaces = spacesResult.data ?? NO_SPACES;
+  const spacesLoading =
+    activeSlug !== null && (spacesResult.isPending || (spacesResult.isError && spacesResult.isFetching));
+  const spacesError = spacesResult.isError && !spacesResult.isFetching ? 'スペースを読み込めませんでした' : null;
 
   // 今のスペースの木。state の写しを ref に持つことはしない — 描いている途中で state を
   // 合わせるとき、ref は書けない（描画中に ref を書き換えるのは React の決まりに反する）ので、
@@ -142,67 +159,15 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   // 後から届くと、消したはずのページが木に蘇る（選ぶと 404）。最後に投げた要求だけを採用する。
   const treeSeq = useRef(0);
 
-  // 所属ワークスペースの一覧。
-  //
-  // 取りに行く処理を effect の中に直接書かず関数に切り出してあるのは、**失敗したときに
-  // 同じ経路でやり直せるようにする**ため。effect の中に閉じ込めると、依存が変わらない限り
-  // 二度と走らず、利用者は画面を再読み込みするしか手が無くなる。
-  // 読み込み中の印は、最初は state の初期値、再試行では押した処理（retryWorkspaces）が立てる。
-  const fetchWorkspaceList = useCallback(() => {
-    KbRepository.fetchWorkspaces()
-      .then((list) => {
-        setWorkspaces(list);
-        setWorkspacesError(null);
-        // URL が何も指していなければ先頭を開く。所属が 0 件なら選ばない。
-        setActiveSlug((current) => current ?? list[0]?.slug ?? null);
-      })
-      .catch(() => {
-        setWorkspacesError('ワークスペースを読み込めませんでした');
-      })
-      .finally(() => {
-        setWorkspacesLoading(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    fetchWorkspaceList();
-  }, [fetchWorkspaceList]);
-
+  const { refetch: refetchWorkspaces } = workspacesResult;
   const retryWorkspaces = useCallback(() => {
-    setWorkspacesLoading(true);
-    setWorkspacesError(null);
-    fetchWorkspaceList();
-  }, [fetchWorkspaceList]);
+    void refetchWorkspaces();
+  }, [refetchWorkspaces]);
 
-  // 選んでいるワークスペースのスペース一覧（切替ドロップダウン・検索・バックログ導線が使う。
-  // 「今いるスペース」の決定そのものには関わらない — それは呼び出し側が spaceId で渡す）。
-  // 読み込み中の印は、ワークスペースが変わったときは上で描いている途中に、再試行では
-  // 押した処理（retrySpaces）が立てる。
-  useEffect(() => {
-    if (!activeSlug) return;
-    const token = ++generation.current;
-    KbRepository.fetchSpaces(activeSlug)
-      .then((list) => {
-        if (token !== generation.current) return;
-        setSpaces(list);
-        setSpacesError(null);
-      })
-      .catch(() => {
-        if (token !== generation.current) return;
-        setSpaces([]);
-        setSpacesError('スペースを読み込めませんでした');
-      })
-      .finally(() => {
-        if (token === generation.current) setSpacesLoading(false);
-      });
-  }, [activeSlug, spacesAttempt]);
-
+  const { refetch: refetchSpaces } = spacesResult;
   const retrySpaces = useCallback(() => {
-    setSpacesLoading(true);
-    setSpaces([]);
-    setSpacesError(null);
-    setSpacesAttempt((prev) => prev + 1);
-  }, []);
+    void refetchSpaces();
+  }, [refetchSpaces]);
 
   /**
    * いまのスペースの木を取りに行く。state は応答が届いてから書く（読み込み中の印は呼ぶ側が立てる）。
@@ -265,18 +230,19 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   /**
    * ワークスペースを作る。**失敗は握り潰さず投げる。**
    *
-   * 作った本人が admin になるので、続けてスペースを作れる。作ったら一覧を取り直し、
+   * 作った本人が admin になるので、続けてスペースを作れる。作ったら一覧へ足し、
    * そのワークスペースへ切り替える（作ってから自分で選び直させない）。
    */
   const createWorkspace = useCallback(async (input: { name: string }): Promise<KbWorkspace> => {
     // URL に出る slug はサーバーが自動採番する（人に決めさせない）。
     const workspace = await KbRepository.createWorkspace({ name: input.name });
-    setWorkspaces((prev) => [...prev, workspace]);
-    setActiveSlug(workspace.slug);
-    // 他画面の一覧（useWorkspaceList）は別インスタンスなので、この setState だけでは知れない。
-    emitKbTreeEvent({ type: 'workspace-created', workspace });
+    // 一覧は管理の画面・ホームと共有している。差し替えればどこにも出る。
+    queryClient.setQueryData(kbWorkspacesQuery().queryKey, (prev) =>
+      prev?.some((w) => w.slug === workspace.slug) ? prev : [...(prev ?? []), workspace],
+    );
+    setChosenSlug(workspace.slug);
     return workspace;
-  }, []);
+  }, [queryClient]);
 
   /**
    * スペースを作る。**失敗は握り潰さず投げる。**
@@ -291,10 +257,14 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
       if (input.visibility && space.visibility !== input.visibility) {
         throw new Error('space visibility mismatch');
       }
-      setSpaces((prev) => [...prev, space]);
+      queryClient.setQueryData(kbSpacesQuery(activeSlug).queryKey, (prev) => [...(prev ?? []), space]);
+      // 自分の役割つきの一覧（スペース切替・スペースの画面の解決が使う）は、作った本人の役割を
+      // 応答が持たないので取り直させる。待たずに返す — 作った直後にそのスペースへ移っても、
+      // スペースの画面は一覧を取り直している間は「見つからない」と言わない（locateKbSpace）。
+      void queryClient.invalidateQueries({ queryKey: kbMySpacesQuery(activeSlug).queryKey });
       return space;
     },
-    [activeSlug],
+    [activeSlug, queryClient],
   );
 
   const renameSpace = useCallback(
@@ -302,10 +272,16 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
       if (!activeSlug) throw new Error('workspace is not selected');
       const space = await KbRepository.renameSpace(activeSlug, id, name);
       // 見出しは spaces の配列から描くので、そこだけ差し替える（木は名前を持たない）。
-      setSpaces((prev) => prev.map((s) => (s.id === space.id ? space : s)));
+      // 役割つきの一覧も名前だけ差し替える（スペースの画面の見出しとスペース切替に出る）。
+      queryClient.setQueryData(kbSpacesQuery(activeSlug).queryKey, (prev) =>
+        prev?.map((s) => (s.id === space.id ? space : s)),
+      );
+      queryClient.setQueryData(kbMySpacesQuery(activeSlug).queryKey, (prev) =>
+        prev?.map((s) => (s.id === space.id ? { ...s, name: space.name } : s)),
+      );
       return space;
     },
-    [activeSlug],
+    [activeSlug, queryClient],
   );
 
   /**
@@ -416,10 +392,6 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   // ページ画面（/p）での作成・更新（改名・アイコン）を木に映す。作成は木ごと取り直し
   // （親子関係の差し込み位置をこちらで計算しない — サーバーの並び順が正）、
   // 更新は値が変わっただけなので 1 枚差し替えで足りる。
-  //
-  // ワークスペースの作成・削除も同じ購読で映す。他画面の一覧（useWorkspaceList）のような
-  // 別インスタンスも、自分自身が発行したイベントも等しく受け取るため、どちらも冪等な
-  // 更新にしてある（無ければ足す・無ければ何もしない）。
   useEffect(() => {
     return subscribeKbTreeEvents((event) => {
       if (event.type === 'page-created') {
@@ -440,18 +412,6 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
           return { ...prev, tree: { ...prev.tree, pages } };
         });
         return;
-      }
-      if (event.type === 'workspace-created') {
-        setWorkspaces((prev) => (prev.some((w) => w.slug === event.workspace.slug) ? prev : [...prev, event.workspace]));
-        return;
-      }
-      if (event.type === 'workspace-deleted') {
-        setWorkspaces((prev) => {
-          if (!prev.some((w) => w.slug === event.workspaceSlug)) return prev;
-          const rest = prev.filter((w) => w.slug !== event.workspaceSlug);
-          setActiveSlug((current) => (current === event.workspaceSlug ? (rest[0]?.slug ?? null) : current));
-          return rest;
-        });
       }
     });
   }, [spaceId, loadSpaceTree]);
@@ -562,7 +522,7 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
     createWorkspace,
     createSpace,
     renameSpace,
-    selectWorkspace: setActiveSlug,
+    selectWorkspace: setChosenSlug,
     archivedMode,
     setArchivedMode,
     retrySpace,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { KbRepository, type KbAcceptedInvitation, type KbInvitation } from '@/entities/kb';
+import { useQueryClient } from '@tanstack/react-query';
+import { KbRepository, kbKeys, type KbAcceptedInvitation, type KbInvitation } from '@/entities/kb';
 import { getApiError } from '@/shared/lib/classifyApiError';
 
 export interface MyInvitationsState {
@@ -25,8 +26,12 @@ const INITIAL: MyInvitationsState = { invitations: [], loading: true, error: nul
  *
  * 承諾したものは手元の一覧から外す（参加完了のカードに替わり、その場に残す必要が無い）。
  * 辞退したものも外す。どちらも失敗したら投げ返す（理由はカードの位置に出す）。
+ *
+ * 承諾すると所属が変わる（ワークスペースが増える・見られるスペースが増える）。共有の所属の
+ * 一覧とその中のものを古いものにして、次に見る場所（左の列・ホーム）で取り直させる。
  */
 export function useMyInvitations() {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<MyInvitationsState>(INITIAL);
   const seq = useRef(0);
 
@@ -73,9 +78,10 @@ export function useMyInvitations() {
     async (invitationId: string): Promise<KbAcceptedInvitation> => {
       const accepted = await mutate(invitationId, () => KbRepository.acceptInvitation(invitationId));
       drop(invitationId);
+      void queryClient.invalidateQueries({ queryKey: kbKeys.workspaces() });
       return accepted;
     },
-    [mutate],
+    [mutate, queryClient],
   );
 
   /** 辞退する。成功したら一覧から外す。 */

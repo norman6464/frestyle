@@ -1,61 +1,61 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import KbRepository from '../api/kbRepository';
-import { emitKbTreeEvent, subscribeKbTreeEvents } from './kbTreeEvents';
+import { kbKeys, kbWorkspacesQuery } from '../api/kbQueries';
+import { emitKbTreeEvent } from './kbTreeEvents';
 import type { KbWorkspace } from './types';
+
+const NO_WORKSPACES: KbWorkspace[] = [];
 
 /**
  * useWorkspaceList は所属ワークスペースの一覧・作成・削除だけを扱う軽量な hook。
  *
- * widgets/kb-sidebar の useKbTree はスペース・ページの木まで抱える重い hook なので、
- * ヘッダーのようにワークスペースの出入りだけが要る場所ではこちらを使う。
+ * 一覧は共有の問い合わせ（kbWorkspacesQuery）から読む。左の列（useKbTree）・管理の画面・
+ * ホームが同じ結果を使うので、1 回だけ取り、どこかで作った・消したワークスペースは
+ * 知らせを待たずにほかの場所の一覧にも出る（作成・削除は共有の一覧を setQueryData で差し替える）。
  *
- * 作成・削除は kbTreeEvents で他インスタンスへ知らせ、他インスタンス（KbFrame の
- * useKbTree・他画面の useWorkspaceList）からの通知も購読する。ヘッダーと本文のように、
- * 同じ画面内でもワークスペース一覧を持つインスタンスは複数存在し、片方の変更を他方が
- * 自動では知れない。
+ * 削除の知らせ（kbTreeEvents）はまだ出す。開いているページの画面が、ワークスペースが
+ * 消えたことを知らせで受けて移るため（知らせは第4段の途中で退役させる）。
  */
 export function useWorkspaceList() {
-  const [workspaces, setWorkspaces] = useState<KbWorkspace[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const result = useQuery(kbWorkspacesQuery());
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    KbRepository.fetchWorkspaces()
-      .then((list) => setWorkspaces(list))
-      .catch(() => setError('ワークスペースを読み込めませんでした'))
-      .finally(() => setLoading(false));
-  }, []);
+  const createWorkspace = useCallback(
+    async (input: { name: string }): Promise<KbWorkspace> => {
+      const workspace = await KbRepository.createWorkspace(input);
+      queryClient.setQueryData(kbWorkspacesQuery().queryKey, (prev) =>
+        prev?.some((w) => w.slug === workspace.slug) ? prev : [...(prev ?? []), workspace],
+      );
+      return workspace;
+    },
+    [queryClient],
+  );
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const deleteWorkspace = useCallback(
+    async (slug: string): Promise<void> => {
+      await KbRepository.deleteWorkspace(slug);
+      queryClient.setQueryData(kbWorkspacesQuery().queryKey, (prev) => prev?.filter((w) => w.slug !== slug));
+      // 中のもの（スペースの一覧など）はサーバーで一緒に消えている。控えにも残さない。
+      queryClient.removeQueries({ queryKey: kbKeys.workspace(slug) });
+      emitKbTreeEvent({ type: 'workspace-deleted', workspaceSlug: slug });
+    },
+    [queryClient],
+  );
 
-  useEffect(() => {
-    return subscribeKbTreeEvents((event) => {
-      if (event.type === 'workspace-created') {
-        setWorkspaces((prev) => (prev.some((w) => w.slug === event.workspace.slug) ? prev : [...prev, event.workspace]));
-        return;
-      }
-      if (event.type === 'workspace-deleted') {
-        setWorkspaces((prev) => prev.filter((w) => w.slug !== event.workspaceSlug));
-      }
-    });
-  }, []);
+  const { refetch } = result;
+  const retry = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
-  const createWorkspace = useCallback(async (input: { name: string }): Promise<KbWorkspace> => {
-    const workspace = await KbRepository.createWorkspace(input);
-    setWorkspaces((prev) => [...prev, workspace]);
-    emitKbTreeEvent({ type: 'workspace-created', workspace });
-    return workspace;
-  }, []);
-
-  const deleteWorkspace = useCallback(async (slug: string): Promise<void> => {
-    await KbRepository.deleteWorkspace(slug);
-    setWorkspaces((prev) => prev.filter((w) => w.slug !== slug));
-    emitKbTreeEvent({ type: 'workspace-deleted', workspaceSlug: slug });
-  }, []);
-
-  return { workspaces, loading, error, retry: load, createWorkspace, deleteWorkspace };
+  return {
+    workspaces: result.data ?? NO_WORKSPACES,
+    // 失敗のあと取り直している間は読み込み中に戻す。一覧を持っているうちの取り直しの失敗は、
+    // 持っている一覧を出し続ける（失敗の表示で隠さない）。
+    loading: result.isPending || (result.isError && result.isFetching),
+    error: result.data === undefined && result.isError && !result.isFetching ? 'ワークスペースを読み込めませんでした' : null,
+    retry,
+    createWorkspace,
+    deleteWorkspace,
+  };
 }

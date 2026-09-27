@@ -1,5 +1,22 @@
-import KbRepository from '../api/kbRepository';
-import type { KbMySpace } from './types';
+import type { KbMySpace, KbWorkspace } from './types';
+
+/** 1 つのワークスペースの「自分が役割を持つスペースの一覧」の、今の取り具合。 */
+export interface MySpacesState {
+  workspaceSlug: string;
+  data: KbMySpace[] | undefined;
+  isError: boolean;
+  isFetching: boolean;
+}
+
+/**
+ * 解決の結果。一覧がそろうまでは決めない（loading）。一覧が 1 つでも読めず、それが無いと
+ * 決まらないなら error。
+ */
+export type KbSpaceResolution<T> =
+  | { kind: 'loading' }
+  | { kind: 'error' }
+  | { kind: 'found'; value: T }
+  | { kind: 'none' };
 
 export interface ResolvedKbSpace {
   workspaceSlug: string;
@@ -7,44 +24,49 @@ export interface ResolvedKbSpace {
 }
 
 /**
- * resolveEntryKbSpaceId は素の /kb/spaces（スペース未指定）で最初に開くスペースの ID を
- * 決める。所属する最初のワークスペース → 自分がアクセスできる最初のスペース
- * （配列の順序=並び順）。どのワークスペースにもアクセスできるスペースが無ければ null。
- *
- * `preferredWorkspaceSlug` を渡すと、そのワークスペースを最初に見る（スペース切替の
+ * 見る順に並べたワークスペース。`preferredWorkspaceSlug` を先頭へ出す（スペース切替の
  * 「すべてのスペース」が対象ワークスペースを持ち越すため）。所属に無い slug
- * （招待の取り消し等）は無視し、通常どおり先頭から見る。
- *
- * pages/backlog/model/resolveBacklogSpace.ts と同じ形だが、fetchSpaces（可視スペース
- * 全件）ではなく fetchMySpaces（自分の役割つき）を使う。バックログ側は今回のスコープ外
- * として触らない（動いている別機能への影響を避けるため、あえて共有しない）。
+ * （招待の取り消し等）は無視し、所属の順のまま返す。
  */
-export async function resolveEntryKbSpaceId(preferredWorkspaceSlug?: string): Promise<string | null> {
-  const workspaces = await KbRepository.fetchWorkspaces();
-  const ordered = preferredWorkspaceSlug
-    ? [
-        ...workspaces.filter((w) => w.slug === preferredWorkspaceSlug),
-        ...workspaces.filter((w) => w.slug !== preferredWorkspaceSlug),
-      ]
-    : workspaces;
-  for (const workspace of ordered) {
-    const spaces = await KbRepository.fetchMySpaces(workspace.slug);
-    if (spaces[0]) return spaces[0].id;
-  }
-  return null;
+export function orderWorkspaces(workspaces: KbWorkspace[], preferredWorkspaceSlug?: string): KbWorkspace[] {
+  if (!preferredWorkspaceSlug || !workspaces.some((w) => w.slug === preferredWorkspaceSlug)) return workspaces;
+  return [
+    ...workspaces.filter((w) => w.slug === preferredWorkspaceSlug),
+    ...workspaces.filter((w) => w.slug !== preferredWorkspaceSlug),
+  ];
 }
 
 /**
- * resolveKbSpace は spaceId からワークスペースを引く。spaceId から直接ワークスペースを
- * 引く backend の口が無いため、所属ワークスペースを順に見てスペース一覧からその ID を
- * 探す（resolveBacklogSpace と同じ理由・同じ制約）。
+ * 素の /kb/spaces（スペース未指定）で最初に開くスペースを決める。見る順に並べたワークスペースの
+ * うち、自分がアクセスできるスペースを持つ最初のもの → その最初のスペース（配列の順序=並び順）。
+ *
+ * 前のワークスペースの一覧がまだ無い・取り直し中なら決めない（後ろのワークスペースを先に
+ * 選ぶと、並び順どおりにならない）。空の一覧を取り直している間も決めない（作ったばかりの
+ * スペースが、取り直せば入ってくる）。
  */
-export async function resolveKbSpace(spaceId: string): Promise<ResolvedKbSpace | null> {
-  const workspaces = await KbRepository.fetchWorkspaces();
-  for (const workspace of workspaces) {
-    const spaces = await KbRepository.fetchMySpaces(workspace.slug);
-    const space = spaces.find((s) => s.id === spaceId);
-    if (space) return { workspaceSlug: workspace.slug, space };
+export function pickEntryKbSpace(lists: MySpacesState[]): KbSpaceResolution<string> {
+  for (const list of lists) {
+    if (list.data === undefined) return list.isError && !list.isFetching ? { kind: 'error' } : { kind: 'loading' };
+    if (list.data[0]) return { kind: 'found', value: list.data[0].id };
+    if (list.isFetching) return { kind: 'loading' };
   }
-  return null;
+  return { kind: 'none' };
+}
+
+/**
+ * spaceId からワークスペースを引く。spaceId から直接ワークスペースを引く backend の口が無いため、
+ * 所属ワークスペースのスペースの一覧からその ID を探す。
+ *
+ * どこかの一覧にあれば、ほかの一覧を待たずに決める（ID はワークスペースをまたいで一意）。
+ * 見つからないと言えるのは、すべての一覧がそろい、どれも取り直し中でないときだけ
+ * （作ったばかりのスペースへ移った直後は、一覧を取り直している間は見つからない）。
+ */
+export function locateKbSpace(spaceId: string, lists: MySpacesState[]): KbSpaceResolution<ResolvedKbSpace> {
+  for (const list of lists) {
+    const space = list.data?.find((s) => s.id === spaceId);
+    if (space) return { kind: 'found', value: { workspaceSlug: list.workspaceSlug, space } };
+  }
+  if (lists.some((list) => list.isFetching || (list.data === undefined && !list.isError))) return { kind: 'loading' };
+  if (lists.some((list) => list.data === undefined)) return { kind: 'error' };
+  return { kind: 'none' };
 }

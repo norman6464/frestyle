@@ -1,10 +1,13 @@
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { KbRepository, type KbFavoritePage, type KbSpace, type KbWorkspace } from '@/entities/kb';
+import { useQuery } from '@tanstack/react-query';
+import { kbSpacesQuery, type KbFavoritePage, type KbSpace, type KbWorkspace } from '@/entities/kb';
 import { KbSearchDialog } from '@/widgets/kb-sidebar';
 import { EmptyNotice, ErrorNotice, FieldSelect, FsIcon, SkeletonRows } from '@/shared/ui';
 import { homeRowLink, homeTextLink } from '../lib/homeStyles';
 import type { HomeResource } from '../model/useHomeResource';
+
+const NO_SPACES: KbSpace[] = [];
 
 export interface HomeFavoritesSectionProps {
   workspaces: HomeResource<KbWorkspace[]>;
@@ -138,19 +141,7 @@ export default function HomeFavoritesSection({
 
 /** 選んだワークスペースの検索窓。結果をスペースごとに束ねるので、開いたらスペースの一覧も取る。 */
 function WorkspaceSearch({ workspaceSlug, onClose }: { workspaceSlug: string; onClose: () => void }) {
-  const [spaces, setSpaces] = useState<KbSpace[]>([]);
-  useEffect(() => {
-    let active = true;
-    KbRepository.fetchSpaces(workspaceSlug)
-      .then((list) => {
-        if (active) setSpaces(list);
-      })
-      .catch(() => {
-        // スペース名が引けなくても検索はできる（見出しが付かないだけ）。
-      });
-    return () => {
-      active = false;
-    };
-  }, [workspaceSlug]);
+  // スペース名が引けなくても検索はできる（見出しが付かないだけ）。左の列と同じ一覧を使う。
+  const { data: spaces = NO_SPACES } = useQuery(kbSpacesQuery(workspaceSlug));
   return <KbSearchDialog workspaceSlug={workspaceSlug} spaces={spaces} onClose={onClose} />;
 }

@@ -1,4 +1,6 @@
-import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
+import { createTestQueryClient } from '@/test/queryClient';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -91,47 +93,51 @@ const hoisted = vi.hoisted(() => ({
   },
 }));
 
+// 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/kb/api/kbRepository', () => ({
+  default: {
+    resolvePage: hoisted.resolvePage,
+    replaceContent: hoisted.replaceContent,
+    renamePage: hoisted.renamePage,
+    setPageIcon: hoisted.setPageIcon,
+    clearPageIcon: hoisted.clearPageIcon,
+    uploadPageImage: hoisted.uploadPageImage,
+    issuePageImageDownloadURL: hoisted.issuePageImageDownloadURL,
+    setPageCover: hoisted.setPageCover,
+    clearPageCover: hoisted.clearPageCover,
+    createPage: hoisted.createPage,
+    listPageGrants: hoisted.listPageGrants,
+    listGrantablePrincipals: hoisted.listGrantablePrincipals,
+    listCommentThreads: hoisted.listCommentThreads,
+    createCommentThread: hoisted.createCommentThread,
+    addComment: hoisted.addComment,
+    resolveCommentThread: hoisted.resolveCommentThread,
+    reopenCommentThread: hoisted.reopenCommentThread,
+    listPageVersions: hoisted.listPageVersions,
+    getPageVersion: hoisted.getPageVersion,
+    createPageVersion: hoisted.createPageVersion,
+    restorePageVersion: hoisted.restorePageVersion,
+    listBacklinks: hoisted.listBacklinks,
+    createPageTemplate: hoisted.createPageTemplate,
+    listPageTemplates: hoisted.listPageTemplates,
+    deletePageTemplate: hoisted.deletePageTemplate,
+    createPageFromTemplate: hoisted.createPageFromTemplate,
+    createSuggestion: hoisted.createSuggestion,
+    listOpenSuggestions: hoisted.listOpenSuggestions,
+    acceptSuggestion: hoisted.acceptSuggestion,
+    rejectSuggestion: hoisted.rejectSuggestion,
+    fetchWorkspaces: hoisted.fetchWorkspaces,
+    fetchSpaces: hoisted.fetchSpaces,
+    fetchPageTree: hoisted.fetchPageTree,
+    addFavorite: hoisted.addFavorite,
+    removeFavorite: hoisted.removeFavorite,
+  },
+}));
+
 vi.mock('@/entities/kb', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/entities/kb')>();
   return {
     ...actual,
-    KbRepository: {
-      resolvePage: hoisted.resolvePage,
-      replaceContent: hoisted.replaceContent,
-      renamePage: hoisted.renamePage,
-      setPageIcon: hoisted.setPageIcon,
-      clearPageIcon: hoisted.clearPageIcon,
-      uploadPageImage: hoisted.uploadPageImage,
-      issuePageImageDownloadURL: hoisted.issuePageImageDownloadURL,
-      setPageCover: hoisted.setPageCover,
-      clearPageCover: hoisted.clearPageCover,
-      createPage: hoisted.createPage,
-      listPageGrants: hoisted.listPageGrants,
-      listGrantablePrincipals: hoisted.listGrantablePrincipals,
-      listCommentThreads: hoisted.listCommentThreads,
-      createCommentThread: hoisted.createCommentThread,
-      addComment: hoisted.addComment,
-      resolveCommentThread: hoisted.resolveCommentThread,
-      reopenCommentThread: hoisted.reopenCommentThread,
-      listPageVersions: hoisted.listPageVersions,
-      getPageVersion: hoisted.getPageVersion,
-      createPageVersion: hoisted.createPageVersion,
-      restorePageVersion: hoisted.restorePageVersion,
-      listBacklinks: hoisted.listBacklinks,
-      createPageTemplate: hoisted.createPageTemplate,
-      listPageTemplates: hoisted.listPageTemplates,
-      deletePageTemplate: hoisted.deletePageTemplate,
-      createPageFromTemplate: hoisted.createPageFromTemplate,
-      createSuggestion: hoisted.createSuggestion,
-      listOpenSuggestions: hoisted.listOpenSuggestions,
-      acceptSuggestion: hoisted.acceptSuggestion,
-      rejectSuggestion: hoisted.rejectSuggestion,
-      fetchWorkspaces: hoisted.fetchWorkspaces,
-      fetchSpaces: hoisted.fetchSpaces,
-      fetchPageTree: hoisted.fetchPageTree,
-      addFavorite: hoisted.addFavorite,
-      removeFavorite: hoisted.removeFavorite,
-    },
     getLastVisitedPageId: hoisted.getLastVisitedPageId,
     forgetVisitedPageIfMatches: hoisted.forgetVisitedPageIfMatches,
     // スパイしつつ実物へ転送する（購読側の配線もこのテストの検査対象のため）。
@@ -248,6 +254,18 @@ function fakeEditor() {
   } as never;
 }
 
+// 画面は共有の問い合わせの置き場の中で描く。置き場はテストごとに作り直す（前のテストの結果を持ち越さない）。
+let queryClient: QueryClient = createTestQueryClient();
+const render: typeof rtlRender = ((ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) => {
+  const Inner = options?.wrapper;
+  function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>{Inner ? <Inner>{children}</Inner> : children}</QueryClientProvider>
+    );
+  }
+  return rtlRender(ui, { ...options, wrapper: Wrapper });
+}) as typeof rtlRender;
+
 /**
  * 本文は枠（KbFrameLayout が描く KbFrame）の中に入り、枠が木のために持っているスペースを
  * コンテキストで受け取る。枠そのものは自前のテストで検証済みなので、ここでは渡る箱だけを置く。
@@ -267,6 +285,7 @@ function renderPage() {
 
 beforeEach(() => {
   hoisted.frameSpace = null;
+  queryClient = createTestQueryClient();
 
   vi.clearAllMocks();
   hoisted.editorProps.current = null;

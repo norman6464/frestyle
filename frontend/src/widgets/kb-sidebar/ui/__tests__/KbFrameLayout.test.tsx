@@ -6,6 +6,7 @@ import KbFrameLayout from '../KbFrameLayout';
 import type { KbPageRowProps } from '../KbPageRow';
 import { useKbFrameLocation } from '../../model/kbFrameLocation';
 import type { KbPage, KbPageTree } from '@/entities/kb';
+import { queryWrapper } from '@/test/queryClient';
 
 const hoisted = vi.hoisted(() => ({
   fetchWorkspaces: vi.fn(),
@@ -32,18 +33,15 @@ vi.mock('@/shared/lib/hooks/useToast', () => ({
   useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn() }),
 }));
 
-vi.mock('@/entities/kb', async () => {
-  const actual = await vi.importActual<typeof import('@/entities/kb')>('@/entities/kb');
-  return {
-    ...actual,
-    KbRepository: {
-      fetchWorkspaces: hoisted.fetchWorkspaces,
-      fetchSpaces: hoisted.fetchSpaces,
-      fetchMySpaces: hoisted.fetchMySpaces,
-      fetchPageTree: hoisted.fetchPageTree,
-    },
-  };
-});
+// 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/kb/api/kbRepository', () => ({
+  default: {
+    fetchWorkspaces: hoisted.fetchWorkspaces,
+    fetchSpaces: hoisted.fetchSpaces,
+    fetchMySpaces: hoisted.fetchMySpaces,
+    fetchPageTree: hoisted.fetchPageTree,
+  },
+}));
 
 function page(id: string, title: string): KbPage {
   return {
@@ -122,7 +120,7 @@ function renderLayout(path = '/kb/p2') {
           <Route path="/kb/:workspaceSlug/members" element={<FakeMembers />} />
         </Route>
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>, { wrapper: queryWrapper() },
   );
 }
 

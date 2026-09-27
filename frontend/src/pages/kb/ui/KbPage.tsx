@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { KbTemplatePickerModal, useKbFrameLocation, useKbFrameSpace, useKbPageTemplates } from '@/widgets/kb-sidebar';
 import {
   emptyRichDoc,
@@ -107,6 +108,7 @@ const RAIL_BUTTON_ACTIVE = 'bg-[var(--color-nav-active)] text-[var(--color-text-
 export default function KbPage() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const { showToast } = useToast();
   const {
@@ -172,7 +174,7 @@ export default function KbPage() {
   useEffect(() => {
     if (entryKey === null) return undefined;
     let cancelled = false;
-    resolveEntryPageId(entryKey || undefined)
+    resolveEntryPageId(queryClient, entryKey || undefined)
       .then((entry) => {
         if (cancelled) return;
         if (entry) {
@@ -190,7 +192,7 @@ export default function KbPage() {
     return () => {
       cancelled = true;
     };
-  }, [entryKey, navigate]);
+  }, [entryKey, navigate, queryClient]);
   // ページを開いたら入口の結果は捨てる（次に素の /kb へ来たときは解決し直す）。
   if (pageId && entrySettledFor !== null) setEntrySettledFor(null);
 

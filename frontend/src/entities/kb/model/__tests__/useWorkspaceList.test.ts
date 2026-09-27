@@ -1,7 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useWorkspaceList } from '../useWorkspaceList';
-import { emitKbTreeEvent, subscribeKbTreeEvents } from '../kbTreeEvents';
+import { subscribeKbTreeEvents } from '../kbTreeEvents';
+import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
+import { kbKeys } from '../../api/kbQueries';
 
 const hoisted = vi.hoisted(() => ({
   fetchWorkspaces: vi.fn(),
@@ -27,7 +29,7 @@ describe('useWorkspaceList', () => {
   });
 
   it('マウント時に一覧を読み込む', async () => {
-    const { result } = renderHook(() => useWorkspaceList());
+    const { result } = renderHook(() => useWorkspaceList(), { wrapper: queryWrapper() });
     expect(result.current.loading).toBe(true);
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.workspaces).toEqual([WS_A]);
@@ -36,37 +38,37 @@ describe('useWorkspaceList', () => {
 
   it('読み込みに失敗するとエラーを返す', async () => {
     hoisted.fetchWorkspaces.mockRejectedValueOnce(new Error('boom'));
-    const { result } = renderHook(() => useWorkspaceList());
+    const { result } = renderHook(() => useWorkspaceList(), { wrapper: queryWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBe('ワークスペースを読み込めませんでした');
   });
 
   it('作ったワークスペースを一覧へ足す', async () => {
     hoisted.createWorkspace.mockResolvedValue(WS_B);
-    const { result } = renderHook(() => useWorkspaceList());
+    const { result } = renderHook(() => useWorkspaceList(), { wrapper: queryWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
       await result.current.createWorkspace({ name: 'B' });
     });
 
-    expect(result.current.workspaces).toEqual([WS_A, WS_B]);
+    await waitFor(() => expect(result.current.workspaces).toEqual([WS_A, WS_B]));
   });
 
   it('消したワークスペースを一覧から外す', async () => {
     hoisted.deleteWorkspace.mockResolvedValue(undefined);
-    const { result } = renderHook(() => useWorkspaceList());
+    const { result } = renderHook(() => useWorkspaceList(), { wrapper: queryWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
       await result.current.deleteWorkspace('a');
     });
 
-    expect(result.current.workspaces).toEqual([]);
+    await waitFor(() => expect(result.current.workspaces).toEqual([]));
   });
 
   it('retry で読み直せる', async () => {
-    const { result } = renderHook(() => useWorkspaceList());
+    const { result } = renderHook(() => useWorkspaceList(), { wrapper: queryWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     hoisted.fetchWorkspaces.mockResolvedValueOnce([WS_A, WS_B]);
@@ -75,39 +77,81 @@ describe('useWorkspaceList', () => {
   });
 
   // SecondaryPanel はモバイル用/デスクトップ用の DOM を常に両方マウントするため、
-  // KbFrame 側（useKbTree）とこのフックは別インスタンスとして同時に走る。
-  // 片方の操作をもう片方が知るのは kbTreeEvents 経由だけ。
-  it('他インスタンスが作ったワークスペースを kbTreeEvents 経由で一覧へ足す', async () => {
-    const { result } = renderHook(() => useWorkspaceList());
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    act(() => emitKbTreeEvent({ type: 'workspace-created', workspace: WS_B }));
-
-    expect(result.current.workspaces).toEqual([WS_A, WS_B]);
-  });
-
-  it('他インスタンスが消したワークスペースを kbTreeEvents 経由で一覧から外す', async () => {
-    const { result } = renderHook(() => useWorkspaceList());
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    act(() => emitKbTreeEvent({ type: 'workspace-deleted', workspaceSlug: 'a' }));
-
-    expect(result.current.workspaces).toEqual([]);
-  });
-
-  it('作成すると他インスタンス向けに workspace-created を発行する', async () => {
+  // 左の列（useKbTree）・管理の画面・ホームは、同じ鍵の結果を共有する。片方で作った・消した
+  // ワークスペースは、知らせを待たずにもう片方の一覧にも出る。
+  it('同じキャッシュを使うほかの場所で作ったワークスペースが、一覧に出る', async () => {
     hoisted.createWorkspace.mockResolvedValue(WS_B);
-    const { result } = renderHook(() => useWorkspaceList());
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => ({ here: useWorkspaceList(), there: useWorkspaceList() }), {
+      wrapper: queryWrapper(client),
+    });
+    await waitFor(() => expect(result.current.here.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.there.createWorkspace({ name: 'B' });
+    });
+
+    await waitFor(() => expect(result.current.here.workspaces).toEqual([WS_A, WS_B]));
+    expect(hoisted.fetchWorkspaces).toHaveBeenCalledTimes(1);
+  });
+
+  it('同じキャッシュを使うほかの場所で消したワークスペースが、一覧から外れる', async () => {
+    hoisted.deleteWorkspace.mockResolvedValue(undefined);
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => ({ here: useWorkspaceList(), there: useWorkspaceList() }), {
+      wrapper: queryWrapper(client),
+    });
+    await waitFor(() => expect(result.current.here.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.there.deleteWorkspace('a');
+    });
+
+    await waitFor(() => expect(result.current.here.workspaces).toEqual([]));
+  });
+
+  it('消したワークスペースの中のもの（スペースの一覧）を控えに残さない', async () => {
+    hoisted.deleteWorkspace.mockResolvedValue(undefined);
+    const client = createTestQueryClient();
+    client.setQueryData(kbKeys.spaces('a'), [{ id: 'sp-1', name: 'S', workspaceSlug: 'a' }]);
+    client.setQueryData(kbKeys.spaces('b'), [{ id: 'sp-2', name: 'T', workspaceSlug: 'b' }]);
+    const { result } = renderHook(() => useWorkspaceList(), { wrapper: queryWrapper(client) });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.deleteWorkspace('a');
+    });
+
+    expect(client.getQueryData(kbKeys.spaces('a'))).toBeUndefined();
+    expect(client.getQueryData(kbKeys.spaces('b'))).toBeDefined();
+  });
+
+  it('消すと workspace-deleted を知らせる（開いているページの画面が一覧へ戻るため）', async () => {
+    hoisted.deleteWorkspace.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useWorkspaceList(), { wrapper: queryWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     const listener = vi.fn();
     const unsubscribe = subscribeKbTreeEvents(listener);
 
     await act(async () => {
-      await result.current.createWorkspace({ name: 'B' });
+      await result.current.deleteWorkspace('a');
     });
 
-    expect(listener).toHaveBeenCalledWith({ type: 'workspace-created', workspace: WS_B });
+    expect(listener).toHaveBeenCalledWith({ type: 'workspace-deleted', workspaceSlug: 'a' });
     unsubscribe();
+  });
+
+  it('一覧を持っているうちの取り直しに失敗しても、持っている一覧を出し続ける', async () => {
+    const { result } = renderHook(() => useWorkspaceList(), { wrapper: queryWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    hoisted.fetchWorkspaces.mockRejectedValueOnce(new Error('boom'));
+    act(() => result.current.retry());
+    await waitFor(() => expect(hoisted.fetchWorkspaces).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.workspaces).toEqual([WS_A]);
+    expect(result.current.error).toBeNull();
   });
 });

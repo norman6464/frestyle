@@ -54,6 +54,14 @@ shared/
 - 1 つ目は取るものの名前（複数形・英小文字）。以降に絞り込みの値を並べる: `['profile', 'me']`・`['notifications', 'unread-count']`・`['kb', 'workspaces']`
 - 鍵は entity の `xxxKeys` にまとめ、文字列を画面に直書きしない（取り直すときに同じ鍵を指せるように）
 - 鍵に入る値は必ず `queryFn` で使う値と同じもの（lint の `@tanstack/query/exhaustive-deps` が見る）
+- 入れ物の中のものは、入れ物の鍵の下に置く: スペースの一覧は `['kb', 'workspaces', slug, 'spaces']`。鍵は先頭からの一致で束ねて扱えるので、`['kb', 'workspaces']` を取り直させれば中のものもすべて古くなり、`['kb', 'workspaces', slug]` を消せば消えた入れ物の中身が残らない
+
+### 一覧から導けるものは控えない
+
+「この ID はどのワークスペースのものか」「最初に開くスペースはどれか」のように、キャッシュにある一覧から決まるものは、決めた結果を別の鍵で控えず、描くたびに一覧から導く（`entities/kb/model/resolveKbSpace.ts`）。結果を控えると、元の一覧を差し替えても（改名・作成）控えが古いまま残り、取り直させる鍵が増える。
+
+- 導く関数は純粋にして単体で確かめる。一覧がまだ無い・取り直している間は「見つからない」と言わない（作ったばかりのものへ移った直後に、行き止まりを一瞬出さない）
+- 1 つの一覧を持っているうちに取り直しが失敗しても、持っている一覧を出し続ける（失敗の表示で隠さない）。失敗を出すのは、一覧が 1 度も取れていないときだけ
 
 ### 書き込んだあと
 
@@ -71,6 +79,8 @@ shared/
 
 - 単体: `@/test/queryClient` の `queryWrapper()` を `render` / `renderHook` の wrapper に渡す（テストごとに新しいキャッシュ・取り直し無し）。2 つの部品で同じキャッシュを共有させたいときは `createTestQueryClient()` で作って両方に渡す
 - 見本: `.storybook/decorators.tsx` の `withQueryClient` を preview で全見本にかけてある（見本ごとに新しいキャッシュ）
+- キャッシュの変化は次の刻みで部品へ届く。書き込み・再試行・`setQueryData` のあとの表示は `waitFor` / `findBy…` で待つ
+- 取得を偽物にするときは、公開口（`@/entities/kb` の `KbRepository`）ではなく取得の本体（`@/entities/kb/api/kbRepository`）を `vi.mock` する。`queryOptions` は本体を直接 import しているので、公開口だけ替えても本物を呼ぶ（`vi.spyOn(KbRepository, …)` は同じ入れ物を書き換えるので効く）
 
 ### React Compiler と一緒に使うとき
 

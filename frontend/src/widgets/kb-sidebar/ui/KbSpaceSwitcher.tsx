@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type Ref } from 'react';
+import { useRef, useState, type Ref } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDismissOnOutside } from '@/shared/lib/hooks/useDismissOnOutside';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { ErrorNotice, FsIcon, NameCreateForm, SkeletonRows } from '@/shared/ui';
-import { KbRepository, type KbMySpace, type KbSpace } from '@/entities/kb';
+import { kbMySpacesQuery, type KbSpace } from '@/entities/kb';
 
 export interface KbSpaceSwitcherProps {
   space: KbSpace;
@@ -59,8 +60,8 @@ export default function KbSpaceSwitcher({ space, workspaceSlug, onCreateSpace }:
 }
 
 /**
- * KbSpaceSwitcherMenu は切替を押したときに出るスペースの一覧。開いたときだけ
- * 自分がアクセスできるスペース（/me/spaces）を取る。作成の入口もここに持つ
+ * KbSpaceSwitcherMenu は切替を押したときに出るスペースの一覧。開いたときに
+ * 自分がアクセスできるスペース（/me/spaces）を読む。作成の入口もここに持つ
  * （スペースを作る手段が他に無くなるため、一覧と同じ場所に置く）。
  */
 function KbSpaceSwitcherMenu({
@@ -79,33 +80,14 @@ function KbSpaceSwitcherMenu({
 }) {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  // 再試行の引き金（値に意味は無い。増えたら同じ問い合わせをもう一度投げる）。
-  const [attempt, setAttempt] = useState(0);
-  // 取得の結果は「どの問い合わせの結果か」の鍵と一緒に持つ。今の鍵の結果がまだ無い間が読み込み中。
-  // 読み込み中・失敗を別の state にして effect の頭で戻すと、再試行を押した直後に
-  // 失敗の表示のまま 1 回描いてから戻すことになる。
-  const requestKey = `${workspaceSlug} ${attempt}`;
-  const [result, setResult] = useState<{ key: string; spaces: KbMySpace[] | null } | null>(null);
-  const current = result?.key === requestKey ? result : null;
-  const mySpaces = current?.spaces ?? null;
-  // 取得の失敗を空の一覧（[]）に畳まない。空だと「スペースが無い」に見え、作り直してしまう。
-  const loadFailed = current !== null && current.spaces === null;
+  // 自分がアクセスできるスペースの一覧。スペースの画面の解決と同じ問い合わせなので、そちらで
+  // 取ってあれば待たずに出す。取得の失敗を空の一覧（[]）に畳まない。空だと「スペースが無い」に
+  // 見え、作り直してしまう。再試行を押したら、取り直している間は読み込み中に戻す。
+  const mySpacesResult = useQuery(kbMySpacesQuery(workspaceSlug));
+  const mySpaces = mySpacesResult.data ?? null;
+  const loadFailed = mySpaces === null && mySpacesResult.isError && !mySpacesResult.isFetching;
   const [addingSpace, setAddingSpace] = useState(false);
   const [addingPrivateSpace, setAddingPrivateSpace] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    KbRepository.fetchMySpaces(workspaceSlug)
-      .then((list) => {
-        if (!cancelled) setResult({ key: requestKey, spaces: list });
-      })
-      .catch(() => {
-        if (!cancelled) setResult({ key: requestKey, spaces: null });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceSlug, requestKey]);
 
   const createSpace = async (input: { name: string; visibility?: 'workspace' | 'private' }) => {
     try {
@@ -132,7 +114,7 @@ function KbSpaceSwitcherMenu({
         <ErrorNotice
           variant="inline"
           message="スペースを読み込めませんでした"
-          onRetry={() => setAttempt((prev) => prev + 1)}
+          onRetry={() => void mySpacesResult.refetch()}
           className="px-3 py-1"
         />
       )}
