@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { kbKeys } from '@/entities/kb/api/kbQueries';
+import { ticketKeys } from '@/entities/ticket/api/ticketQueries';
 import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 import { useMyInvitations } from '../useMyInvitations';
 
@@ -29,6 +30,7 @@ describe('useMyInvitations', () => {
     const client = createTestQueryClient();
     client.setQueryData(kbKeys.workspaces(), []);
     client.setQueryData(kbKeys.mySpaces('other'), []);
+    client.setQueryData(ticketKeys.labels('other'), []);
     const { result } = renderHook(() => useMyInvitations(), { wrapper: queryWrapper(client) });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -38,6 +40,7 @@ describe('useMyInvitations', () => {
 
     expect(client.getQueryState(kbKeys.workspaces())?.isInvalidated).toBe(true);
     expect(client.getQueryState(kbKeys.mySpaces('other'))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(ticketKeys.labels('other'))?.isInvalidated).toBe(true);
     expect(result.current.invitations).toEqual([]);
   });
 

@@ -4,6 +4,7 @@ import { useWorkspaceList } from '../useWorkspaceList';
 import { subscribeKbTreeEvents } from '../kbTreeEvents';
 import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 import { kbKeys } from '../../api/kbQueries';
+import { ticketKeys } from '@/entities/ticket/api/ticketQueries';
 
 const hoisted = vi.hoisted(() => ({
   fetchWorkspaces: vi.fn(),
@@ -124,6 +125,24 @@ describe('useWorkspaceList', () => {
 
     expect(client.getQueryData(kbKeys.spaces('a'))).toBeUndefined();
     expect(client.getQueryData(kbKeys.spaces('b'))).toBeDefined();
+  });
+
+  it('消したワークスペースのチケットの設定（ラベル・状態）も控えに残さない', async () => {
+    hoisted.deleteWorkspace.mockResolvedValue(undefined);
+    const client = createTestQueryClient();
+    client.setQueryData(ticketKeys.labels('a'), []);
+    client.setQueryData(ticketKeys.statuses('a', 'p-1'), []);
+    client.setQueryData(ticketKeys.labels('b'), []);
+    const { result } = renderHook(() => useWorkspaceList(), { wrapper: queryWrapper(client) });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.deleteWorkspace('a');
+    });
+
+    expect(client.getQueryData(ticketKeys.labels('a'))).toBeUndefined();
+    expect(client.getQueryData(ticketKeys.statuses('a', 'p-1'))).toBeUndefined();
+    expect(client.getQueryData(ticketKeys.labels('b'))).toBeDefined();
   });
 
   it('消すと workspace-deleted を知らせる（開いているページの画面が一覧へ戻るため）', async () => {

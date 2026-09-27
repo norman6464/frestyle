@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { KbRepository, kbMySpacesQuery, type KbMySpace, type KbPageTemplate } from '@/entities/kb';
 import { ProjectRepository, type Project } from '@/entities/project';
-import { TicketRepository } from '@/entities/ticket';
+import { ticketStatusesQuery, type TicketStatus } from '@/entities/ticket';
 import { toHomeResource, useHomeResource, type HomeResource } from './useHomeResource';
 
 const NO_SPACES: KbMySpace[] = [];
@@ -50,14 +50,19 @@ export function useProjects(workspaceSlug: string | null) {
 /**
  * プロジェクトでチケットを使える状態か（初期状態がある＝有効化済み）。作れる権限があることと、
  * プロジェクトの設定が済んでいることは別なので、権限不足とは分けて知らせる。
+ * 状態の一覧はバックログ・チケットの画面と共有する（取ってあれば取り直さない）。
  */
-export function useProjectReady(workspaceSlug: string | null, projectId: string | null) {
-  return useHomeResource(
-    workspaceSlug && projectId ? `ready:${workspaceSlug}/${projectId}` : null,
-    async () => {
-      const statuses = await TicketRepository.fetchTicketStatuses(workspaceSlug ?? '', projectId ?? '');
-      return statuses.some((s) => s.isInitial);
-    },
+export function useProjectReady(workspaceSlug: string | null, projectId: string | null): HomeResource<boolean> {
+  return toHomeResource(
+    useQuery({
+      ...ticketStatusesQuery(workspaceSlug ?? '', projectId ?? ''),
+      enabled: workspaceSlug !== null && projectId !== null,
+      select: hasInitialStatus,
+    }),
     false,
   );
+}
+
+function hasInitialStatus(statuses: TicketStatus[]): boolean {
+  return statuses.some((s) => s.isInitial);
 }
