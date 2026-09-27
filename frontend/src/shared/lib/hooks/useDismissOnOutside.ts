@@ -56,8 +56,5 @@ export function useDismissOnOutside(
       document.removeEventListener('keydown', onDocumentKeyDown);
     };
     // useEffectEvent の戻りは effect の依存に入れない（React の規約。中身は描画ごとに最新へ差し替わる）。
-    // eslint-plugin-react-hooks 5 系はこれを知らず「依存が足りない」と言うので、この行だけ黙らせる。
-    // 6 系（useEffectEvent を理解する）へ上げたら外す。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 }

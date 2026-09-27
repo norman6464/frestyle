@@ -179,13 +179,13 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
       });
   }, [activeSlug, spaceId, setSpaceState]);
 
-  // spaceId が変わったら（切替・別ページへの遷移）取り直す。
+  // spaceId・ワークスペースが変わったら（切替・別ページへの遷移）取り直す。loadSpaceTree は
+  // この 2 つが変わったときだけ作り直される（setSpaceState は変わらない）ので、依存はそれで表す。
   useEffect(() => {
     setSpaceState(() => emptySpaceState());
     setExpandedPageIds(new Set());
     loadSpaceTree();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spaceId, activeSlug]);
+  }, [loadSpaceTree, setSpaceState]);
 
   // 現在位置のページの祖先を開く。
   //

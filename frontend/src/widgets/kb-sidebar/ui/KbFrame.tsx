@@ -229,6 +229,22 @@ export default function KbFrame({
     }
     setFilterToggled((prev) => xorSet(prev, new Set([pageId])));
   };
+
+  // 木の行へ渡す操作は、JSX の中に `() => ...` と書かず、ここで名前を付けて作る。JSX の条件
+  // （`activeSlug && space && ...`）の内側で作った関数は、React Compiler が条件の外の値と
+  // ひとまとめに控えるので、木を開け閉めするたびに作り直されて全部の行が描き直される。
+  // ここで作れば、使っている値が変わらない限り同じ関数のまま行へ渡る。
+  const cancelRename = () => setRenamingPageId(null);
+  const createChild = (parentId: string) => void createChildPage(parentId);
+  const archive = (pageId: string) => void doArchivePage(pageId);
+  const remove = (pageId: string) => void doDeletePage(pageId);
+  const unarchive = (pageId: string) => void doUnarchivePage(pageId);
+  const move = (pageId: string, target: KbDropTarget) => void doMovePage(pageId, target);
+  // dragover はマウスを動かしている間ずっと届く。落とし先が前と同じなら前の値をそのまま返して
+  // 描き直さない（毎回新しい値を渡すと、同じ行・同じ区画の上でも木の全行を描き続ける）。
+  const dragOverRow = (pageId: string, zone: KbDropZone) =>
+    setDropAt((prev) => (prev?.pageId === pageId && prev.zone === zone ? prev : { pageId, zone }));
+  const dropRow = (pageId: string, zone: KbDropZone) => void dropOnRow(pageId, zone);
   // 最上段の「見えないページが在る」印は、全体をそのまま出しているときだけ意味がある。
   const shownHiddenAtRoot = !filtering && !focusRoot && (spaceState.tree?.hasHiddenChildren ?? false);
 
@@ -403,22 +419,17 @@ export default function KbFrame({
                 label={`${space.name} のページ`}
                 onToggle={toggleShown}
                 onStartRename={setRenamingPageId}
-                onCancelRename={() => setRenamingPageId(null)}
+                onCancelRename={cancelRename}
                 onCommitRename={commitRename}
-                onCreateChild={(parentId) => void createChildPage(parentId)}
-                onArchive={(pageId) => void doArchivePage(pageId)}
-                onDelete={(pageId) => void doDeletePage(pageId)}
-                onUnarchive={(pageId) => void doUnarchivePage(pageId)}
-                onMove={(pageId, target) => void doMovePage(pageId, target)}
+                onCreateChild={createChild}
+                onArchive={archive}
+                onDelete={remove}
+                onUnarchive={unarchive}
+                onMove={move}
                 onDragStart={setDraggingPageId}
                 onDragEnd={endDrag}
-                // dragover はマウスを動かしている間ずっと届く。落とし先が前と同じなら前の値を
-                // そのまま返して描き直さない（毎回新しい値を渡すと、同じ行・同じ区画の上でも
-                // 木の全行を描き続ける）。
-                onDragOverRow={(pageId, zone) =>
-                  setDropAt((prev) => (prev?.pageId === pageId && prev.zone === zone ? prev : { pageId, zone }))
-                }
-                onDropOnRow={(pageId, zone) => void dropOnRow(pageId, zone)}
+                onDragOverRow={dragOverRow}
+                onDropOnRow={dropRow}
               />
             )}
             {!spaceState.tree?.pages.length && spaceState.tree?.hasHiddenChildren && (
