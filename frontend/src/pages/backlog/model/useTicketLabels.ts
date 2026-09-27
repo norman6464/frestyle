@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { reflectWrite } from '@/shared/api/queryCache';
 import { TicketRepository, ticketLabelsQuery, type Label, type LabelInput } from '@/entities/ticket';
 
 const LOAD_FAILED = 'ラベルを読み込めませんでした。時間をおいて開き直すと最新の状態が出ます。';
@@ -38,8 +39,8 @@ export function useTicketLabels(workspaceSlug: string | undefined) {
     async (input: LabelInput) => {
       const slug = requireScope();
       const created = await TicketRepository.createLabel(slug, input);
-      queryClient.setQueryData(ticketLabelsQuery(slug).queryKey, (prev) =>
-        prev?.some((l) => l.id === created.id) ? prev : [...(prev ?? []), created],
+      await reflectWrite(queryClient, ticketLabelsQuery(slug).queryKey, (prev) =>
+        prev.some((l) => l.id === created.id) ? prev : [...prev, created],
       );
       return created;
     },
@@ -50,8 +51,8 @@ export function useTicketLabels(workspaceSlug: string | undefined) {
     async (labelId: string, input: LabelInput) => {
       const slug = requireScope();
       const updated = await TicketRepository.updateLabel(slug, labelId, input);
-      queryClient.setQueryData(ticketLabelsQuery(slug).queryKey, (prev) =>
-        prev?.map((l) => (l.id === labelId ? updated : l)),
+      await reflectWrite(queryClient, ticketLabelsQuery(slug).queryKey, (prev) =>
+        prev.map((l) => (l.id === labelId ? updated : l)),
       );
       return updated;
     },
@@ -62,7 +63,7 @@ export function useTicketLabels(workspaceSlug: string | undefined) {
     async (labelId: string) => {
       const slug = requireScope();
       await TicketRepository.deleteLabel(slug, labelId);
-      queryClient.setQueryData(ticketLabelsQuery(slug).queryKey, (prev) => prev?.filter((l) => l.id !== labelId));
+      await reflectWrite(queryClient, ticketLabelsQuery(slug).queryKey, (prev) => prev.filter((l) => l.id !== labelId));
     },
     [requireScope, queryClient],
   );

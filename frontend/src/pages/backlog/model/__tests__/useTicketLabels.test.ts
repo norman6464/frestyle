@@ -116,6 +116,27 @@ describe('useTicketLabels', () => {
     expect(hoisted.fetchLabels).toHaveBeenCalledTimes(1);
   });
 
+  it('最初の読み込みの途中で作ったラベルが、あとから届いた読み込みの結果で消えない', async () => {
+    let resolveFirst!: (labels: Label[]) => void;
+    hoisted.fetchLabels
+      .mockImplementationOnce(() => new Promise<Label[]>((resolve) => (resolveFirst = resolve)))
+      .mockResolvedValueOnce([fixtureLabel({ id: 'l-1' }), fixtureLabel({ id: 'l-2', name: '検索' })]);
+    hoisted.createLabel.mockResolvedValue(fixtureLabel({ id: 'l-2', name: '検索' }));
+    const { result } = renderHook(() => useTicketLabels(SLUG), { wrapper: queryWrapper() });
+    await waitFor(() => expect(hoisted.fetchLabels).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await result.current.createLabel({ name: '検索', color: '#1d4ed8' });
+    });
+    resolveFirst([fixtureLabel({ id: 'l-1' })]);
+
+    await waitFor(() => expect(result.current.labels.map((l) => l.id)).toEqual(['l-1', 'l-2']));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(result.current.labels.map((l) => l.id)).toEqual(['l-1', 'l-2']);
+  });
+
   it('一覧を持っているうちの取り直しに失敗しても、一覧を出し続ける', async () => {
     hoisted.fetchLabels.mockResolvedValueOnce([fixtureLabel({ id: 'l-1' })]);
     const { result } = renderHook(() => useTicketLabels(SLUG), { wrapper: queryWrapper() });

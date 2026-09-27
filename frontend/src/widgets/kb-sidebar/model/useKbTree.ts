@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { reflectWrite } from '@/shared/api/queryCache';
 import {
   NOTE_NEW_PAGE_TITLE,
   KbRepository,
@@ -245,8 +246,8 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
     // URL に出る slug はサーバーが自動採番する（人に決めさせない）。
     const workspace = await KbRepository.createWorkspace({ name: input.name });
     // 一覧は管理の画面・ホームと共有している。差し替えればどこにも出る。
-    queryClient.setQueryData(kbWorkspacesQuery().queryKey, (prev) =>
-      prev?.some((w) => w.slug === workspace.slug) ? prev : [...(prev ?? []), workspace],
+    await reflectWrite(queryClient, kbWorkspacesQuery().queryKey, (prev) =>
+      prev.some((w) => w.slug === workspace.slug) ? prev : [...prev, workspace],
     );
     setChosenSlug(workspace.slug);
     return workspace;
@@ -265,7 +266,9 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
       if (input.visibility && space.visibility !== input.visibility) {
         throw new Error('space visibility mismatch');
       }
-      queryClient.setQueryData(kbSpacesQuery(activeSlug).queryKey, (prev) => [...(prev ?? []), space]);
+      await reflectWrite(queryClient, kbSpacesQuery(activeSlug).queryKey, (prev) =>
+        prev.some((s) => s.id === space.id) ? prev : [...prev, space],
+      );
       // 自分の役割つきの一覧（スペース切替・スペースの画面の解決が使う）は、作った本人の役割を
       // 応答が持たないので取り直させる。待たずに返す — 作った直後にそのスペースへ移っても、
       // スペースの画面は一覧を取り直している間は「見つからない」と言わない（locateKbSpace）。
@@ -281,11 +284,11 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
       const space = await KbRepository.renameSpace(activeSlug, id, name);
       // 見出しは spaces の配列から描くので、そこだけ差し替える（木は名前を持たない）。
       // 役割つきの一覧も名前だけ差し替える（スペースの画面の見出しとスペース切替に出る）。
-      queryClient.setQueryData(kbSpacesQuery(activeSlug).queryKey, (prev) =>
-        prev?.map((s) => (s.id === space.id ? space : s)),
+      await reflectWrite(queryClient, kbSpacesQuery(activeSlug).queryKey, (prev) =>
+        prev.map((s) => (s.id === space.id ? space : s)),
       );
-      queryClient.setQueryData(kbMySpacesQuery(activeSlug).queryKey, (prev) =>
-        prev?.map((s) => (s.id === space.id ? { ...s, name: space.name } : s)),
+      await reflectWrite(queryClient, kbMySpacesQuery(activeSlug).queryKey, (prev) =>
+        prev.map((s) => (s.id === space.id ? { ...s, name: space.name } : s)),
       );
       return space;
     },

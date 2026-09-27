@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { reflectWrite } from '@/shared/api/queryCache';
 import KbRepository from '../api/kbRepository';
 import { kbKeys, kbWorkspacesQuery } from '../api/kbQueries';
 import { emitKbTreeEvent } from './kbTreeEvents';
@@ -12,7 +13,7 @@ const NO_WORKSPACES: KbWorkspace[] = [];
  *
  * 一覧は共有の問い合わせ（kbWorkspacesQuery）から読む。左の列（useKbTree）・管理の画面・
  * ホームが同じ結果を使うので、1 回だけ取り、どこかで作った・消したワークスペースは
- * 知らせを待たずにほかの場所の一覧にも出る（作成・削除は共有の一覧を setQueryData で差し替える）。
+ * 知らせを待たずにほかの場所の一覧にも出る（作成・削除は共有の一覧を reflectWrite で差し替える）。
  *
  * 削除の知らせ（kbTreeEvents）はまだ出す。開いているページの画面が、ワークスペースが
  * 消えたことを知らせで受けて移るため（知らせは第4段の途中で退役させる）。
@@ -24,8 +25,8 @@ export function useWorkspaceList() {
   const createWorkspace = useCallback(
     async (input: { name: string }): Promise<KbWorkspace> => {
       const workspace = await KbRepository.createWorkspace(input);
-      queryClient.setQueryData(kbWorkspacesQuery().queryKey, (prev) =>
-        prev?.some((w) => w.slug === workspace.slug) ? prev : [...(prev ?? []), workspace],
+      await reflectWrite(queryClient, kbWorkspacesQuery().queryKey, (prev) =>
+        prev.some((w) => w.slug === workspace.slug) ? prev : [...prev, workspace],
       );
       return workspace;
     },
@@ -35,7 +36,7 @@ export function useWorkspaceList() {
   const deleteWorkspace = useCallback(
     async (slug: string): Promise<void> => {
       await KbRepository.deleteWorkspace(slug);
-      queryClient.setQueryData(kbWorkspacesQuery().queryKey, (prev) => prev?.filter((w) => w.slug !== slug));
+      await reflectWrite(queryClient, kbWorkspacesQuery().queryKey, (prev) => prev.filter((w) => w.slug !== slug));
       // 中のもの（スペースの一覧など）はサーバーで一緒に消えている。控えにも残さない。
       queryClient.removeQueries({ queryKey: kbKeys.workspace(slug) });
       emitKbTreeEvent({ type: 'workspace-deleted', workspaceSlug: slug });
