@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { FsIcon } from '@/shared/ui';
 import { Link, useLocation } from 'react-router-dom';
 import { GLOBAL_NAV_PRIMARY, navActive } from '../model/globalNav';
@@ -6,8 +5,8 @@ import { GLOBAL_NAV_PRIMARY, navActive } from '../model/globalNav';
 import Loading from '@/shared/ui/Loading';
 import HeaderUserMenu from './HeaderUserMenu';
 import { useSidebar } from '../model/useSidebar';
-import { NotificationRepository } from '@/entities/notification';
-import { ProfileRepository } from '@/entities/user';
+import { useUnreadCount } from '@/entities/notification';
+import { useMyProfile } from '@/entities/user';
 
 interface HeaderProps {
   /** 検索ボタン押下時に呼ぶ。AppShell が持つ既存の ⌘K パレットを開くだけで、
@@ -27,23 +26,11 @@ export default function Header({ onOpenSearch }: HeaderProps) {
   const { handleLogout, loggingOut } = useSidebar();
   const { pathname } = useLocation();
 
-  const [profile, setProfile] = useState<{ displayName: string; avatarUrl: string | null; email: string } | null>(null);
-  const [unread, setUnread] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    ProfileRepository.fetchProfile()
-      .then((p) => {
-        if (cancelled) return;
-        setProfile({ displayName: p.displayName ?? '', avatarUrl: p.avatarUrl ?? null, email: p.email ?? '' });
-      })
-      .catch(() => { /* 表示が壊れない最低限のフォールバックは下で行う */ });
-    // バッジ用に未読件数だけ取得する（全件取得は重いのでヘッダーでは行わない）。
-    NotificationRepository.getUnreadCount()
-      .then((c) => { if (!cancelled) setUnread(c); })
-      .catch(() => { /* 取得失敗時はバッジ非表示 */ });
-    return () => { cancelled = true; };
-  }, []);
+  // 自分のプロフィールと未読の件数は、設定・通知の画面と共有する（名前を変えた・既読にした結果が
+  // その場でここへ届く）。取れない間は表示が壊れない最低限（空の名前・バッジ無し）で出す。
+  // 未読は件数だけを取る（全件取得は重いのでヘッダーでは行わない）。
+  const { data: profile } = useMyProfile();
+  const { data: unread = 0 } = useUnreadCount();
 
   return (
     <>
@@ -108,7 +95,7 @@ export default function Header({ onOpenSearch }: HeaderProps) {
           {/* アカウントのメニュー。狭い画面でも出す —— ログアウトの入口がここしか無いため。 */}
           <HeaderUserMenu
             displayName={profile?.displayName ?? ''}
-            avatarUrl={profile?.avatarUrl}
+            avatarUrl={profile?.avatarUrl ?? null}
             email={profile?.email ?? ''}
             onLogout={handleLogout}
           />

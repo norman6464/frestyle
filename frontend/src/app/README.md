@@ -7,6 +7,7 @@
 - エントリポイント（`main.tsx` / `App.tsx`）
 - ルーティング定義
 - Provider 群（store / トースト / エラーバウンダリ / 認証初期化）
+- ログイン後の親（`layouts/AuthenticatedLayout`: アプリの枠と、取得した結果のキャッシュを配る。遅延読み込み）
 - グローバルスタイル
 
 ## 構造
@@ -16,6 +17,7 @@
 ```
 app/
   providers/
+  layouts/
   routes/
   styles/
   store/

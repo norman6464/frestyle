@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ProfileRepository } from '@/entities/user';
+import { useQueryClient } from '@tanstack/react-query';
+import { ProfileRepository, myProfileQuery, profileKeys } from '@/entities/user';
 import type { FormMessage } from '@/shared/ui/FormMessage';
 import type { Profile } from '@/entities/user';
 
@@ -32,6 +33,7 @@ function sameText(a: ProfileForm, b: ProfileForm): boolean {
 }
 
 export function useProfileEdit() {
+  const queryClient = useQueryClient();
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM);
   const [saved, setSaved] = useState<ProfileForm>(EMPTY_FORM);
   // 取得や通信の失敗はフォームの上に出す（欄の直しで解けるもの＝氏名の空は欄のそばに出す）。
@@ -48,7 +50,8 @@ export function useProfileEdit() {
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const data = await ProfileRepository.fetchProfile();
+        // ヘッダーなどが既に取った自分のプロフィールがあれば、それを使う（取り直さない）。
+        const data = await queryClient.fetchQuery(myProfileQuery());
         const fetched = {
           displayName: data.displayName ?? '',
           bio: data.bio ?? '',
@@ -65,7 +68,7 @@ export function useProfileEdit() {
       }
     };
     loadProfile();
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => () => {
     if (savedTimer.current) clearTimeout(savedTimer.current);
@@ -76,6 +79,14 @@ export function useProfileEdit() {
     if (savedTimer.current) clearTimeout(savedTimer.current);
     savedTimer.current = setTimeout(() => setJustSaved(false), SAVED_VISIBLE_MS);
   }, []);
+
+  // 保存できた値を、共有している自分のプロフィールへ写す（ヘッダーの名前・アバターがその場で変わる）。
+  const reflectSaved = useCallback(
+    (next: ProfileForm) => {
+      queryClient.setQueryData(profileKeys.me(), (prev) => (prev ? { ...prev, ...next } : prev));
+    },
+    [queryClient],
+  );
 
   const updateField = useCallback(<K extends keyof ProfileForm>(field: K, value: ProfileForm[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -91,6 +102,7 @@ export function useProfileEdit() {
     setSubmitting(true);
     try {
       await ProfileRepository.updateProfile(form);
+      reflectSaved(form);
       setSaved(form);
       setMessage(null);
       showSaved();
@@ -99,7 +111,7 @@ export function useProfileEdit() {
     } finally {
       setSubmitting(false);
     }
-  }, [form, showSaved]);
+  }, [form, showSaved, reflectSaved]);
 
   /**
    * 画像だけを保存する（選んだ時点で呼ぶ）。保存済みの値に画像を差し替えて送るので、文字の欄の
@@ -111,6 +123,7 @@ export function useProfileEdit() {
       try {
         const next = { ...saved, avatarUrl };
         await ProfileRepository.updateProfile(next);
+        reflectSaved(next);
         setSaved(next);
         setForm((prev) => ({ ...prev, avatarUrl }));
         return true;
@@ -118,7 +131,7 @@ export function useProfileEdit() {
         return false;
       }
     },
-    [saved, loaded],
+    [saved, loaded, reflectSaved],
   );
 
   return {

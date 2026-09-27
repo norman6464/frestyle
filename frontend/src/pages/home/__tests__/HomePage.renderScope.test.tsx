@@ -7,6 +7,7 @@ import TicketRepository from '@/entities/ticket/api/ticketRepository';
 import { NotificationRepository } from '@/entities/notification/api/notificationRepository';
 import ProfileRepository from '@/entities/user/api/profileRepository';
 import { createMockStorage } from '@/test/mockStorage';
+import { queryWrapper } from '@/test/queryClient';
 
 // 各欄は本物を描き、描かれた回数だけ数える。
 const hoisted = vi.hoisted(() => ({ renders: { resume: 0, assigned: 0, favorites: 0 } }));
@@ -68,7 +69,7 @@ describe('HomePage の描き直しの範囲', () => {
     render(
       <MemoryRouter>
         <HomePage />
-      </MemoryRouter>,
+      </MemoryRouter>, { wrapper: queryWrapper() },
     );
     await screen.findByText('表示できる履歴はありません');
     await screen.findByText('未完了の担当はありません');

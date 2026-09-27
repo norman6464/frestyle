@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import apiClient from '@/shared/api/axios';
 import KbBacklogPage from '../KbBacklogPage';
+import { queryWrapper } from '@/test/queryClient';
 
 // 行は本物を描き、チケットごとに描かれた回数だけ数える。本物の行は memo なので、数える包みも
 // 同じく memo にする（包みが memo でないと、本物が描き直しを飛ばしても包みの数が増える）。
@@ -83,7 +84,7 @@ async function renderReady() {
       <Routes>
         <Route path="/backlog/:projectId" element={<KbBacklogPage view="backlog" />} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>, { wrapper: queryWrapper() },
   );
   await screen.findByText('三つ目');
   // 取得が落ち着く（件数・保存した絞り込みが届く）まで待ってから数え始める。

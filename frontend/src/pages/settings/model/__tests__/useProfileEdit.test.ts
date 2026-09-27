@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useProfileEdit } from '../useProfileEdit';
+import { useMyProfile } from '@/entities/user';
+import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 
 const mockFetchProfile = vi.fn();
 const mockUpdateProfile = vi.fn();
@@ -29,7 +31,7 @@ describe('useProfileEdit', () => {
   });
 
   it('プロフィール取得成功時にフォームに値がセットされる', async () => {
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -43,7 +45,7 @@ describe('useProfileEdit', () => {
   it('プロフィール取得失敗時にエラーメッセージが表示される', async () => {
     mockFetchProfile.mockRejectedValue(new Error('Network Error'));
 
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -54,7 +56,7 @@ describe('useProfileEdit', () => {
   });
 
   it('updateFieldでフォームの値が更新される', async () => {
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -68,7 +70,7 @@ describe('useProfileEdit', () => {
   });
 
   it('handleUpdate が成功したら、その場に「保存しました」を出し、未保存の変更は無くなる', async () => {
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
@@ -88,7 +90,7 @@ describe('useProfileEdit', () => {
   });
 
   it('氏名が空なら送らず、氏名の欄のエラーにする', async () => {
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
@@ -114,7 +116,7 @@ describe('useProfileEdit', () => {
   // 取得に失敗したまま画像だけを保存すると、空の値で氏名などを上書きしてしまう。
   it('プロフィールを取得できていなければ、画像だけの保存はしない', async () => {
     mockFetchProfile.mockRejectedValue(new Error('Network Error'));
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
@@ -130,7 +132,7 @@ describe('useProfileEdit', () => {
   });
 
   it('画像だけを保存するときは、文字の欄の書きかけを一緒に送らない', async () => {
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
@@ -159,7 +161,7 @@ describe('useProfileEdit', () => {
   it('handleUpdate失敗時にエラーメッセージが表示される', async () => {
     mockUpdateProfile.mockRejectedValue(new Error('Server Error'));
 
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -174,7 +176,7 @@ describe('useProfileEdit', () => {
   });
 
   it('loading状態が初期trueからfalseに変化する', async () => {
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
     expect(result.current.loading).toBe(true);
 
     await waitFor(() => {
@@ -183,7 +185,7 @@ describe('useProfileEdit', () => {
   });
 
   it('updateFieldでbioフィールドも更新できる', async () => {
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -203,7 +205,7 @@ describe('useProfileEdit', () => {
       () => new Promise((resolve) => { resolveUpdate = resolve; })
     );
 
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -227,7 +229,7 @@ describe('useProfileEdit', () => {
   });
 
   it('handleUpdate時にupdateProfileにフォーム値が渡される', async () => {
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -250,7 +252,7 @@ describe('useProfileEdit', () => {
   });
 
   it('氏名が空の場合は氏名の欄のエラーにし、APIを呼ばない', async () => {
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -271,7 +273,7 @@ describe('useProfileEdit', () => {
   });
 
   it('氏名が空白のみの場合も氏名の欄のエラーにし、APIを呼ばない', async () => {
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -292,7 +294,7 @@ describe('useProfileEdit', () => {
   });
 
   it('updateFieldでstatusフィールドを更新できる', async () => {
-    const { result } = renderHook(() => useProfileEdit());
+    const { result } = renderHook(() => useProfileEdit(), { wrapper: queryWrapper() });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -303,5 +305,32 @@ describe('useProfileEdit', () => {
     });
 
     expect(result.current.form.status).toBe('チャット可能');
+  });
+
+  it('保存したら、ほかの場所で読んでいる自分のプロフィール（ヘッダーの名前）も変わる', async () => {
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => ({ edit: useProfileEdit(), me: useMyProfile() }), {
+      wrapper: queryWrapper(client),
+    });
+    await waitFor(() => expect(result.current.edit.loading).toBe(false));
+    expect(result.current.me.data?.displayName).toBe('テスト太郎');
+
+    act(() => result.current.edit.updateField('displayName', '新しい名前'));
+    await act(async () => {
+      await result.current.edit.handleUpdate();
+    });
+
+    expect(result.current.me.data?.displayName).toBe('新しい名前');
+  });
+
+  it('設定を開いても、ヘッダーが取った自分のプロフィールを取り直さない（同じ鍵は 1 回だけ取る）', async () => {
+    const client = createTestQueryClient();
+    const { result } = renderHook(() => ({ me: useMyProfile(), edit: useProfileEdit() }), {
+      wrapper: queryWrapper(client),
+    });
+
+    await waitFor(() => expect(result.current.edit.loading).toBe(false));
+
+    expect(mockFetchProfile).toHaveBeenCalledTimes(1);
   });
 });

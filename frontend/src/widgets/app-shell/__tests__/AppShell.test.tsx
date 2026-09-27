@@ -6,6 +6,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import authReducer from '@/entities/user/model/authSlice';
 import AppShell from '../ui/AppShell';
 import { ToastProvider } from '@/app/providers/ToastProvider';
+import { queryWrapper } from '@/test/queryClient';
 
 function createTestStore() {
   return configureStore({
@@ -26,7 +27,7 @@ function renderAppShell({ initialEntry = '/', body = <div>テストコンテン�
           </Routes>
         </ToastProvider>
       </MemoryRouter>
-    </Provider>
+    </Provider>, { wrapper: queryWrapper() }
   );
 }
 

@@ -6,6 +6,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import authReducer from '@/entities/user/model/authSlice';
 import { ToastProvider } from '@/app/providers/ToastProvider';
 import Header from '../ui/Header';
+import { queryWrapper } from '@/test/queryClient';
 
 // この環境の jsdom は localStorage を提供しないため、既存テストと同じ流儀でスタブする
 // （useResizablePanel.test.ts 等と同様）。
@@ -57,7 +58,7 @@ function renderHeader({
           <Header onOpenSearch={onOpenSearch} />
         </MemoryRouter>
       </ToastProvider>
-    </Provider>,
+    </Provider>, { wrapper: queryWrapper() },
   );
 }
 
