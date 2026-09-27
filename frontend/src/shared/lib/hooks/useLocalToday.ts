@@ -16,11 +16,20 @@ function localDateString(now: Date): string {
 export function useLocalToday(): string {
   const [today, setToday] = useState(() => localDateString(new Date()));
   useEffect(() => {
-    const now = new Date();
-    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    // 0 時ちょうどに撃つと時計の揺れで前の日のまま取り直すことがあるので、少し後にする。
-    const timer = setTimeout(() => setToday(localDateString(new Date())), nextMidnight.getTime() - now.getTime() + 1000);
+    let timer: ReturnType<typeof setTimeout>;
+    // 鳴るたびに次の 0 時を予約し直す。日付が変わらなかったとき（時計が戻された・0 時より前に
+    // 鳴った）も予約を続ける —— today の変化を合図にすると、同じ日付では二度と鳴らなくなる。
+    const schedule = () => {
+      const now = new Date();
+      const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      // 0 時ちょうどに撃つと時計の揺れで前の日のまま取り直すことがあるので、少し後にする。
+      timer = setTimeout(() => {
+        setToday(localDateString(new Date()));
+        schedule();
+      }, nextMidnight.getTime() - now.getTime() + 1000);
+    };
+    schedule();
     return () => clearTimeout(timer);
-  }, [today]);
+  }, []);
   return today;
 }
