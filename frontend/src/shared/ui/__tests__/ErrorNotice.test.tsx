@@ -10,6 +10,16 @@ describe('ErrorNotice', () => {
     expect(screen.getByRole('alert')).not.toHaveTextContent('再試行');
   });
 
+  it('狭い場所の 1 行でも、知らせは文言だけで、再試行を押すと取り直しを呼ぶ', () => {
+    const onRetry = vi.fn();
+    render(<ErrorNotice variant="inline" message="スペースを読み込めませんでした" onRetry={onRetry} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('スペースを読み込めませんでした');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('再試行');
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
   it('再試行を押すと取り直しを呼ぶ', () => {
     const onRetry = vi.fn();
     render(<ErrorNotice message="読み込めませんでした。" onRetry={onRetry} />);

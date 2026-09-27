@@ -16,7 +16,14 @@ export interface HomeUnreadNoticeProps {
 export default function HomeUnreadNotice({ unread, wide }: HomeUnreadNoticeProps) {
   if (unread.status === 'loading') return null;
   if (unread.status === 'error') {
-    return <ErrorNotice variant="inline" message="未読の通知の件数を取得できませんでした。" onRetry={unread.retry} />;
+    return (
+      <ErrorNotice
+        variant="inline"
+        politeness="polite"
+        message="未読の通知の件数を取得できませんでした。"
+        onRetry={unread.retry}
+      />
+    );
   }
   if (unread.data <= 0) return null;
 

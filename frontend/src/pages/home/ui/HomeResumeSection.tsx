@@ -156,6 +156,7 @@ function PageReferences({ references, wide }: { references: HomeResource<TicketR
       <div className="mt-6 border-t border-surface-3 pt-5">
         <ErrorNotice
           variant="inline"
+          politeness="polite"
           message="このページを参照しているチケットを取得できませんでした。"
           onRetry={references.retry}
         />
