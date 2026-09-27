@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useMobileDrawerFocus } from '@/shared/lib/hooks/useMobileDrawerFocus';
@@ -98,12 +98,17 @@ export default function KbFrame({
   const [focusHere, setFocusHere] = useState(false);
   // 狭い画面で左の列を引き出しとして開いているか。
   const [panelOpen, setPanelOpen] = useState(false);
-  const drawerRef = useMobileDrawerFocus(panelOpen, () => setPanelOpen(false));
-
-  // 画面が変わったら引き出しは閉じる（木のページを押して移ったときも取り残さない）。
-  useEffect(() => {
+  const closePanel = () => setPanelOpen(false);
+  const drawerRef = useMobileDrawerFocus(panelOpen, closePanel);
+  // 画面が変わったら（木のページを押して移ったときも）引き出しを閉じる。前の画面を覚えておき、
+  // 描いている途中で比べて閉じる。effect で閉じると、移った先を引き出しが開いたまま 1 回描いてから
+  // 閉じ直すことになる。「開いた画面と同じ間だけ開いている」と導く形にはしない — 移ってから
+  // 「戻る」で元の画面に帰ると、引き出しが勝手に開き直す。
+  const [panelPath, setPanelPath] = useState(pathname);
+  if (pathname !== panelPath) {
+    setPanelPath(pathname);
     setPanelOpen(false);
-  }, [pathname]);
+  }
 
   // 作った直後のページは、そのまま題名を書き換えられる状態で出す
   // （「無題」のまま置き去りにされるのを減らす）。
@@ -486,7 +491,7 @@ export default function KbFrame({
             <>
               {/* 狭い画面: 引き出しの後ろの幕。触れると閉じる。下部ナビ（z-40）より上に敷く。 */}
               {panelOpen && (
-                <div aria-hidden="true" className="fixed inset-0 z-[45] bg-black/40 md:hidden" onClick={() => setPanelOpen(false)} />
+                <div aria-hidden="true" className="fixed inset-0 z-[45] bg-black/40 md:hidden" onClick={closePanel} />
               )}
               <aside
                 ref={drawerRef}
@@ -506,7 +511,7 @@ export default function KbFrame({
                 <div className="flex items-center justify-end px-2 pt-2 md:hidden">
                   <button
                     type="button"
-                    onClick={() => setPanelOpen(false)}
+                    onClick={closePanel}
                     aria-label="ページの一覧を閉じる"
                     className="inline-flex h-11 w-11 items-center justify-center rounded-md text-[var(--color-text-muted)] hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
                   >

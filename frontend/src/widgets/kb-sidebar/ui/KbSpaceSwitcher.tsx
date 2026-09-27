@@ -79,30 +79,33 @@ function KbSpaceSwitcherMenu({
 }) {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [mySpaces, setMySpaces] = useState<KbMySpace[] | null>(null);
-  // 取得の失敗を空の一覧（[]）に畳まない。空だと「スペースが無い」に見え、作り直してしまう。
-  const [loadFailed, setLoadFailed] = useState(false);
   // 再試行の引き金（値に意味は無い。増えたら同じ問い合わせをもう一度投げる）。
   const [attempt, setAttempt] = useState(0);
+  // 取得の結果は「どの問い合わせの結果か」の鍵と一緒に持つ。今の鍵の結果がまだ無い間が読み込み中。
+  // 読み込み中・失敗を別の state にして effect の頭で戻すと、再試行を押した直後に
+  // 失敗の表示のまま 1 回描いてから戻すことになる。
+  const requestKey = `${workspaceSlug} ${attempt}`;
+  const [result, setResult] = useState<{ key: string; spaces: KbMySpace[] | null } | null>(null);
+  const current = result?.key === requestKey ? result : null;
+  const mySpaces = current?.spaces ?? null;
+  // 取得の失敗を空の一覧（[]）に畳まない。空だと「スペースが無い」に見え、作り直してしまう。
+  const loadFailed = current !== null && current.spaces === null;
   const [addingSpace, setAddingSpace] = useState(false);
   const [addingPrivateSpace, setAddingPrivateSpace] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    setLoadFailed(false);
     KbRepository.fetchMySpaces(workspaceSlug)
       .then((list) => {
-        if (!cancelled) setMySpaces(list);
+        if (!cancelled) setResult({ key: requestKey, spaces: list });
       })
       .catch(() => {
-        if (cancelled) return;
-        setMySpaces(null);
-        setLoadFailed(true);
+        if (!cancelled) setResult({ key: requestKey, spaces: null });
       });
     return () => {
       cancelled = true;
     };
-  }, [workspaceSlug, attempt]);
+  }, [workspaceSlug, requestKey]);
 
   const createSpace = async (input: { name: string; visibility?: 'workspace' | 'private' }) => {
     try {
