@@ -1846,6 +1846,8 @@ describe('KbPage の描き直しの範囲', () => {
   }
 
   it('打鍵で保存状態が変わっても、本文エディタと題名を描き直さない', async () => {
+    // 後片付けでページを閉じるとき、書きかけを待たずに送る（useKbPageDoc）。その応答を用意しておく。
+    hoisted.replaceContent.mockResolvedValue({ doc: { type: 'doc', content: [] }, updatedAt: '2026-08-01T00:00:01Z' });
     await renderReady();
 
     act(() => {
