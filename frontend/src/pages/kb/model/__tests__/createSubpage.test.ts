@@ -1,19 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { kbKeys } from '@/entities/kb/api/kbQueries';
+import { createTestQueryClient } from '@/test/queryClient';
 import { createSubpage, type SubpageEditor } from '../createSubpage';
 
 const hoisted = vi.hoisted(() => ({
   createPage: vi.fn(),
-  emit: vi.fn(),
 }));
 
-vi.mock('@/entities/kb', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/kb')>();
-  return {
-    ...actual,
-    KbRepository: { createPage: hoisted.createPage },
-    emitKbTreeEvent: hoisted.emit,
-  };
-});
+vi.mock('@/entities/kb/api/kbRepository', () => ({
+  default: { createPage: hoisted.createPage },
+}));
 
 const resolved = {
   workspaceSlug: 'w-3f2a9c',
@@ -55,7 +51,7 @@ describe('createSubpage', () => {
   it('現在のページの子として作り、本文にページ参照を挿し、開く先の URL を返す', async () => {
     const { editor, insertContent, run } = fakeEditor();
 
-    const path = await createSubpage(editor, resolved);
+    const path = await createSubpage(editor, resolved, createTestQueryClient());
 
     expect(hoisted.createPage).toHaveBeenCalledWith('w-3f2a9c', 'space-1', {
       title: '無題',
@@ -70,20 +66,26 @@ describe('createSubpage', () => {
     expect(path).toBe('/kb/child-1');
   });
 
-  it('木へ確定後のページで知らせる（サイドバーが追従できる）', async () => {
+  it('作ったページのスペースの木を取り直させる（左の列・すべてのページに出る）', async () => {
     const { editor } = fakeEditor();
+    const client = createTestQueryClient();
+    client.setQueryData(kbKeys.pageTree('w-3f2a9c', 'space-1', false), { pages: [], hasHiddenChildren: false });
+    client.setQueryData(kbKeys.pageTree('w-3f2a9c', 'space-2', false), { pages: [], hasHiddenChildren: false });
 
-    await createSubpage(editor, resolved);
+    await createSubpage(editor, resolved, client);
 
-    expect(hoisted.emit).toHaveBeenCalledWith({ type: 'page-created', page: child });
+    expect(client.getQueryState(kbKeys.pageTree('w-3f2a9c', 'space-1', false))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(kbKeys.pageTree('w-3f2a9c', 'space-2', false))?.isInvalidated).toBe(false);
   });
 
-  it('作成に失敗したら参照を挿さず、木にも知らせず、失敗を投げる', async () => {
+  it('作成に失敗したら参照を挿さず、木も取り直させず、失敗を投げる', async () => {
     hoisted.createPage.mockRejectedValue(new Error('403'));
     const { editor, insertContent } = fakeEditor();
+    const client = createTestQueryClient();
+    client.setQueryData(kbKeys.pageTree('w-3f2a9c', 'space-1', false), { pages: [], hasHiddenChildren: false });
 
-    await expect(createSubpage(editor, resolved)).rejects.toThrow();
+    await expect(createSubpage(editor, resolved, client)).rejects.toThrow();
     expect(insertContent).not.toHaveBeenCalled();
-    expect(hoisted.emit).not.toHaveBeenCalled();
+    expect(client.getQueryState(kbKeys.pageTree('w-3f2a9c', 'space-1', false))?.isInvalidated).toBe(false);
   });
 });

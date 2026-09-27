@@ -17,6 +17,14 @@ export const kbKeys = {
   spaces: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'spaces'] as const,
   /** ワークスペースのうち、自分が役割を持つスペースの一覧（役割つき）。 */
   mySpaces: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'my-spaces'] as const,
+  /** 1 つのスペースの中のものすべて。 */
+  space: (workspaceSlug: string, spaceId: string) => [...workspaceScope(workspaceSlug), 'space', spaceId] as const,
+  /** スペースのページの木（現役とアーカイブ済みの両方）。ページを作る・消す・アーカイブしたら取り直させる。 */
+  pageTrees: (workspaceSlug: string, spaceId: string) =>
+    [...workspaceScope(workspaceSlug), 'space', spaceId, 'page-tree'] as const,
+  /** スペースのページの木（現役かアーカイブ済みのどちらか）。 */
+  pageTree: (workspaceSlug: string, spaceId: string, archived: boolean) =>
+    [...workspaceScope(workspaceSlug), 'space', spaceId, 'page-tree', archived ? 'archived' : 'active'] as const,
 };
 
 /** 所属ワークスペースの一覧。ヘッダー・左の列・管理の画面・ホーム・入口の解決が共有する。 */
@@ -40,5 +48,16 @@ export function kbMySpacesQuery(workspaceSlug: string) {
   return queryOptions({
     queryKey: kbKeys.mySpaces(workspaceSlug),
     queryFn: () => KbRepository.fetchMySpaces(workspaceSlug),
+  });
+}
+
+/**
+ * スペースのページの木。左の列・すべてのページ・素の /kb の入口が共有する。
+ * 現役とアーカイブ済みは同じ口のスコープ違いなので、鍵を分けて別々に持つ。
+ */
+export function kbPageTreeQuery(workspaceSlug: string, spaceId: string, archived = false) {
+  return queryOptions({
+    queryKey: kbKeys.pageTree(workspaceSlug, spaceId, archived),
+    queryFn: () => KbRepository.fetchPageTree(workspaceSlug, spaceId, { archived }),
   });
 }

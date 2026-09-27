@@ -24,7 +24,7 @@ import { useKbImageResolver } from '../model/useKbImageResolver';
 import { destinationAfterDeletion } from '../lib/deletionDestination';
 import { useDocOutline } from '../model/useDocOutline';
 import {
-  emitKbTreeEvent,
+  refreshKbPageTrees,
   forgetVisitedPageIfMatches,
   KbRepository,
   subscribeKbTreeEvents,
@@ -291,10 +291,10 @@ export default function KbPage() {
   // run の closure には ref を握らせ、実行時点の最新の data を読ませる。
   // 「ページ」という業務の語彙はこの画面が持ち、エディタは項目を並べるだけ。
   // 描いている途中で ref を書き換えない（コンパイラが部品ごと対象から外す）。描き終えた直後に写す。
-  const subpageContext = useRef({ data, navigate, showToast });
+  const subpageContext = useRef({ data, navigate, showToast, queryClient });
   useLayoutEffect(() => {
-    subpageContext.current = { data, navigate, showToast };
-  }, [data, navigate, showToast]);
+    subpageContext.current = { data, navigate, showToast, queryClient };
+  }, [data, navigate, showToast, queryClient]);
   // 題名で Enter → 本文の先頭へ（見出しから書き出しへ流れるように移る）。
   const [bodyFocusSignal, setBodyFocusSignal] = useState(0);
   // 共有パネルの開閉。ページを移ったら必ず閉じる（別のページの設定を開いたまま
@@ -443,11 +443,11 @@ export default function KbPage() {
         parentId: data.page.id,
         title,
       });
-      emitKbTreeEvent({ type: 'page-created', page: created });
+      void refreshKbPageTrees(queryClient, data.workspaceSlug, created.spaceId);
       setTemplatePickerOpen(false);
       navigate(`/kb/${created.id}`);
     },
-    [data, templates, navigate],
+    [data, templates, navigate, queryClient],
   );
 
   // 「このページを参照しているページ」（逆リンク）。折りたたみの開閉には依存せず、
@@ -628,7 +628,7 @@ export default function KbPage() {
         run: (editor) => {
           const ctx = subpageContext.current;
           if (!ctx.data) return;
-          void createSubpage(editor, ctx.data)
+          void createSubpage(editor, ctx.data, ctx.queryClient)
             .then((path) => ctx.navigate(path))
             .catch(() => ctx.showToast('error', '子ページを作成できませんでした'));
         },

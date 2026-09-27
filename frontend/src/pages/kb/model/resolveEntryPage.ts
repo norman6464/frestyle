@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { KbRepository, getLastVisitedPageId, kbSpacesQuery, kbWorkspacesQuery } from '@/entities/kb';
+import { getLastVisitedPageId, kbPageTreeQuery, kbSpacesQuery, kbWorkspacesQuery } from '@/entities/kb';
 
 /**
  * resolveEntryPageId は素の /kb(ページ ID 無し)で最初に開くページの ID を決める。
@@ -18,7 +18,7 @@ import { KbRepository, getLastVisitedPageId, kbSpacesQuery, kbWorkspacesQuery } 
  * `fromLastVisited` を見て、開けなかったら呼び出し側が入口へ戻して選び直す
  * (開けなかったページの記録は useKbPageDoc が消すので、2 回目は 3 へ落ちる)。
  *
- * ワークスペースとスペースの一覧は共有の問い合わせから読む(左の列が取ってあれば取り直さない)。
+ * ワークスペース・スペースの一覧とページの木は共有の問い合わせから読む(左の列が取ってあれば取り直さない)。
  */
 export interface EntryPage {
   pageId: string;
@@ -41,7 +41,7 @@ export async function resolveEntryPageId(
   for (const workspace of workspaces) {
     const spaces = await queryClient.fetchQuery(kbSpacesQuery(workspace.slug));
     for (const space of spaces) {
-      const tree = await KbRepository.fetchPageTree(workspace.slug, space.id);
+      const tree = await queryClient.fetchQuery(kbPageTreeQuery(workspace.slug, space.id));
       const first = tree.pages[0]?.page.id;
       if (first) return { pageId: first, fromLastVisited: false };
     }

@@ -6,7 +6,8 @@ export type { KbSpaceHeadingProps } from './ui/KbSpaceHeading';
 export { default as KbWorkspaceTabs } from './ui/KbWorkspaceTabs';
 export type { KbWorkspaceTabsProps, KbWorkspaceTab } from './ui/KbWorkspaceTabs';
 export { useWorkspaceList } from './model/useWorkspaceList';
-export { kbKeys, kbWorkspacesQuery, kbSpacesQuery, kbMySpacesQuery } from './api/kbQueries';
+export { kbKeys, kbWorkspacesQuery, kbSpacesQuery, kbMySpacesQuery, kbPageTreeQuery } from './api/kbQueries';
+export { refreshKbPageTrees, reflectKbPageInTrees } from './model/kbPageTreeCache';
 export {
   KB_ROLE_LABEL,
   KB_ROLE_DESCRIPTION,

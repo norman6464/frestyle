@@ -16,8 +16,8 @@ describe('kbTreeEvents', () => {
     const listener = vi.fn();
     const unsubscribe = subscribeKbTreeEvents(listener);
 
-    emitKbTreeEvent({ type: 'page-created', page });
-    expect(listener).toHaveBeenCalledWith({ type: 'page-created', page });
+    emitKbTreeEvent({ type: 'page-updated', page });
+    expect(listener).toHaveBeenCalledWith({ type: 'page-updated', page });
 
     unsubscribe();
     emitKbTreeEvent({ type: 'page-updated', page });
@@ -25,7 +25,7 @@ describe('kbTreeEvents', () => {
   });
 
   it('購読者がいなくても emit は失敗しない', () => {
-    expect(() => emitKbTreeEvent({ type: 'page-created', page })).not.toThrow();
+    expect(() => emitKbTreeEvent({ type: 'page-updated', page })).not.toThrow();
   });
 
   it('emit の最中に後続の購読者が解除されても、その回のイベントは届く', () => {
@@ -36,7 +36,7 @@ describe('kbTreeEvents', () => {
     const unsubscribeFirst = subscribeKbTreeEvents(first);
     const unsubscribeSecond = subscribeKbTreeEvents(second);
 
-    emitKbTreeEvent({ type: 'page-created', page });
+    emitKbTreeEvent({ type: 'page-updated', page });
 
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(1);

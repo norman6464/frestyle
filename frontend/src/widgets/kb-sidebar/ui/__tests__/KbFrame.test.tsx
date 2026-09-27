@@ -5,10 +5,11 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-rou
 import KbFrame from '../KbFrame';
 import type { KbPageRowProps } from '../KbPageRow';
 import type { KbRowActionsProps } from '../KbRowActions';
-import { emitKbTreeEvent, subscribeKbTreeEvents, useWorkspaceList } from '@/entities/kb';
+import { subscribeKbTreeEvents, useWorkspaceList } from '@/entities/kb';
 import type { KbMySpace, KbPage, KbPageTree, KbSpace, KbWorkspace } from '@/entities/kb';
 import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 import { kbKeys } from '@/entities/kb/api/kbQueries';
+import { refreshKbPageTrees, reflectKbPageInTrees } from '@/entities/kb/model/kbPageTreeCache';
 
 /** 描くたびに新しいキャッシュを配る（左の列は取得した結果の置き場の下で動く）。 */
 const render: typeof rtlRender = ((ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
@@ -985,7 +986,45 @@ describe('KbFrame', () => {
       dragRowOnto('1番目', '2番目', 50);
       dragRowOnto('1番目', '2番目', 50);
 
+      // 送るのは、取りに行っている途中の木を止めた次の刻み。
+      await waitFor(() => expect(hoisted.movePage).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
       expect(hoisted.movePage).toHaveBeenCalledTimes(1);
+    });
+
+    it('取りに行っている途中の木が、先に動かした並びをあとから上書きしない', async () => {
+      const client = createTestQueryClient();
+      render(
+        <MemoryRouter initialEntries={['/kb']}>
+          <KbFrame spaceId="space-1" />
+        </MemoryRouter>,
+        { wrapper: queryWrapper(client) },
+      );
+      await screen.findByText('2番目');
+      let resolveStale: (value: KbPageTree) => void = () => {};
+      hoisted.fetchPageTree.mockImplementationOnce(
+        () =>
+          new Promise<KbPageTree>((resolve) => {
+            resolveStale = resolve;
+          }),
+      );
+      act(() => {
+        void client.refetchQueries({ queryKey: kbKeys.pageTrees('acme', 'space-1') });
+      });
+      await waitFor(() => expect(hoisted.fetchPageTree).toHaveBeenCalledTimes(2));
+      hoisted.movePage.mockResolvedValue(undefined);
+
+      dragRowOnto('1番目', '2番目', 99);
+      await waitFor(() => expect(hoisted.movePage).toHaveBeenCalled());
+      await act(async () => {
+        resolveStale(tree([{ id: 'p1', title: '1番目' }, { id: 'p2', title: '2番目' }]));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const titles = screen.getAllByRole('link').map((link) => link.textContent);
+      expect(titles.indexOf('2番目')).toBeLessThan(titles.indexOf('1番目'));
     });
 
     it('スコープが切り替わったあとの失敗では、新しい木を巻き戻さない', async () => {
@@ -1492,50 +1531,61 @@ describe('スペースの切替（文脈バー）', () => {
   });
 });
 
-describe('ページ画面からの通知に木が追従する', () => {
-  it('page-created で親を開き、そのスペースの木を取り直す', async () => {
-    hoisted.fetchPageTree.mockResolvedValue(
-      tree([{ id: 'p1', title: '設計メモ', children: ['p1-child'] }]),
+describe('ページ画面での作成・改名が木に届く（木の控えを直す）', () => {
+  function renderSidebarWith(client: ReturnType<typeof createTestQueryClient>) {
+    return render(
+      <MemoryRouter initialEntries={['/kb']}>
+        <KbFrame spaceId="space-1" />
+      </MemoryRouter>,
+      { wrapper: queryWrapper(client) },
     );
-    renderSidebar();
+  }
+
+  it('ページ画面でページを作ったら、そのスペースの木を取り直す', async () => {
+    const client = createTestQueryClient();
+    renderSidebarWith(client);
+    await screen.findByText('設計メモ');
+    const before = hoisted.fetchPageTree.mock.calls.length;
+    hoisted.fetchPageTree.mockResolvedValue(
+      tree([
+        { id: 'p1', title: '設計メモ' },
+        { id: 'p2', title: '新しいページ' },
+      ]),
+    );
+
+    await act(async () => {
+      await refreshKbPageTrees(client, 'acme', 'space-1');
+    });
+
+    expect(hoisted.fetchPageTree.mock.calls.length).toBeGreaterThan(before);
+    expect(await screen.findByText('新しいページ')).toBeInTheDocument();
+  });
+
+  it('ページ画面で改名したら、木の題名が差し替わる（木ごと取り直さない）', async () => {
+    const client = createTestQueryClient();
+    renderSidebarWith(client);
     await screen.findByText('設計メモ');
     const before = hoisted.fetchPageTree.mock.calls.length;
 
-    act(() => {
-      emitKbTreeEvent({
-        type: 'page-created',
-        page: page('p1-new', '新しいページ'),
-      });
-    });
-
-    await waitFor(() =>
-      expect(hoisted.fetchPageTree.mock.calls.length).toBeGreaterThan(before),
-    );
-  });
-
-  it('page-updated が未読込のスペース宛でも壊れない（何も起きない）', async () => {
-    renderSidebar();
-    await screen.findByText('設計メモ');
-
-    expect(() =>
-      act(() => {
-        emitKbTreeEvent({
-          type: 'page-updated',
-          page: { ...page('other-page', '別スペース'), spaceId: 'space-999' },
-        });
-      }),
-    ).not.toThrow();
-  });
-
-  it('page-updated で木の題名が差し替わる', async () => {
-    renderSidebar();
-    await screen.findByText('設計メモ');
-
-    act(() => {
-      emitKbTreeEvent({ type: 'page-updated', page: page('p1', '書き換わった題名') });
+    await act(async () => {
+      await reflectKbPageInTrees(client, 'acme', page('p1', '書き換わった題名'));
     });
 
     expect(await screen.findByText('書き換わった題名')).toBeInTheDocument();
+    expect(hoisted.fetchPageTree.mock.calls.length).toBe(before);
+  });
+
+  it('別のスペースのページの改名は、この木に何もしない', async () => {
+    const client = createTestQueryClient();
+    renderSidebarWith(client);
+    await screen.findByText('設計メモ');
+
+    await act(async () => {
+      await reflectKbPageInTrees(client, 'acme', { ...page('p1', '別スペースの題名'), spaceId: 'space-999' });
+    });
+
+    expect(screen.getByText('設計メモ')).toBeInTheDocument();
+    expect(screen.queryByText('別スペースの題名')).not.toBeInTheDocument();
   });
 
   // 管理の画面（useWorkspaceList）と左の列は同じ問い合わせを使う。片方で作った・消した所属は、
@@ -2083,7 +2133,8 @@ describe('描いた直後にもう 1 回描き直さない（effect の中で st
       resolveTree(tree([{ id: 'p1', title: '親', children: ['child'] }]));
     });
 
-    expect(screen.getByText('child')).toBeInTheDocument();
+    // 木の到着は共有の問い合わせが次の刻みで知らせる。届いたその 1 回の描き直しで祖先が開く。
+    expect(await screen.findByText('child')).toBeInTheDocument();
     expect(commits.count).toBe(1);
   });
 

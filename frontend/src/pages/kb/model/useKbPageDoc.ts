@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   KbRepository,
-  emitKbTreeEvent,
+  reflectKbPageInTrees,
   rememberVisitedPage,
   forgetVisitedPageIfMatches,
   type KbIcon,
@@ -31,6 +32,7 @@ const SAVE_DEBOUNCE_MS = 800;
  * 分かる）、**フロントで「見る権限がありません」と書いてはいけない。**
  */
 export function useKbPageDoc(pageId: string | undefined) {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<KbPageDocState>({ data: null, loading: false, error: null });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   // 本文保存が block_id_conflict（409）で失敗した回数。0 は「まだ起きていない」。
@@ -183,7 +185,7 @@ export function useKbPageDoc(pageId: string | undefined) {
 
   /**
    * renameTitle は題名を変える。**失敗は投げる**（呼び出し側が入力を保って知らせる）。
-   * 成功したら画面の状態を確定後の値で差し替え、サイドバーの木にも知らせる。
+   * 成功したら画面の状態を確定後の値で差し替え、木の控え（左の列・すべてのページ）も差し替える。
    */
   const renameTitle = useCallback(async (title: string): Promise<void> => {
     const target = saveTarget.current;
@@ -192,17 +194,17 @@ export function useKbPageDoc(pageId: string | undefined) {
     const page = await KbRepository.renamePage(target.workspaceSlug, target.pageId, title);
     // 応答が返る前に別ページへ移っていたら、画面の状態には触らない
     //（触ると、移った先の見出しと ID が前のページのもので上書きされる）。
-    // 改名そのものはサーバーで成立しているので、木への知らせは出す。
+    // 改名そのものはサーバーで成立しているので、木の控えは差し替える。
     if (token === generation.current) {
       setState((prev) => (prev.data ? { ...prev, data: { ...prev.data, page } } : prev));
     }
-    emitKbTreeEvent({ type: 'page-updated', page });
-  }, []);
+    await reflectKbPageInTrees(queryClient, target.workspaceSlug, page);
+  }, [queryClient]);
 
   /**
    * changeIcon はページのアイコンを設定・解除する（`icon` が null なら解除）。
    * **失敗は投げる**（renameTitle と同じ理由 — 呼び出し側がトーストで知らせる）。
-   * 成功したら画面の状態を確定後の値で差し替え、サイドバーの木にも知らせる。
+   * 成功したら画面の状態を確定後の値で差し替え、木の控えも差し替える。
    */
   const changeIcon = useCallback(async (icon: KbIcon | null): Promise<void> => {
     const target = saveTarget.current;
@@ -215,8 +217,8 @@ export function useKbPageDoc(pageId: string | undefined) {
     if (token === generation.current) {
       setState((prev) => (prev.data ? { ...prev, data: { ...prev.data, page } } : prev));
     }
-    emitKbTreeEvent({ type: 'page-updated', page });
-  }, []);
+    await reflectKbPageInTrees(queryClient, target.workspaceSlug, page);
+  }, [queryClient]);
 
   /**
    * changeCover はページのカバー画像を設定・解除する（`key` が null なら解除）。
@@ -226,7 +228,7 @@ export function useKbPageDoc(pageId: string | undefined) {
    * — バリデーション・アップロード・設定の一連の流れは 1 箇所（呼び出し側）にまとめる。
    *
    * **失敗は投げる**（changeIcon と同じ理由 — 呼び出し側がトーストで知らせる）。
-   * 成功したら画面の状態を確定後の値（page・cover）で差し替え、サイドバーの木にも知らせる。
+   * 成功したら画面の状態を確定後の値（page・cover）で差し替え、木の控えも差し替える。
    */
   const changeCover = useCallback(async (key: string | null): Promise<void> => {
     const target = saveTarget.current;
@@ -239,8 +241,8 @@ export function useKbPageDoc(pageId: string | undefined) {
     if (token === generation.current) {
       setState((prev) => (prev.data ? { ...prev, data: { ...prev.data, page, cover } } : prev));
     }
-    emitKbTreeEvent({ type: 'page-updated', page });
-  }, []);
+    await reflectKbPageInTrees(queryClient, target.workspaceSlug, page);
+  }, [queryClient]);
 
   /**
    * applyRestoredContent は版の復元（useKbPageVersions.restoreVersion）が成功した後、

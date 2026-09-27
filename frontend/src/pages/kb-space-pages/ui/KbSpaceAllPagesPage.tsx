@@ -1,7 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { KbPageGlyph, useKbSpaceOutlet } from '@/widgets/kb-sidebar';
 import { Loading, fsIcon } from '@/shared/ui';
-import { KbRepository, KbSpaceHeading, NOTE_NEW_PAGE_TITLE, emitKbTreeEvent } from '@/entities/kb';
+import { useQueryClient } from '@tanstack/react-query';
+import { KbRepository, KbSpaceHeading, NOTE_NEW_PAGE_TITLE, refreshKbPageTrees } from '@/entities/kb';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useKbSpaceAllPages } from '../model/useKbSpaceAllPages';
@@ -40,13 +41,14 @@ function AllPagesList({
 }) {
   const { pages, hasHiddenChildren, loading, error, retry } = useKbSpaceAllPages(workspaceSlug, spaceId);
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
 
   // 空の画面から最初のページを作れるようにする（ナレッジの中にいるのに別の場所へ行かせない）。
   // 作ったらそのページを開く。
   const createFirstPage = async () => {
     try {
       const page = await KbRepository.createPage(workspaceSlug, spaceId, { title: NOTE_NEW_PAGE_TITLE });
-      emitKbTreeEvent({ type: 'page-created', page });
+      void refreshKbPageTrees(queryClient, workspaceSlug, spaceId);
       onOpen(page.id);
     } catch {
       showToast('error', 'ページを作成できませんでした');

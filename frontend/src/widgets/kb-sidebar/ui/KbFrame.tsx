@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useMobileDrawerFocus } from '@/shared/lib/hooks/useMobileDrawerFocus';
 import { EmptyNotice, ErrorNotice, FsIcon, NameCreateForm, SkeletonRows } from '@/shared/ui';
-import { emitKbTreeEvent, type KbDropTarget } from '@/entities/kb';
+import type { KbDropTarget } from '@/entities/kb';
 import { useKbTree } from '../model/useKbTree';
 import { toDropTarget, type KbDropZone } from '../model/dropZone';
 import { filterTreeByTitle, subtreeOf } from '../model/treeFilter';
@@ -80,6 +80,7 @@ export default function KbFrame({
     archivedMode,
     setArchivedMode,
     retrySpace,
+    refreshTree,
   } = useKbTree({ workspaceSlug, spaceId, activePageId });
 
   // 本文まで探す検索（サーバー）。左の列の題名の絞り込みから、打った語を持ち越して開く。
@@ -321,7 +322,7 @@ export default function KbFrame({
             archivedMode={archivedMode}
             onCreatePage={() => void createRootPage()}
             onCreatedFromTemplate={(page) => {
-              emitKbTreeEvent({ type: 'page-created', page });
+              refreshTree();
               setTitleQuery('');
               navigate(`/kb/${page.id}`);
             }}
