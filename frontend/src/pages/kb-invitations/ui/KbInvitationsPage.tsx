@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { KbWorkspaceTabs, useWorkspaceList, type KbInvitation, type KbIssuedInvitation } from '@/entities/kb';
 import { Button, ConfirmModal, FsIcon, fsIcon } from '@/shared/ui';
-import { KbFrame } from '@/widgets/kb-sidebar';
+import { useKbFrameLocation } from '@/widgets/kb-sidebar';
 import EmptyState from '@/shared/ui/EmptyState';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useKbInvitations } from '../model/useKbInvitations';
@@ -57,14 +57,11 @@ export default function KbInvitationsPage() {
 
   // ナレッジの枠（文脈バーのワークスペース側）の中に出す。スペースを持たない画面なので
   // 左の列（ページの木）は出さない。
-  const frame = (content: ReactNode) => (
-    <KbFrame workspaceSlug={workspaceSlug} showPagePanel={false}>
-      <div className="min-h-0 flex-1 overflow-y-auto">{content}</div>
-    </KbFrame>
-  );
+  useKbFrameLocation({ workspaceSlug, showPagePanel: false });
+  const body = (content: ReactNode) => <div className="min-h-0 flex-1 overflow-y-auto">{content}</div>;
 
   if (invitations.error === 'forbidden') {
-    return frame(
+    return body(
       <EmptyState
         headingLevel={1}
         icon={fsIcon('lock')}
@@ -75,7 +72,7 @@ export default function KbInvitationsPage() {
     );
   }
 
-  return frame(
+  return body(
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:pt-12">
       <KbWorkspaceTabs workspaceSlug={workspaceSlug ?? ''} workspaceName={workspaceName} active="invitations" />
 

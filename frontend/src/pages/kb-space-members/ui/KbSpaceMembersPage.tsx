@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { KbFrame } from '@/widgets/kb-sidebar';
+import { useKbFrameLocation } from '@/widgets/kb-sidebar';
 import { Loading, fsIcon } from '@/shared/ui';
 import { useKbSpaceEntry, KbSpaceHeading, kbRoleLabel } from '@/entities/kb';
 import Avatar from '@/shared/ui/Avatar';
@@ -24,46 +24,46 @@ export default function KbSpaceMembersPage() {
     navigate(`/kb/spaces/${id}`, { replace: true }),
   );
 
+  // 枠（左の木と文脈バー）へ今の位置を知らせる。スペースが決まるまでは undefined のまま
+  // （枠は前の木のまま）にして、同じスペースの画面どうしを移るたびに木を取り直さない。
+  useKbFrameLocation({ workspaceSlug: workspaceSlug ?? undefined, spaceId: space?.id });
+
   return (
-    // ナレッジの枠（文脈バー・左の木）。スペースが無い／決まらないときも枠は描く —— 左の列が
-    // 空のワークスペース・空のスペース一覧を検知して作成の欄を出す（そこが始める唯一の入口）。
-    <KbFrame workspaceSlug={workspaceSlug ?? undefined} spaceId={space?.id ?? ''}>
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {error && (
-          <div role="alert" className="flex flex-1 items-center justify-center px-6 py-8 text-center text-sm text-[var(--color-text-muted)]">
-            {error}
-          </div>
-        )}
+    <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      {error && (
+        <div role="alert" className="flex flex-1 items-center justify-center px-6 py-8 text-center text-sm text-[var(--color-text-muted)]">
+          {error}
+        </div>
+      )}
 
-        {!error && noSpaces && (
-          <div className="flex flex-1 items-center justify-center px-6 text-center">
-            <div>
-              <h1 className="mb-2 text-lg font-semibold text-[var(--color-text-secondary)]">
-                アクセスできるスペースがありません
-              </h1>
-              <p className="text-sm text-[var(--color-text-muted)]">
-                左の列（狭い画面では左上のボタン）から、最初のスペースを作れます。
-              </p>
-            </div>
+      {!error && noSpaces && (
+        <div className="flex flex-1 items-center justify-center px-6 text-center">
+          <div>
+            <h1 className="mb-2 text-lg font-semibold text-[var(--color-text-secondary)]">
+              アクセスできるスペースがありません
+            </h1>
+            <p className="text-sm text-[var(--color-text-muted)]">
+              左の列（狭い画面では左上のボタン）から、最初のスペースを作れます。
+            </p>
           </div>
-        )}
+        </div>
+      )}
 
-        {!error && !noSpaces && (loading || !space || !workspaceSlug) && (
-          <div role="status" className="flex flex-1 items-center justify-center py-8 text-sm text-[var(--color-text-muted)]">
-            読み込み中…
+      {!error && !noSpaces && (loading || !space || !workspaceSlug) && (
+        <div role="status" className="flex flex-1 items-center justify-center py-8 text-sm text-[var(--color-text-muted)]">
+          読み込み中…
+        </div>
+      )}
+
+      {!error && !noSpaces && space && workspaceSlug && (
+        <>
+          <KbSpaceHeading space={space} title="メンバー" />
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <MembersList workspaceSlug={workspaceSlug} spaceId={space.id} />
           </div>
-        )}
-
-        {!error && !noSpaces && space && workspaceSlug && (
-          <>
-            <KbSpaceHeading space={space} title="メンバー" />
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-              <MembersList workspaceSlug={workspaceSlug} spaceId={space.id} />
-            </div>
-          </>
-        )}
-      </main>
-    </KbFrame>
+        </>
+      )}
+    </main>
   );
 }
 

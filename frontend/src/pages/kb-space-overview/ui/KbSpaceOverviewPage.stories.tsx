@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { expect, waitFor, within } from 'storybook/test';
+import { KbFrameLayout } from '@/widgets/kb-sidebar';
 import KbSpaceOverviewPage from './KbSpaceOverviewPage';
-import { routerWithParam, withApi, withToast } from '../../../../.storybook/decorators';
+import { kbFrameRoute, withApi, withToast } from '../../../../.storybook/decorators';
 
 const workspaces = [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:00:00Z', canManage: true }];
 const mySpaces = [{ id: 'space-1', name: '開発部', role: 'editor' }];
@@ -22,7 +23,7 @@ type Story = StoryObj<typeof meta>;
 // 突き合わせは前から順なので、細かい宛先を先に書く（/spaces が先だと木の要求まで拾う）。
 export const ふつう: Story = {
   decorators: [
-    routerWithParam('/kb/spaces/:spaceId', '/kb/spaces/space-1'),
+    kbFrameRoute('/kb/spaces/:spaceId', '/kb/spaces/space-1'),
     withApi({
       '/spaces/space-1/pages': { pages: [], hasHiddenChildren: false },
       '/me/spaces': mySpaces,
@@ -50,8 +51,10 @@ export const 対象ワークスペースを引き継ぐ: Story = {
     (Story) => (
       <MemoryRouter initialEntries={['/kb/spaces?workspace=beta']}>
         <Routes>
-          <Route path="/kb/spaces" element={<Story />} />
-          <Route path="/kb/spaces/:spaceId" element={<Story />} />
+          <Route element={<KbFrameLayout />}>
+            <Route path="/kb/spaces" element={<Story />} />
+            <Route path="/kb/spaces/:spaceId" element={<Story />} />
+          </Route>
         </Routes>
       </MemoryRouter>
     ),
@@ -78,7 +81,7 @@ export const 対象ワークスペースを引き継ぐ: Story = {
 export const アクセスできるスペースが無い: Story = {
   // spaceId 無しの入口（/kb/spaces）でだけ再現する。特定の spaceId を指しての「見つからない」
   // とは別（そちらは別の文言になる。resolveKbSpace の doc 参照）。
-  decorators: [routerWithParam('/kb/spaces', '/kb/spaces'), withApi({ '/me/spaces': [], '/kb/workspaces': workspaces })],
+  decorators: [kbFrameRoute('/kb/spaces', '/kb/spaces'), withApi({ '/me/spaces': [], '/kb/workspaces': workspaces })],
   play: async ({ canvasElement }) => {
     await expect(
       await within(canvasElement).findByText('アクセスできるスペースがありません'),

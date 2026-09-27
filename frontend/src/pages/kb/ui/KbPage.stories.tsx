@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
-import { withApi, withToast, routerWithParam } from '../../../../.storybook/decorators';
+import { withApi, withToast, kbFrameRoute } from '../../../../.storybook/decorators';
 import KbPage from './KbPage';
 
 /**
@@ -127,7 +127,7 @@ const api = (over: Record<string, unknown> = {}) => ({
 
 /** ページを開いているとき。 */
 export const ページを開く: Story = {
-  decorators: [routerWithParam('/kb/:pageId', '/kb/p-1'), withApi(api())],
+  decorators: [kbFrameRoute('/kb/:pageId', '/kb/p-1'), withApi(api())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(
@@ -142,7 +142,7 @@ export const ページを開く: Story = {
 /** 読むだけの人が開いたとき。題名も本文も打ち替えられない。アイコンも押せない。 */
 export const 読むだけ: Story = {
   decorators: [
-    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    kbFrameRoute('/kb/:pageId', '/kb/p-1'),
     withApi(
       api({
         '/kb/pages/p-1': resolved({
@@ -168,12 +168,12 @@ export const 読むだけ: Story = {
 
 /** 見られないページ・存在しないページ。どちらも同じ見え方にする（実在を読ませない）。 */
 export const 見られないページ: Story = {
-  decorators: [routerWithParam('/kb/:pageId', '/kb/p-404'), withApi(api())],
+  decorators: [kbFrameRoute('/kb/:pageId', '/kb/p-404'), withApi(api())],
 };
 
 /** アイコンを付ける。一覧から選ぶと保存され、頭部の絵文字に変わる。 */
 export const アイコンを付ける: Story = {
-  decorators: [routerWithParam('/kb/:pageId', '/kb/p-1'), withApi(api())],
+  decorators: [kbFrameRoute('/kb/:pageId', '/kb/p-1'), withApi(api())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const addButton = await findPageOption(canvas, 'アイコンを追加');
@@ -192,7 +192,7 @@ export const アイコンを付ける: Story = {
 /** アイコンを外す。 */
 export const アイコンを外す: Story = {
   decorators: [
-    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    kbFrameRoute('/kb/:pageId', '/kb/p-1'),
     withApi(
       api({
         '/kb/pages/p-1': resolved({ page: { ...page, icon: { type: 'emoji', value: '📘' } } }),
@@ -216,7 +216,7 @@ export const アイコンを外す: Story = {
 /** アイコンの変更に失敗。トーストで知らせ、ピッカーは開いたまま。 */
 export const アイコンの変更に失敗: Story = {
   decorators: [
-    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    kbFrameRoute('/kb/:pageId', '/kb/p-1'),
     withApi(
       api({
         '/pages/p-1/icon': () => {
@@ -246,7 +246,7 @@ export const アイコンの変更に失敗: Story = {
  */
 export const 提案を送信する: Story = {
   decorators: [
-    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    kbFrameRoute('/kb/:pageId', '/kb/p-1'),
     withApi(
       api({
         '/kb/pages/p-1': resolved({ canEdit: false, canManage: false, canComment: true }),
@@ -287,7 +287,7 @@ export const 提案を送信する: Story = {
  */
 export const 提案を採用する: Story = {
   decorators: [
-    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    kbFrameRoute('/kb/:pageId', '/kb/p-1'),
     withApi(
       api({
         '/pages/p-1/suggestions/s-1/accept': () => ({
@@ -330,7 +330,7 @@ export const 提案を採用する: Story = {
 /** 最終編集が出る。 */
 export const 最終編集が出る: Story = {
   decorators: [
-    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    kbFrameRoute('/kb/:pageId', '/kb/p-1'),
     withApi(
       api({
         '/kb/pages/p-1': resolved({
@@ -353,7 +353,7 @@ export const 最終編集が出る: Story = {
  */
 export const バイラインに公開範囲とラベルと閲覧数が出る: Story = {
   decorators: [
-    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    kbFrameRoute('/kb/:pageId', '/kb/p-1'),
     withApi(
       api({
         '/kb/pages/p-1': resolved({
@@ -380,7 +380,7 @@ export const バイラインに公開範囲とラベルと閲覧数が出る: St
  * 「共有」は塗りの主ボタンになる。
  */
 export const 幅とパンくずと共有ボタン: Story = {
-  decorators: [routerWithParam('/kb/:pageId', '/kb/p-1'), withApi(api())],
+  decorators: [kbFrameRoute('/kb/:pageId', '/kb/p-1'), withApi(api())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const article = await canvas.findByRole('article');
@@ -421,7 +421,7 @@ const docWithHeadings = {
  */
 export const 右レールの目次: Story = {
   decorators: [
-    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    kbFrameRoute('/kb/:pageId', '/kb/p-1'),
     withApi(api({ '/kb/pages/p-1': resolved({ doc: docWithHeadings }) })),
   ],
   play: async ({ canvasElement }) => {
@@ -445,7 +445,7 @@ export const 右レールの目次: Story = {
 /** 操作バーのコメント・履歴・提案はレールの同じ名前のタブを開く。同時に見えるのは 1 つで、閉じるボタンで本文が広がる。 */
 export const 右レールのタブを切り替える: Story = {
   decorators: [
-    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    kbFrameRoute('/kb/:pageId', '/kb/p-1'),
     withApi(
       api({
         '/pages/p-1/versions': [
@@ -480,7 +480,7 @@ export const 右レールのタブを切り替える: Story = {
 
 /** 操作バーの星。押すとその場で塗られ、もう一度押すと外れる。 */
 export const お気に入りの星: Story = {
-  decorators: [routerWithParam('/kb/:pageId', '/kb/p-1'), withApi(api())],
+  decorators: [kbFrameRoute('/kb/:pageId', '/kb/p-1'), withApi(api())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const star = await canvas.findByRole('button', { name: 'お気に入りに追加' });
@@ -495,7 +495,7 @@ export const お気に入りの星: Story = {
 /** 保存状態はバイラインの右端。読み上げ用の領域は最初から置き、本文を書き換えると文字が入る。 */
 export const 保存状態はバイラインに出る: Story = {
   decorators: [
-    routerWithParam('/kb/:pageId', '/kb/p-1'),
+    kbFrameRoute('/kb/:pageId', '/kb/p-1'),
     withApi(api({ '/pages/p-1/content': () => ({ ...resolved(), doc }) })),
   ],
   play: async ({ canvasElement }) => {
@@ -513,7 +513,7 @@ export const 保存状態はバイラインに出る: Story = {
 
 /** 狭い画面では右レールは右から出る引き出しになる。Escape で閉じて、押したボタンへ戻る。 */
 export const 狭い画面の補助: Story = {
-  decorators: [routerWithParam('/kb/:pageId', '/kb/p-1'), withApi(api())],
+  decorators: [kbFrameRoute('/kb/:pageId', '/kb/p-1'), withApi(api())],
   globals: { viewport: { value: 'mobile1', isRotated: false } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

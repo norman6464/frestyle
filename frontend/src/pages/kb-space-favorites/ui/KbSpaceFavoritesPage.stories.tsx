@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, waitFor, within } from 'storybook/test';
 import KbSpaceFavoritesPage from './KbSpaceFavoritesPage';
-import { routerWithParam, withApi, withToast } from '../../../../.storybook/decorators';
+import { kbFrameRoute, withApi, withToast } from '../../../../.storybook/decorators';
 
 const workspaces = [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:00:00Z', canManage: true }];
 const mySpaces = [{ id: 'space-1', name: '開発部', role: 'editor' }];
@@ -12,7 +12,8 @@ const meta = {
   title: 'pages/kb-space-favorites/KbSpaceFavoritesPage',
   component: KbSpaceFavoritesPage,
   parameters: { layout: 'fullscreen' },
-  decorators: [withToast, routerWithParam('/kb/spaces/:spaceId/favorites', '/kb/spaces/space-1/favorites')],
+  // 通知の箱は枠ごと包む（枠も通知を出す）。デコレータは先に書いたものほど内側になる。
+  decorators: [kbFrameRoute('/kb/spaces/:spaceId/favorites', '/kb/spaces/space-1/favorites'), withToast],
 } satisfies Meta<typeof KbSpaceFavoritesPage>;
 
 export default meta;

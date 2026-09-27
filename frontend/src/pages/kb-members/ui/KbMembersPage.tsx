@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { KbWorkspaceTabs, useWorkspaceList, type KbAdminWorkspaceMember, type KbGrantRole } from '@/entities/kb';
 import { Button, ConfirmModal, Loading, fsIcon } from '@/shared/ui';
-import { KbFrame } from '@/widgets/kb-sidebar';
+import { useKbFrameLocation } from '@/widgets/kb-sidebar';
 import EmptyState from '@/shared/ui/EmptyState';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useToast } from '@/shared/lib/hooks/useToast';
@@ -63,11 +63,8 @@ export default function KbMembersPage() {
 
   // ナレッジの枠（文脈バーのワークスペース側）の中に出す。スペースを持たない画面なので
   // 左の列（ページの木）は出さない。
-  const frame = (content: ReactNode) => (
-    <KbFrame workspaceSlug={workspaceSlug} showPagePanel={false}>
-      <div className="min-h-0 flex-1 overflow-y-auto">{content}</div>
-    </KbFrame>
-  );
+  useKbFrameLocation({ workspaceSlug, showPagePanel: false });
+  const body = (content: ReactNode) => <div className="min-h-0 flex-1 overflow-y-auto">{content}</div>;
 
   const confirmDeleteWorkspace = async () => {
     if (!workspaceSlug) return;
@@ -96,7 +93,7 @@ export default function KbMembersPage() {
   };
 
   if (error === 'forbidden') {
-    return frame(
+    return body(
       <EmptyState
         headingLevel={1}
         icon={fsIcon('lock')}
@@ -108,7 +105,7 @@ export default function KbMembersPage() {
   }
 
   if (error === 'unknown') {
-    return frame(
+    return body(
       <EmptyState
         headingLevel={1}
         icon={fsIcon('alert-circle')}
@@ -119,7 +116,7 @@ export default function KbMembersPage() {
     );
   }
 
-  return frame(
+  return body(
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:pt-12">
       <KbWorkspaceTabs workspaceSlug={workspaceSlug ?? ''} workspaceName={workspaceName} active="members" />
 
