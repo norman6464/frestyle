@@ -4,6 +4,7 @@ import Button from '@/shared/ui/Button';
 import { formatHourMinute, formatMonthDay } from '@/shared/lib/formatters';
 import { computeSuggestionDiff } from '../lib/suggestionDiff';
 import KbSuggestionDiffView from './KbSuggestionDiffView';
+import { EmptyNotice, ErrorNotice, SkeletonRows } from '@/shared/ui';
 
 export interface KbSuggestionsPanelProps {
   suggestions: KbPageSuggestion[];
@@ -51,24 +52,11 @@ export default function KbSuggestionsPanel({
 
   return (
     <div className="flex flex-col gap-3 p-3">
-      {loading && (
-        <div className="flex flex-col gap-1.5" role="status" aria-label="提案を読み込み中">
-          <div className="h-16 animate-skeleton rounded bg-surface-2" />
-          <div className="h-16 animate-skeleton rounded bg-surface-2" />
-        </div>
-      )}
+      {loading && <SkeletonRows label="提案を読み込み中" shape="blocks" size="lg" />}
 
-      {!loading && error && (
-        <p role="alert" className="text-sm leading-relaxed text-danger-ink">
-          {error}
-        </p>
-      )}
+      {!loading && error && <ErrorNotice variant="inline" message={error} />}
 
-      {!loading && !error && suggestions.length === 0 && (
-        <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
-          まだ提案はありません。
-        </p>
-      )}
+      {!loading && !error && suggestions.length === 0 && <EmptyNotice title="まだ提案はありません。" />}
 
       {!loading && !error && suggestions.length > 0 && (
         <ul className="flex flex-col gap-3">

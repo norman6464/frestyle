@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import type { KbPageTemplate } from '@/entities/kb';
 import Button from '@/shared/ui/Button';
 import ConfirmModal from '@/shared/ui/ConfirmModal';
-import { FsIcon } from '@/shared/ui';
+import { EmptyNotice, ErrorNotice, FsIcon, SkeletonRows } from '@/shared/ui';
 
 export interface KbTemplatePickerModalProps {
   isOpen: boolean;
@@ -142,21 +142,10 @@ function TemplatePicker({
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {!selected && (
             <>
-              {loading && (
-                <div className="flex flex-col gap-1.5" role="status" aria-label="テンプレートを読み込み中">
-                  <div className="h-9 animate-skeleton rounded bg-surface-2" />
-                  <div className="h-9 animate-skeleton rounded bg-surface-2" />
-                </div>
-              )}
-              {!loading && error && (
-                <p role="alert" className="text-sm leading-relaxed text-danger-ink">
-                  {error}
-                </p>
-              )}
+              {loading && <SkeletonRows label="テンプレートを読み込み中" shape="blocks" size="sm" />}
+              {!loading && error && <ErrorNotice variant="inline" message={error} />}
               {!loading && !error && templates.length === 0 && (
-                <p className="px-1 py-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                  まだテンプレートがありません。
-                </p>
+                <EmptyNotice title="まだテンプレートがありません。" className="px-1 py-2" />
               )}
               {!loading && !error && templates.length > 0 && (
                 <ul className="flex flex-col gap-1">

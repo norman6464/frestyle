@@ -2,11 +2,10 @@ import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { KbRecentPage } from '@/entities/kb';
 import { formatTicketKey, type TicketReference } from '@/entities/ticket';
-import { FsIcon } from '@/shared/ui';
+import { EmptyNotice, ErrorNotice, FsIcon, SkeletonRows } from '@/shared/ui';
 import { formatViewedAt } from '../lib/homeDates';
 import { homePrimaryLink, homeRowLink, homeTextLink } from '../lib/homeStyles';
 import type { HomeResource } from '../model/useHomeResource';
-import { HomeLoadingRows, HomePanelEmpty, HomePanelError } from './HomePanelState';
 
 export interface HomeResumeSectionProps {
   recent: HomeResource<KbRecentPage[]>;
@@ -55,17 +54,17 @@ export default function HomeResumeSection({ recent, references, workspaceName, w
         )}
       </div>
 
-      {recent.status === 'loading' && <HomeLoadingRows label="最近のページを読み込んでいます" rows={3} />}
+      {recent.status === 'loading' && <SkeletonRows label="最近のページを読み込んでいます" rows={3} className="py-4" />}
       {recent.status === 'error' && (
-        <HomePanelError message="最近のページを取得できませんでした。" onRetry={recent.retry} />
+        <ErrorNotice message="最近のページを取得できませんでした。" onRetry={recent.retry} />
       )}
       {recent.status === 'ready' && !latest && (
-        <HomePanelEmpty title="表示できる履歴はありません">
+        <EmptyNotice variant="panel" title="表示できる履歴はありません">
           <p>ナレッジからページを探せます。お気に入りと自分の担当はそのまま使えます。</p>
           <Link to="/kb" className={`${homeTextLink} mt-1`}>
             ページを探す <FsIcon name="arrow-right" className="h-4 w-4" />
           </Link>
-        </HomePanelEmpty>
+        </EmptyNotice>
       )}
 
       {recent.status === 'ready' && latest && (
@@ -154,13 +153,12 @@ function PageReferences({ references, wide }: { references: HomeResource<TicketR
   if (references.status === 'loading') return null;
   if (references.status === 'error') {
     return (
-      <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-surface-3 pt-5 text-sm">
-        <p role="alert" className="text-[var(--color-text-muted)]">
-          このページを参照しているチケットを取得できませんでした。
-        </p>
-        <button type="button" onClick={references.retry} className={homeTextLink}>
-          再試行
-        </button>
+      <div className="mt-6 border-t border-surface-3 pt-5">
+        <ErrorNotice
+          variant="inline"
+          message="このページを参照しているチケットを取得できませんでした。"
+          onRetry={references.retry}
+        />
       </div>
     );
   }

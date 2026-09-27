@@ -1,10 +1,9 @@
 import { Link } from 'react-router-dom';
 import { formatTicketKey, type MyAssignedTicket } from '@/entities/ticket';
-import { FsIcon } from '@/shared/ui';
+import { EmptyNotice, ErrorNotice, FsIcon, SkeletonRows } from '@/shared/ui';
 import { formatDueDate } from '../lib/homeDates';
 import { homeTextLink } from '../lib/homeStyles';
 import type { HomeResource } from '../model/useHomeResource';
-import { HomeLoadingRows, HomePanelEmpty, HomePanelError } from './HomePanelState';
 
 export interface HomeAssignedSectionProps {
   assigned: HomeResource<MyAssignedTicket[]>;
@@ -40,17 +39,17 @@ export default function HomeAssignedSection({ assigned, wide, today }: HomeAssig
       </div>
       <p className="text-sm text-[var(--color-text-muted)]">全ワークスペース・未完了・期限順</p>
 
-      {assigned.status === 'loading' && <HomeLoadingRows label="自分の担当を読み込んでいます" rows={wide ? 3 : 2} />}
+      {assigned.status === 'loading' && <SkeletonRows label="自分の担当を読み込んでいます" rows={wide ? 3 : 2} className="py-4" />}
       {assigned.status === 'error' && (
         <div className="mt-4">
-          <HomePanelError message="自分の担当を取得できませんでした。" onRetry={assigned.retry} />
+          <ErrorNotice message="自分の担当を取得できませんでした。" onRetry={assigned.retry} />
         </div>
       )}
       {assigned.status === 'ready' && shown.length === 0 && (
         <div className="mt-4">
-          <HomePanelEmpty title="未完了の担当はありません">
+          <EmptyNotice variant="panel" title="未完了の担当はありません">
             <p>チームの次の作業は、バックログで確認できます。</p>
-          </HomePanelEmpty>
+          </EmptyNotice>
         </div>
       )}
       {assigned.status === 'ready' && shown.length > 0 && (
