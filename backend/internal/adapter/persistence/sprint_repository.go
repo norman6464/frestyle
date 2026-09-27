@@ -130,12 +130,26 @@ func (r *sprintRepository) UpdateSprint(ctx context.Context, workspaceID, sprint
 	return &s, nil
 }
 
+func sprintConstraintError(err error) error {
+	name, ok := uniqueViolationConstraint(err)
+	if !ok {
+		return err
+	}
+
+	switch name {
+	case "uq_sprints_project_active":
+		return repository.ErrActiveSprintAlreadyExists
+	default:
+		return err
+	}
+}
+
 func (r *sprintRepository) ChangeSprintState(ctx context.Context, workspaceID, sprintID string, expectedState, newState domain.SprintState) (*domain.Sprint, error) {
-	wsID, ok := kbParseID(workspaceID)
-	sID, ok2 := kbParseID(sprintID)
-	if !ok || !ok2 {
+	ids, ok := kbParseIDs(workspaceID, sprintID)
+	if !ok {
 		return nil, repository.ErrSprintNotFound
 	}
+	wsID, sID := ids[0], ids[1]
 	row, err := r.queries(ctx).ChangeSprintState(ctx, sqlcgen.ChangeSprintStateParams{
 		WorkspaceID:   wsID,
 		ID:            sID,
@@ -146,12 +160,7 @@ func (r *sprintRepository) ChangeSprintState(ctx context.Context, workspaceID, s
 		return nil, repository.ErrSprintStateConflict
 	}
 	if err != nil {
-		if name, ok := uniqueViolationConstraint(err); ok {
-			if name == "uq_sprints_project_active" {
-				return nil, repository.ErrActiveSprintAlreadyExists
-			}
-		}
-		return nil, err
+		return nil, sprintConstraintError(err)
 	}
 	s := toDomainSprint(row)
 	return &s, nil

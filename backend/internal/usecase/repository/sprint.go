@@ -39,7 +39,8 @@ type SprintRepository interface {
 	UpdateSprint(ctx context.Context, workspaceID, sprintID, name string, startDate, endDate *string) (*domain.Sprint, error)
 	ChangeSprintState(ctx context.Context, workspaceID, sprintID string, expectedState, newState domain.SprintState) (*domain.Sprint, error)
 	DeleteSprint(ctx context.Context, workspaceID, sprintID string) error
-	// CountActiveSprints は通常時の事前チェックに使う。active 1 件制約は DB の partial UNIQUE でも保証する。
+	// CountActiveSprints は、active なスプリントがすでにあるかを事前に確認するために使う。
+	// 同一 project 内で active なスプリントは 1 件まで、という制約は DB の partial UNIQUE でも保証する。
 	CountActiveSprints(ctx context.Context, workspaceID, projectID string) (int64, error)
 
 	// AddTicketToSprint は既に別のスプリントへ入っていれば移動になる（表の PK が

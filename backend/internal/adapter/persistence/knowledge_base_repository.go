@@ -60,6 +60,18 @@ func kbParseID(id string) (uuid.UUID, bool) {
 	return u, true
 }
 
+func kbParseIDs(ids ...string) ([]uuid.UUID, bool) {
+	parsedIDs := make([]uuid.UUID, len(ids))
+	for i, id := range ids {
+		parsed, ok := kbParseID(id)
+		if !ok {
+			return nil, false
+		}
+		parsedIDs[i] = parsed
+	}
+	return parsedIDs, true
+}
+
 // kbNullID は NULL 可の親 ID（*string）を uuid.NullUUID へ変換する。
 func kbNullID(id *string) (uuid.NullUUID, bool) {
 	if id == nil {
