@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ProjectRepository, type Project } from '@/entities/project';
-import { FsIcon } from '@/shared/ui';
+import { EmptyNotice, ErrorNotice, FsIcon, SkeletonRows } from '@/shared/ui';
 import { useDismissOnOutside } from '@/shared/lib/hooks/useDismissOnOutside';
 
 export interface BacklogProjectSwitcherProps {
@@ -70,23 +70,17 @@ export default function BacklogProjectSwitcher({ workspaceSlug, project }: Backl
       {open && (
         <div className="absolute left-0 top-full z-20 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-md border border-surface-3 bg-surface-1 p-1 shadow-lg">
           {listStatus === 'loading' ? (
-            <p role="status" className="px-2 py-1.5 text-xs text-[var(--color-text-muted)]">
-              読み込み中…
-            </p>
+            <SkeletonRows label="プロジェクトを読み込み中" shape="blocks" size="sm" className="px-2 py-1.5" />
           ) : listStatus === 'error' ? (
-            <div role="alert" className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs text-danger-ink">
-              <span>プロジェクトを読み込めませんでした</span>
-              <button
-                type="button"
-                onClick={() => setAttempt((prev) => prev + 1)}
-                className="min-h-9 shrink-0 rounded px-1.5 underline hover:no-underline"
-              >
-                再試行
-              </button>
-            </div>
+            <ErrorNotice
+              variant="inline"
+              message="プロジェクトを読み込めませんでした"
+              onRetry={() => setAttempt((prev) => prev + 1)}
+              className="px-2 py-1"
+            />
           ) : projects.length === 0 ? (
             // 今のプロジェクトも一覧に並ぶので、0 件は「ほかの」ではなく「無い」。
-            <p className="px-2 py-1.5 text-xs text-[var(--color-text-muted)]">切り替えられるプロジェクトはありません</p>
+            <EmptyNotice title="切り替えられるプロジェクトはありません" className="px-2 py-1.5" />
           ) : (
             projects.map((p) => (
               <Link

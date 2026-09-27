@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ConfirmModal, EmptyState, FsIllustration, Loading, NameCreateForm } from '@/shared/ui';
+import { ConfirmModal, EmptyState, ErrorNotice, FsIllustration, fsIcon, Loading, NameCreateForm } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
 import { getApiError } from '@/shared/lib/classifyApiError';
@@ -130,8 +130,10 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     workspaceSlug,
     project,
     noProjects,
+    notFound: projectNotFound,
     loading: projectLoading,
     error: projectError,
+    retry: retryProject,
   } = useBacklogProject(projectId, (id) => navigate(backlogPath(id, view), { replace: true }));
 
   const list = useTicketList(workspaceSlug ?? undefined, project?.id, {
@@ -492,9 +494,18 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
         inert={!wide && mobileDetailOpen}
         className="mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col overflow-hidden"
       >
-        {projectError ? (
-          <div role="alert" className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]">
-            {projectError}
+        {projectNotFound ? (
+          // 行き止まりにしない。素の /backlog は最初に見つかったプロジェクトを開く。
+          <EmptyState
+            headingLevel={1}
+            icon={fsIcon('folder')}
+            title="このプロジェクトは見つかりませんでした"
+            description="移動または削除された可能性があります。"
+            action={{ label: 'バックログへ戻る', onClick: () => navigate('/backlog') }}
+          />
+        ) : projectError ? (
+          <div className="flex flex-1 items-center justify-center px-4 sm:px-6">
+            <ErrorNotice message={projectError} onRetry={retryProject} className="w-full max-w-md" />
           </div>
         ) : noProjects ? (
           <div className="flex flex-1 items-center justify-center px-6 text-center">
@@ -519,9 +530,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
             </div>
           </div>
         ) : projectLoading || !project ? (
-          <div role="status" className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-muted)]">
-            読み込み中…
-          </div>
+          <Loading className="flex-1" />
         ) : (
           <>
             {/*
@@ -586,16 +595,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                   />
                   {/* 保存した絞り込みが読めなかったことは、無いことと区別して出す（0 件は何も出ない）。 */}
                   {saved.error && (
-                    <p role="alert" className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-muted)]">
-                      <span>{saved.error}</span>
-                      <button
-                        type="button"
-                        onClick={saved.refresh}
-                        className="min-h-9 rounded px-1.5 underline hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-                      >
-                        再試行
-                      </button>
-                    </p>
+                    <ErrorNotice variant="inline" message={saved.error} onRetry={saved.refresh} className="mt-1" />
                   )}
                   {/* 保存・改名・削除の結果は、操作したタブの並びのすぐ下に出す（トーストだけにしない）。 */}
                   {filterMessage && (
@@ -648,21 +648,15 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                 ) : (
                   <div className="flex h-full min-h-0 flex-col">
                     {sprintError && (
-                      // 一覧そのものは読めているので画面は塞がない。ただし
+                      // 一覧そのものは読めているので画面は塞がない（status）。ただし
                       // 「スプリントの中身が空なのか、読めなかったのか」は必ず区別させる。
-                      <p
-                        role="status"
-                        className="mx-4 mt-3 flex items-center gap-2 rounded-md border border-surface-3 bg-surface-2 px-3 py-2 text-xs text-[var(--color-text-muted)]"
-                      >
-                        <span>{sprintError}</span>
-                        <button
-                          type="button"
-                          onClick={retrySprints}
-                          className="rounded border border-surface-3 px-2 py-0.5 font-medium text-[var(--color-text-secondary)] hover:bg-surface-1"
-                        >
-                          再試行
-                        </button>
-                      </p>
+                      <ErrorNotice
+                        variant="inline"
+                        politeness="polite"
+                        message={sprintError}
+                        onRetry={retrySprints}
+                        className="mx-4 mt-3 rounded-md border border-surface-3 bg-surface-2 px-3"
+                      />
                     )}
                     {/* 一覧は残りの高さを使い、狭い画面の選択中の帯はその下に常に見える位置に置く。 */}
                     <div className="min-h-0 flex-1">

@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useMobileDrawerFocus } from '@/shared/lib/hooks/useMobileDrawerFocus';
-import { NameCreateForm, FsIcon } from '@/shared/ui';
+import { EmptyNotice, ErrorNotice, FsIcon, NameCreateForm, SkeletonRows } from '@/shared/ui';
 import { emitKbTreeEvent, type KbDropTarget } from '@/entities/kb';
 import { useKbTree } from '../model/useKbTree';
 import { toDropTarget, type KbDropZone } from '../model/dropZone';
@@ -264,14 +264,11 @@ export default function KbFrame({
 
   const panelContent = (
     <>
-      {workspacesLoading && <p className="px-2 py-2 text-xs text-[var(--color-text-muted)]">読み込み中…</p>}
+      {workspacesLoading && (
+        <SkeletonRows label="ワークスペースを読み込み中" shape="blocks" size="sm" className="px-2 py-2" />
+      )}
       {workspacesError && (
-        <div role="alert" className="px-2 py-2 text-xs text-danger-ink">
-          <p>{workspacesError}</p>
-          <button type="button" onClick={retryWorkspaces} className="mt-0.5 min-h-9 underline hover:no-underline">
-            再試行
-          </button>
-        </div>
+        <ErrorNotice variant="inline" message={workspacesError} onRetry={retryWorkspaces} className="px-2 py-2" />
       )}
 
       {!workspacesLoading && !workspacesError && workspaces.length === 0 && (
@@ -287,15 +284,10 @@ export default function KbFrame({
       )}
 
       {activeSlug && !space && spacesLoading && (
-        <p className="px-2 py-1 text-xs text-[var(--color-text-muted)]">読み込み中…</p>
+        <SkeletonRows label="スペースを読み込み中" shape="blocks" size="sm" className="px-2 py-1" />
       )}
       {activeSlug && !space && spacesError && (
-        <div role="alert" className="px-2 py-1 text-xs text-danger-ink">
-          <p>{spacesError}</p>
-          <button type="button" onClick={retrySpaces} className="mt-0.5 min-h-9 underline hover:no-underline">
-            再試行
-          </button>
-        </div>
+        <ErrorNotice variant="inline" message={spacesError} onRetry={retrySpaces} className="px-2 py-1" />
       )}
       {/* ワークスペースを作っただけではスペースは付いてこない。ここで入口を出さないと
           「見られるスペースがありません」で行き止まりになる（文脈バーのスペース切替は
@@ -385,23 +377,19 @@ export default function KbFrame({
 
           <div className="min-h-0 flex-1">
             {spaceState.loading && (
-              <p className="px-2 py-1 text-xs text-[var(--color-text-muted)]">読み込み中…</p>
+              <SkeletonRows label="ページを読み込み中" shape="blocks" size="sm" className="px-2 py-1" />
             )}
             {spaceState.error && (
-              <div className="px-2 py-1 text-xs text-danger-ink">
-                <p>{spaceState.error}</p>
-                <button type="button" onClick={retrySpace} className="mt-0.5 min-h-9 underline hover:no-underline">
-                  再試行
-                </button>
-              </div>
+              <ErrorNotice variant="inline" message={spaceState.error} onRetry={retrySpace} className="px-2 py-1" />
             )}
             {!spaceState.loading &&
               !spaceState.error &&
               !spaceState.tree?.pages.length &&
               !spaceState.tree?.hasHiddenChildren && (
-                <p className="px-2 py-1 text-xs text-[var(--color-text-muted)]">
-                  {archivedMode ? 'アーカイブしたページはありません' : 'ページがありません'}
-                </p>
+                <EmptyNotice
+                  title={archivedMode ? 'アーカイブしたページはありません' : 'ページがありません'}
+                  className="px-2 py-1"
+                />
               )}
             {filtering && fullTree.length > 0 && shownNodes.length === 0 && (
               <p role="status" className="px-2 py-1 text-xs text-[var(--color-text-muted)]">

@@ -1,5 +1,5 @@
 import type { TicketChangeGroup } from '@/entities/ticket';
-import Loading from '@/shared/ui/Loading';
+import { EmptyNotice, ErrorNotice, Loading } from '@/shared/ui';
 import { formatMonthDay, formatHourMinute } from '@/shared/lib/formatters';
 
 export interface TicketChangeHistoryProps {
@@ -37,14 +37,12 @@ export default function TicketChangeHistory({ history, loading, error }: TicketC
 
   if (error) {
     return (
-      <p role="alert" className="text-sm leading-relaxed text-danger-ink">
-        {error}
-      </p>
+      <ErrorNotice variant="inline" message={error} />
     );
   }
 
   if (history.length === 0) {
-    return <p className="text-xs text-[var(--color-text-muted)]">まだ変更はありません</p>;
+    return <EmptyNotice title="まだ変更はありません" />;
   }
 
   return (

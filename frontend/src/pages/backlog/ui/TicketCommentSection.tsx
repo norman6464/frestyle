@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import Loading from '@/shared/ui/Loading';
+import { EmptyNotice, ErrorNotice, Loading } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import type { TicketCommentBlock } from '@/entities/ticket';
@@ -114,21 +114,8 @@ export default function TicketCommentSection({ workspaceSlug, ticketId, compact 
     return (
       <div className="flex flex-col gap-2">
         {loading && <Loading size="small" />}
-        {!loading && error && (
-          <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger-ink">
-            <p>{error}</p>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="inline-flex min-h-9 items-center rounded-md border border-surface-3 bg-surface-1 px-3 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-surface-2"
-            >
-              再読み込み
-            </button>
-          </div>
-        )}
-        {!loading && !error && latest.length === 0 && (
-          <p className="text-xs text-[var(--color-text-muted)]">まだコメントはありません</p>
-        )}
+        {!loading && error && <ErrorNotice variant="inline" message={error} onRetry={() => void refresh()} />}
+        {!loading && !error && latest.length === 0 && <EmptyNotice title="まだコメントはありません" />}
         {!loading &&
           !error &&
           latest.map((comment) => (
@@ -167,20 +154,9 @@ export default function TicketCommentSection({ workspaceSlug, ticketId, compact 
 
       {loading && <Loading />}
 
-      {!loading && error && (
-        <div className="flex items-center gap-2 text-xs text-danger-ink">
-          <p role="alert" className="flex-1">
-            {error}
-          </p>
-          <button type="button" onClick={refresh} className="font-semibold underline">
-            再読み込み
-          </button>
-        </div>
-      )}
+      {!loading && error && <ErrorNotice variant="inline" message={error} onRetry={() => void refresh()} />}
 
-      {!loading && !error && threads.length === 0 && (
-        <p className="text-sm text-[var(--color-text-muted)]">まだコメントはありません</p>
-      )}
+      {!loading && !error && threads.length === 0 && <EmptyNotice title="まだコメントはありません" />}
 
       {!loading && !error && hiddenThreadCount > 0 && (
         <button

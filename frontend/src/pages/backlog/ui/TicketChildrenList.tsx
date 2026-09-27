@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { TicketKeyBadge, TicketStatusPill, type Ticket, type TicketStatus } from '@/entities/ticket';
-import Loading from '@/shared/ui/Loading';
+import { EmptyNotice, ErrorNotice, Loading } from '@/shared/ui';
 import { ticketLinkState } from '../lib/ticketLinkState';
 
 export interface TicketChildrenListProps {
@@ -20,13 +20,11 @@ export default function TicketChildrenList({ tickets, loading, error, projectKey
   if (loading) return <Loading size="small" />;
   if (error) {
     return (
-      <p role="alert" className="text-sm text-danger-ink">
-        {error}
-      </p>
+      <ErrorNotice variant="inline" message={error} />
     );
   }
   if (tickets.length === 0) {
-    return <p className="text-xs text-[var(--color-text-muted)]">子チケットはありません</p>;
+    return <EmptyNotice title="子チケットはありません" />;
   }
 
   return (
