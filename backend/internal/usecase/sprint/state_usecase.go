@@ -57,5 +57,24 @@ func (u *ChangeSprintStateUseCase) Execute(ctx context.Context, in ChangeSprintS
 			return nil, ErrActiveSprintExists
 		}
 	}
-	return u.repo.ChangeSprintState(ctx, in.WorkspaceID, in.SprintID, in.State)
+	updated, err := u.repo.ChangeSprintState(
+		ctx,
+		in.WorkspaceID,
+		in.SprintID,
+		current.State,
+		in.State,
+	)
+
+	if errors.Is(err, repository.ErrSprintStateConflict) {
+		return nil, ErrSprintStateTransition
+	}
+	if errors.Is(err, repository.ErrActiveSprintAlreadyExists) {
+		return nil, ErrActiveSprintExists
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return updated, nil
 }

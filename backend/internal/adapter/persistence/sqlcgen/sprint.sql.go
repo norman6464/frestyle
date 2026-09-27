@@ -13,19 +13,28 @@ import (
 )
 
 const changeSprintState = `-- name: ChangeSprintState :one
-UPDATE sprints SET state = $3, updated_at = now()
-WHERE workspace_id = $1 AND id = $2
+UPDATE sprints
+SET state = $1, updated_at = now()
+WHERE workspace_id = $2
+  AND id = $3
+  AND state = $4
 RETURNING id, workspace_id, project_id, name, state, start_date, end_date, position, created_at, updated_at
 `
 
 type ChangeSprintStateParams struct {
-	WorkspaceID uuid.UUID
-	ID          uuid.UUID
-	State       string
+	NewState      string
+	WorkspaceID   uuid.UUID
+	ID            uuid.UUID
+	ExpectedState string
 }
 
 func (q *Queries) ChangeSprintState(ctx context.Context, arg ChangeSprintStateParams) (Sprint, error) {
-	row := q.db.QueryRowContext(ctx, changeSprintState, arg.WorkspaceID, arg.ID, arg.State)
+	row := q.db.QueryRowContext(ctx, changeSprintState,
+		arg.NewState,
+		arg.WorkspaceID,
+		arg.ID,
+		arg.ExpectedState,
+	)
 	var i Sprint
 	err := row.Scan(
 		&i.ID,

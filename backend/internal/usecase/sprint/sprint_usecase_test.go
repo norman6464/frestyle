@@ -64,9 +64,11 @@ func (m *mockSprintRepo) UpdateSprint(
 }
 
 func (m *mockSprintRepo) ChangeSprintState(
-	ctx context.Context, workspaceID, sprintID string, state domain.SprintState,
+	ctx context.Context,
+	workspaceID, sprintID string,
+	expectedState, newState domain.SprintState,
 ) (*domain.Sprint, error) {
-	args := m.Called(ctx, workspaceID, sprintID, state)
+	args := m.Called(ctx, workspaceID, sprintID, expectedState, newState)
 	s, _ := args.Get(0).(*domain.Sprint)
 	return s, args.Error(1)
 }
@@ -339,7 +341,15 @@ func Test_スプリントの状態_進行中は1つまで(t *testing.T) {
 	})
 
 	assert.ErrorIs(t, err, sprint.ErrActiveSprintExists)
-	repo.AssertNotCalled(t, "ChangeSprintState", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	repo.AssertNotCalled(
+		t,
+		"ChangeSprintState",
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+	)
 }
 
 func Test_スプリントの状態_他に進行中が無ければ開始できる(t *testing.T) {
@@ -347,7 +357,14 @@ func Test_スプリントの状態_他に進行中が無ければ開始できる
 	started := sprintIn(domain.SprintStateActive)
 	repo.On("FindSprint", mock.Anything, spWS, spID).Return(sprintIn(domain.SprintStatePlanned), nil)
 	repo.On("CountActiveSprints", mock.Anything, spWS, spProject).Return(int64(0), nil)
-	repo.On("ChangeSprintState", mock.Anything, spWS, spID, domain.SprintStateActive).Return(started, nil)
+	repo.On(
+		"ChangeSprintState",
+		mock.Anything,
+		spWS,
+		spID,
+		domain.SprintStatePlanned,
+		domain.SprintStateActive,
+	).Return(started, nil)
 
 	got, err := sprint.NewChangeSprintStateUseCase(repo).Execute(context.Background(), sprint.ChangeSprintStateInput{
 		WorkspaceID: spWS, SprintID: spID, State: domain.SprintStateActive,
@@ -362,7 +379,14 @@ func Test_スプリントの状態_完了は進行中の数を数えない(t *te
 	repo := &mockSprintRepo{}
 	done := sprintIn(domain.SprintStateCompleted)
 	repo.On("FindSprint", mock.Anything, spWS, spID).Return(sprintIn(domain.SprintStateActive), nil)
-	repo.On("ChangeSprintState", mock.Anything, spWS, spID, domain.SprintStateCompleted).Return(done, nil)
+	repo.On(
+		"ChangeSprintState",
+		mock.Anything,
+		spWS,
+		spID,
+		domain.SprintStateActive,
+		domain.SprintStateCompleted,
+	).Return(done, nil)
 
 	got, err := sprint.NewChangeSprintStateUseCase(repo).Execute(context.Background(), sprint.ChangeSprintStateInput{
 		WorkspaceID: spWS, SprintID: spID, State: domain.SprintStateCompleted,
@@ -372,6 +396,58 @@ func Test_スプリントの状態_完了は進行中の数を数えない(t *te
 	assert.Equal(t, domain.SprintStateCompleted, got.State)
 	// 「1 つまで」は開始のときだけの規則。完了で数えると無駄な問い合わせが 1 本増える。
 	repo.AssertNotCalled(t, "CountActiveSprints", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func Test_スプリントの状態_更新競合を既存エラーに変換する(t *testing.T) {
+	tests := []struct {
+		name    string
+		repoErr error
+		wantErr error
+	}{
+		{
+			name:    "状態が途中で変わった",
+			repoErr: repository.ErrSprintStateConflict,
+			wantErr: sprint.ErrSprintStateTransition,
+		},
+		{
+			name:    "別のスプリントが先にactiveになった",
+			repoErr: repository.ErrActiveSprintAlreadyExists,
+			wantErr: sprint.ErrActiveSprintExists,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &mockSprintRepo{}
+
+			repo.On("FindSprint", mock.Anything, spWS, spID).
+				Return(sprintIn(domain.SprintStatePlanned), nil)
+
+			repo.On("CountActiveSprints", mock.Anything, spWS, spProject).
+				Return(int64(0), nil)
+
+			repo.On(
+				"ChangeSprintState",
+				mock.Anything,
+				spWS,
+				spID,
+				domain.SprintStatePlanned,
+				domain.SprintStateActive,
+			).Return((*domain.Sprint)(nil), tt.repoErr)
+
+			_, err := sprint.NewChangeSprintStateUseCase(repo).Execute(
+				context.Background(),
+				sprint.ChangeSprintStateInput{
+					WorkspaceID: spWS,
+					SprintID:    spID,
+					State:       domain.SprintStateActive,
+				},
+			)
+
+			assert.ErrorIs(t, err, tt.wantErr)
+			repo.AssertExpectations(t)
+		})
+	}
 }
 
 func Test_スプリントの状態_指定が足りなければ断る(t *testing.T) {

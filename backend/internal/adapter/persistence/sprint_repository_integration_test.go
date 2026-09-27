@@ -4,6 +4,7 @@ package persistence_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/norman6464/frestyle/backend/internal/adapter/persistence"
@@ -61,21 +62,116 @@ func TestSprintRepository_Integration(t *testing.T) {
 		ws, project := setup(t)
 		s := newSprint(t, ws, project, "スプリント 1")
 
-		started, err := repo.ChangeSprintState(ctx, ws, s.ID, domain.SprintStateActive)
+		started, err := repo.ChangeSprintState(
+			ctx,
+			ws,
+			s.ID,
+			domain.SprintStatePlanned,
+			domain.SprintStateActive,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, domain.SprintStateActive, started.State)
 
 		n, err := repo.CountActiveSprints(ctx, ws, project)
 		require.NoError(t, err)
-		assert.EqualValues(t, 1, n, "進行中の数を数えられる（1 つまでの判定に使う）")
+		assert.EqualValues(t, 1, n, "進行中の数を数えられる（1つまでの判定に使う）")
 
-		done, err := repo.ChangeSprintState(ctx, ws, s.ID, domain.SprintStateCompleted)
+		done, err := repo.ChangeSprintState(
+			ctx,
+			ws,
+			s.ID,
+			domain.SprintStateActive,
+			domain.SprintStateCompleted,
+		)
 		require.NoError(t, err)
 		assert.Equal(t, domain.SprintStateCompleted, done.State)
 
 		n, err = repo.CountActiveSprints(ctx, ws, project)
 		require.NoError(t, err)
 		assert.EqualValues(t, 0, n, "完了したら進行中から外れる")
+	})
+
+	t.Run("古いplanned状態ではcompletedからactiveに戻せない", func(t *testing.T) {
+		ws, project := setup(t)
+		s := newSprint(t, ws, project, "スプリント 1")
+
+		_, err := repo.ChangeSprintState(
+			ctx,
+			ws,
+			s.ID,
+			domain.SprintStatePlanned,
+			domain.SprintStateActive,
+		)
+		require.NoError(t, err)
+
+		_, err = repo.ChangeSprintState(
+			ctx,
+			ws,
+			s.ID,
+			domain.SprintStateActive,
+			domain.SprintStateCompleted,
+		)
+		require.NoError(t, err)
+
+		_, err = repo.ChangeSprintState(
+			ctx,
+			ws,
+			s.ID,
+			domain.SprintStatePlanned,
+			domain.SprintStateActive,
+		)
+		assert.ErrorIs(t, err, repository.ErrSprintStateConflict)
+
+		got, err := repo.FindSprint(ctx, ws, s.ID)
+		require.NoError(t, err)
+		assert.Equal(t, domain.SprintStateCompleted, got.State)
+	})
+
+	t.Run("同じprojectのスプリントを同時に開始してもactiveは1件だけ", func(t *testing.T) {
+		ws, project := setup(t)
+		first := newSprint(t, ws, project, "スプリント 1")
+		second := newSprint(t, ws, project, "スプリント 2")
+
+		sprints := []*domain.Sprint{first, second}
+		errs := make([]error, len(sprints))
+
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+
+		for i, s := range sprints {
+			wg.Add(1)
+			go func(i int, s *domain.Sprint) {
+				defer wg.Done()
+
+				<-start
+
+				_, errs[i] = repo.ChangeSprintState(
+					ctx,
+					ws,
+					s.ID,
+					domain.SprintStatePlanned,
+					domain.SprintStateActive,
+				)
+			}(i, s)
+		}
+
+		close(start)
+		wg.Wait()
+
+		succeeded := 0
+		for _, err := range errs {
+			if err == nil {
+				succeeded++
+			} else {
+				assert.ErrorIs(t, err, repository.ErrActiveSprintAlreadyExists)
+			}
+		}
+
+		assert.Equal(t, 1, succeeded)
+
+		n, err := repo.CountActiveSprints(ctx, ws, project)
+		require.NoError(t, err)
+		assert.EqualValues(t, 1, n)
 	})
 
 	// 壊れた ID（UUID として読めない文字列）は「無い」として扱う。落ちたり、

@@ -75,13 +75,16 @@ func (f *sprintFakeRepo) UpdateSprint(
 }
 
 func (f *sprintFakeRepo) ChangeSprintState(
-	_ context.Context, workspaceID, sprintID string, state domain.SprintState,
+	_ context.Context, workspaceID, sprintID string, expectedState, newState domain.SprintState,
 ) (*domain.Sprint, error) {
 	s, ok := f.sprints[sprintID]
 	if !ok || s.WorkspaceID != workspaceID {
 		return nil, repository.ErrSprintNotFound
 	}
-	s.State = state
+	if s.State != expectedState {
+		return nil, repository.ErrSprintStateConflict
+	}
+	s.State = newState
 	cp := *s
 	return &cp, nil
 }

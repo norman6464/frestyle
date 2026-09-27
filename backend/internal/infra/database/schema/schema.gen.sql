@@ -774,6 +774,8 @@ CREATE TABLE "sprints" (
 );
 -- Create index "idx_sprints_project_position" to table: "sprints"
 CREATE INDEX "idx_sprints_project_position" ON "sprints" ("workspace_id", "project_id", "position");
+-- Create index "uq_sprints_project_active" to table: "sprints"
+CREATE UNIQUE INDEX "uq_sprints_project_active" ON "sprints" ("workspace_id", "project_id") WHERE ((state)::text = 'active'::text);
 -- Create "team_members" table
 CREATE TABLE "team_members" (
   "workspace_id" uuid NOT NULL,

@@ -3227,6 +3227,11 @@ table "sprints" {
   unique "uq_sprints_project_position" {
     columns = [column.workspace_id, column.project_id, column.position]
   }
+  index "uq_sprints_project_active" {
+    unique  = true
+    columns = [column.workspace_id, column.project_id]
+    where   = "((state)::text = 'active'::text)"
+  }
   check "ck_sprints_state" {
     expr = "(state)::text = ANY (ARRAY[('planned'::character varying)::text, ('active'::character varying)::text, ('completed'::character varying)::text])"
   }
