@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import KbFrame from '../KbFrame';
 import type { KbPageRowProps } from '../KbPageRow';
+import type { KbRowActionsProps } from '../KbRowActions';
 import { emitKbTreeEvent, subscribeKbTreeEvents } from '@/entities/kb';
 import type { KbMySpace, KbPage, KbPageTree, KbSpace, KbWorkspace } from '@/entities/kb';
 
@@ -35,6 +36,20 @@ vi.mock('../KbPageRow', async () => {
     default: (props: KbPageRowProps) => {
       rowRenders.count += 1;
       return <Row {...props} />;
+    },
+  };
+});
+
+// 行の操作メニュー（行の中でいちばん重い部品）が何回描き直されたかも同じ形で数える。
+const actionsRenders = vi.hoisted(() => ({ count: 0 }));
+vi.mock('../KbRowActions', async () => {
+  const actual = await vi.importActual<typeof import('../KbRowActions')>('../KbRowActions');
+  const Actions = actual.default;
+  return {
+    ...actual,
+    default: (props: KbRowActionsProps) => {
+      actionsRenders.count += 1;
+      return <Actions {...props} />;
     },
   };
 });
@@ -1867,5 +1882,29 @@ describe('左の列の絞り込み', () => {
     renderSidebar();
     await screen.findByText('設計メモ');
     expect(screen.queryByRole('button', { name: 'この場所のページだけを表示' })).not.toBeInTheDocument();
+  });
+});
+
+describe('描き直す範囲（React Compiler）', () => {
+  it('段を 1 つ開いても、ほかの行の操作メニューは描き直さない', async () => {
+    // 行へ渡す値と関数が前と同じなら、行の中身（操作メニュー）は前に描いたものを使い回す。
+    // 手で memo を書かず、コンパイラ（vite-plugins/react-compiler.js）に任せている。
+    hoisted.fetchPageTree.mockResolvedValue(
+      tree([
+        { id: 'p1', title: '親', children: ['子'] },
+        { id: 'p2', title: '2番目' },
+        { id: 'p3', title: '3番目' },
+        { id: 'p4', title: '4番目' },
+      ]),
+    );
+    renderSidebar();
+    await screen.findByText('4番目');
+    const before = actionsRenders.count;
+
+    fireEvent.click(screen.getByRole('button', { name: '親 を開く' }));
+    expect(await screen.findByText('子')).toBeInTheDocument();
+
+    // 描き直すのは、開いた「親」の行と、新しく見えた「子」の行の 2 つだけ。ほかの 3 行はそのまま。
+    expect(actionsRenders.count - before).toBe(2);
   });
 });

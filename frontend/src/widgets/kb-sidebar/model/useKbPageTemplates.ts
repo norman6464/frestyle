@@ -59,8 +59,6 @@ export function useKbPageTemplates(
   // 要求の連番。同じ宛先への 2 本目が飛んでいる最中に 1 本目が着地して
   // 古い一覧で上書きされる取り違えを見分ける（useKbComments と同じ理由）。
   const seq = useRef(0);
-  const target = targetOf(workspaceSlug, spaceId, open);
-  const targetKey = target?.key ?? null;
 
   const load = useCallback(async (to: TemplatesTarget) => {
     const request = ++seq.current;
@@ -75,7 +73,10 @@ export function useKbPageTemplates(
     }
   }, []);
 
+  // 宛先は effect の中で組み立てる（描画ごとに作り直すオブジェクトを依存に入れると毎回走る）。
+  // 依存は宛先を決める 3 つの値そのもの。
   useEffect(() => {
+    const target = targetOf(workspaceSlug, spaceId, open);
     active.current = target;
     if (!target) {
       // ピッカーを閉じた（または宛先が未確定）。連番を進めて、飛んでいる応答を無効にする。
@@ -84,9 +85,7 @@ export function useKbPageTemplates(
       return;
     }
     void load(target);
-    // target は毎描画で作り直すオブジェクトなので、鍵で比べる。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetKey, load]);
+  }, [workspaceSlug, spaceId, open, load]);
 
   /**
    * deleteTemplate はテンプレートを削除する。成功したら一覧から該当行を取り除く。

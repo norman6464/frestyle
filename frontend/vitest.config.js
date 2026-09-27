@@ -4,6 +4,7 @@ import { fileURLToPath, URL } from 'node:url';
 import path from 'node:path';
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
 import { playwright } from '@vitest/browser-playwright';
+import { reactCompiler } from './vite-plugins/react-compiler.js';
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Storybook の story をブラウザで実行するプロジェクトは **明示的に有効にしたときだけ** 足す。
@@ -17,7 +18,8 @@ const withStorybookTests = process.env.WITH_STORYBOOK_TESTS === '1';
 
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 export default defineConfig({
-  plugins: [react()],
+  // React Compiler はビルドと同じものをかける（vite-plugins/react-compiler.js）。
+  plugins: [react(), reactCompiler()],
   // vite.config.js / tsconfig.json と同じ '@' → src のエイリアス。
   // ここが無いと、テストだけが絶対パスを解決できず一斉に落ちる。
   resolve: {

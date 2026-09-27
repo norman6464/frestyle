@@ -8,6 +8,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import { readdirSync } from 'node:fs';
 import tseslint from 'typescript-eslint';
+import { REACT_COMPILER_DIRS, REACT_COMPILER_IGNORES } from './vite-plugins/react-compiler-scope.js';
 
 /*
  * FSD の層間依存ルール。
@@ -142,9 +143,9 @@ export default defineConfig([globalIgnores(['dist', 'coverage']), {
   extends: [
     js.configs.recommended,
     ...tseslint.configs.recommended,
-    reactHooks.configs['recommended-latest'],
     reactRefresh.configs.vite,
   ],
+  plugins: { 'react-hooks': reactHooks },
   languageOptions: {
     ecmaVersion: 2020,
     globals: globals.browser,
@@ -155,9 +156,28 @@ export default defineConfig([globalIgnores(['dist', 'coverage']), {
     },
   },
   rules: {
+    // フックの呼び方の 2 つの検査は全体に効かせる。
+    'react-hooks/rules-of-hooks': 'error',
+    'react-hooks/exhaustive-deps': 'warn',
     'no-unused-vars': 'off',
     '@typescript-eslint/no-unused-vars': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
+  },
+}, {
+  // React Compiler をかける範囲には、コンパイラと同じ解析で「React の決まりに反する書き方」
+  // （描画中に ref を読み書きする・props や state を書き換える など）を見つける検査も
+  // 効かせる。反する部品はコンパイラが黙って対象から外す（壊れはしないが速くもならない）ので、
+  // lint で気づけるようにする。全体に効かせると既存のコードの書き直しが要るので、範囲は
+  // コンパイラと同じ定数から読む（vite-plugins/react-compiler-scope.js）。
+  files: REACT_COMPILER_DIRS.map((dir) => `${dir}/**/*.{ts,tsx}`),
+  ignores: REACT_COMPILER_IGNORES,
+  rules: {
+    ...reactHooks.configs.flat['recommended-latest'].rules,
+    // effect の中で同期的に state を変える書き方（描いた直後にもう 1 回描き直す）は、コンパイラの
+    // 最適化を止めない（止めるのは描画中の ref の読み書きなど）。サイドバーには 10 か所あり、
+    // 直すには木の読み込み（useKbTree）の組み立て直しが要るので、この検査だけ切っておく。
+    // 一覧と扱いは FRESTYLE-634 に記録した。直したら外す。
+    'react-hooks/set-state-in-effect': 'off',
   },
 }, {
   // ビルド・テストの設定ファイルは Node で動く（src はブラウザ）。
