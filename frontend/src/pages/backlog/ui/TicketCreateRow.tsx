@@ -27,9 +27,10 @@ export default function TicketCreateRow({ onCreate }: TicketCreateRowProps) {
       setTitle('');
     } catch {
       setError('チケットを作成できませんでした。');
-    } finally {
-      setSaving(false);
     }
+    // finally にしない（React Compiler が try … finally を扱えず、この部品ごと対象から外す）。
+    // catch は投げ直さず try の中で return もしないので、ここに置いても必ず通る。
+    setSaving(false);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {

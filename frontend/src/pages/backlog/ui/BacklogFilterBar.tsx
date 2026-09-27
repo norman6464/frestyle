@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useState } from 'react';
 import type { Label, TicketStatus, TicketType } from '@/entities/ticket';
 import type { KbGrantablePrincipal } from '@/entities/kb';
 import { Button, FieldSelect, FsIcon } from '@/shared/ui';
@@ -96,17 +96,21 @@ export default function BacklogFilterBar({
   const panelId = useId();
 
   // URL 側が変わった(絞り込みリンクからの遷移・ブラウザの戻る)ときは入力欄も追従する。
-  useEffect(() => {
+  // effect で合わせると、前の文字のまま 1 回描いてしまうので、描いている途中で前の値と比べる。
+  const [syncedQ, setSyncedQ] = useState(q);
+  if (syncedQ !== q) {
+    setSyncedQ(q);
     setQueryInput(q);
-  }, [q]);
+  }
 
+  // 打ち終えてから URL へ反映する。q・onChangeQuery は描くたびに変わりうるので、effect の
+  // 依存に入れずに最新を読む（入れると親から渡されるたびに待ち直しになり、デバウンスが効かない）。
+  const commitQuery = useEffectEvent((value: string) => {
+    if (value !== q) onChangeQuery(value);
+  });
   useEffect(() => {
-    if (queryInput === q) return undefined;
-    const timer = setTimeout(() => onChangeQuery(queryInput), QUERY_DEBOUNCE_MS);
+    const timer = setTimeout(() => commitQuery(queryInput), QUERY_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-    // q・onChangeQuery を依存に含めると、親から渡されるたびに再セットされて
-    // デバウンスが効かなくなる（KbSearchDialog の workspaceSlug 依存と同じ理由で q は含めない）。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryInput]);
 
   const nameOf = <T extends { id: string; name: string }>(list: T[], id: string | null) =>

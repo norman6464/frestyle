@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useResizablePanel } from '@/shared/lib/hooks/useResizablePanel';
 
 const DEFAULT_WIDTH = 640;
@@ -46,11 +46,11 @@ export default function TicketDetailPane({ band, onClose, autoFocus, children }:
 
   // 開いた直後（このチケットで初めて描かれたとき）に帯の見出しへ。呼び出し側は key を
   // チケットごとに変えるので、別のチケットを選び直したときもここを通る。
+  // 開いた瞬間の 1 回だけ。そのときの autoFocus を覚えておき、あとで変わっても動かさない。
+  const [focusOnOpen] = useState(autoFocus);
   useEffect(() => {
-    if (autoFocus) asideRef.current?.querySelector<HTMLElement>('h2')?.focus();
-    // 開いた瞬間の 1 回だけ。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (focusOnOpen) asideRef.current?.querySelector<HTMLElement>('h2')?.focus();
+  }, [focusOnOpen]);
 
   return (
     <aside

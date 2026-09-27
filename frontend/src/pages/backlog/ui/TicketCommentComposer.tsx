@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import { useEffect, useState } from 'react';
+import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import Link from '@tiptap/extension-link';
@@ -64,9 +64,8 @@ export default function TicketCommentComposer({
   const [open, setOpen] = useState(!collapsible);
 
   // マウント時の下書きの種だけを見る（以降 initialBlocks が変わっても打ち直さない —
-  // 発言の編集はコンポーザごと開閉されるたびに新しく積むので、この eslint-disable で十分）。
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const initialContent = useMemo(() => blocksToEditorContent(initialBlocks, resolveMentionName ?? (() => null)), []);
+  // 発言の編集はコンポーザごと開閉されるたびに新しく積む）。state の初期値で 1 回だけ作る。
+  const [initialContent] = useState(() => blocksToEditorContent(initialBlocks, resolveMentionName ?? (() => null)));
   const [empty, setEmpty] = useState(() => isEditorContentEmpty(initialContent));
 
   const editor = useEditor({
@@ -137,9 +136,10 @@ export default function TicketCommentComposer({
       if (collapsible) setOpen(false);
     } catch {
       setError('送信できませんでした。もう一度お試しください。');
-    } finally {
-      setSubmitting(false);
     }
+    // finally にしない（React Compiler が try … finally を扱えず、この部品ごと対象から外す）。
+    // catch は投げ直さず try の中で return もしないので、ここに置いても必ず通る。
+    setSubmitting(false);
   };
 
   /** 畳んだ姿から開く。 */
@@ -293,21 +293,20 @@ const COMMENT_FORMAT_BUTTONS: CommentFormatButton[] = [
 ];
 
 function CommentFormatBar({ editor, disabled }: { editor: Editor; disabled: boolean }) {
-  // isActive はエディタの状態で React の状態ではないので、選択が動いても再描画されない。
-  // 押下状態を追随させるためにエディタの更新を購読する（本文側の書式バーと同じ作り）。
-  const [, forceRender] = useState(0);
-  useEffect(() => {
-    const rerender = () => forceRender((n) => n + 1);
-    editor.on('selectionUpdate', rerender);
-    editor.on('transaction', rerender);
-    return () => {
-      editor.off('selectionUpdate', rerender);
-      editor.off('transaction', rerender);
-    };
-  }, [editor]);
+  // 押下状態はエディタの状態で React の状態ではない。useEditorState でエディタの更新を購読し、
+  // React の値として受け取る（描いている途中で editor.isActive を読むと、React Compiler が
+  // 「editor が同じなら同じ」として結果を控え、押しても押下状態が変わらなくなる）。
+  const formats = useEditorState({
+    editor,
+    selector: ({ editor: current }) => ({
+      active: COMMENT_FORMAT_BUTTONS.map((button) => button.isActive(current)),
+      link: current.isActive('link'),
+      linkHref: (current.getAttributes('link').href as string | undefined) ?? '',
+    }),
+  });
 
   const [linkOpen, setLinkOpen] = useState(false);
-  const linkActive = editor.isActive('link');
+  const linkActive = formats.link;
 
   return (
     <>
@@ -316,8 +315,8 @@ function CommentFormatBar({ editor, disabled }: { editor: Editor; disabled: bool
         aria-label="発言の書式"
         className="flex flex-wrap items-center gap-0.5 border-b border-surface-3 px-1.5 py-1"
       >
-        {COMMENT_FORMAT_BUTTONS.map((button) => {
-          const active = button.isActive(editor);
+        {COMMENT_FORMAT_BUTTONS.map((button, index) => {
+          const active = formats.active[index];
           return (
             <button
               key={button.id}
@@ -355,7 +354,7 @@ function CommentFormatBar({ editor, disabled }: { editor: Editor; disabled: bool
       {linkOpen && (
         <LinkUrlForm
           editor={editor}
-          initialHref={(editor.getAttributes('link').href as string | undefined) ?? ''}
+          initialHref={formats.linkHref}
           canRemove={linkActive}
           onClose={() => setLinkOpen(false)}
           className="border-b border-surface-3 px-1.5 py-1"

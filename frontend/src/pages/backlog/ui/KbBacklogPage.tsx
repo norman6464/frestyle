@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ConfirmModal, EmptyState, ErrorNotice, FsIllustration, fsIcon, Loading, NameCreateForm } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
+import { useStableCallback } from '@/shared/lib/hooks/useStableCallback';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { TicketRepository, formatTicketKey, type TicketSavedFilter } from '@/entities/ticket';
 import { ProjectRepository } from '@/entities/project';
@@ -152,7 +153,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   // ページで 1 つ持って両方へ渡す（同じ一覧を 2 回取らない）。
   const sprints = useSprints(workspaceSlug ?? undefined, project?.id);
   // どのチケットがどのスプリントに入っているかは ID だけ引き、中身は一覧の応答から引き当てる。
-  const openSprints = sprints.sprints.filter((sprint) => sprint.state !== 'completed');
+  const openSprints = useMemo(() => sprints.sprints.filter((sprint) => sprint.state !== 'completed'), [sprints.sprints]);
   const { bySprint, error: sprintTicketsError, reload: reloadSprintTickets } = useSprintTickets(
     workspaceSlug ?? undefined,
     openSprints.map((sprint) => sprint.id),
@@ -214,9 +215,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
         tickets: list.tickets.filter((ticket) => !taken.has(ticket.id)),
       },
     ];
-    // openSprints は毎回新しい配列になるので、中身の署名で見る。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list.tickets, bySprint, openSprints.map((s) => `${s.id}:${s.name}:${s.state}`).join(',')]);
+  }, [list.tickets, bySprint, openSprints]);
 
   // プロジェクトを切り替えたら文脈を捨てる（前のプロジェクトのチケットを次の画面で引きずらない）。
   // 初回の読み込みでは捨てない — URL に載っている選択や絞り込みを開いた直後に消してしまう。
@@ -279,9 +278,10 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
       list.refresh();
     } catch {
       showToast('error', 'チケットを有効化できませんでした。');
-    } finally {
-      setEnabling(false);
     }
+    // finally にしない（React Compiler が try … finally を扱えず、この部品ごと対象から外す）。
+    // catch は投げ直さず try の中で return もしないので、ここに置いても必ず通る。
+    setEnabling(false);
   };
 
   const handleSelect = (ticketId: string) => {
@@ -289,6 +289,27 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
     setFocusDetailFor(ticketId);
     setMoveMessage(null);
   };
+
+  // 一覧の行へ渡す関数。行は memo なので、いつも同じ関数を全行へ渡す。中で使う値（URL の選択・
+  // 一覧の書き込み・取り直し）は操作のたびに作り直されるので、useCallback ではなく
+  // useStableCallback で「同じ入れ物・中身は最新」にする。JSX の中で作ると条件分岐ごと作り直され、
+  // 1 行の変化で全行を描き直す。
+  const handleRowOpen = useStableCallback((ticketId: string) => handleSelect(ticketId));
+  const handleRowVerify = useStableCallback(() => refreshAll());
+  const handleOpenDetail = useStableCallback(() => setMobileDetailOpen(true));
+  const handleCreateRow = useStableCallback((title: string) =>
+    list.createTicket({ title }).then((t) => handleSelect(t.id)),
+  );
+  // 行の状態変更の結果は、その行のすぐ下に出す（PX04。トーストだけにしない）。
+  const handleChangeRowStatus = useStableCallback((ticketId: string, nextStatusId: string) => {
+    const name = masters.statuses.find((st) => st.id === nextStatusId)?.name ?? '選んだ状態';
+    void rowOutcomes.run(ticketId, () => list.changeStatus(ticketId, { statusId: nextStatusId }), {
+      saving: `「${name}」に変更しています…`,
+      saved: `状態を「${name}」にしました`,
+      fallback: '状態を変えられませんでした。',
+      reasons: { status_not_found: 'この状態は今は選べません。選択肢を更新してください。' },
+    });
+  });
 
   /** 狭い画面の全画面の詳細から一覧へ戻る。選択は残し、開いた行へフォーカスを戻す。 */
   const backToList = () => {
@@ -674,22 +695,13 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                       selectedId={selectedId}
                       busyId={list.busyId}
                       nameOf={nameOf}
-                      onSelect={handleSelect}
+                      onSelect={handleRowOpen}
                       // 狭い画面だけ、選択中のカードに「詳細をひらく」を出す（広い画面は右に開いている）。
-                      onOpenDetail={wide ? undefined : () => setMobileDetailOpen(true)}
-                      onCreate={(title) => list.createTicket({ title }).then((t) => handleSelect(t.id))}
-                      // 行の状態変更の結果は、その行のすぐ下に出す（PX04。トーストだけにしない）。
-                      onChangeStatus={(ticketId, nextStatusId) => {
-                        const name = masters.statuses.find((st) => st.id === nextStatusId)?.name ?? '選んだ状態';
-                        void rowOutcomes.run(ticketId, () => list.changeStatus(ticketId, { statusId: nextStatusId }), {
-                          saving: `「${name}」に変更しています…`,
-                          saved: `状態を「${name}」にしました`,
-                          fallback: '状態を変えられませんでした。',
-                          reasons: { status_not_found: 'この状態は今は選べません。選択肢を更新してください。' },
-                        });
-                      }}
+                      onOpenDetail={wide ? undefined : handleOpenDetail}
+                      onCreate={handleCreateRow}
+                      onChangeStatus={handleChangeRowStatus}
                       outcomeOf={rowOutcomes.outcomeOf}
-                      onVerify={refreshAll}
+                      onVerify={handleRowVerify}
                       renderGroupAction={(group) =>
                         group.kind === 'sprint' ? (
                           <button

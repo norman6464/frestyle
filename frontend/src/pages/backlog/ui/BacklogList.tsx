@@ -4,7 +4,7 @@ import type { SprintState } from '@/entities/sprint';
 import EmptyState from '@/shared/ui/EmptyState';
 import Loading from '@/shared/ui/Loading';
 import FsIllustration from '@/shared/ui/icons/FsIllustration';
-import { useContainerWidth } from '@/shared/lib/hooks/useContainerWidth';
+import { useContainerNarrowerThan } from '@/shared/lib/hooks/useContainerNarrowerThan';
 import { localTodayISO } from '../lib/dueDate';
 import type { WriteOutcome } from '../lib/writeOutcome';
 import BacklogRow, { BACKLOG_TABLE_GRID, type BacklogRowLayout } from './BacklogRow';
@@ -74,7 +74,7 @@ const COLUMNS = ['課題', 'やること', '担当', '優先度', '期限', '状
  * 組み替えるため（表の要素は列の構造を捨てられない）。役割（table / row / cell）は
  * 付けておき、読み上げでは表として辿れるようにする。
  *
- * 表かカードかは一覧の領域の幅で決める（useContainerWidth）。チケットを選んで右に詳細が
+ * 表かカードかは一覧の領域の幅で決める（useContainerNarrowerThan。境目をまたいだときだけ描き直す）。チケットを選んで右に詳細が
  * 開くと領域が狭くなり、自動でカードに変わる（ST10）。測れない環境では表。
  */
 export default function BacklogList({
@@ -107,8 +107,8 @@ export default function BacklogList({
   const today = localTodayISO();
   // 読み込み中・0 件・失敗のときは一覧の器を描かないので、器が付いた・作り直されたときに
   // 測り直せるよう callback ref で受ける。
-  const [containerRef, width] = useContainerWidth<HTMLDivElement>();
-  const layout: BacklogRowLayout = width !== null && width < BACKLOG_TABLE_MIN_WIDTH ? 'card' : 'table';
+  const [containerRef, narrow] = useContainerNarrowerThan<HTMLDivElement>(BACKLOG_TABLE_MIN_WIDTH);
+  const layout: BacklogRowLayout = narrow === true ? 'card' : 'table';
 
   if (error) {
     return (
@@ -197,9 +197,9 @@ export default function BacklogList({
                     indented={ticket.parentId !== null}
                     today={today}
                     layout={layout}
-                    onOpen={() => onSelect(ticket.id)}
-                    onOpenDetail={onOpenDetail ? () => onOpenDetail(ticket.id) : undefined}
-                    onChangeStatus={(statusId) => onChangeStatus(ticket.id, statusId)}
+                    onOpen={onSelect}
+                    onOpenDetail={onOpenDetail}
+                    onChangeStatus={onChangeStatus}
                     outcome={outcomeOf?.(ticket.id) ?? null}
                     onVerify={onVerify}
                   />

@@ -18,6 +18,11 @@ const CATEGORY_LABEL: Record<TicketStatusCategory, string> = {
 
 const DEFAULT_COLOR = '#5b6b7a';
 
+/** 状態を追加できなかったときの文言（try/catch の中の条件式を部品の外へ出すため）。 */
+function statusCreateError(cause: unknown): string {
+  return getApiError(cause).serverCode === 'status_name_taken' ? '同じ名前の状態が既にあります。' : '状態を追加できませんでした。';
+}
+
 /**
  * 状態の管理表（設計 Ⅲ・Ⅷ）。使用中のアーカイブ・名前の重複・初期状態のアーカイブは
  * すべて 409/400 として backend から返る — ここでは個別の文言に変換するだけで、
@@ -61,11 +66,11 @@ export default function TicketStatusAdmin({ statuses, onCreate, onSetInitial, on
       setCategory('todo');
       setColor(DEFAULT_COLOR);
     } catch (cause) {
-      const code = getApiError(cause).serverCode;
-      setFormError(code === 'status_name_taken' ? '同じ名前の状態が既にあります。' : '状態を追加できませんでした。');
-    } finally {
-      setSaving(false);
+      setFormError(statusCreateError(cause));
     }
+    // finally にしない（React Compiler が try … finally を扱えず、この部品ごと対象から外す）。
+    // catch は投げ直さず try の中で return もしないので、ここに置いても必ず通る。
+    setSaving(false);
   };
 
   return (

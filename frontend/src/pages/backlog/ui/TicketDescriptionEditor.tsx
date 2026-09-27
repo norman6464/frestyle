@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import Link from '@tiptap/extension-link';
@@ -92,6 +92,10 @@ export default function TicketDescriptionEditor({
     [extensions],
   );
 
+  // 本文が空か。エディタの状態なので useEditorState で受け取る（描いている途中で editor.isEmpty を
+  // 読むと、React Compiler が「editor が同じなら同じ」として控え、外から中身が届いても変わらない）。
+  const blankDoc = useEditorState({ editor, selector: ({ editor: current }) => current?.isEmpty ?? true });
+
   // 編集していない間に外から届いた更新（別の人の保存・チケット切り替え）を反映する。
   // 編集中に上書きすると打ちかけが消えるので、そのときは触らない。
   useEffect(() => {
@@ -133,9 +137,10 @@ export default function TicketDescriptionEditor({
       setEditing(false);
     } catch {
       setError('保存できませんでした。もう一度お試しください。');
-    } finally {
-      setSaving(false);
     }
+    // finally にしない（React Compiler が try … finally を扱えず、この部品ごと対象から外す）。
+    // catch は投げ直さず try の中で return もしないので、ここに置いても必ず通る。
+    setSaving(false);
   }, [editor, onSave, saving]);
 
   if (!editor) return null;
@@ -143,7 +148,7 @@ export default function TicketDescriptionEditor({
   if (!editing) {
     // 本文が空のときは、見出しと「本文を編集」の間に何も無い帯ができる。
     // その空白に「押せば書ける」と言わせる（editable でないときは何も出さない —— 空は空のまま）。
-    const blank = editor.isEmpty;
+    const blank = blankDoc;
     return (
       <div>
         {blank && editable ? (
@@ -260,21 +265,22 @@ const FORMAT_BUTTONS: FormatButton[] = [
 ];
 
 function TicketFormatBar({ editor, disabled }: { editor: Editor; disabled: boolean }) {
-  // isActive はエディタの状態であって React の状態ではないので、選択が動いても再描画されない。
-  // 書式バーの押下状態を追随させるために、エディタの更新を購読して描画し直す。
-  const [, forceRender] = useState(0);
-  useEffect(() => {
-    const rerender = () => forceRender((n) => n + 1);
-    editor.on('selectionUpdate', rerender);
-    editor.on('transaction', rerender);
-    return () => {
-      editor.off('selectionUpdate', rerender);
-      editor.off('transaction', rerender);
-    };
-  }, [editor]);
+  // 押下状態・取り消せるか はエディタの状態で React の状態ではない。useEditorState でエディタの
+  // 更新を購読し、React の値として受け取る（描いている途中で editor.isActive を読むと、React
+  // Compiler が「editor が同じなら同じ」として結果を控え、押しても押下状態が変わらなくなる）。
+  const formats = useEditorState({
+    editor,
+    selector: ({ editor: current }) => ({
+      active: FORMAT_BUTTONS.map((button) => button.isActive(current)),
+      link: current.isActive('link'),
+      linkHref: (current.getAttributes('link').href as string | undefined) ?? '',
+      canUndo: current.can().undo(),
+      canRedo: current.can().redo(),
+    }),
+  });
 
   const [linkOpen, setLinkOpen] = useState(false);
-  const linkActive = editor.isActive('link');
+  const linkActive = formats.link;
 
   return (
     <>
@@ -283,8 +289,8 @@ function TicketFormatBar({ editor, disabled }: { editor: Editor; disabled: boole
         aria-label="本文の書式"
         className="flex flex-wrap items-center gap-1 border-b border-surface-3 bg-surface-1 p-2 [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600"
       >
-        {FORMAT_BUTTONS.map((button) => {
-          const active = button.isActive(editor);
+        {FORMAT_BUTTONS.map((button, index) => {
+          const active = formats.active[index];
           return (
             <button
               key={button.id}
@@ -325,7 +331,7 @@ function TicketFormatBar({ editor, disabled }: { editor: Editor; disabled: boole
           <button
             type="button"
             onClick={() => editor.chain().focus().undo().run()}
-            disabled={disabled || !editor.can().undo()}
+            disabled={disabled || !formats.canUndo}
             aria-label="元に戻す"
             title="元に戻す"
             className="grid h-7 w-7 place-items-center rounded-md text-[15px] text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 disabled:opacity-50"
@@ -335,7 +341,7 @@ function TicketFormatBar({ editor, disabled }: { editor: Editor; disabled: boole
           <button
             type="button"
             onClick={() => editor.chain().focus().redo().run()}
-            disabled={disabled || !editor.can().redo()}
+            disabled={disabled || !formats.canRedo}
             aria-label="やり直す"
             title="やり直す"
             className="grid h-7 w-7 place-items-center rounded-md text-[15px] text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 disabled:opacity-50"
@@ -347,7 +353,7 @@ function TicketFormatBar({ editor, disabled }: { editor: Editor; disabled: boole
       {linkOpen && (
         <LinkUrlForm
           editor={editor}
-          initialHref={(editor.getAttributes('link').href as string | undefined) ?? ''}
+          initialHref={formats.linkHref}
           canRemove={linkActive}
           onClose={() => setLinkOpen(false)}
           className="border-b border-surface-3 bg-surface-1 px-2 py-1.5"
