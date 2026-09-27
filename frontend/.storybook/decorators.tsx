@@ -9,7 +9,7 @@ import { authReducer } from '@/entities/user';
 import { ToastProvider } from '@/app/providers/ToastProvider';
 import ToastContainer from '@/app/providers/ToastContainer';
 import apiClient from '@/shared/api/axios';
-import { KbFrameLayout } from '@/widgets/kb-sidebar';
+import { KbFrameLayout, KbSpaceLayout } from '@/widgets/kb-sidebar';
 
 /*
  * story を単体で描くための「まわりの装置」。
@@ -66,10 +66,26 @@ export function routerWithParam(pattern: string, path: string): Decorator {
  * 先に書いたものほど内側になる）。
  */
 export function kbFrameRoute(pattern: string, path: string): Decorator {
-  return routeDecorator(pattern, path, <KbFrameLayout />);
+  return routeDecorator(pattern, path, [<KbFrameLayout key="frame" />]);
 }
 
-function routeDecorator(pattern: string, path: string, layout?: ReactElement): Decorator {
+/**
+ * kbSpaceRoute — スペースの画面（概要・すべてのページ・お気に入り・メンバー）を、本番と同じく
+ * 枠の親ルートと、その下のスペースの親ルート（KbSpaceLayout）の中に置く。
+ *
+ * スペースの画面は自分ではスペースを解決せず、親ルートが解決したものを受け取る。
+ * 読み込み中・見つからない・読み込めない・スペースが無い、も親ルートが出す。
+ */
+export function kbSpaceRoute(pattern: string, path: string): Decorator {
+  return routeDecorator(pattern, path, [<KbFrameLayout key="frame" />, <KbSpaceLayout key="space" />]);
+}
+
+/** 親ルートを外から順に重ねる（先頭がいちばん外）。 */
+function nestLayouts(layouts: ReactElement[], route: ReactElement): ReactElement {
+  return layouts.reduceRight<ReactElement>((inner, layout) => <Route element={layout}>{inner}</Route>, route);
+}
+
+function routeDecorator(pattern: string, path: string, layouts: ReactElement[] = []): Decorator {
   // story ごとに `parameters.routerState` で、開いたときの location.state を差し込める
   // （「どこから来たか」で振る舞いが変わる画面を、router を重ねずに描くため）。
   const Wrapped: Decorator = (Story, { parameters }) => {
@@ -77,7 +93,7 @@ function routeDecorator(pattern: string, path: string, layout?: ReactElement): D
     const route = <Route path={pattern} element={<Story />} />;
     return (
       <MemoryRouter initialEntries={[state === undefined ? path : { ...parsePath(path), state }]}>
-        <Routes>{layout ? <Route element={layout}>{route}</Route> : route}</Routes>
+        <Routes>{nestLayouts(layouts, route)}</Routes>
       </MemoryRouter>
     );
   };

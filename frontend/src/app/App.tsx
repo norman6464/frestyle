@@ -28,6 +28,10 @@ const KbFrameLayout = lazyWithReload(
   () => import('@/widgets/kb-sidebar').then((m) => ({ default: m.KbFrameLayout })),
   'KbFrameLayout',
 );
+const KbSpaceLayout = lazyWithReload(
+  () => import('@/widgets/kb-sidebar').then((m) => ({ default: m.KbSpaceLayout })),
+  'KbSpaceLayout',
+);
 const AssignedPage = lazyWithReload(
   () => import('@/pages/assigned').then((m) => ({ default: m.AssignedPage })),
   'AssignedPage',
@@ -150,13 +154,16 @@ export default function App() {
           <Route path="/kb/:workspaceSlug/invitations" element={<KbInvitationsPage />} />
           {/*
             スペース単位の 4 画面。「workspaceSlug を URL に持たず spaceId だけで解決する」流儀。/kb/spaces はスペース未選択の入口（自分がアクセス
-            できる最初のスペースへ移す）を兼ねる。
+            できる最初のスペースへ移す）を兼ねる。スペースの解決と、読み込み中・見つからない・
+            読み込めない・スペースが無い、は親ルート KbSpaceLayout が 1 か所で持つ。
           */}
-          <Route path="/kb/spaces" element={<KbSpaceOverviewPage />} />
-          <Route path="/kb/spaces/:spaceId" element={<KbSpaceOverviewPage />} />
-          <Route path="/kb/spaces/:spaceId/pages" element={<KbSpaceAllPagesPage />} />
-          <Route path="/kb/spaces/:spaceId/favorites" element={<KbSpaceFavoritesPage />} />
-          <Route path="/kb/spaces/:spaceId/members" element={<KbSpaceMembersPage />} />
+          <Route element={<KbSpaceLayout />}>
+            <Route path="/kb/spaces" element={<KbSpaceOverviewPage />} />
+            <Route path="/kb/spaces/:spaceId" element={<KbSpaceOverviewPage />} />
+            <Route path="/kb/spaces/:spaceId/pages" element={<KbSpaceAllPagesPage />} />
+            <Route path="/kb/spaces/:spaceId/favorites" element={<KbSpaceFavoritesPage />} />
+            <Route path="/kb/spaces/:spaceId/members" element={<KbSpaceMembersPage />} />
+          </Route>
         </Route>
         {/* 旧 URL の受け皿。ワークスペース単体（/kb/:workspaceSlug）の形は新しい
             /kb/:pageId と区別できないため対応しない。ページ付きの旧 URL
