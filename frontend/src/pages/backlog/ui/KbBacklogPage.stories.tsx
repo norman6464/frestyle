@@ -503,6 +503,105 @@ function sprintApi(): ApiStubs {
 }
 
 /**
+ * スプリントの中身（どのチケットがどの順で入っているか）を覚えて返すスタブ。入れる・出す・並べ替えの
+ * 書き込みを受けたら中身を変える（サーバーと同じく、書き込みのあとに取り直せば新しい並びが返る）。
+ * 鍵は `/workspaces/acme/projects` より先に置く（前から順の部分一致）。
+ */
+function statefulSprintApi(initial: string[], tickets: ReturnType<typeof ticket>[]): ApiStubs {
+  let members = [...initial];
+  return {
+    '/workspaces/acme/projects/p-1/sprints': {
+      sprints: [
+        {
+          id: 's-1',
+          workspaceId: 'w-1',
+          projectId: 'p-1',
+          name: 'スプリント 1',
+          state: 'planned',
+          startDate: '2026-09-01',
+          endDate: '2026-09-14',
+          position: 'a0',
+          ticketCount: initial.length,
+          createdAt: '2026-09-01T00:00:00Z',
+          updatedAt: '2026-09-01T00:00:00Z',
+        },
+      ],
+    },
+    '/workspaces/acme/sprints/s-1/tickets': (config: { method?: string; data?: unknown }) => {
+      if (config.method === 'post') {
+        const { ticketId } = JSON.parse(String(config.data)) as { ticketId: string };
+        members = [...members.filter((id) => id !== ticketId), ticketId];
+        return undefined;
+      }
+      return { ticketIds: members };
+    },
+    // スプリント内の並べ替え（…/tickets/:id/sprint/position）。行の手前・直後、または末尾へ置く。
+    '/sprint/position': (config: { url?: string; data?: unknown }) => {
+      const ticketId = /tickets\/([^/]+)\/sprint/.exec(config.url ?? '')?.[1] ?? '';
+      const { anchorTicketId, anchorAfter } = JSON.parse(String(config.data)) as {
+        anchorTicketId: string;
+        anchorAfter: boolean;
+      };
+      const rest = members.filter((id) => id !== ticketId);
+      const at = rest.indexOf(anchorTicketId);
+      members = at === -1 ? [...rest, ticketId] : [...rest.slice(0, at + (anchorAfter ? 1 : 0)), ticketId, ...rest.slice(at + (anchorAfter ? 1 : 0))];
+      return undefined;
+    },
+    ...detailApi(),
+    '/workspaces/acme/projects/p-1/tickets': { tickets },
+    ...baseApi({ '/workspaces/acme/projects/p-1/tickets': { tickets } }),
+  };
+}
+
+/** スプリントの段の中の行の題名を、上から順に読む（段の見出しの行は数えない）。 */
+function sprintRowTitles(canvasElement: HTMLElement): string[] {
+  const groups = within(canvasElement).getAllByRole('rowgroup');
+  const sprintGroup = groups.find((group) => group.textContent?.includes('スプリント 1'));
+  if (!sprintGroup) return [];
+  return within(sprintGroup)
+    .queryAllByRole('button', { name: /^段/ })
+    .map((button) => button.textContent ?? '');
+}
+
+/** 選んだチケットを「スプリントへ」で入れると、その場でスプリントの段へ移る。 */
+export const スプリントへ入れるとその段へ移る: Story = {
+  decorators: [withApi(statefulSprintApi([], [ticket({})]))],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
+    await userEvent.click(await canvas.findByRole('combobox', { name: '入れ先のスプリント' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'スプリント 1' }));
+    await waitFor(async () => {
+      await expect(canvas.getByRole('button', { name: /スプリント 1.*1 件/ })).toBeInTheDocument();
+    });
+    await expect(sprintRowTitles(canvasElement)).toEqual([TITLE]);
+  },
+};
+
+/** スプリントの中で「末尾へ」と並べ替えると、段の中の順がその場で変わる。 */
+export const スプリントの中で並べ替えると順が変わる: Story = {
+  decorators: [
+    withApi(
+      statefulSprintApi(
+        ['t-1', 't-2'],
+        [ticket({}), ticket({ id: 't-2', number: 458, title: '段2: 並べ替え', position: 'a1' })],
+      ),
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(async () => {
+      await expect(sprintRowTitles(canvasElement)).toEqual([TITLE, '段2: 並べ替え']);
+    });
+    await userEvent.click(canvas.getByRole('button', { name: TITLE }));
+    await userEvent.click(await canvas.findByRole('button', { name: /末尾へ/ }));
+    await waitFor(async () => {
+      await expect(sprintRowTitles(canvasElement)).toEqual(['段2: 並べ替え', TITLE]);
+    });
+  },
+};
+
+/**
  * バックログの段からは名前を聞かずに連番で作る（Jira のバックログと同じ）。作ったことと、
  * 名前を変えられる場所を知らせる。
  */

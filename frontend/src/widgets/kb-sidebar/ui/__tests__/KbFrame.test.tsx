@@ -25,6 +25,8 @@ const hoisted = vi.hoisted(() => ({
   renameSpace: vi.fn(),
   searchPages: vi.fn(),
   showToast: vi.fn(),
+  getLastVisitedPageId: vi.fn(),
+  forgetVisitedPageIfMatches: vi.fn(),
 }));
 
 // 木の行が何回描き直されたかを数える（描き直す範囲の検査に使う）。中身は本物をそのまま描く。
@@ -85,6 +87,8 @@ vi.mock('@/entities/kb', async () => {
       renameSpace: hoisted.renameSpace,
       searchPages: hoisted.searchPages,
     },
+    getLastVisitedPageId: hoisted.getLastVisitedPageId,
+    forgetVisitedPageIfMatches: hoisted.forgetVisitedPageIfMatches,
   };
 });
 
@@ -2030,5 +2034,56 @@ describe('描いた直後にもう 1 回描き直さない（effect の中で st
 
     expect(screen.queryByText('スペースを読み込めませんでした')).not.toBeInTheDocument();
     expect(commits.count).toBe(1);
+  });
+});
+
+describe('ほかの場所への知らせ', () => {
+  it('名前を変えたら、本文へも知らせる（開いているページの題名とパンくずが古いまま残らない）', async () => {
+    const received: string[] = [];
+    const unsubscribe = subscribeKbTreeEvents((event) => {
+      if (event.type === 'page-updated') received.push(`${event.page.id}:${event.page.title}`);
+    });
+    renderSidebar();
+    await screen.findByText('設計メモ');
+
+    fireEvent.click(screen.getByRole('button', { name: '設計メモ の操作' }));
+    fireEvent.click(screen.getByRole('button', { name: '名前を変更' }));
+    const input = screen.getByRole('textbox', { name: 'ページの題名' });
+    fireEvent.change(input, { target: { value: '新しい名前' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(received).toContain('p1:新しい名前'));
+    unsubscribe();
+  });
+
+  it('消したページ（またはその下）が「前回開いたページ」なら、その記録を外す', async () => {
+    hoisted.fetchPageTree.mockResolvedValue(tree([{ id: 'p1', title: '親', children: ['child'] }, { id: 'p2', title: '2番目' }]));
+    hoisted.deletePage.mockResolvedValue(undefined);
+    hoisted.getLastVisitedPageId.mockReturnValue('child');
+    renderSidebar();
+    await screen.findByText('親');
+
+    fireEvent.click(screen.getByRole('button', { name: '親 の操作' }));
+    fireEvent.click(screen.getByRole('button', { name: '削除' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'ページを削除' })).getByRole('button', { name: '削除' }));
+
+    await waitFor(() => expect(hoisted.deletePage).toHaveBeenCalledWith('acme', 'p1'));
+    // 記録を残すと、次に素の /kb を開いたとき入口が消えたページを選んで「ページを開けません」になる。
+    await waitFor(() => expect(hoisted.forgetVisitedPageIfMatches).toHaveBeenCalledWith('child'));
+  });
+
+  it('関係の無いページを消しても、「前回開いたページ」の記録は外さない', async () => {
+    hoisted.fetchPageTree.mockResolvedValue(tree([{ id: 'p1', title: '親', children: ['child'] }, { id: 'p2', title: '2番目' }]));
+    hoisted.deletePage.mockResolvedValue(undefined);
+    hoisted.getLastVisitedPageId.mockReturnValue('child');
+    renderSidebar();
+    await screen.findByText('2番目');
+
+    fireEvent.click(screen.getByRole('button', { name: '2番目 の操作' }));
+    fireEvent.click(screen.getByRole('button', { name: '削除' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'ページを削除' })).getByRole('button', { name: '削除' }));
+
+    await waitFor(() => expect(hoisted.deletePage).toHaveBeenCalledWith('acme', 'p2'));
+    expect(hoisted.forgetVisitedPageIfMatches).not.toHaveBeenCalled();
   });
 });

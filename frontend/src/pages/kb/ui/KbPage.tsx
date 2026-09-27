@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { KbTemplatePickerModal, useKbFrameLocation, useKbPageTemplates } from '@/widgets/kb-sidebar';
+import { KbTemplatePickerModal, useKbFrameLocation, useKbFrameSpace, useKbPageTemplates } from '@/widgets/kb-sidebar';
 import {
   RichTextEditor,
   emptyRichDoc,
   isRichDoc,
-  extractPlainText,
   type EditorCommand,
   type CommentAnchor,
   type CommentBadgeCounts,
@@ -23,8 +22,15 @@ import { createSubpage } from '../model/createSubpage';
 import { resolveEntryPageId } from '../model/resolveEntryPage';
 import { useKbImageResolver } from '../model/useKbImageResolver';
 import { useKbPageFavorite } from '../model/useKbPageFavorite';
-import { extractHeadings } from '../lib/docOutline';
-import { emitKbTreeEvent, KbRepository, subscribeKbTreeEvents, type KbIcon } from '@/entities/kb';
+import { destinationAfterDeletion } from '../lib/deletionDestination';
+import { useDocOutline } from '../model/useDocOutline';
+import {
+  emitKbTreeEvent,
+  forgetVisitedPageIfMatches,
+  KbRepository,
+  subscribeKbTreeEvents,
+  type KbIcon,
+} from '@/entities/kb';
 import KbPageTitle from './KbPageTitle';
 import KbPageIconButton from './KbPageIconButton';
 import KbPageMeta from './KbPageMeta';
@@ -51,9 +57,6 @@ import { useKbPageVersions } from '../model/useKbPageVersions';
 import { useKbBacklinks } from '../model/useKbBacklinks';
 import { useKbSuggestionDraft } from '../model/useKbSuggestionDraft';
 import { useKbPageSuggestions } from '../model/useKbPageSuggestions';
-
-/** バイラインの読了時間の見積りに使う速さ（600 字/分・端数切り上げ）。API は無く手元で計算する。 */
-const READING_CHARS_PER_MINUTE = 600;
 
 /**
  * KbPage はナレッジの画面（左にサイドバー、右に本文）。
@@ -88,10 +91,13 @@ export default function KbPage() {
     applyRestoredContent,
     waitForPendingSaveToSettle,
     reloadPage,
+    applyPageUpdate,
   } = useKbPageDoc(pageId);
   // ヘッダー/サイドバーのワークスペース切替から来たときだけ渡ってくる。
   // ページを開いているときは data.workspaceSlug が正なのでそちらを優先する。
   const navigationWorkspaceSlug = (location.state as { workspaceSlug?: string } | null)?.workspaceSlug;
+  // 枠が今いると判断しているスペース（開けないページから戻る先に使う）。
+  const frameSpace = useKbFrameSpace();
   // 枠（左の木と文脈バー）へ今の位置を知らせる。どのスペースの木かはページを取得して初めて
   // 分かる。取得の間は undefined のまま（枠は前の木のまま）にして、同じスペースの中を移る
   // たびに木を取り直さない（別のページへ移る間も data は前のページを指したまま残る）。
@@ -212,24 +218,33 @@ export default function KbPage() {
 
   const { resolveImageSrc } = useKbImageResolver(data?.workspaceSlug, data?.page.id);
 
-  // 自分か祖先が物理削除されたら一覧へ戻る（消えた場所に立ち続けない）。
+  // 自分か祖先が物理削除されたら、残っている一番近い親へ移る（消えた場所に立ち続けない）。
+  // 親が無ければスペースの概要へ（destinationAfterDeletion）。素の /kb へ戻すと、入口が
+  // 「前回開いたページ」＝今消えたページを選んで「ページを開けません」になるので、その記録も外す。
+  // 消えたページの URL を履歴に残さないよう置き換えで移る（戻るで消えたページへ行かない）。
   // 祖先はサーバー応答（ancestors — アーカイブ済みも含む）で知っているので、
   // サイドバーの現役の木に載っていないページを開いていても正しく判定できる。
-  // ワークスペースごと削除されたとき（配下は FK CASCADE で全消去）も同じ理由で戻る。
+  // ワークスペースごと削除されたとき（配下は FK CASCADE で全消去）は一覧へ戻る。
+  // ほかの場所（サイドバーの改名など）で自分か祖先が変わったら、題名とパンくずへ映す。
   useEffect(() => {
     if (!pageId || !data) return undefined;
     return subscribeKbTreeEvents((event) => {
       if (event.type === 'page-deleted') {
-        const hit =
-          event.pageId === pageId || (data.ancestors ?? []).some((ancestor) => ancestor.id === event.pageId);
-        if (hit) navigate('/kb');
+        const destination = destinationAfterDeletion(event.pageId, pageId, data.ancestors ?? [], data.page.spaceId);
+        if (destination === null) return;
+        forgetVisitedPageIfMatches(pageId);
+        navigate(destination, { replace: true });
+        return;
+      }
+      if (event.type === 'page-updated') {
+        applyPageUpdate(event.page);
         return;
       }
       if (event.type === 'workspace-deleted' && event.workspaceSlug === data.workspaceSlug) {
         navigate('/kb');
       }
     });
-  }, [pageId, data, navigate]);
+  }, [pageId, data, navigate, applyPageUpdate]);
 
   // '/page': 子ページを作って本文にリンクを挿し、作ったページを開く。
   //
@@ -407,16 +422,17 @@ export default function KbPage() {
   // 「このページを参照しているページ」（逆リンク）。折りたたみの開閉には依存せず、
   // ページを開いたら常に取得する（見出しの件数表示に使うため — useKbComments と同じ考え方）。
   const backlinks = useKbBacklinks(data?.workspaceSlug, data?.page.id);
-  // 読了時間は本文の文字数から見積もる（段2の viewCount と違い、backend の応答には無い —
-  // 決定済みの計算式を手元で適用するだけ）。空の本文では出さない（0 分は意味を持たない）。
-  const readMinutes = useMemo(() => {
-    if (!isRichDoc(data?.doc)) return null;
-    const charCount = extractPlainText(data.doc).length;
-    return charCount > 0 ? Math.max(1, Math.ceil(charCount / READING_CHARS_PER_MINUTE)) : null;
-  }, [data?.doc]);
-
-  // 目次は本文（doc）の見出しから作る。書きながら見出しを足せばその場で増える。
-  const headings = useMemo(() => extractHeadings(data?.doc), [data?.doc]);
+  // 目次（見出し）と読了時間は本文から作る。読了時間は backend の応答には無く、決定済みの
+  // 計算式を手元で適用するだけ。書きながら見出しを足せば、打つ手が止まったところで増える
+  // （本文の状態 data.doc は読み込み時の物で、打鍵では変わらないので、別に保つ）。
+  const { headings, readMinutes, update: updateOutline } = useDocOutline(data?.doc);
+  const handleDocChange = useCallback(
+    (doc: unknown) => {
+      onDocChange(doc);
+      updateOutline(doc);
+    },
+    [onDocChange, updateOutline],
+  );
   // 目次の飛び先（本文の見出しの DOM）を探す起点。
   const articleRef = useRef<HTMLElement | null>(null);
 
@@ -605,7 +621,14 @@ export default function KbPage() {
               icon={fsIcon('document-text')}
               title="ページを開けません"
               description={error}
-              action={{ label: 'スペース一覧へ戻る', onClick: () => navigate('/kb/spaces') }}
+              action={
+                // 行き止まりにしない。枠がいまのスペースを知っていれば（左の木を出している）、
+                // そのスペースの概要へ戻す。消えたページへの本文のリンクや古いブックマークから
+                // 来たときも、元いた場所へ 1 回で帰れる。
+                frameSpace
+                  ? { label: `${frameSpace.name} の概要へ`, onClick: () => navigate(`/kb/spaces/${frameSpace.id}`) }
+                  : { label: 'スペース一覧へ戻る', onClick: () => navigate('/kb/spaces') }
+              }
             />
           )}
 
@@ -852,7 +875,7 @@ export default function KbPage() {
                   // doc は API から来る任意の JSON。形が違えば空の本文として扱い、画面を落とさない。
                   value={isRichDoc(data.doc) ? data.doc : emptyRichDoc()}
                   editable={data.canEdit}
-                  onChange={onDocChange}
+                  onChange={handleDocChange}
                   ariaLabel={`${data.page.title} の本文`}
                   extraSlashCommands={data.canEdit ? extraSlashCommands : undefined}
                   onNavigateToPage={(path) => navigate(path)}

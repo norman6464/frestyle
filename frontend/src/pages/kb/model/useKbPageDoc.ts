@@ -5,6 +5,7 @@ import {
   rememberVisitedPage,
   forgetVisitedPageIfMatches,
   type KbIcon,
+  type KbPage,
   type KbPageContentSaveResult,
   type KbResolvedPage,
 } from '@/entities/kb';
@@ -286,6 +287,31 @@ export function useKbPageDoc(pageId: string | undefined) {
     setState({ data, loading: false, error: null });
   }, []);
 
+  /**
+   * applyPageUpdate は、ほかの場所（サイドバーの改名など）で変わったページを画面へ映す。
+   * 開いているページなら題名・アイコンなどを、祖先ならパンくずの題名を差し替える。
+   * 変わっていなければ state を作り直さない（自分の改名の知らせも自分に届くため）。
+   */
+  const applyPageUpdate = useCallback((page: KbPage) => {
+    setState((prev) => {
+      if (!prev.data) return prev;
+      if (prev.data.page.id === page.id) {
+        const merged = { ...prev.data.page, ...page };
+        if (JSON.stringify(merged) === JSON.stringify(prev.data.page)) return prev;
+        return { ...prev, data: { ...prev.data, page: merged } };
+      }
+      const ancestors = prev.data.ancestors ?? [];
+      if (!ancestors.some((ancestor) => ancestor.id === page.id && ancestor.title !== page.title)) return prev;
+      return {
+        ...prev,
+        data: {
+          ...prev.data,
+          ancestors: ancestors.map((ancestor) => (ancestor.id === page.id ? { ...ancestor, title: page.title } : ancestor)),
+        },
+      };
+    });
+  }, []);
+
   /** onDocChange はエディタの onChange から呼ぶ。デバウンスして本文を保存する。 */
   const onDocChange = useCallback(
     (doc: unknown) => {
@@ -314,5 +340,6 @@ export function useKbPageDoc(pageId: string | undefined) {
     applyRestoredContent,
     waitForPendingSaveToSettle,
     reloadPage,
+    applyPageUpdate,
   };
 }

@@ -241,8 +241,14 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   // 入れる／から出す）。どちらも選択中の帯から。
   const reorder = useBacklogReorder(groups, selectedTicket?.id ?? null, {
     onMove: list.move,
+    // 段の中の順はスプリントの中身（ID の並び）で決まるので、それも取り直す。一覧だけ
+    // 取り直すと、並べ替えは成功しているのに段の中の順が変わらない。
     onMoveInSprint: (ticketId, anchorTicketId, anchorAfter) =>
-      sprints.moveTicket(ticketId, anchorTicketId, anchorAfter).then(() => list.refresh()),
+      sprints
+        .moveTicket(ticketId, anchorTicketId, anchorAfter)
+        .then(async () => {
+          await Promise.all([list.refresh(), reloadSprintTickets()]);
+        }),
   });
 
   // 一覧の行で状態を変えた結果（行ごと）。
@@ -416,7 +422,9 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
         sprints={reorder.otherSprints}
         onMoveToSprint={(sprintId) =>
           announceMove(
-            sprints.addTicket(sprintId, selectedTicket.id),
+            // どの段に出すかはスプリントの中身で決まる。入れたら取り直さないと、入れたのに
+            // バックログの段に残って見える（スプリント一覧の件数だけが変わる）。
+            sprints.addTicket(sprintId, selectedTicket.id).then(() => reloadSprintTickets()),
             `${selectedKey} を${reorder.otherSprints.find((s) => s.id === sprintId)?.name ?? 'スプリント'}へ入れました`,
             'スプリントへ入れられませんでした。',
           )
@@ -425,7 +433,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
           reorder.ownerGroup?.kind === 'sprint'
             ? () =>
                 announceMove(
-                  sprints.removeTicket(selectedTicket.id),
+                  sprints.removeTicket(selectedTicket.id).then(() => reloadSprintTickets()),
                   `${selectedKey} をスプリントから出しました`,
                   'スプリントから出せませんでした。',
                 )

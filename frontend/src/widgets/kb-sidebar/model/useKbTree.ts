@@ -4,6 +4,8 @@ import {
   KbRepository,
   emitKbTreeEvent,
   collectKbAncestorIds,
+  forgetVisitedPageIfMatches,
+  getLastVisitedPageId,
   subscribeKbTreeEvents,
   replaceKbPageInTree,
   moveKbPageInTree,
@@ -498,6 +500,9 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
         if (pages === prev.tree.pages) return prev;
         return { ...prev, tree: { ...prev.tree, pages } };
       });
+      // 本文（開いているページの題名・パンくず）へも知らせる。木だけ差し替えると、そのページを
+      // 開いていた本文は古い題名のまま残る。自分にも届くが、木の差し替えは冪等。
+      emitKbTreeEvent({ type: 'page-updated', page });
       return page;
     },
     [activeSlug],
@@ -511,13 +516,24 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
     async (pageId: string): Promise<void> => {
       if (!activeSlug) throw new Error('workspace is not selected');
       await KbRepository.deletePage(activeSlug, pageId);
+      // 「前回開いたページ」が消えた部分木の中なら、その記録を外す。残すと、次に素の /kb を
+      // 開いたとき入口が消えたページを選んで「ページを開けません」になる（ページを開いて
+      // いない画面から消した場合も含む。開いている本文はそれとは別に自分で外す）。
+      const lastVisited = getLastVisitedPageId();
+      if (
+        lastVisited &&
+        (lastVisited === pageId ||
+          (spaceState.tree && collectKbAncestorIds(spaceState.tree.pages, lastVisited).includes(pageId)))
+      ) {
+        forgetVisitedPageIfMatches(lastVisited);
+      }
       // 開いている画面が「消えた場所」かの判定はページ側が行う（ページは自分の祖先を
       // サーバー応答で知っている。サイドバーの現役の木では、アーカイブ済みの子孫を
       // 開いている場合を見落とす）。
       emitKbTreeEvent({ type: 'page-deleted', pageId });
       loadSpaceTree();
     },
-    [activeSlug, loadSpaceTree],
+    [activeSlug, spaceState.tree, loadSpaceTree],
   );
 
   const retrySpace = useCallback(() => {

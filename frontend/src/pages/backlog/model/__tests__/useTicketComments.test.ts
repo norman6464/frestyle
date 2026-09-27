@@ -181,3 +181,38 @@ describe('useTicketComments', () => {
     expect(result.current.comments.map((c) => c.id)).toEqual(['c-2']);
   });
 });
+
+describe('useTicketComments の開き直し', () => {
+  it('閉じてすぐ同じチケットを開き直したあとに、前の書き込みの応答を重ねない（二重に増えない）', async () => {
+    const created = fixtureComment({ id: 'c-new' });
+    let resolveCreate: (value: TicketComment) => void = () => {};
+    hoisted.createTicketComment.mockImplementation(
+      () =>
+        new Promise<TicketComment>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    hoisted.fetchTicketComments.mockResolvedValueOnce([]);
+    const { result, rerender } = renderHook(({ ticketId }) => useTicketComments(SLUG, ticketId), {
+      initialProps: { ticketId: TICKET as string | undefined },
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // 送信中に閉じて、すぐ同じチケットを開き直す。開き直しの取得には、送った発言がもう入っている。
+    let sending: Promise<unknown> = Promise.resolve();
+    act(() => {
+      sending = result.current.createComment([{ kind: 'text', text: 'x' }]);
+    });
+    rerender({ ticketId: undefined });
+    hoisted.fetchTicketComments.mockResolvedValueOnce([created]);
+    rerender({ ticketId: TICKET });
+    await waitFor(() => expect(result.current.comments).toHaveLength(1));
+
+    await act(async () => {
+      resolveCreate(created);
+      await sending;
+    });
+
+    expect(result.current.comments.map((c) => c.id)).toEqual(['c-new']);
+  });
+});

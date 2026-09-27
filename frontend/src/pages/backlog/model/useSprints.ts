@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SprintRepository, type Sprint, type SprintInput, type SprintState } from '@/entities/sprint';
 
 /**
@@ -13,8 +13,12 @@ export function useSprints(workspaceSlug: string | undefined, projectId: string 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // 要求の連番。最後に投げた取得の応答だけを採用する。プロジェクトを切り替えたあとに
+  // 前のプロジェクトの応答が遅れて届くと、別のプロジェクトのスプリントが並んでしまう。
+  const seq = useRef(0);
 
   const reload = useCallback(async () => {
+    const request = ++seq.current;
     if (!workspaceSlug || !projectId) {
       setSprints([]);
       return;
@@ -22,11 +26,12 @@ export function useSprints(workspaceSlug: string | undefined, projectId: string 
     setLoading(true);
     setError(null);
     try {
-      setSprints(await SprintRepository.fetchSprints(workspaceSlug, projectId));
+      const list = await SprintRepository.fetchSprints(workspaceSlug, projectId);
+      if (seq.current === request) setSprints(list);
     } catch {
-      setError('スプリントを読み込めませんでした。');
+      if (seq.current === request) setError('スプリントを読み込めませんでした。');
     } finally {
-      setLoading(false);
+      if (seq.current === request) setLoading(false);
     }
   }, [workspaceSlug, projectId]);
 
