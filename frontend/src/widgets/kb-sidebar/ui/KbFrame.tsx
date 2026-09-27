@@ -96,13 +96,19 @@ export default function KbFrame({
   };
   // 「この場所のページだけを表示」。今開いているページとその子孫だけに木を絞る。
   const [focusHere, setFocusHere] = useState(false);
-  // 狭い画面で左の列を引き出しとして開いているか。開いたときの画面（pathname）を覚えておき、
-  // 今の画面と同じ間だけ開いている扱いにする。画面が変わったら（木のページを押して移ったときも）
-  // その描画の中で閉じる。effect で閉じると、移った先を引き出しが開いたまま 1 回描いてから閉じ直す。
-  const [panelOpenAt, setPanelOpenAt] = useState<string | null>(null);
-  const panelOpen = panelOpenAt === pathname;
-  const closePanel = () => setPanelOpenAt(null);
+  // 狭い画面で左の列を引き出しとして開いているか。
+  const [panelOpen, setPanelOpen] = useState(false);
+  const closePanel = () => setPanelOpen(false);
   const drawerRef = useMobileDrawerFocus(panelOpen, closePanel);
+  // 画面が変わったら（木のページを押して移ったときも）引き出しを閉じる。前の画面を覚えておき、
+  // 描いている途中で比べて閉じる。effect で閉じると、移った先を引き出しが開いたまま 1 回描いてから
+  // 閉じ直すことになる。「開いた画面と同じ間だけ開いている」と導く形にはしない — 移ってから
+  // 「戻る」で元の画面に帰ると、引き出しが勝手に開き直す。
+  const [panelPath, setPanelPath] = useState(pathname);
+  if (pathname !== panelPath) {
+    setPanelPath(pathname);
+    setPanelOpen(false);
+  }
 
   // 作った直後のページは、そのまま題名を書き換えられる状態で出す
   // （「無題」のまま置き去りにされるのを減らす）。
@@ -476,7 +482,7 @@ export default function KbFrame({
           onCreateSpace={createSpace}
           archivedMode={archivedMode}
           onToggleArchived={() => setArchivedMode(!archivedMode)}
-          onOpenPagePanel={hasPanel ? () => setPanelOpenAt(pathname) : undefined}
+          onOpenPagePanel={hasPanel ? () => setPanelOpen(true) : undefined}
           pagePanelOpen={panelOpen}
         />
 

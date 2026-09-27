@@ -1,7 +1,7 @@
 import { Profiler } from 'react';
 import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import KbFrame from '../KbFrame';
 import type { KbPageRowProps } from '../KbPageRow';
 import type { KbRowActionsProps } from '../KbRowActions';
@@ -1990,6 +1990,31 @@ describe('描いた直後にもう 1 回描き直さない（effect の中で st
 
     expect(screen.queryByRole('dialog', { name: 'ページ' })).not.toBeInTheDocument();
     expect(commits.count).toBe(1);
+  });
+
+  it('引き出しを開いたまま移ってから戻っても、引き出しは閉じたまま', async () => {
+    function BackButton() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate(-1)}>
+          戻る
+        </button>
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={['/kb']}>
+        <KbFrame spaceId="space-1" />
+        <BackButton />
+      </MemoryRouter>,
+    );
+    await screen.findByText('設計メモ');
+    fireEvent.click(screen.getByRole('button', { name: 'ページの一覧を開く' }));
+    fireEvent.click(screen.getByRole('link', { name: '設計メモ' }));
+    expect(screen.queryByRole('dialog', { name: 'ページ' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '戻る' }));
+
+    expect(screen.queryByRole('dialog', { name: 'ページ' })).not.toBeInTheDocument();
   });
 
   it('スペースの一覧の再試行は、押した描画の中で読み込み中に戻す', async () => {
