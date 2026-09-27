@@ -112,9 +112,13 @@ export default function KbFrame({
   const [dropAt, setDropAt] = useState<{ pageId: string; zone: KbDropZone } | null>(null);
 
   const space = spaces.find((s) => s.id === spaceId);
+  // ワークスペース単位の画面（左の列を出さない画面）では、今いるスペースを名乗らない
+  // （文脈バーにスペースの切替や「概要・メンバー・アーカイブ」を出さない）。枠は画面をまたいで
+  // 残るので、木そのものは据え置き、戻ったときに取り直さない。変えるのは見せ方だけ。
+  const shownSpace = showPagePanel ? space : undefined;
   const workspaceCanManage = workspaces.find((w) => w.slug === activeSlug)?.canManage ?? false;
   // 本文（パンくず）へ今いるスペースを渡す。応答にはスペースの名前が無く、枠は木のために持っている。
-  const frameValue = useMemo<KbFrameValue>(() => ({ space: space ?? null }), [space]);
+  const frameValue = useMemo<KbFrameValue>(() => ({ space: shownSpace ?? null }), [shownSpace]);
 
   // ワークスペース作成は入口が 2 つ（切替ポップアップ / 所属 0 件の常設フォーム）ある。
   // 作成 → 失敗の知らせ → /kb へ戻る、を 1 つに集約して入口ごとの差を作らない。
@@ -458,7 +462,7 @@ export default function KbFrame({
           }}
           onCreateWorkspace={handleCreateWorkspace}
           onManageMembers={(slug) => navigate(`/kb/${slug}/members`)}
-          space={space}
+          space={shownSpace}
           onCreateSpace={createSpace}
           archivedMode={archivedMode}
           onToggleArchived={() => setArchivedMode(!archivedMode)}

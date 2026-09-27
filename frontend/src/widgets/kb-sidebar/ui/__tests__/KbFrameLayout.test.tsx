@@ -190,16 +190,20 @@ describe('KbFrameLayout', () => {
     expect(rowRenders.count).toBeGreaterThan(settled);
   });
 
-  it('スペースを持たない画面では左の列を出さず、戻っても木を取り直さない', async () => {
+  it('スペースを持たない画面では左の列もスペースも出さず、戻っても木を取り直さない', async () => {
     renderLayout();
     await openParentFolder();
+    expect(screen.getByRole('navigation', { name: '開発部 の画面' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('link', { name: 'ワークスペースのメンバー画面へ' }));
     expect(await screen.findByRole('heading', { name: 'メンバーの本文' })).toBeInTheDocument();
     expect(screen.queryByRole('complementary', { name: 'ページ' })).not.toBeInTheDocument();
+    // ワークスペース単位の画面なので、前に居たスペースを文脈バーで名乗らない。
+    expect(screen.queryByRole('navigation', { name: '開発部 の画面' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('link', { name: 'ページへ戻る' }));
     expect(await screen.findByRole('complementary', { name: 'ページ' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '開発部 の画面' })).toBeInTheDocument();
     expect(screen.getByText('子')).toBeInTheDocument();
     expect(hoisted.fetchPageTree).toHaveBeenCalledTimes(1);
   });
