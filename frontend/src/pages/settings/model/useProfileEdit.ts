@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ProfileRepository, myProfileQuery, profileKeys } from '@/entities/user';
+import { reflectWrite } from '@/shared/api/queryCache';
+import { ProfileRepository, myProfileQuery } from '@/entities/user';
 import type { FormMessage } from '@/shared/ui/FormMessage';
 import type { Profile } from '@/entities/user';
 
@@ -82,9 +83,7 @@ export function useProfileEdit() {
 
   // 保存できた値を、共有している自分のプロフィールへ写す（ヘッダーの名前・アバターがその場で変わる）。
   const reflectSaved = useCallback(
-    (next: ProfileForm) => {
-      queryClient.setQueryData(profileKeys.me(), (prev) => (prev ? { ...prev, ...next } : prev));
-    },
+    (next: ProfileForm) => reflectWrite(queryClient, myProfileQuery().queryKey, (prev) => ({ ...prev, ...next })),
     [queryClient],
   );
 
@@ -102,7 +101,7 @@ export function useProfileEdit() {
     setSubmitting(true);
     try {
       await ProfileRepository.updateProfile(form);
-      reflectSaved(form);
+      await reflectSaved(form);
       setSaved(form);
       setMessage(null);
       showSaved();
@@ -123,7 +122,7 @@ export function useProfileEdit() {
       try {
         const next = { ...saved, avatarUrl };
         await ProfileRepository.updateProfile(next);
-        reflectSaved(next);
+        await reflectSaved(next);
         setSaved(next);
         setForm((prev) => ({ ...prev, avatarUrl }));
         return true;

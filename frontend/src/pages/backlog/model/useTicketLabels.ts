@@ -1,54 +1,34 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { TicketRepository, type Label, type LabelInput } from '@/entities/ticket';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { reflectWrite } from '@/shared/api/queryCache';
+import { TicketRepository, ticketLabelsQuery, type Label, type LabelInput } from '@/entities/ticket';
 
 const LOAD_FAILED = 'ラベルを読み込めませんでした。時間をおいて開き直すと最新の状態が出ます。';
+const NO_LABELS: Label[] = [];
 
 /**
  * useTicketLabels はワークスペースのラベル定義（一覧・作成・改名・削除）を読み書きする。
  *
  * ラベルの語彙はワークスペース単位（ページとチケットで共有する）ので、プロジェクトを
- * 切り替えても同じ一覧が出る。
+ * 切り替えても同じ一覧が出る。一覧は共有の問い合わせ（ticketLabelsQuery）から読むので、
+ * バックログとチケットの画面を行き来しても取り直さず、片方で作ったラベルはもう片方にも出る。
  *
  * 状態・種別のマスタ（useTicketMasters）と違い、使用中件数のような取得し直さないと
- * ずれる派生値を持たないので、作成・更新・削除の応答をそのまま手元へ反映する
+ * ずれる派生値を持たないので、作成・更新・削除の応答をそのまま共有の一覧へ反映する
  * （マスタのように毎回一覧を取り直さない）。
  *
  * チケットへの付け外し（ticket.labels の更新）はここでは持たない — 対象がチケット
  * 1 件の状態（useTicketList / useTicketPage）に属するため、それぞれの hook に持たせる。
  */
 export function useTicketLabels(workspaceSlug: string | undefined) {
-  const [labels, setLabels] = useState<Label[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const active = useRef<string | null>(null);
+  const queryClient = useQueryClient();
+  const result = useQuery({ ...ticketLabelsQuery(workspaceSlug ?? ''), enabled: workspaceSlug !== undefined });
+  const hasLabels = result.data !== undefined;
 
-  const load = useCallback(async (slug: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const list = await TicketRepository.fetchLabels(slug);
-      if (active.current !== slug) return;
-      setLabels(list);
-    } catch {
-      if (active.current !== slug) return;
-      setError(LOAD_FAILED);
-    } finally {
-      if (active.current === slug) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    active.current = workspaceSlug ?? null;
-    if (!workspaceSlug) {
-      setLabels([]);
-      return;
-    }
-    void load(workspaceSlug);
-  }, [workspaceSlug, load]);
-
+  const { refetch } = result;
   const refresh = useCallback(() => {
-    if (workspaceSlug) void load(workspaceSlug);
-  }, [workspaceSlug, load]);
+    void refetch();
+  }, [refetch]);
 
   const requireScope = useCallback((): string => {
     if (!workspaceSlug) throw new Error('backlog: no active scope');
@@ -59,32 +39,43 @@ export function useTicketLabels(workspaceSlug: string | undefined) {
     async (input: LabelInput) => {
       const slug = requireScope();
       const created = await TicketRepository.createLabel(slug, input);
-      if (active.current === slug) setLabels((prev) => [...prev, created]);
+      await reflectWrite(queryClient, ticketLabelsQuery(slug).queryKey, (prev) =>
+        prev.some((l) => l.id === created.id) ? prev : [...prev, created],
+      );
       return created;
     },
-    [requireScope],
+    [requireScope, queryClient],
   );
 
   const updateLabel = useCallback(
     async (labelId: string, input: LabelInput) => {
       const slug = requireScope();
       const updated = await TicketRepository.updateLabel(slug, labelId, input);
-      if (active.current === slug) {
-        setLabels((prev) => prev.map((l) => (l.id === labelId ? updated : l)));
-      }
+      await reflectWrite(queryClient, ticketLabelsQuery(slug).queryKey, (prev) =>
+        prev.map((l) => (l.id === labelId ? updated : l)),
+      );
       return updated;
     },
-    [requireScope],
+    [requireScope, queryClient],
   );
 
   const deleteLabel = useCallback(
     async (labelId: string) => {
       const slug = requireScope();
       await TicketRepository.deleteLabel(slug, labelId);
-      if (active.current === slug) setLabels((prev) => prev.filter((l) => l.id !== labelId));
+      await reflectWrite(queryClient, ticketLabelsQuery(slug).queryKey, (prev) => prev.filter((l) => l.id !== labelId));
     },
-    [requireScope],
+    [requireScope, queryClient],
   );
 
-  return { labels, loading, error, refresh, createLabel, updateLabel, deleteLabel };
+  return {
+    labels: result.data ?? NO_LABELS,
+    // 一覧がまだ無い間だけ読み込み中・失敗を出す。持っている一覧は取り直しの間も失敗しても出し続ける。
+    loading: workspaceSlug !== undefined && !hasLabels && (result.isPending || result.isFetching),
+    error: !hasLabels && result.isError && !result.isFetching ? LOAD_FAILED : null,
+    refresh,
+    createLabel,
+    updateLabel,
+    deleteLabel,
+  };
 }

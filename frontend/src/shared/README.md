@@ -46,15 +46,16 @@ shared/
 |---|---|
 | キャッシュ（`queryClient`・既定の取り直し方） | `shared/api/queryClient.ts` |
 | キャッシュを配る Provider | `app/layouts/AuthenticatedLayout.tsx`（ログイン後の親。遅延読み込みで、最初に読む塊に入れない。外れたら `queryClient.clear()`） |
+| 鍵の根（ワークスペース・プロジェクトの中） | `shared/api/queryKeys.ts`（`workspacesKey`・`workspaceScope`・`projectScope`） |
 | 鍵と取得の組（`queryOptions`） | 取るものの entity の `api/*Queries.ts`（例: `entities/user/api/profileQueries.ts`） |
 | 画面から使う hook | 同じ entity の `model/useXxx.ts`（例: `useMyProfile`・`useUnreadCount`） |
 
 ### 鍵の付け方
 
-- 1 つ目は取るものの名前（複数形・英小文字）。以降に絞り込みの値を並べる: `['profile', 'me']`・`['notifications', 'unread-count']`・`['kb', 'workspaces']`
+- 1 つ目は取るものの名前（複数形・英小文字）。以降に絞り込みの値を並べる: `['profile', 'me']`・`['notifications', 'unread-count']`・`['workspaces']`
 - 鍵は entity の `xxxKeys` にまとめ、文字列を画面に直書きしない（取り直すときに同じ鍵を指せるように）
 - 鍵に入る値は必ず `queryFn` で使う値と同じもの（lint の `@tanstack/query/exhaustive-deps` が見る）
-- 入れ物の中のものは、入れ物の鍵の下に置く: スペースの一覧は `['kb', 'workspaces', slug, 'spaces']`。鍵は先頭からの一致で束ねて扱えるので、`['kb', 'workspaces']` を取り直させれば中のものもすべて古くなり、`['kb', 'workspaces', slug]` を消せば消えた入れ物の中身が残らない
+- 入れ物の中のものは、どの entity のものでも入れ物の鍵の下に置く。根は `shared/api/queryKeys.ts` の `workspaceScope(slug)`（ワークスペースの中）と `projectScope(slug, projectId)`（プロジェクトの中）: スペースの一覧は `['workspaces', slug, 'spaces']`、ラベルは `['workspaces', slug, 'labels']`、状態は `['workspaces', slug, 'projects', projectId, 'statuses']`。鍵は先頭からの一致で束ねて扱えるので、`['workspaces']` を取り直させればナレッジもチケットも中のものがすべて古くなり、`['workspaces', slug]` を消せば消えたワークスペースの中身が残らない
 
 ### 一覧から導けるものは控えない
 
@@ -65,7 +66,7 @@ shared/
 
 ### 書き込んだあと
 
-- **応答が新しい値そのもの**（保存したプロフィール・更新した 1 件）→ `setQueryData` でその鍵を差し替える。取り直しを待たずに表示が変わる
+- **応答が新しい値そのもの**（保存したプロフィール・作った 1 件・改名した 1 件）→ `shared/api/queryCache.ts` の `reflectWrite` でその鍵を差し替える。取り直しを待たずに表示が変わる。`setQueryData` を直接呼ばない。`reflectWrite` は、書き込みより前に投げた取得の古い結果があとから届いて上書きしないよう先に止め、まだ一覧を持っていなければ（最初の読み込み中に書いた）「書いた 1 件だけの一覧」を作らずに取り直させる
 - **応答から一覧が決まらない**（既読にした・消した・並べ替えた）→ `invalidateQueries` で関係する鍵を取り直させる。いま画面に出ていない鍵は、次に使うときに取り直す
 - 楽観更新（応答を待たずに書き換える）は、失敗したら戻す手順と一緒に書くときだけ使う
 
