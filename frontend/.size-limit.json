@@ -8,6 +8,6 @@
       "dist/assets/rolldown-runtime-*.js"
     ],
     "gzip": true,
-    "limit": "130 KB"
+    "limit": "95 KB"
   }
 ]

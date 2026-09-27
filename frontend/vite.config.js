@@ -41,10 +41,12 @@ export default defineConfig(({ mode }) => {
           // react-router-dom / react-dom を react より先に判定する(部分一致の取りこぼし防止)。
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined;
+            // TanStack Query はここに入れない。使うのはログイン後の画面だけで、キャッシュの置き場
+            // （app/layouts/AuthenticatedLayout）ごと遅延読み込みにしてある。名指しで最初に読む塊へ
+            // 入れると、ログイン画面でも読むことになる。
             if (
               id.includes('node_modules/@reduxjs/toolkit') ||
-              id.includes('node_modules/react-redux') ||
-              id.includes('node_modules/@tanstack/react-query')
+              id.includes('node_modules/react-redux')
             ) {
               return 'vendor-state';
             }
