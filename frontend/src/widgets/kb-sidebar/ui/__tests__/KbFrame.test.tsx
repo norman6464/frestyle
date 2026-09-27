@@ -8,6 +8,7 @@ import type { KbRowActionsProps } from '../KbRowActions';
 import { emitKbTreeEvent, subscribeKbTreeEvents, useWorkspaceList } from '@/entities/kb';
 import type { KbMySpace, KbPage, KbPageTree, KbSpace, KbWorkspace } from '@/entities/kb';
 import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
+import { kbKeys } from '@/entities/kb/api/kbQueries';
 
 /** 描くたびに新しいキャッシュを配る（左の列は取得した結果の置き場の下で動く）。 */
 const render: typeof rtlRender = ((ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
@@ -446,6 +447,32 @@ describe('KbFrame', () => {
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
     expect(await screen.findByText('設計メモ')).toBeInTheDocument();
+  });
+
+  it('一覧を持っているうちの取り直しに失敗しても、失敗の表示で一覧を隠さない', async () => {
+    // 画面に戻ったときなどの裏の取り直しが一時的に失敗しただけで、出ていた一覧を下げない。
+    const client = createTestQueryClient();
+    render(
+      <MemoryRouter initialEntries={['/kb']}>
+        <KbFrame spaceId="space-1" />
+      </MemoryRouter>,
+      { wrapper: queryWrapper(client) },
+    );
+    await screen.findByText('設計メモ');
+
+    hoisted.fetchWorkspaces.mockRejectedValueOnce(new Error('boom'));
+    hoisted.fetchSpaces.mockRejectedValueOnce(new Error('boom'));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: kbKeys.workspaces() });
+    });
+    await waitFor(() => expect(client.getQueryState(kbKeys.spaces('acme'))?.status).toBe('error'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(screen.queryByText('ワークスペースを読み込めませんでした')).not.toBeInTheDocument();
+    expect(screen.queryByText('スペースを読み込めませんでした')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'スペース「開発部」を切り替える' })).toBeInTheDocument();
   });
 
   it('ワークスペースを切り替えたら、前のスペースを先に捨てる', async () => {

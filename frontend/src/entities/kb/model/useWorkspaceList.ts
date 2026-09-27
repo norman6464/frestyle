@@ -50,9 +50,9 @@ export function useWorkspaceList() {
 
   return {
     workspaces: result.data ?? NO_WORKSPACES,
-    // 失敗のあと取り直している間は読み込み中に戻す。一覧を持っているうちの取り直しの失敗は、
-    // 持っている一覧を出し続ける（失敗の表示で隠さない）。
-    loading: result.isPending || (result.isError && result.isFetching),
+    // 一覧がまだ無い間だけ読み込み中（失敗のあと取り直している間も含む）。一覧を持っているうちの
+    // 取り直しは、成功しても失敗しても持っている一覧を出し続ける（読み込み中や失敗の表示で隠さない）。
+    loading: result.data === undefined && (result.isPending || result.isFetching),
     error: result.data === undefined && result.isError && !result.isFetching ? 'ワークスペースを読み込めませんでした' : null,
     retry,
     createWorkspace,

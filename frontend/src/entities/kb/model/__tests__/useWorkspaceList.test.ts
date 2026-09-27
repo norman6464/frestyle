@@ -154,4 +154,23 @@ describe('useWorkspaceList', () => {
     expect(result.current.workspaces).toEqual([WS_A]);
     expect(result.current.error).toBeNull();
   });
+
+  it('一覧を持っているうちは、失敗のあとの取り直しの間も読み込み中にしない（中身を差し替えない）', async () => {
+    const { result } = renderHook(() => useWorkspaceList(), { wrapper: queryWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    hoisted.fetchWorkspaces.mockRejectedValueOnce(new Error('boom'));
+    act(() => result.current.retry());
+    await waitFor(() => expect(hoisted.fetchWorkspaces).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    hoisted.fetchWorkspaces.mockImplementationOnce(() => new Promise(() => {}));
+    act(() => result.current.retry());
+    await waitFor(() => expect(hoisted.fetchWorkspaces).toHaveBeenCalledTimes(3));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.workspaces).toEqual([WS_A]);
+  });
 });

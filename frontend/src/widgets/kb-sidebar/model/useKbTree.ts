@@ -62,11 +62,16 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
 
   // 所属ワークスペースの一覧。管理の画面・ホームなどと同じ問い合わせを使い、1 回だけ取る。
   // 失敗したあと取り直している間は「読み込み中」に戻す（再試行を押したら失敗の表示を下げる）。
+  // 失敗を出すのは一覧が 1 度も取れていないときだけ。持っている一覧は、裏の取り直しが失敗しても
+  // 出し続ける（失敗の表示で隠さない）。
   const workspacesResult = useQuery(kbWorkspacesQuery());
   const workspaces = workspacesResult.data ?? NO_WORKSPACES;
-  const workspacesLoading = workspacesResult.isPending || (workspacesResult.isError && workspacesResult.isFetching);
+  const workspacesLoading =
+    workspacesResult.data === undefined && (workspacesResult.isPending || workspacesResult.isFetching);
   const workspacesError =
-    workspacesResult.isError && !workspacesResult.isFetching ? 'ワークスペースを読み込めませんでした' : null;
+    workspacesResult.data === undefined && workspacesResult.isError && !workspacesResult.isFetching
+      ? 'ワークスペースを読み込めませんでした'
+      : null;
 
   // 選んだワークスペース（URL か切り替え）。選んでいなければ所属の先頭を開く。所属が 0 件なら選ばない。
   const [chosenSlug, setChosenSlug] = useState<string | null>(workspaceSlug ?? null);
@@ -98,8 +103,11 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   const spacesResult = useQuery({ ...kbSpacesQuery(activeSlug ?? ''), enabled: activeSlug !== null });
   const spaces = spacesResult.data ?? NO_SPACES;
   const spacesLoading =
-    activeSlug !== null && (spacesResult.isPending || (spacesResult.isError && spacesResult.isFetching));
-  const spacesError = spacesResult.isError && !spacesResult.isFetching ? 'スペースを読み込めませんでした' : null;
+    activeSlug !== null && spacesResult.data === undefined && (spacesResult.isPending || spacesResult.isFetching);
+  const spacesError =
+    spacesResult.data === undefined && spacesResult.isError && !spacesResult.isFetching
+      ? 'スペースを読み込めませんでした'
+      : null;
 
   // 今のスペースの木。state の写しを ref に持つことはしない — 描いている途中で state を
   // 合わせるとき、ref は書けない（描画中に ref を書き換えるのは React の決まりに反する）ので、

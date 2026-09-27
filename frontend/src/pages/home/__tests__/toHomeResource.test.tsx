@@ -24,14 +24,26 @@ describe('toHomeResource', () => {
     expect(load).not.toHaveBeenCalled();
   });
 
-  it('取り直しに失敗したら、前の結果を出さずに error', async () => {
-    const load = vi.fn().mockResolvedValueOnce(['a']).mockRejectedValueOnce(new Error('gone'));
+  it('持っている結果は、取り直しの間も・取り直しに失敗しても出し続ける', async () => {
+    // 画面に戻ったときなどの裏の取り直しが一時的に失敗しただけで、出ていた一覧を消さない。
+    const load = vi
+      .fn()
+      .mockResolvedValueOnce(['a'])
+      .mockRejectedValueOnce(new Error('network'))
+      .mockImplementationOnce(() => new Promise(() => {}));
     const { result } = renderHook(() => useResource(load), { wrapper: queryWrapper() });
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
     act(() => result.current.retry());
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(result.current).toMatchObject({ data: ['a'], status: 'ready' });
 
-    await waitFor(() => expect(result.current).toMatchObject({ data: [], status: 'error' }));
+    act(() => result.current.retry());
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(3));
+    expect(result.current).toMatchObject({ data: ['a'], status: 'ready' });
   });
 
   it('失敗のあと再試行を押したら、取り直している間は loading に戻す', async () => {

@@ -60,17 +60,19 @@ export function useHomeResource<T>(
  * 共有の問い合わせ（TanStack Query）の結果を、ホームの枠の形に合わせる。ヘッダーや左の列と
  * 同じ結果を使う枠（所属のワークスペース・未読数など）はこちらを通す。
  *
- * 決まりは useHomeResource と同じにする。
- * - 前提が揃わず読まない間（enabled: false）は loading
- * - 失敗したら前の結果を出さない（見られなくなったものを表示し続けない）
- * - 再試行を押したら、取り直している間は loading に戻す（失敗の表示を下げる）
+ * - 前提が揃わず読まない間（enabled: false）と、結果がまだ無い間は loading（失敗のあと
+ *   再試行を押して取り直している間も含む）
+ * - 失敗を出すのは結果が 1 度も取れていないときだけ。持っている結果は、取り直しの間も・
+ *   取り直しに失敗しても出し続ける
+ *
+ * useHomeResource の「失敗したら前の結果を残さない」と違うのは、共有の問い合わせは画面に
+ * 戻ったときなどに裏で取り直すため。一時的な失敗で、出ていた一覧を消したり失敗の表示に
+ * 差し替えたりしない（見る立場を失った場合は、作るときなどにサーバーが断る）。
  */
 export function toHomeResource<T>(result: UseQueryResult<T>, initial: T): HomeResource<T> {
-  const status: HomeResourceStatus =
-    result.isPending || (result.isError && result.isFetching) ? 'loading' : result.isError ? 'error' : 'ready';
-  return {
-    data: status === 'ready' ? (result.data ?? initial) : initial,
-    status,
-    retry: () => void result.refetch(),
-  };
+  if (result.data !== undefined) {
+    return { data: result.data, status: 'ready', retry: () => void result.refetch() };
+  }
+  const status: HomeResourceStatus = result.isError && !result.isFetching ? 'error' : 'loading';
+  return { data: initial, status, retry: () => void result.refetch() };
 }

@@ -47,14 +47,14 @@ describe('ログイン後の枠の塊の先読み', () => {
     setAuthHint();
     await renderAt('/');
 
-    expect(await screen.findByRole('status')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
     await waitFor(() => expect(hoisted.layoutLoaded).toHaveBeenCalled());
   });
 
   it('手がかりが無ければ読まない（ほぼログイン画面へ移るので、使わない塊を読ませない）', async () => {
     await renderAt('/');
 
-    expect(await screen.findByRole('status')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(hoisted.layoutLoaded).not.toHaveBeenCalled();
   });
