@@ -1,10 +1,12 @@
 import type { Project } from '@/entities/project';
-import { findAcrossLists, firstAcrossLists, type AcrossListsResolution, type OwnedListState } from '@/shared/lib/acrossLists';
-
-export interface ResolvedBacklogProject {
-  workspaceSlug: string;
-  project: Project;
-}
+import {
+  firstAcrossLists,
+  locateInList,
+  type AcrossListsResolution,
+  type LocatedListState,
+  type LocationState,
+  type OwnedListState,
+} from '@/shared/lib/acrossLists';
 
 /** 1 つのワークスペースのプロジェクトの一覧の、今の取り具合。 */
 export type ProjectListState = OwnedListState<Project>;
@@ -19,12 +21,14 @@ export function resolveEntryProject(lists: ProjectListState[]): AcrossListsResol
 }
 
 /**
- * locateBacklogProject は projectId からワークスペースを引く。
- *
- * `/backlog/:projectId` は URL にワークスペースを出さない既存の規則を踏襲するが、projectId から
- * 直接ワークスペースを引く backend の口が無いので、所属ワークスペースのプロジェクトの一覧から
- * その ID を探す。ワークスペース数は実データで数個・プロジェクト一覧は軽い口なので、いまはこれで足りる。
+ * locateBacklogProject は projectId のプロジェクトを決める。どのワークスペースかは所在の口
+ * （/projects/:projectId、location.owner は slug）で引き、プロジェクトそのものはそのワークスペースの
+ * 一覧から読む（判断は shared/lib/acrossLists の locateInList。スペースの解決と同じ）。
  */
-export function locateBacklogProject(projectId: string, lists: ProjectListState[]): AcrossListsResolution<Project> {
-  return findAcrossLists(lists, (project) => project.id === projectId);
+export function locateBacklogProject(
+  projectId: string,
+  location: LocationState,
+  list: LocatedListState<Project>,
+): AcrossListsResolution<Project> {
+  return locateInList(location, list, (project) => project.id === projectId);
 }

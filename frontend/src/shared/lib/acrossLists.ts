@@ -26,22 +26,6 @@ export type AcrossListsResolution<T> =
   | { kind: 'none' };
 
 /**
- * findAcrossLists は、条件に合うものをどれかの一覧から探す。どこかの一覧にあれば、ほかの一覧を
- * 待たずに決める（ID は入れ物をまたいで一意）。見つからないと言えるのは、すべての一覧がそろい、
- * どれも取り直し中でないときだけ。見つからず、読めなかった一覧があれば失敗（見つからないとは
- * 言えない）。
- */
-export function findAcrossLists<T>(lists: OwnedListState<T>[], match: (item: T) => boolean): AcrossListsResolution<T> {
-  for (const list of lists) {
-    const item = list.data?.find(match);
-    if (item !== undefined) return { kind: 'found', owner: list.owner, item };
-  }
-  if (lists.some((list) => list.isFetching || (list.data === undefined && !list.isError))) return { kind: 'loading' };
-  if (lists.some((list) => list.data === undefined)) return { kind: 'error' };
-  return { kind: 'none' };
-}
-
-/**
  * firstAcrossLists は、並べた順に見て、中身のある最初の一覧の最初の 1 つを選ぶ。前の一覧がまだ
  * 無い・取り直し中なら決めない（後ろの一覧を先に選ぶと、並び順どおりにならない）。空の一覧を
  * 取り直している間も決めない（作ったばかりのものが、取り直せば入ってくる）。

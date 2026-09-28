@@ -342,6 +342,13 @@ export const PROJECT_API = {
   /** GET(取得) / PATCH(改名) — /api/v2/workspaces/:slug/projects/:projectId */
   project: (workspaceSlug: string, projectId: string) =>
     `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(projectId)}`,
+  /**
+   * GET — /api/v2/projects/:projectId
+   *
+   * /backlog/{projectId} の URL からの解決。URL にワークスペースを出さないための口で、
+   * 応答の workspaceSlug でそのワークスペースの一覧を開く（KB_API.resolveSpace と同じ役割）。
+   */
+  resolveProject: (projectId: string) => `${API_V2}/projects/${encodeURIComponent(projectId)}`,
 } as const;
 
 /**

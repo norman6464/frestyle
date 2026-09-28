@@ -15,6 +15,16 @@ export interface Project {
   updatedAt: string;
 }
 
+/**
+ * プロジェクトの所在（/projects/:projectId の応答）。URL にワークスペースを出さないバックログが、
+ * どのワークスペースのプロジェクトかを知るために引く。プロジェクトがワークスペースをまたいで動くことは無い。
+ */
+export interface ProjectLocation {
+  workspaceSlug: string;
+  workspaceName: string;
+  project: Project;
+}
+
 /** 作成の入力。key は省略可（空ならサーバーが自動採番する）。 */
 export interface CreateProjectInput {
   key?: string;
