@@ -21,6 +21,13 @@ export {
   kbGrantablePrincipalsQuery,
   kbSpaceTemplatesQuery,
   kbSearchQuery,
+  kbFavoritesQuery,
+  kbMembersQuery,
+  kbAdminMembersQuery,
+  kbSpaceMembersQuery,
+  kbInvitationsQuery,
+  kbRecentPagesQuery,
+  kbMyInvitationsQuery,
 } from './api/kbQueries';
 export { refreshKbPageTrees, reflectKbPageInTrees } from './model/kbPageTreeCache';
 export {

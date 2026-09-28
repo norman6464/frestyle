@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { KbRepository, type KbInvitation, type KbInviteByEmailInput, type KbIssuedInvitation } from '@/entities/kb';
-import { getApiError } from '@/shared/lib/classifyApiError';
+import { useCallback, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
+import {
+  KbRepository,
+  kbInvitationsQuery,
+  kbKeys,
+  type KbInvitation,
+  type KbInviteByEmailInput,
+  type KbIssuedInvitation,
+} from '@/entities/kb';
 
 export interface KbInvitationsState {
   invitations: KbInvitation[];
@@ -11,66 +19,45 @@ export interface KbInvitationsState {
   busyId: string | null;
 }
 
-const EMPTY: KbInvitationsState = { invitations: [], loading: false, error: null, busyId: null };
+const NO_INVITATIONS: KbInvitation[] = [];
 
 /**
  * useKbInvitations は招待の画面の一覧取得と、発行・再送・取消をまとめる。
  *
- * 書き込みはどれも**成功した後に一覧を丸ごと引き直す**（useKbAdminMembers と同じ）。発行は
- * 同じ宛先の未決を再送に変える（新しい行にならない）ので、差分をこちらで組み立てるより
- * 引き直す方が確実。発行・再送は応答の token（この 1 回しか返らない）をそのまま返す —
- * 画面がリンクにして相手へ渡す。
+ * 一覧は共有の問い合わせ（kbInvitationsQuery）から読む。書き込みはどれも**成功した後に一覧を
+ * 丸ごと取り直す**（取り直しを待ってから返す。useKbAdminMembers と同じ）。発行は同じ宛先の未決を
+ * 再送に変える（新しい行にならない）ので、差分をこちらで組み立てるより取り直す方が確実。
+ * 発行・再送は応答の token（この 1 回しか返らない）をそのまま返す — 画面がリンクにして相手へ渡す。
  */
 export function useKbInvitations(workspaceSlug: string | undefined) {
-  const [state, setState] = useState<KbInvitationsState>(EMPTY);
-  const active = useRef<string | null>(null);
-  const seq = useRef(0);
+  const queryClient = useQueryClient();
+  const active = workspaceSlug !== undefined;
+  const result = useQuery({ ...kbInvitationsQuery(workspaceSlug ?? ''), enabled: active });
+  // 取り直しが 403・404 になったら（admin でなくなった）、持っている一覧も出さずに forbidden にする。
+  const { data, loading, failed, lostAccess } = queryShownState(result, active);
+  // 処理中の招待は、どのワークスペースで押したかと組で持つ（移った先の行を閉じない）。
+  const [busy, setBusy] = useState<{ workspaceSlug: string; id: string | null } | null>(null);
 
-  const load = useCallback(async (slug: string) => {
-    const request = ++seq.current;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const invitations = await KbRepository.fetchInvitations(slug);
-      if (active.current !== slug || seq.current !== request) return;
-      setState({ invitations, loading: false, error: null, busyId: null });
-    } catch (cause) {
-      if (active.current !== slug || seq.current !== request) return;
-      const status = getApiError(cause).status;
-      // 権限操作 API は拒否を 404 で揃える（実在を教えない）。admin でない人が開いたときの
-      // 404 は「無い」ではなく「見せない」なので、メンバー一覧の 403 と同じ扱いにする。
-      setState({ ...EMPTY, error: status === 403 || status === 404 ? 'forbidden' : 'unknown' });
-    }
-  }, []);
-
-  useEffect(() => {
-    active.current = workspaceSlug ?? null;
-    if (!workspaceSlug) {
-      seq.current += 1;
-      setState(EMPTY);
-      return;
-    }
-    void load(workspaceSlug);
-  }, [workspaceSlug, load]);
-
+  const { refetch } = result;
   const retry = useCallback(() => {
-    if (workspaceSlug) void load(workspaceSlug);
-  }, [workspaceSlug, load]);
+    void refetch();
+  }, [refetch]);
 
-  /** mutate は 1 回の書き込みを行い、成功したら一覧を引き直す。失敗は投げる（知らせは呼び出し側）。 */
+  /** mutate は 1 回の書き込みを行い、成功したら一覧を取り直す。失敗は投げる（知らせは呼び出し側）。 */
   const mutate = useCallback(
     async <T,>(busyId: string | null, run: (slug: string) => Promise<T>): Promise<T> => {
-      const slug = active.current;
-      if (!slug) throw new Error('workspace is not selected');
-      setState((prev) => ({ ...prev, busyId }));
+      if (!workspaceSlug) throw new Error('workspace is not selected');
+      const slug = workspaceSlug;
+      setBusy({ workspaceSlug: slug, id: busyId });
       try {
-        const result = await run(slug);
-        if (active.current === slug) await load(slug);
-        return result;
+        const written = await run(slug);
+        await queryClient.invalidateQueries({ queryKey: kbKeys.invitations(slug) });
+        return written;
       } finally {
-        if (active.current === slug) setState((prev) => ({ ...prev, busyId: null }));
+        setBusy((prev) => (prev?.workspaceSlug === slug && prev.id === busyId ? null : prev));
       }
     },
-    [load],
+    [workspaceSlug, queryClient],
   );
 
   const invite = useCallback(
@@ -91,5 +78,11 @@ export function useKbInvitations(workspaceSlug: string | undefined) {
     [mutate],
   );
 
+  const state: KbInvitationsState = {
+    invitations: data ?? NO_INVITATIONS,
+    loading,
+    error: lostAccess ? 'forbidden' : failed ? 'unknown' : null,
+    busyId: busy !== null && busy.workspaceSlug === workspaceSlug ? busy.id : null,
+  };
   return { ...state, retry, invite, resend, revoke };
 }

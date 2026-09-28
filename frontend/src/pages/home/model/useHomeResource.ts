@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 
 export type HomeResourceStatus = 'loading' | 'ready' | 'error';
 
@@ -67,12 +68,12 @@ export function useHomeResource<T>(
  *
  * useHomeResource の「失敗したら前の結果を残さない」と違うのは、共有の問い合わせは画面に
  * 戻ったときなどに裏で取り直すため。一時的な失敗で、出ていた一覧を消したり失敗の表示に
- * 差し替えたりしない（見る立場を失った場合は、作るときなどにサーバーが断る）。
+ * 差し替えたりしない。取り直しが 403・404（見る立場を失った）なら、持っている結果も出さない
+ * （queryShownState）。
  */
 export function toHomeResource<T>(result: UseQueryResult<T>, initial: T): HomeResource<T> {
-  if (result.data !== undefined) {
-    return { data: result.data, status: 'ready', retry: () => void result.refetch() };
-  }
-  const status: HomeResourceStatus = result.isError && !result.isFetching ? 'error' : 'loading';
-  return { data: initial, status, retry: () => void result.refetch() };
+  const shown = queryShownState(result);
+  const retry = () => void result.refetch();
+  if (shown.data !== undefined) return { data: shown.data, status: 'ready', retry };
+  return { data: initial, status: shown.failed ? 'error' : 'loading', retry };
 }

@@ -7,7 +7,16 @@ import type { KbPage, KbPageTree } from './types';
 /**
  * ページの木の控え（kbPageTreeQuery）を、ページの書き込みに合わせて直す。左の列の木・すべての
  * ページ・入口の解決が同じ木を使うので、ここを通せばどこで書き込んでもすべてに届く。
+ *
+ * ページを載せているほかの一覧（お気に入り・最近のページ）も、ここで一緒に古いものにする。
+ * 消したページや改名前の題名が、ホームやお気に入りの画面に残って見えないように。
  */
+
+/** ページを載せている一覧（お気に入り・最近のページ）を古いものにする。見ている一覧だけ取り直す。 */
+function refreshPageLists(queryClient: QueryClient, workspaceSlug: string): void {
+  void queryClient.invalidateQueries({ queryKey: kbKeys.favorites(workspaceSlug) });
+  void queryClient.invalidateQueries({ queryKey: kbKeys.recentPages() });
+}
 
 /**
  * ページを作った・消した・アーカイブした・戻したあとに、そのスペースの木（現役とアーカイブ済み）を
@@ -15,6 +24,7 @@ import type { KbPage, KbPageTree } from './types';
  * 組み立てずに取り直す。取り直しの間も持っている木は出したまま（一瞬空にならない）。
  */
 export function refreshKbPageTrees(queryClient: QueryClient, workspaceSlug: string, spaceId: string): Promise<void> {
+  refreshPageLists(queryClient, workspaceSlug);
   return queryClient.invalidateQueries({ queryKey: kbKeys.pageTrees(workspaceSlug, spaceId) });
 }
 
@@ -23,6 +33,7 @@ export function refreshKbPageTrees(queryClient: QueryClient, workspaceSlug: stri
  * （木ごと取り直すと、開いていた段が一瞬畳まれて見える）。変わっていなければ木を作り直さない。
  */
 export function reflectKbPageInTrees(queryClient: QueryClient, workspaceSlug: string, page: KbPage): Promise<void> {
+  refreshPageLists(queryClient, workspaceSlug);
   return reflectWriteAll<KbPageTree>(queryClient, kbKeys.pageTrees(workspaceSlug, page.spaceId), (tree) => {
     const pages = replaceKbPageInTree(tree.pages, page);
     return pages === tree.pages ? tree : { ...tree, pages };
