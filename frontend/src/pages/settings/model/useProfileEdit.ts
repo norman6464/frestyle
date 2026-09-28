@@ -49,26 +49,24 @@ export function useProfileEdit() {
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        // ヘッダーなどが既に取った自分のプロフィールがあれば、それを使う（取り直さない）。
-        const data = await queryClient.fetchQuery(myProfileQuery());
-        const fetched = {
-          displayName: data.displayName ?? '',
-          bio: data.bio ?? '',
-          avatarUrl: data.avatarUrl ?? '',
-          status: data.status ?? '',
-        };
-        setForm(fetched);
-        setSaved(fetched);
-        setLoaded(true);
-      } catch {
-        setMessage({ type: 'error', text: 'プロフィール取得に失敗しました。' });
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadProfile();
+    // ヘッダーなどが既に取った自分のプロフィールがあれば、それを使う（取り直さない）。
+    void queryClient
+      .fetchQuery(myProfileQuery())
+      .then(
+        (data) => {
+          const fetched = {
+            displayName: data.displayName ?? '',
+            bio: data.bio ?? '',
+            avatarUrl: data.avatarUrl ?? '',
+            status: data.status ?? '',
+          };
+          setForm(fetched);
+          setSaved(fetched);
+          setLoaded(true);
+        },
+        () => setMessage({ type: 'error', text: 'プロフィール取得に失敗しました。' }),
+      )
+      .finally(() => setLoading(false));
   }, [queryClient]);
 
   useEffect(() => () => {
@@ -99,17 +97,15 @@ export function useProfileEdit() {
       return;
     }
     setSubmitting(true);
-    try {
+    const save = async () => {
       await ProfileRepository.updateProfile(form);
       await reflectSaved(form);
       setSaved(form);
       setMessage(null);
       showSaved();
-    } catch {
-      setMessage({ type: 'error', text: '通信エラーが発生しました。' });
-    } finally {
-      setSubmitting(false);
-    }
+    };
+    await save().catch(() => setMessage({ type: 'error', text: '通信エラーが発生しました。' }));
+    setSubmitting(false);
   }, [form, showSaved, reflectSaved]);
 
   /**

@@ -105,15 +105,14 @@ export function useKbPageVersions(workspaceSlug: string | undefined, pageId: str
     async (note?: string): Promise<void> => {
       if (!open || !workspaceSlug || !pageId) return;
       setSaving(true);
-      try {
+      const createAndReflect = async () => {
         const created = await KbRepository.createPageVersion(workspaceSlug, pageId, note);
         await reflectWrite(queryClient, kbPageVersionsQuery(workspaceSlug, pageId).queryKey, (prev) => [
           created,
           ...prev,
         ]);
-      } finally {
-        setSaving(false);
-      }
+      };
+      await createAndReflect().finally(() => setSaving(false));
     },
     [open, workspaceSlug, pageId, queryClient],
   );
@@ -149,15 +148,14 @@ export function useKbPageVersions(workspaceSlug: string | undefined, pageId: str
         throw new Error('ページが確定していないため復元できません。');
       }
       setRestoring(true);
-      try {
+      const restore = async () => {
         const result = await KbRepository.restorePageVersion(workspaceSlug, pageId, versionSeq);
         // 復元した版のプレビューを終える（その間に別ページへ移っていれば、組が合わないので触らない）。
         setSelection((prev) => (prev !== null && prev.pageKey === pageKey ? null : prev));
         void queryClient.invalidateQueries({ queryKey: kbKeys.versions(workspaceSlug, pageId) });
         return result;
-      } finally {
-        setRestoring(false);
-      }
+      };
+      return restore().finally(() => setRestoring(false));
     },
     [workspaceSlug, pageId, pageKey, queryClient],
   );

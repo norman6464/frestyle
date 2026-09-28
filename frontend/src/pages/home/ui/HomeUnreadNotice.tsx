@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ErrorNotice, FsIcon } from '@/shared/ui';
-import type { HomeResource } from '../model/useHomeResource';
+import type { HomeResource } from '../model/homeResource';
 
 export interface HomeUnreadNoticeProps {
   unread: HomeResource<number>;

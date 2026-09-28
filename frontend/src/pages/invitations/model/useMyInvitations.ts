@@ -46,15 +46,14 @@ export function useMyInvitations() {
   const settle = useCallback(
     async <T,>(invitationId: string, run: () => Promise<T>): Promise<T> => {
       setBusyId(invitationId);
-      try {
+      const runAndReflect = async () => {
         const settled = await run();
         await reflectWrite(queryClient, kbMyInvitationsQuery().queryKey, (prev) =>
           prev.filter((inv) => inv.id !== invitationId),
         );
         return settled;
-      } finally {
-        setBusyId(null);
-      }
+      };
+      return runAndReflect().finally(() => setBusyId(null));
     },
     [queryClient],
   );

@@ -43,19 +43,18 @@ export const useAuth = () => {
     setLoading(true);
     setError(null);
 
-    try {
-      await signOutCurrentProvider();
-      setUser(null);
-      dispatch(clearAuth());
-      // 認証ヒント（次回の初期描画を早めるための印）も消す。
-      // 残すと、ログアウト後の再訪でログイン済みとして描き始めてしまう。
-      clearAuthHint();
-      navigate('/login');
-    } catch (err) {
-      setError(classifyApiError(err, 'ログアウトに失敗しました。'));
-    } finally {
-      setLoading(false);
-    }
+    await signOutCurrentProvider().then(
+      () => {
+        setUser(null);
+        dispatch(clearAuth());
+        // 認証ヒント（次回の初期描画を早めるための印）も消す。
+        // 残すと、ログアウト後の再訪でログイン済みとして描き始めてしまう。
+        clearAuthHint();
+        navigate('/login');
+      },
+      (err: unknown) => setError(classifyApiError(err, 'ログアウトに失敗しました。')),
+    );
+    setLoading(false);
   }, [dispatch, navigate]);
 
   /**
@@ -65,18 +64,20 @@ export const useAuth = () => {
     setLoading(true);
     setError(null);
 
-    try {
-      const userInfo = await AuthRepository.getCurrentUser();
-      setUser(userInfo);
-      dispatch(setAuthData());
-      return userInfo;
-    } catch (err) {
-      setError(classifyApiError(err, 'ユーザー情報の取得に失敗しました。'));
-      dispatch(finishLoading());
-      return null;
-    } finally {
-      setLoading(false);
-    }
+    const userInfo = await AuthRepository.getCurrentUser().then(
+      (info) => {
+        setUser(info);
+        dispatch(setAuthData());
+        return info;
+      },
+      (err: unknown) => {
+        setError(classifyApiError(err, 'ユーザー情報の取得に失敗しました。'));
+        dispatch(finishLoading());
+        return null;
+      },
+    );
+    setLoading(false);
+    return userInfo;
   }, [dispatch]);
 
   return {

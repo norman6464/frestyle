@@ -51,25 +51,27 @@ export function useEmailVerification(): EmailVerification {
     }
     setSending(true);
     setMessage(null);
-    try {
-      await sendEmailVerification(current);
-      setMessage({
-        tone: 'info',
-        text: `${current.email ?? 'あなたのメールアドレス'} に確認メールを送りました。届いたリンクを開いてから「確認を済ませた」を押してください。`,
-      });
-      return true;
-    } catch (cause) {
-      setMessage({
-        tone: 'error',
-        text:
-          errorCode(cause) === 'auth/too-many-requests'
-            ? '続けて送りすぎています。少し待ってからもう一度お試しください。'
-            : '確認メールを送れませんでした。時間をおいてもう一度お試しください。',
-      });
-      return false;
-    } finally {
-      setSending(false);
-    }
+    const sent = await sendEmailVerification(current).then(
+      () => {
+        setMessage({
+          tone: 'info',
+          text: `${current.email ?? 'あなたのメールアドレス'} に確認メールを送りました。届いたリンクを開いてから「確認を済ませた」を押してください。`,
+        });
+        return true;
+      },
+      (cause: unknown) => {
+        setMessage({
+          tone: 'error',
+          text:
+            errorCode(cause) === 'auth/too-many-requests'
+              ? '続けて送りすぎています。少し待ってからもう一度お試しください。'
+              : '確認メールを送れませんでした。時間をおいてもう一度お試しください。',
+        });
+        return false;
+      },
+    );
+    setSending(false);
+    return sent;
   }, []);
 
   const confirm = useCallback(async () => {
@@ -80,7 +82,7 @@ export function useEmailVerification(): EmailVerification {
     }
     setChecking(true);
     setMessage(null);
-    try {
+    const check = async () => {
       await current.reload();
       if (!current.emailVerified) {
         setMessage({ tone: 'info', text: 'まだ確認が済んでいません。メールのリンクを開いてから、もう一度押してください。' });
@@ -89,12 +91,13 @@ export function useEmailVerification(): EmailVerification {
       await current.getIdToken(true);
       await AuthRepository.login();
       return true;
-    } catch {
+    };
+    const confirmed = await check().catch(() => {
       setMessage({ tone: 'error', text: '確認の状態を読み込めませんでした。時間をおいてもう一度お試しください。' });
       return false;
-    } finally {
-      setChecking(false);
-    }
+    });
+    setChecking(false);
+    return confirmed;
   }, []);
 
   if (!available) return { available: false };

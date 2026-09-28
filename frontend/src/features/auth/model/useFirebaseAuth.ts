@@ -60,17 +60,17 @@ export function useFirebaseAuth(): FirebaseAuthActions {
       setLoading(true);
       setErrorMessage(null);
       setErrorField(null);
-      try {
-        await action();
-        return true;
-      } catch (err) {
-        setErrorMessage(classifyFirebaseError(err, fallback));
-        setErrorField(classifyFirebaseErrorField(err));
-        return false;
-      } finally {
-        inFlight.current = false;
-        setLoading(false);
-      }
+      const succeeded = await action().then(
+        () => true,
+        (err: unknown) => {
+          setErrorMessage(classifyFirebaseError(err, fallback));
+          setErrorField(classifyFirebaseErrorField(err));
+          return false;
+        },
+      );
+      inFlight.current = false;
+      setLoading(false);
+      return succeeded;
     },
     [config],
   );

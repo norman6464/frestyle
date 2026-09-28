@@ -66,12 +66,11 @@ export function useSprints(workspaceSlug: string | undefined, projectId: string 
     async (sprintId: string, run: (slug: string) => Promise<unknown>) => {
       if (!workspaceSlug || !projectId) return;
       setBusyId(sprintId);
-      try {
+      const runAndRefresh = async () => {
         await run(workspaceSlug);
         await refreshList(workspaceSlug, projectId);
-      } finally {
-        setBusyId(null);
-      }
+      };
+      await runAndRefresh().finally(() => setBusyId(null));
     },
     [workspaceSlug, projectId, refreshList],
   );

@@ -11,6 +11,7 @@
     "dev": "vite",
     "build": "vite build && node scripts/make-app-shell.mjs",
     "lint": "eslint .",
+    "check:compiler": "node scripts/check-react-compiler.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",

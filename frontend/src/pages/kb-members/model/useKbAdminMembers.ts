@@ -54,13 +54,14 @@ export function useKbAdminMembers(workspaceSlug: string | undefined) {
       if (!workspaceSlug) return;
       const slug = workspaceSlug;
       setBusy({ workspaceSlug: slug, userId });
-      try {
+      const runAndRefresh = async () => {
         await run(slug);
         void queryClient.invalidateQueries({ queryKey: kbKeys.members(slug) });
         await queryClient.invalidateQueries({ queryKey: kbKeys.adminMembers(slug) });
-      } finally {
-        setBusy((prev) => (prev?.workspaceSlug === slug && prev.userId === userId ? null : prev));
-      }
+      };
+      await runAndRefresh().finally(() =>
+        setBusy((prev) => (prev?.workspaceSlug === slug && prev.userId === userId ? null : prev)),
+      );
     },
     [workspaceSlug, queryClient],
   );

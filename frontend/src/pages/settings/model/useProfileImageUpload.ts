@@ -13,16 +13,17 @@ export function useProfileImageUpload() {
     }
 
     setUploading(true);
-    try {
+    const send = async () => {
       const { uploadUrl, imageUrl } = await ProfileRepository.getImagePresignedUrl(file.type, file.size);
       await ProfileRepository.uploadToS3(uploadUrl, file);
       return imageUrl;
-    } catch (error) {
+    };
+    const imageUrl = await send().catch((error: unknown) => {
       logger.error('プロフィール画像のアップロードに失敗しました:', error);
       return null;
-    } finally {
-      setUploading(false);
-    }
+    });
+    setUploading(false);
+    return imageUrl;
   }, []);
 
   return { upload, uploading };

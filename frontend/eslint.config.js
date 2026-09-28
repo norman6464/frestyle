@@ -176,7 +176,13 @@ export default defineConfig([globalIgnores(['dist', 'coverage']),
   // コンパイラと同じ定数から読む（vite-plugins/react-compiler-scope.js）。
   files: REACT_COMPILER_DIRS.map((dir) => `${dir}/**/*.{ts,tsx}`),
   ignores: REACT_COMPILER_IGNORES,
-  rules: reactHooks.configs.flat['recommended-latest'].rules,
+  rules: {
+    ...reactHooks.configs.flat['recommended-latest'].rules,
+    // コンパイラがまだ扱えない書き方（try … finally など）。部品や hook ごと黙って対象から外れるので、
+    // 推奨の設定には無いが止める。lint で捕まらないもの（try の中の条件式）は
+    // scripts/check-react-compiler.mjs が実際にコンパイラへ通して確かめる。
+    'react-hooks/todo': 'error',
+  },
 }, {
   // ビルド・テストの設定ファイルは Node で動く（src はブラウザ）。
   // preview.tsx はブラウザで動くので含めない（Node のグローバルを許すと

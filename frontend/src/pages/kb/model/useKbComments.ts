@@ -69,14 +69,13 @@ export function useKbComments(workspaceSlug: string | undefined, pageId: string 
     ): Promise<void> => {
       if (!workspaceSlug || !pageId) return;
       setInFlight((n) => n + 1);
-      try {
+      const runAndReflect = async () => {
         const written = await run(workspaceSlug, pageId);
         await reflectWrite(queryClient, kbCommentThreadsQuery(workspaceSlug, pageId).queryKey, (prev) =>
           apply(prev, written),
         );
-      } finally {
-        setInFlight((n) => n - 1);
-      }
+      };
+      await runAndReflect().finally(() => setInFlight((n) => n - 1));
     },
     [workspaceSlug, pageId, queryClient],
   );

@@ -49,13 +49,14 @@ export function useKbInvitations(workspaceSlug: string | undefined) {
       if (!workspaceSlug) throw new Error('workspace is not selected');
       const slug = workspaceSlug;
       setBusy({ workspaceSlug: slug, id: busyId });
-      try {
+      const runAndRefresh = async () => {
         const written = await run(slug);
         await queryClient.invalidateQueries({ queryKey: kbKeys.invitations(slug) });
         return written;
-      } finally {
-        setBusy((prev) => (prev?.workspaceSlug === slug && prev.id === busyId ? null : prev));
-      }
+      };
+      return runAndRefresh().finally(() =>
+        setBusy((prev) => (prev?.workspaceSlug === slug && prev.id === busyId ? null : prev)),
+      );
     },
     [workspaceSlug, queryClient],
   );

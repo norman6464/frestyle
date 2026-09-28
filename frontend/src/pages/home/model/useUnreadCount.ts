@@ -1,5 +1,5 @@
 import { useUnreadCount as useSharedUnreadCount } from '@/entities/notification';
-import { toHomeResource, type HomeResource } from './useHomeResource';
+import { toHomeResource, type HomeResource } from './homeResource';
 
 /**
  * 未読の通知の件数。ホームは件数と入口だけを出し、通知の本文は複製しない。

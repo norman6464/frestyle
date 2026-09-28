@@ -5,7 +5,7 @@ import { formatTicketKey, type TicketReference } from '@/entities/ticket';
 import { EmptyNotice, ErrorNotice, FsIcon, SkeletonRows } from '@/shared/ui';
 import { formatViewedAt } from '../lib/homeDates';
 import { homePrimaryLink, homeRowLink, homeTextLink } from '../lib/homeStyles';
-import type { HomeResource } from '../model/useHomeResource';
+import type { HomeResource } from '../model/homeResource';
 
 export interface HomeResumeSectionProps {
   recent: HomeResource<KbRecentPage[]>;

@@ -49,10 +49,17 @@ export function useKbSuggestionDraft(workspaceSlug: string | undefined, pageId: 
   const latestDraft = useRef<unknown>(null);
 
   // ページを移ったら、書きかけの下書きを持ち越さない（共有・コメント・履歴の各パネルと同じ理由）。
+  // 閉じるのは描いている途中で行う（effect で閉じると、前のページの下書きのまま 1 回描いてしまう）。
+  const pageKey = `${workspaceSlug ?? ''} ${pageId ?? ''}`;
+  const [shownPageKey, setShownPageKey] = useState(pageKey);
+  if (shownPageKey !== pageKey) {
+    setShownPageKey(pageKey);
+    setState(CLOSED);
+  }
+  // 送信中の応答と打鍵の控えも、移る前のページのものは捨てる。
   useEffect(() => {
     generation.current += 1;
     latestDraft.current = null;
-    setState(CLOSED);
   }, [workspaceSlug, pageId]);
 
   const start = useCallback((initialDoc: unknown) => {

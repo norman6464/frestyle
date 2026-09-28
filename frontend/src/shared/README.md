@@ -94,7 +94,13 @@ shared/
 
 ### React Compiler と一緒に使うとき
 
+範囲（`vite-plugins/react-compiler-scope.js`）は pages・widgets・features・entities の ui と model のすべて。コンパイラは扱えない書き方に出会うと、壊しはしないがその部品・hook を**黙って**対象から外す（画面もテストも通るので気づけない）。CI の `pnpm run check:compiler` が範囲のファイルを実際にコンパイラへ通し、1 つでも外したら落とす。
+
 - `select` に渡す関数は部品の外（モジュールの上）で作る。描くたびに作ると、取った結果の変わらない描き直しでも `select` が動く
+- `try … finally` と、catch の無い `try` を書かない。後始末は Promise の `.finally()`、失敗の扱いは `.then(成功, 失敗)` か `.catch()` で書く（処理を中の async 関数にまとめて `write().finally(() => …)` の形）
+- `try` の中に条件式（`?:`・`&&`・`??`・`?.`）を書かない。これは lint（`react-hooks/todo`）では捕まらず、`check:compiler` だけが捕まえる
+- `useCallback` の関数を中から自分で呼ばない（「宣言より前に使っている」になる）。続けて呼ぶ処理は中に名前付きの関数を置く
+- 描いている途中で state を揃える（`if (前の値 !== 今の値) setX(…)`）hook では、コンパイラが state の書き換え関数も依存に数える。`useCallback` の依存にも書く
 
 ## 依存ルール
 

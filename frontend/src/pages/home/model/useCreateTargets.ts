@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { kbMySpacesQuery, kbSpaceTemplatesQuery, type KbMySpace, type KbPageTemplate } from '@/entities/kb';
 import { projectListQuery, type Project } from '@/entities/project';
 import { ticketStatusesQuery, type TicketStatus } from '@/entities/ticket';
-import { toHomeResource, type HomeResource } from './useHomeResource';
+import { toHomeResource, type HomeResource } from './homeResource';
 
 const NO_SPACES: KbMySpace[] = [];
 const NO_TEMPLATES: KbPageTemplate[] = [];

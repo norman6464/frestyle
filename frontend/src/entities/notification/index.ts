@@ -6,7 +6,7 @@
  */
 
 export { NotificationRepository } from './api/notificationRepository';
-export { notificationKeys, unreadCountQuery } from './api/notificationQueries';
+export { notificationKeys, notificationsQuery, unreadCountQuery } from './api/notificationQueries';
 export { useUnreadCount } from './model/useUnreadCount';
 
 export type {
