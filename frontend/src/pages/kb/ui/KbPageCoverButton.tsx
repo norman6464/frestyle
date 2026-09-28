@@ -8,8 +8,8 @@ import {
 } from '@/shared/config/imageUpload';
 
 export interface KbPageCoverButtonProps {
-  /** 未設定は null（明示的に外した）と undefined（旧応答）のどちらもあり得る。 */
-  cover?: KbResolvedCover | null;
+  /** カバー画像。未設定は null。 */
+  cover: KbResolvedCover | null;
   canEdit: boolean;
   /**
    * 設定（ファイルを選ぶとアップロードして設定）・解除をまとめて担う（null が解除）。

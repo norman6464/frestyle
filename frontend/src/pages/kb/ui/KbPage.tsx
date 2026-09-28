@@ -265,7 +265,7 @@ export default function KbPage() {
     if (!pageId || !data) return undefined;
     return subscribeKbTreeEvents((event) => {
       if (event.type === 'page-deleted') {
-        const destination = destinationAfterDeletion(event.pageId, pageId, data.ancestors ?? [], data.page.spaceId);
+        const destination = destinationAfterDeletion(event.pageId, pageId, data.ancestors, data.page.spaceId);
         if (destination === null) return;
         forgetVisitedPageIfMatches(pageId);
         navigate(destination, { replace: true });
@@ -536,7 +536,7 @@ export default function KbPage() {
       suggestionDraft.cancel();
       return;
     }
-    // data.doc は旧応答（デプロイ順）や壊れた保存で isRichDoc を満たさないことがある
+    // data.doc は壊れた保存などで isRichDoc を満たさないことがある
     // （本文表示側と同じ防御。RichTextEditor に無効な doc をそのまま渡さない）。
     if (data) suggestionDraft.start(isRichDoc(data.doc) ? data.doc : emptyRichDoc());
   }, [suggestionDraft, data]);
@@ -726,13 +726,12 @@ export default function KbPage() {
               {/* カバー画像（設定済みのときだけ）。頭部の最初に置く見せ場なので、パンくずより上。 */}
               <KbPageCover cover={data.cover} />
               {/* パンくずの行と操作ボタンの行は別の行にする（幅が狭いときにパンくずが
-                  折り返しても、操作ボタンの並びが崩れないようにするため）。
-                  ?? [] はデプロイ順の防御 — 旧バックエンドの応答（ancestors なし）でも落とさない */}
+                  折り返しても、操作ボタンの並びが崩れないようにするため）。 */}
               <KbPageBreadcrumb
                 workspaceSlug={data.workspaceSlug}
                 workspaceName={data.workspaceName}
                 spaceId={data.page.spaceId}
-                ancestors={data.ancestors ?? []}
+                ancestors={data.ancestors}
                 title={data.page.title}
               />
               {/*
@@ -753,7 +752,7 @@ export default function KbPage() {
                   key={data.page.id}
                   workspaceSlug={data.workspaceSlug}
                   pageId={data.page.id}
-                  initial={data.isFavorite ?? false}
+                  initial={data.isFavorite}
                 />
                 {/* 目次はレールの既定のタブ。閉じた後に開き直す入口としてもここに置く。 */}
                 <button

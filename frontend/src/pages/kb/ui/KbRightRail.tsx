@@ -23,6 +23,9 @@ export interface KbRightRailProps {
  * コメント・履歴・提案を別々の列にすると、並んで開いたときに 1024px で本文が潰れる。
  * 1 枚にして排他にする（同時に見えるのは 1 つ）。広い画面では本文の右の列、狭い画面では右から出る引き出し。
  * 閉じるボタンは見出しの行の右端に置く（どの幅でも同じ場所）。
+ *
+ * 中身の見出しは h3 から始まる（コメントの「未解決」など）。目で見る見出しはタブが担うので、
+ * 各タブの中身の先頭にタブ名の h2 を読み上げ用に置き、ページの題名（h1）から段を飛ばさない。
  */
 export default function KbRightRail({ open, tab, onTabChange, onClose, unresolvedCommentCount, panels }: KbRightRailProps) {
   const drawerRef = useMobileDrawerFocus(open, onClose);
@@ -80,7 +83,12 @@ export default function KbRightRail({ open, tab, onTabChange, onClose, unresolve
           </div>
           {KB_RAIL_TABS.map((id) => (
             <Tabs.Panel key={id} value={id} className="min-h-0 flex-1 overflow-y-auto overscroll-contain focus:outline-none">
-              {tab === id ? panels[id] : null}
+              {tab === id ? (
+                <>
+                  <h2 className="sr-only">{KB_RAIL_TAB_LABEL[id]}</h2>
+                  {panels[id]}
+                </>
+              ) : null}
             </Tabs.Panel>
           ))}
         </Tabs.Root>

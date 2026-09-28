@@ -52,21 +52,17 @@ export interface KbEditorRef {
 export interface KbPage {
   id: string;
   spaceId: string;
-  parentId?: string;
+  parentId: string | null;
   title: string;
   createdByUserId: number;
-  archivedAt?: string;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  /** 未設定は null（明示的に外した）と undefined（旧応答）の両方であり得る。 */
-  icon?: KbIcon | null;
-  lastEditedByUserId?: number;
-  /**
-   * 公開範囲バッジの元（段 13）。'public' | 'space'（既定） | 'private'。
-   * backend は常に返すが、旧応答（デプロイ順）を踏まえ optional にしておく — 無ければ
-   * 既定の 'space' として扱う。
-   */
-  visibility?: 'public' | 'space' | 'private';
+  /** 絵文字の見出し。未設定は null。 */
+  icon: KbIcon | null;
+  lastEditedByUserId: number | null;
+  /** 公開範囲バッジの元（段 13）。'public' | 'space'（既定） | 'private'。 */
+  visibility: 'public' | 'space' | 'private';
 }
 
 /**
@@ -76,16 +72,9 @@ export interface KbPage {
  * このときだけ excerpt（一致箇所の前後 30 文字程度の抜粋）・matchStart・matchLen が付く。
  * matchStart / matchLen は **excerpt 文字列内での**一致開始位置と長さ（ページ本文全体での
  * 位置ではない）— 抜粋の中の一致箇所を `<mark>` 等で強調するために使う。
- *
- * 4 つとも任意（omitempty 相当）。バックエンドの実装がまだ揺れている段階のフィールドで、
- * 旧応答（4 つとも無い）でも画面が落ちないようにする。
  */
-export interface KbSearchResult extends KbPage {
-  matchField?: 'title' | 'body';
-  excerpt?: string;
-  matchStart?: number;
-  matchLen?: number;
-}
+export type KbSearchResult = KbPage &
+  ({ matchField: 'title' } | { matchField: 'body'; excerpt: string; matchStart: number; matchLen: number });
 
 /**
  * ツリーの 1 ノード。
@@ -162,24 +151,23 @@ export interface KbResolvedPage {
    *
    * canEdit はページ単位の実効権限（付与の合成）なので、ページ/スペース限定の編集権限しか
    * 持たない人には true でも、workspaceCanEdit は false になり得る（雛形関連のボタンを
-   * 「押せるが403になる」状態で出さないための旗。旧応答（デプロイ順）では undefined）。
+   * 「押せるが403になる」状態で出さないための旗）。
    */
-  workspaceCanEdit?: boolean;
+  workspaceCanEdit: boolean;
   /**
    * 閲覧できる祖先だけが根から順に入る（パンくず用）。
    * 見えない祖先は行ごと無い — 木と同じ規則で、穴があき得る。
    */
   ancestors: KbAncestorRef[];
-  /** 本文を最後に保存した人。旧応答（デプロイ順）や不明なユーザーでは無い/空文字。 */
-  lastEditedBy?: KbEditorRef | null;
+  /** 本文を最後に保存した人。まだ保存の記録が無ければ null、不明なユーザーでは名前が空文字。 */
+  lastEditedBy: KbEditorRef | null;
   /** 最終編集の日時（= page_snapshots.built_at）。lastEditedBy と対になる。 */
-  lastEditedAt?: string | null;
+  lastEditedAt: string | null;
   /**
-   * カバー画像。未設定は null（明示的に外した）と undefined（旧応答）の両方があり得る
-   * （KbIcon と同じ約束）。**一覧・木の KbPage には出てこない**（N+1 回避のため、
+   * カバー画像。未設定は null。**一覧・木の KbPage には出てこない**（N+1 回避のため、
    * backend は一覧応答では解決しない — このページ単体の解決応答でだけ入る）。
    */
-  cover?: KbResolvedCover | null;
+  cover: KbResolvedCover | null;
   /**
    * このページにコメントできるか（新規スレッド作成・返信・解決・再開）。
    *
@@ -189,17 +177,13 @@ export interface KbResolvedPage {
    */
   canComment: boolean;
   /**
-   * ページに付いたラベル（段 8。チケットの labels をスペース単位で共有する）。
-   * 0 件でも配列（旧応答（デプロイ順）だけ undefined になり得る）。
+   * ページに付いたラベル（段 8。チケットの labels をスペース単位で共有する）。0 件なら空の配列。
    */
-  labels?: KbLabel[];
-  /**
-   * このページを見たことのある人数（段 2。延べ回数ではない）。
-   * 旧応答（デプロイ順）では undefined。
-   */
-  viewCount?: number;
-  /** 自分がこのページをお気に入りに入れているか。旧応答（デプロイ順）では undefined（＝入れていない扱い）。 */
-  isFavorite?: boolean;
+  labels: KbLabel[];
+  /** このページを見たことのある人数（段 2。延べ回数ではない）。 */
+  viewCount: number;
+  /** 自分がこのページをお気に入りに入れているか。 */
+  isFavorite: boolean;
 }
 
 /**
@@ -257,7 +241,7 @@ export interface KbSpaceMember {
 export interface KbFavoritePage {
   pageId: string;
   title: string;
-  icon?: KbIcon | null;
+  icon: KbIcon | null;
   spaceId: string;
   spaceName: string;
   createdAt: string;
@@ -268,7 +252,7 @@ export interface KbRecentPage {
   pageId: string;
   workspaceSlug: string;
   title: string;
-  icon?: KbIcon | null;
+  icon: KbIcon | null;
   spaceId: string;
   spaceName: string;
   viewedAt: string;
@@ -368,8 +352,8 @@ export interface KbCommentThread {
 export interface KbPageContentSaveResult {
   doc: unknown;
   builtAt: string;
-  lastEditedBy?: KbEditorRef | null;
-  lastEditedAt?: string | null;
+  lastEditedBy: KbEditorRef | null;
+  lastEditedAt: string | null;
 }
 
 /**
@@ -419,14 +403,14 @@ export interface KbPageSuggestion {
 /**
  * テンプレート 1 件（一覧用の軽い形。doc は含まない）。
  *
- * spaceId が無い（null/undefined）ならワークスペース全体で使えるテンプレート、値があれば
+ * spaceId が null ならワークスペース全体で使えるテンプレート、値があれば
  * そのスペース専用。一覧 GET（?spaceId=）は「そのスペース専用」+「ワークスペース全体」の
  * 両方を返す想定 — backend 未実装の段階での想定であり確定ではない（要すり合わせ）。
  */
 export interface KbPageTemplate {
   id: string;
   name: string;
-  icon?: KbIcon | null;
-  spaceId?: string | null;
+  icon: KbIcon | null;
+  spaceId: string | null;
   createdAt: string;
 }

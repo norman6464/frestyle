@@ -33,10 +33,3 @@ export const 未設定: Story = {
   },
 };
 
-/** 旧応答（undefined）でも壊れない。 */
-export const 旧応答: Story = {
-  args: {},
-  play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelector('img')).toBeNull();
-  },
-};

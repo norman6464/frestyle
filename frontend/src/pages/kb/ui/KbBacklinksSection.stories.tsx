@@ -28,6 +28,11 @@ const page = (id: string, title: string): KbPage => ({
   createdByUserId: 1,
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-01T00:00:00Z',
+  parentId: null,
+  archivedAt: null,
+  icon: null,
+  lastEditedByUserId: null,
+  visibility: 'space',
 });
 
 /** 現在の URL を画面に出す（Link を押した結果、実際に遷移したかを見るための道具）。 */

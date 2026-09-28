@@ -4,8 +4,8 @@ import KbPageIconPicker from './KbPageIconPicker';
 import { FsIcon } from '@/shared/ui';
 
 export interface KbPageIconButtonProps {
-  /** 未設定は null（明示的に外した）と undefined（旧応答）のどちらもあり得る。 */
-  icon?: KbIcon | null;
+  /** 絵文字の見出し。未設定は null。 */
+  icon: KbIcon | null;
   canEdit: boolean;
   /**
    * 設定・変更・解除をまとめて担う（null が解除）。**失敗は投げてくる**前提
@@ -69,7 +69,7 @@ export default function KbPageIconButton({ icon, canEdit, onChange }: KbPageIcon
   const picker = open && (
     <div className="absolute right-0 top-full z-20 mt-1">
       <KbPageIconPicker
-        current={icon ?? null}
+        current={icon}
         onSelect={(next) => onChange(next)}
         onClear={() => onChange(null)}
         onClose={() => setOpen(false)}

@@ -29,7 +29,7 @@ describe('KbRepository', () => {
     const controller = new AbortController();
     mockGet.mockResolvedValueOnce({ data: [{ pageId: 'p1', title: '設計メモ' }] });
 
-    await expect(KbRepository.fetchRecentPages(controller.signal)).resolves.toEqual([
+    await expect(KbRepository.fetchRecentPages(controller.signal)).resolves.toMatchObject([
       { pageId: 'p1', title: '設計メモ' },
     ]);
     expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/me/recent-pages', {
@@ -214,61 +214,103 @@ describe('KbRepository', () => {
   });
 
   describe('searchPages の一致情報（matchField / excerpt / matchStart / matchLen）', () => {
-    it('題名一致の要素はそのまま通す（matchField 以外の追加フィールドは無い）', async () => {
-      const hit = {
-        id: 'p-1',
-        spaceId: 's1',
-        title: '設計メモ',
-        createdByUserId: 1,
-        createdAt: '2026-09-01T00:00:00Z',
-        updatedAt: '2026-09-01T00:00:00Z',
-        matchField: 'title' as const,
-      };
-      mockGet.mockResolvedValue({ data: [hit] });
+    const base = {
+      id: 'p-1',
+      spaceId: 's1',
+      title: '設計メモ',
+      createdByUserId: 1,
+      createdAt: '2026-09-01T00:00:00Z',
+      updatedAt: '2026-09-01T00:00:00Z',
+      visibility: 'space' as const,
+    };
+
+    it('題名一致の要素は抜粋を持たない', async () => {
+      mockGet.mockResolvedValue({ data: [{ ...base, matchField: 'title' }] });
 
       const [got] = await KbRepository.searchPages('acme', '設計');
 
-      expect(got).toEqual(hit);
+      expect(got).toMatchObject({ id: 'p-1', matchField: 'title' });
+      expect(got).not.toHaveProperty('excerpt');
     });
 
     it('本文一致の要素は excerpt / matchStart / matchLen を持ったまま通す', async () => {
-      const hit = {
-        id: 'p-2',
-        spaceId: 's1',
-        title: '無関係な題名',
-        createdByUserId: 1,
-        createdAt: '2026-09-01T00:00:00Z',
-        updatedAt: '2026-09-01T00:00:00Z',
-        matchField: 'body' as const,
-        excerpt: '…この段落には docker の使い方が書かれている…',
-        matchStart: 8,
-        matchLen: 6,
-      };
-      mockGet.mockResolvedValue({ data: [hit] });
+      const excerpt = '…この段落には docker の使い方が書かれている…';
+      mockGet.mockResolvedValue({ data: [{ ...base, matchField: 'body', excerpt, matchStart: 8, matchLen: 6 }] });
 
       const [got] = await KbRepository.searchPages('acme', 'docker');
 
-      expect(got).toEqual(hit);
-      expect(got.excerpt).toBe('…この段落には docker の使い方が書かれている…');
-      expect(got.matchStart).toBe(8);
-      expect(got.matchLen).toBe(6);
+      expect(got).toMatchObject({ matchField: 'body', excerpt, matchStart: 8, matchLen: 6 });
     });
 
-    it('旧応答（matchField 等が無い）でも画面が落ちない形でそのまま通す', async () => {
-      const legacy = {
-        id: 'p-3',
-        spaceId: 's1',
-        title: '旧仕様の結果',
-        createdByUserId: 1,
-        createdAt: '2026-09-01T00:00:00Z',
-        updatedAt: '2026-09-01T00:00:00Z',
-      };
-      mockGet.mockResolvedValue({ data: [legacy] });
+    it('一致が抜粋の先頭のとき、応答に無い matchStart を 0 に揃える（整数の omitempty で 0 はキーごと欠ける）', async () => {
+      mockGet.mockResolvedValue({ data: [{ ...base, matchField: 'body', excerpt: 'docker の使い方', matchLen: 6 }] });
 
-      const [got] = await KbRepository.searchPages('acme', 'x');
+      const [got] = await KbRepository.searchPages('acme', 'docker');
 
-      expect(got.matchField).toBeUndefined();
-      expect(got.excerpt).toBeUndefined();
+      expect(got).toMatchObject({ matchField: 'body', matchStart: 0, matchLen: 6 });
+    });
+  });
+
+  describe('応答の揃え方（無いときキーごと欠ける項目）', () => {
+    const page = {
+      id: 'p-1',
+      spaceId: 's1',
+      title: '設計メモ',
+      createdByUserId: 1,
+      createdAt: '2026-09-01T00:00:00Z',
+      updatedAt: '2026-09-01T00:00:00Z',
+      visibility: 'space' as const,
+    };
+
+    it('ページの親・アーカイブ・絵・最終編集者が欠けていたら null にする', async () => {
+      mockGet.mockResolvedValue({ data: [page] });
+
+      const [got] = await KbRepository.listBacklinks('acme', 'p-9');
+
+      expect(got).toEqual({ ...page, parentId: null, archivedAt: null, icon: null, lastEditedByUserId: null });
+    });
+
+    it('木の行の子が欠けていても空の配列にし、中のページも揃える', async () => {
+      mockGet.mockResolvedValue({
+        data: { pages: [{ page, hasHiddenChildren: false, parentArchived: false }], hasHiddenChildren: false },
+      });
+
+      const tree = await KbRepository.fetchPageTree('acme', 's1');
+
+      expect(tree.pages[0].children).toEqual([]);
+      expect(tree.pages[0].page.parentId).toBeNull();
+    });
+
+    it('開いたページの最終編集・カバーが欠け、祖先の列とラベルが null なら、null と空の配列にする', async () => {
+      mockGet.mockResolvedValue({
+        data: {
+          workspaceSlug: 'acme',
+          workspaceName: 'Acme',
+          page,
+          doc: null,
+          canEdit: true,
+          canManage: false,
+          workspaceCanEdit: true,
+          ancestors: null,
+          canComment: true,
+          labels: null,
+          viewCount: 3,
+          isFavorite: false,
+        },
+      });
+
+      const got = await KbRepository.resolvePage('p-1');
+
+      expect(got).toMatchObject({ ancestors: [], lastEditedBy: null, lastEditedAt: null, cover: null, labels: [] });
+      expect(got.page.icon).toBeNull();
+    });
+
+    it('ワークスペース全体の雛形は spaceId が欠けているので null にする', async () => {
+      mockGet.mockResolvedValue({ data: [{ id: 't-1', name: '議事録', createdAt: '' }] });
+
+      const [got] = await KbRepository.listPageTemplates('acme');
+
+      expect(got).toEqual({ id: 't-1', name: '議事録', createdAt: '', icon: null, spaceId: null });
     });
   });
 
@@ -287,7 +329,7 @@ describe('KbRepository', () => {
       const backlinks = await KbRepository.listBacklinks('acme', 'p-1');
 
       expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/pages/p-1/backlinks');
-      expect(backlinks).toEqual([page]);
+      expect(backlinks).toMatchObject([page]);
     });
 
     it('一覧が null で返っても空配列にする', async () => {
@@ -322,7 +364,7 @@ describe('KbRepository', () => {
     await expect(KbRepository.renameSpace('acme', 'sp-1', 'x')).rejects.toThrow();
   });
 
-  it('resolvePage は GET /kb/pages/:id で解決結果をそのまま返す', async () => {
+  it('resolvePage は GET /kb/pages/:id で解決結果を返す', async () => {
     const resolved = {
       workspaceSlug: 'w-3f2a9c',
       page: { id: 'p-1', spaceId: 'sp-1', title: '設計メモ' },
@@ -334,7 +376,7 @@ describe('KbRepository', () => {
     const got = await KbRepository.resolvePage('p-1');
 
     expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/pages/p-1');
-    expect(got).toEqual(resolved);
+    expect(got).toMatchObject(resolved);
   });
 
   it('resolvePage の失敗は投げる（404 は「無い」と「見えない」の両方）', async () => {
@@ -355,7 +397,8 @@ describe('KbRepository', () => {
     expect(mockPut).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/pages/p-1/content', {
       doc: { type: 'doc', content: [{ type: 'paragraph' }] },
     });
-    expect(got).toEqual(normalized);
+    // まだ最終編集が無いときは応答にキーが無いので null に揃える。
+    expect(got).toEqual({ ...normalized, lastEditedBy: null, lastEditedAt: null });
   });
 
   it('replaceContent の失敗は投げる（呼び出し側が未保存へ戻すため）', async () => {
@@ -390,7 +433,7 @@ describe('KbRepository', () => {
         type: 'emoji',
         value: '📘',
       });
-      expect(got).toEqual(page);
+      expect(got).toMatchObject(page);
     });
 
     it('失敗は握り潰さず投げる', async () => {
@@ -410,7 +453,7 @@ describe('KbRepository', () => {
       const got = await KbRepository.clearPageIcon('acme', 'p-1');
 
       expect(mockDelete).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/pages/p-1/icon');
-      expect(got).toEqual(page);
+      expect(got).toMatchObject(page);
     });
 
     it('失敗は握り潰さず投げる', async () => {
@@ -514,7 +557,7 @@ describe('KbRepository', () => {
         type: 'file',
         key: 'kb/w-1/p-1/1.bin',
       });
-      expect(got).toEqual(body);
+      expect(got).toMatchObject(body);
     });
 
     it('失敗は握り潰さず投げる', async () => {
@@ -534,7 +577,7 @@ describe('KbRepository', () => {
       const got = await KbRepository.clearPageCover('acme', 'p-1');
 
       expect(mockDelete).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/pages/p-1/cover');
-      expect(got).toEqual(body);
+      expect(got).toMatchObject(body);
     });
 
     it('失敗は握り潰さず投げる', async () => {
@@ -985,7 +1028,7 @@ describe('KbRepository', () => {
       expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/templates', {
         params: { spaceId: 's-1' },
       });
-      expect(got).toEqual([template]);
+      expect(got).toMatchObject([template]);
     });
 
     it('一覧が null で返っても空配列にする', async () => {
@@ -1015,7 +1058,7 @@ describe('KbRepository', () => {
         name: '議事録',
         spaceId: 's-1',
       });
-      expect(got).toEqual(created);
+      expect(got).toMatchObject(created);
     });
 
     it('spaceId に null を渡すとそのまま送る（ワークスペース全体）', async () => {
@@ -1068,7 +1111,7 @@ describe('KbRepository', () => {
         '/api/v2/kb/workspaces/acme/spaces/s-1/pages/from-template',
         { templateId: 't-1', title: '議事録' },
       );
-      expect(got).toEqual(page);
+      expect(got).toMatchObject(page);
     });
 
     it('parentId を渡すとそのまま送る', async () => {

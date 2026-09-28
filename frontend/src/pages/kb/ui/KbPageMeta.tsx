@@ -9,13 +9,14 @@ export type KbPageVisibility = 'public' | 'space' | 'private';
 export type KbPageAccess = 'edit' | 'comment' | 'view';
 
 export interface KbPageMetaProps {
-  lastEditedBy?: KbEditorRef | null;
-  lastEditedAt?: string | null;
-  /** 公開範囲（段 13）。旧応答（デプロイ順）では undefined — 既定の 'space' として扱う。 */
-  visibility?: KbPageVisibility;
-  /** ページに付いたラベル（段 8）。旧応答では undefined。 */
-  labels?: KbLabel[];
-  /** このページを見たことのある人数（段 2）。旧応答では undefined — 出さない。 */
+  /** 最終編集の人と日時。まだ保存の記録が無いページでは null。 */
+  lastEditedBy: KbEditorRef | null;
+  lastEditedAt: string | null;
+  /** 公開範囲（段 13）。 */
+  visibility: KbPageVisibility;
+  /** ページに付いたラベル（段 8）。 */
+  labels: KbLabel[];
+  /** このページを見たことのある人数（段 2）。渡さなければ出さない。 */
   viewCount?: number;
   /** 本文の文字数から見積もった読了分数（クライアント側で計算）。無ければ出さない。 */
   readMinutes?: number | null;
@@ -58,7 +59,7 @@ function KbVisibilityBadge({ visibility }: { visibility: KbPageVisibility }) {
  * KbPageMeta は題名の下に出すバイライン（見本 3a）。
  *
  * 左から 最終編集（人と日時）→ 公開範囲 → ラベル → 権限の印、右端に 閲覧数・読了時間・保存状態。
- * 最終編集が無い（旧応答・未保存のページ）ときはその部分だけを省く — 公開範囲や保存状態は
+ * 最終編集が無い（まだ保存の記録が無いページ）ときはその部分だけを省く — 公開範囲や保存状態は
  * それでも要るので、行ごと消さない。
  * name が引けなければ「不明なユーザー」に倒す（ListGrantablePrincipals と同じ、行を消さず埋める約束）。
  */
@@ -87,8 +88,8 @@ export default function KbPageMeta({
           </span>
         </span>
       )}
-      <KbVisibilityBadge visibility={visibility ?? 'space'} />
-      {(labels ?? []).map((label) => (
+      <KbVisibilityBadge visibility={visibility} />
+      {labels.map((label) => (
         <LabelChip key={label.id} name={label.name} color={label.color} />
       ))}
       {access !== 'edit' && (

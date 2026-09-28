@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, within } from 'storybook/test';
-import type { KbPageTreeNode } from '@/entities/kb';
+import type { KbPage, KbPageTreeNode } from '@/entities/kb';
 import { withRouter } from '../../../../.storybook/decorators';
 import KbTreeList from './KbTreeList';
 
@@ -31,13 +31,18 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const page = (id: string, title: string) => ({
+const page = (id: string, title: string): KbPage => ({
   id,
   spaceId: 's-1',
   title,
   createdByUserId: 1,
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-01T00:00:00Z',
+  parentId: null,
+  archivedAt: null,
+  icon: null,
+  lastEditedByUserId: null,
+  visibility: 'space',
 });
 
 const node = (

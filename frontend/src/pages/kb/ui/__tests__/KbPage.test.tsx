@@ -8,7 +8,7 @@ import { AxiosError, AxiosHeaders } from 'axios';
 import KbPage from '../KbPage';
 import { KbFrameContext } from '@/widgets/kb-frame';
 import { KbFrameLocationContext } from '@/widgets/kb-frame/model/kbFrameLocation';
-import { emitKbTreeEvent } from '@/entities/kb';
+import { emitKbTreeEvent, type KbResolvedPage } from '@/entities/kb';
 import type { CommentAnchor, CommentBadgeCounts, EditorCommand } from '@/shared/ui/RichTextEditor';
 
 function blockIdConflictError(): AxiosError {
@@ -230,23 +230,34 @@ const resolved = (
   canManage = false,
   canComment = true,
   workspaceCanEdit = true,
-) => ({
+): KbResolvedPage => ({
   workspaceSlug: 'w-3f2a9c',
   workspaceName: '開発チーム',
   ancestors: [{ id: 'anc-1', title: '親ページの親' }],
   page: {
     id: 'p1',
     spaceId: 's1',
+    parentId: 'anc-1',
     title: '親ページ',
     createdByUserId: 1,
+    archivedAt: null,
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
+    icon: null,
+    lastEditedByUserId: null,
+    visibility: 'space',
   },
   doc: { type: 'doc', content: [] },
   canEdit,
   canManage,
   canComment,
   workspaceCanEdit,
+  lastEditedBy: null,
+  lastEditedAt: null,
+  cover: null,
+  labels: [],
+  viewCount: 0,
+  isFavorite: false,
 });
 
 /** /page の run に渡す最小のエディタ（createSubpage が使う形だけ）。 */
@@ -364,18 +375,6 @@ describe('KbPage の配線', () => {
     );
     expect(within(nav).getByText('親ページ')).toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: '親ページ' })).not.toBeInTheDocument();
-  });
-
-  it('ancestors の無い旧応答でも画面は落ちない（デプロイ順の防御）', async () => {
-    const legacy = { ...resolved(true) } as Record<string, unknown>;
-    delete legacy.ancestors;
-    delete legacy.workspaceName;
-    hoisted.resolvePage.mockResolvedValue(legacy);
-    renderPage();
-
-    const nav = await screen.findByRole('navigation', { name: 'ページの場所' });
-    // ワークスペース名が無ければ slug で代用する。
-    expect(within(nav).getByText('w-3f2a9c')).toBeInTheDocument();
   });
 
   it('祖先が空でもパンくずは壊れない（根ページ・穴だけの経路）', async () => {

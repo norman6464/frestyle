@@ -33,6 +33,8 @@ type Story = StoryObj<typeof meta>;
 const template = (id: string, name: string): KbPageTemplate => ({
   id,
   name,
+  icon: null,
+  spaceId: null,
   createdAt: '2026-09-01T00:00:00Z',
 });
 

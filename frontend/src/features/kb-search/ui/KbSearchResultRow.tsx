@@ -22,11 +22,8 @@ export interface KbSearchResultRowProps {
  * React が通常の文字列として扱う（HTML として解釈しない）ので安全になる。
  */
 export default function KbSearchResultRow({ page, id, selected, onSelect }: KbSearchResultRowProps) {
-  const excerpt = page.matchField === 'body' ? page.excerpt : undefined;
-  const segments =
-    typeof excerpt === 'string'
-      ? splitExcerptMatch(excerpt, page.matchStart ?? 0, page.matchLen ?? 0)
-      : null;
+  // 本文の一致だけが抜粋を持つ（題名の一致には無い）。
+  const segments = page.matchField === 'body' ? splitExcerptMatch(page.excerpt, page.matchStart, page.matchLen) : null;
 
   return (
     // 押されるのは option である div 自身（KbSearchDialog の約束 — option の中に

@@ -38,6 +38,7 @@ const page = {
   createdByUserId: 1,
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-01T00:00:00Z',
+  visibility: 'space',
 };
 
 const tree = {
@@ -71,6 +72,11 @@ const resolved = (over: Record<string, unknown> = {}) => ({
   canEdit: true,
   canManage: true,
   workspaceCanEdit: true,
+  canComment: true,
+  ancestors: [],
+  viewCount: 0,
+  isFavorite: false,
+  labels: [],
   ...over,
 });
 
@@ -148,6 +154,7 @@ export const 読むだけ: Story = {
         '/kb/pages/p-1': resolved({
           canEdit: false,
           canManage: false,
+          canComment: false,
           page: { ...page, icon: { type: 'emoji', value: '📘' } },
         }),
       }),
@@ -466,6 +473,9 @@ export const 右レールのタブを切り替える: Story = {
     // タブを直接押しても切り替わる。
     await userEvent.click(within(rail).getByRole('tab', { name: 'コメント' }));
     await expect(await within(rail).findByText('まだコメントはありません。')).toBeVisible();
+    // 中身の見出し（h3）の上に、タブ名の h2 が読み上げ用に入る（題名の h1 から段を飛ばさない）。
+    await expect(within(rail).getByRole('heading', { level: 2, name: 'コメント' })).toBeInTheDocument();
+    await expect(within(rail).getByRole('heading', { level: 3, name: '新しいスレッドを作成' })).toBeInTheDocument();
     await expect(within(rail).queryByText('レビュー節を追記')).toBeNull();
 
     await userEvent.click(within(rail).getByRole('button', { name: '補助を閉じる' }));
