@@ -379,6 +379,23 @@ func (r *knowledgeBaseRepository) FindSpace(ctx context.Context, workspaceID, sp
 	return &sp, nil
 }
 
+// FindSpaceByIDAcrossWorkspaces はスペースを ID だけで引く（詳細は port のコメント）。
+func (r *knowledgeBaseRepository) FindSpaceByIDAcrossWorkspaces(ctx context.Context, spaceID string) (*domain.Space, error) {
+	spID, ok := kbParseID(spaceID)
+	if !ok {
+		return nil, repository.ErrSpaceNotFound
+	}
+	row, err := r.queries(ctx).GetSpaceAcrossWorkspaces(ctx, spID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, repository.ErrSpaceNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	sp := toDomainSpace(row)
+	return &sp, nil
+}
+
 // UpdateSpaceName はスペースの表示名を変える。0 件更新は「無い」と同じ扱いで
 // ErrSpaceNotFound（別ワークスペースの ID も WHERE の workspace_id でここに落ちる）。
 func (r *knowledgeBaseRepository) UpdateSpaceName(ctx context.Context, workspaceID, spaceID, name string) error {

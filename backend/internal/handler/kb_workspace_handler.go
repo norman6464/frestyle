@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/norman6464/frestyle/backend/internal/domain"
+	"github.com/norman6464/frestyle/backend/internal/handler/dto"
 	"github.com/norman6464/frestyle/backend/internal/handler/middleware"
 	"github.com/norman6464/frestyle/backend/internal/usecase/kb"
 	"github.com/norman6464/frestyle/backend/internal/usecase/user"
@@ -35,6 +36,7 @@ type KnowledgeBaseWorkspaceHandler struct {
 	listFavorites        *kb.ListPageFavoritesUseCase
 	listSpaceMembers     *kb.ListSpaceMembersUseCase
 	listMySpaces         *kb.ListMySpacesUseCase
+	resolveSpace         *kb.ResolveSpaceLocationUseCase
 }
 
 func NewKnowledgeBaseWorkspaceHandler(
@@ -54,6 +56,7 @@ func NewKnowledgeBaseWorkspaceHandler(
 	listFavorites *kb.ListPageFavoritesUseCase,
 	listSpaceMembers *kb.ListSpaceMembersUseCase,
 	listMySpaces *kb.ListMySpacesUseCase,
+	resolveSpace *kb.ResolveSpaceLocationUseCase,
 ) *KnowledgeBaseWorkspaceHandler {
 	return &KnowledgeBaseWorkspaceHandler{
 		listWorkspaces:       listWorkspaces,
@@ -72,6 +75,7 @@ func NewKnowledgeBaseWorkspaceHandler(
 		listFavorites:        listFavorites,
 		listSpaceMembers:     listSpaceMembers,
 		listMySpaces:         listMySpaces,
+		resolveSpace:         resolveSpace,
 	}
 }
 
@@ -96,24 +100,6 @@ func toKbWorkspaceResponse(w *domain.Workspace, perm domain.ScopePermission) kbW
 	return kbWorkspaceResponse{
 		Slug: w.Slug, Name: w.Name, CreatedAt: w.CreatedAt,
 		CanManage: perm.CanManage, CanCreateTickets: perm.CanEdit,
-	}
-}
-
-// kbSpaceResponse はスペース 1 件の返却形。
-// id は載せる（ページ一覧・作成の URL がスペース ID を取るため）。
-type kbSpaceResponse struct {
-	ID   string `json:"id"  example:"0198a000-0000-7000-8000-000000000002"`
-	Key  string `json:"key" example:"eng"`
-	Name string `json:"name" example:"開発部"`
-	// Visibility はサイドバーの節分けに使う（workspace = チーム / private = プライベート）。
-	Visibility string    `json:"visibility" example:"workspace"`
-	CreatedAt  time.Time `json:"createdAt"`
-}
-
-func toKbSpaceResponse(s *domain.Space) kbSpaceResponse {
-	return kbSpaceResponse{
-		ID: s.ID, Key: s.Key, Name: s.Name,
-		Visibility: string(s.Visibility), CreatedAt: s.CreatedAt,
 	}
 }
 
@@ -195,9 +181,9 @@ func (h *KnowledgeBaseWorkspaceHandler) ListSpaces(c *gin.Context) {
 	}
 	// 0 件でも null ではなく [] を返す（make で長さ 0 のスライスを作ってある）。
 	// null になるとフロントの .map / for-of が TypeError で落ちる。
-	out := make([]kbSpaceResponse, 0, len(spaces))
+	out := make([]dto.KbSpaceResponse, 0, len(spaces))
 	for i := range spaces {
-		out = append(out, toKbSpaceResponse(&spaces[i]))
+		out = append(out, dto.KbSpaceFromDomain(&spaces[i]))
 	}
 	c.JSON(http.StatusOK, out)
 }
@@ -482,7 +468,7 @@ func (h *KnowledgeBaseWorkspaceHandler) CreateSpace(c *gin.Context) {
 		respondKnowledgeBaseErr(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, toKbSpaceResponse(space))
+	c.JSON(http.StatusCreated, dto.KbSpaceFromDomain(space))
 }
 
 // kbSpaceMemberResponse はスペースメンバー 1 人の返却形（段 9）。
@@ -538,6 +524,40 @@ type kbMySpaceResponse struct {
 	ID   string           `json:"id"`
 	Name string           `json:"name"`
 	Role domain.GrantRole `json:"role"`
+}
+
+// ResolveSpace は /kb/spaces/{spaceId} の URL からスペースとワークスペースを引く（URL に
+// ワークスペースを出さないための口。ページの ResolveByID と同じ形）。
+func (h *KnowledgeBaseWorkspaceHandler) ResolveSpace(c *gin.Context) {
+	uid := middleware.CurrentUserIDOrZero(c)
+	if uid == 0 {
+		c.JSON(http.StatusUnauthorized, errorResponse{Error: "unauthorized"})
+		return
+	}
+	spaceID := c.Param("spaceId")
+	loc, err := h.resolveSpace.Execute(c.Request.Context(), spaceID)
+	if err != nil {
+		// 実在しない ID も、この後の権限で伏せられる ID も、同じ経路の 404 に落ちる。
+		respondKnowledgeBaseErr(c, err)
+		return
+	}
+	// 解決はテナント確定前の読みなので、**ここで必ず**その workspace の権限判定を通す。
+	// 所属していないワークスペースでは役割が集まらず、閲覧もできない。
+	perm, err := h.checkSpace.Execute(c.Request.Context(), kb.CheckSpacePermissionInput{
+		WorkspaceID: loc.Workspace.ID,
+		SpaceID:     loc.Space.ID,
+		UserID:      uid,
+	})
+	if err != nil {
+		respondKnowledgeBaseErr(c, err)
+		return
+	}
+	if !perm.CanView {
+		// 閲覧できない相手にはスペースの実在を教えない（存在しない ID と同じ応答）。
+		c.JSON(http.StatusNotFound, errorResponse{Error: "not_found"})
+		return
+	}
+	c.JSON(http.StatusOK, dto.KbResolvedSpaceFromDomain(&loc.Workspace, &loc.Space))
 }
 
 // ListMySpaces は ListSpaceMembers の向きを逆にしたもの（段 14。GET /me/spaces）。
@@ -605,7 +625,7 @@ func (h *KnowledgeBaseWorkspaceHandler) RenameSpace(c *gin.Context) {
 		respondKnowledgeBaseErr(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, toKbSpaceResponse(space))
+	c.JSON(http.StatusOK, dto.KbSpaceFromDomain(space))
 }
 
 // kbSearchPageResponse は検索結果 1 件の返却形。kbPageResponse を埋め込み「どこにヒットしたか」

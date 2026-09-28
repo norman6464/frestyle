@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/norman6464/frestyle/backend/internal/domain"
+	"github.com/norman6464/frestyle/backend/internal/handler/dto"
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -214,7 +215,7 @@ func Test_ナレッジAPI_スペース作成はワークスペースのadminだ�
 		w := f.do(t, http.MethodPost, spacesPath, `{"key":"eng","name":"開発部"}`)
 
 		require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-		var got kbSpaceResponse
+		var got dto.KbSpaceResponse
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 		assert.Equal(t, "eng", got.Key)
 		assert.NotEmpty(t, got.ID, "以降の URL で使うのでスペース ID は返す")
@@ -402,7 +403,7 @@ func Test_ナレッジAPI_プライベートスペースはメンバーなら作
 		w := f.do(t, http.MethodPost, spacesPath, `{"name":"自分のメモ","visibility":"private"}`)
 
 		require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-		var got kbSpaceResponse
+		var got dto.KbSpaceResponse
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 		assert.Equal(t, "private", got.Visibility)
 		assert.NotEmpty(t, got.Key, "key は自動採番される")
@@ -458,7 +459,7 @@ func Test_ナレッジAPI_プライベートスペースはメンバーなら作
 		w := f.do(t, http.MethodPost, spacesPath, `{"name":"開発部"}`)
 
 		require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-		var got kbSpaceResponse
+		var got dto.KbSpaceResponse
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 		assert.Equal(t, "workspace", got.Visibility)
 	})
@@ -517,13 +518,13 @@ func Test_ナレッジAPI_ワークスペース一覧は操作の可否を役割
 func ptrRole(r domain.GrantRole) *domain.GrantRole { return &r }
 
 // kbListSpaces はスペース一覧を叩いて応答をデコードする。
-func kbListSpaces(t *testing.T, f kbFixture, slug string) (*httptest.ResponseRecorder, []kbSpaceResponse) {
+func kbListSpaces(t *testing.T, f kbFixture, slug string) (*httptest.ResponseRecorder, []dto.KbSpaceResponse) {
 	t.Helper()
 	w := f.do(t, http.MethodGet, kbFill(kbSpacesPath, slug, ""), "")
 	if w.Code != http.StatusOK {
 		return w, nil
 	}
-	var got []kbSpaceResponse
+	var got []dto.KbSpaceResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 	return w, got
 }
@@ -1007,6 +1008,67 @@ func Test_ナレッジAPI_管理者向け一覧は未認証なら401(t *testing.
 	f := newKbFixture(kbCanEdit, 0)
 
 	w := f.do(t, http.MethodGet, kbFill(kbAdminMembersPath, kbWorkspaceSlug, ""), "")
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// kbResolveSpacePath は URL にワークスペースを出さないスペースの解決（/kb/spaces/{spaceId}）。
+const kbResolveSpacePath = "/api/v2/kb/spaces/"
+
+const kbOtherSpaceID = "0198a000-0000-7000-8000-0000000000f2"
+
+func kbResolveSpace(t *testing.T, f kbFixture, spaceID string) (*httptest.ResponseRecorder, dto.KbResolvedSpaceResponse) {
+	t.Helper()
+	w := f.do(t, http.MethodGet, kbResolveSpacePath+spaceID, "")
+	var got dto.KbResolvedSpaceResponse
+	if w.Code == http.StatusOK {
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	}
+	return w, got
+}
+
+func Test_ナレッジAPI_スペースの解決は見られるスペースのワークスペースとスペースを返す(t *testing.T) {
+	f := newKbFixture(kbCanEdit, kbUserID)
+	f.perms.setScopeRole(kbSpaceID, kbUserID, domain.GrantRoleViewer)
+
+	w, got := kbResolveSpace(t, f, kbSpaceID)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, kbWorkspaceSlug, got.WorkspaceSlug)
+	assert.Equal(t, kbWorkspaceSlug, got.WorkspaceName)
+	assert.Equal(t, kbSpaceID, got.Space.ID)
+	assert.Equal(t, "workspace", got.Space.Visibility)
+}
+
+func Test_ナレッジAPI_スペースの解決は役割の無い相手には実在するスペースも存在しないIDも同じ404(t *testing.T) {
+	f := newKbFixture(kbCanEdit, kbUserID)
+	// scopeRole を何も張らない = ワークスペースにもスペースにも役割が無い（所属はしている）。
+
+	real, _ := kbResolveSpace(t, f, kbSpaceID)
+	missing, _ := kbResolveSpace(t, f, "00000000-0000-7000-8000-00000000dead")
+
+	require.Equal(t, http.StatusNotFound, real.Code)
+	require.Equal(t, http.StatusNotFound, missing.Code)
+	assert.Equal(t, missing.Body.String(), real.Body.String(), "見えないスペースの実在を教えない")
+}
+
+func Test_ナレッジAPI_スペースの解決は所属していないワークスペースのスペースを返さない(t *testing.T) {
+	f := newKbFixture(kbCanEdit, kbUserID)
+	// 他社のテナントのスペース。URL にワークスペースが無いので slug の middleware は通らない。
+	// 解決した先のワークスペースで権限判定を通さないと、ID を知っているだけで中身が引ける。
+	f.pages.addSpace(kbOtherWorkspaceID, kbOtherSpaceID)
+	f.perms.setScopeRole(kbOtherSpaceID, kbUserID, domain.GrantRoleAdmin)
+
+	w, _ := kbResolveSpace(t, f, kbOtherSpaceID)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.NotContains(t, w.Body.String(), kbOtherWorkspaceSlug)
+}
+
+func Test_ナレッジAPI_スペースの解決は未認証なら401(t *testing.T) {
+	f := newKbFixture(kbCanEdit, 0)
+
+	w, _ := kbResolveSpace(t, f, kbSpaceID)
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

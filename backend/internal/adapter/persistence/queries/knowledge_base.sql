@@ -74,6 +74,15 @@ WHERE w.id = $1
 SELECT * FROM spaces
 WHERE workspace_id = $1 AND id = $2;
 
+-- name: GetSpaceAcrossWorkspaces :one
+-- スペースを **ID だけ** で引く。/kb/spaces/{spaceId} の URL からワークスペースを特定するための
+-- 読み取りで、GetPageAcrossWorkspaces と同じく workspace_id を WHERE に持たない。
+-- 引いた直後に必ずその workspace の権限判定を通すこと（判定なしで応答に使わない）。
+-- id は uuid の主キーで全テナント一意なので、これ自体が越境にはならない
+-- （危ういのは結果の使い方で、それは呼び出し側の handler が縛る）。
+SELECT * FROM spaces
+WHERE id = $1;
+
 -- name: InsertPage :one
 -- ページの作成。created_at / updated_at / archived_at は DB 既定値に任せ、
 -- RETURNING で確定した行を返す（アプリ側の時刻と DB の時刻を二重管理しない）。

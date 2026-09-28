@@ -406,6 +406,9 @@ func Test_ナレッジAPI_登録済みルートは全て認可テストの対象
 		http.MethodPost + " /api/v2/kb/invitations/preview": true,
 		// /p/{pageId} の解決。Test_ナレッジAPI_IDだけでの解決 が直接叩く。
 		http.MethodGet + " /api/v2/kb/pages/:pageId": true,
+		// /kb/spaces/{spaceId} の解決。URL に slug が無く、解決した先で権限を判定する経路なので
+		// 表にせず、Test_ナレッジAPI_スペースの解決* が直接叩く。
+		http.MethodGet + " /api/v2/kb/spaces/:spaceId": true,
 		// 自分の最近見たページ（段2）。認証だけで所属は問わない特殊な経路（ワークスペース
 		// 横断）なので表にせず、Test_ナレッジAPI_最近見たページ* が直接叩く。
 		http.MethodGet + " /api/v2/kb/me/recent-pages": true,
