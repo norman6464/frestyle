@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { reflectWrite } from '@/shared/api/queryCache';
 import {
   KbRepository,
@@ -61,8 +62,7 @@ export function useKbPageVersions(workspaceSlug: string | undefined, pageId: str
     ...kbPageVersionsQuery(workspaceSlug ?? '', pageId ?? ''),
     enabled: open && hasTarget,
   });
-  const listShown = open && hasTarget;
-  const listMissing = listResult.data === undefined;
+  const listView = queryShownState(listResult, open && hasTarget);
   const [saving, setSaving] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
@@ -74,9 +74,10 @@ export function useKbPageVersions(workspaceSlug: string | undefined, pageId: str
     ...kbPageVersionQuery(workspaceSlug ?? '', pageId ?? '', selectedSeq ?? 0),
     enabled: hasTarget && selectedSeq !== null,
   });
-  const detail = detailResult.data ?? null;
-  const detailLoading = detail === null && (detailResult.isPending || detailResult.isFetching);
-  const detailFailed = detail === null && detailResult.isError && !detailResult.isFetching;
+  const detailView = queryShownState(detailResult, hasTarget && selectedSeq !== null);
+  const detail = detailView.data ?? null;
+  const detailLoading = detailView.loading;
+  const detailFailed = detailView.failed;
   const selected = useMemo<KbSelectedVersionState | null>(
     () =>
       selectedSeq === null
@@ -161,10 +162,9 @@ export function useKbPageVersions(workspaceSlug: string | undefined, pageId: str
   );
 
   return {
-    versions: listShown ? (listResult.data ?? NO_VERSIONS) : NO_VERSIONS,
-    // 一覧がまだ無い間だけ読み込み中・失敗を出す。持っている一覧は取り直しの間も失敗しても出し続ける。
-    loading: listShown && listMissing && (listResult.isPending || listResult.isFetching),
-    error: listShown && listMissing && listResult.isError && !listResult.isFetching ? LOAD_FAILED : null,
+    versions: listView.data ?? NO_VERSIONS,
+    loading: listView.loading,
+    error: listView.failed ? LOAD_FAILED : null,
     saving,
     retry,
     selected,

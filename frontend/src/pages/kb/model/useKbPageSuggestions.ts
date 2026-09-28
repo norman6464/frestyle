@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { reflectWrite } from '@/shared/api/queryCache';
 import { KbRepository, kbKeys, kbSuggestionsQuery, type KbPageSuggestion } from '@/entities/kb';
 
@@ -30,8 +31,7 @@ export function useKbPageSuggestions(workspaceSlug: string | undefined, pageId: 
   const queryClient = useQueryClient();
   const hasTarget = workspaceSlug !== undefined && pageId !== undefined;
   const result = useQuery({ ...kbSuggestionsQuery(workspaceSlug ?? '', pageId ?? ''), enabled: open && hasTarget });
-  const missing = result.data === undefined;
-  const shown = open && hasTarget;
+  const view = queryShownState(result, open && hasTarget);
 
   const { refetch } = result;
   const retry = useCallback(() => {
@@ -71,10 +71,9 @@ export function useKbPageSuggestions(workspaceSlug: string | undefined, pageId: 
   );
 
   return {
-    suggestions: shown ? (result.data ?? NO_SUGGESTIONS) : NO_SUGGESTIONS,
-    // 一覧がまだ無い間だけ読み込み中・失敗を出す。持っている一覧は取り直しの間も失敗しても出し続ける。
-    loading: shown && missing && (result.isPending || result.isFetching),
-    error: shown && missing && result.isError && !result.isFetching ? LOAD_FAILED : null,
+    suggestions: view.data ?? NO_SUGGESTIONS,
+    loading: view.loading,
+    error: view.failed ? LOAD_FAILED : null,
     retry,
     accept,
     reject,

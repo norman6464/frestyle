@@ -1,4 +1,5 @@
 import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { queryWrapper } from '@/test/queryClient';
 import { useKbComments } from '../useKbComments';
@@ -93,6 +94,38 @@ describe('useKbComments', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toMatch(/コメントを読み込めませんでした/);
     expect(result.current.threads).toHaveLength(0);
+  });
+
+  it('取り直しが 403（見る立場を失った）なら、持っているスレッドも出さずに失敗にする', async () => {
+    const { result } = renderHook(() => useKbComments(SLUG, PAGE));
+    await waitFor(() => expect(result.current.threads).toHaveLength(1));
+
+    hoisted.listCommentThreads.mockRejectedValue(
+      new AxiosError('forbidden', 'ERR_BAD_REQUEST', undefined, undefined, {
+        status: 403,
+        statusText: '',
+        headers: {},
+        config: { headers: new AxiosHeaders() },
+        data: {},
+      }),
+    );
+    act(() => result.current.retry());
+
+    await waitFor(() => expect(result.current.error).toMatch(/コメントを読み込めませんでした/));
+    expect(result.current.threads).toEqual([]);
+  });
+
+  it('取り直しが一時的な失敗なら、持っているスレッドは出したまま', async () => {
+    const { result } = renderHook(() => useKbComments(SLUG, PAGE));
+    await waitFor(() => expect(result.current.threads).toHaveLength(1));
+
+    hoisted.listCommentThreads.mockRejectedValue(new Error('network'));
+    act(() => result.current.retry());
+
+    await waitFor(() => expect(hoisted.listCommentThreads).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(result.current.threads).toHaveLength(1);
+    expect(result.current.error).toBeNull();
   });
 
   describe('createThread', () => {

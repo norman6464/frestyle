@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { kbPageTreeQuery, type KbPage, type KbPageTree, type KbPageTreeNode } from '@/entities/kb';
 
 export interface KbFlatPage {
@@ -37,7 +38,7 @@ function toFlatPages(tree: KbPageTree): KbFlatPages {
  */
 export function useKbSpaceAllPages(workspaceSlug: string, spaceId: string) {
   const result = useQuery({ ...kbPageTreeQuery(workspaceSlug, spaceId), select: toFlatPages });
-  const missing = result.data === undefined;
+  const view = queryShownState(result);
 
   const { refetch } = result;
   const retry = useCallback(() => {
@@ -45,10 +46,10 @@ export function useKbSpaceAllPages(workspaceSlug: string, spaceId: string) {
   }, [refetch]);
 
   return {
-    pages: result.data?.pages ?? NO_PAGES,
-    hasHiddenChildren: result.data?.hasHiddenChildren ?? false,
-    loading: missing && (result.isPending || result.isFetching),
-    error: missing && result.isError && !result.isFetching ? 'ページを読み込めませんでした。' : null,
+    pages: view.data?.pages ?? NO_PAGES,
+    hasHiddenChildren: view.data?.hasHiddenChildren ?? false,
+    loading: view.loading,
+    error: view.failed ? 'ページを読み込めませんでした。' : null,
     retry,
   };
 }

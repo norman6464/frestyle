@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { reflectWrite } from '@/shared/api/queryCache';
 import { KbRepository, kbCommentThreadsQuery, type KbCommentThread } from '@/entities/kb';
 import type { CommentAnchor } from '@/shared/ui/RichTextEditor';
@@ -53,7 +54,7 @@ export function useKbComments(workspaceSlug: string | undefined, pageId: string 
   const queryClient = useQueryClient();
   const hasTarget = workspaceSlug !== undefined && pageId !== undefined;
   const result = useQuery({ ...kbCommentThreadsQuery(workspaceSlug ?? '', pageId ?? ''), enabled: hasTarget });
-  const missing = result.data === undefined;
+  const view = queryShownState(result, hasTarget);
   // 飛んでいる書き込みの数。1 つでもあれば saving。
   const [inFlight, setInFlight] = useState(0);
 
@@ -130,10 +131,9 @@ export function useKbComments(workspaceSlug: string | undefined, pageId: string 
   }, [refetch]);
 
   return {
-    threads: hasTarget ? (result.data ?? NO_THREADS) : NO_THREADS,
-    // 一覧がまだ無い間だけ読み込み中・失敗を出す。持っている一覧は取り直しの間も失敗しても出し続ける。
-    loading: hasTarget && missing && (result.isPending || result.isFetching),
-    error: hasTarget && missing && result.isError && !result.isFetching ? LOAD_FAILED : null,
+    threads: view.data ?? NO_THREADS,
+    loading: view.loading,
+    error: view.failed ? LOAD_FAILED : null,
     saving: inFlight > 0,
     createThread,
     reply,

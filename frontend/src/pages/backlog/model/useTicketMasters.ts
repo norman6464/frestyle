@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import {
   TicketRepository,
   ticketKeys,
@@ -125,22 +126,14 @@ export function useTicketMasters(workspaceSlug: string | undefined, projectId: s
     [changeTypes],
   );
 
-  // 一覧がまだ無い間だけ読み込み中・失敗を出す。持っている一覧は取り直しの間も失敗しても出し続ける。
-  const statusesMissing = statusesResult.data === undefined;
-  const typesMissing = typesResult.data === undefined;
-  const loading =
-    hasScope &&
-    ((statusesMissing && (statusesResult.isPending || statusesResult.isFetching)) ||
-      (typesMissing && (typesResult.isPending || typesResult.isFetching)));
-  const failed =
-    (statusesMissing && statusesResult.isError && !statusesResult.isFetching) ||
-    (typesMissing && typesResult.isError && !typesResult.isFetching);
+  const statusesView = queryShownState(statusesResult, hasScope);
+  const typesView = queryShownState(typesResult, hasScope);
 
   return {
-    statuses: statusesResult.data ?? NO_STATUSES,
-    types: typesResult.data ?? NO_TYPES,
-    loading,
-    error: failed ? LOAD_FAILED : null,
+    statuses: statusesView.data ?? NO_STATUSES,
+    types: typesView.data ?? NO_TYPES,
+    loading: statusesView.loading || typesView.loading,
+    error: statusesView.failed || typesView.failed ? LOAD_FAILED : null,
     refresh,
     createStatus,
     updateStatus,

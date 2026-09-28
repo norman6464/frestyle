@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { reflectWrite } from '@/shared/api/queryCache';
 import KbRepository from '../api/kbRepository';
 import { kbKeys, kbWorkspacesQuery } from '../api/kbQueries';
@@ -51,12 +52,11 @@ export function useWorkspaceList() {
     void refetch();
   }, [refetch]);
 
+  const view = queryShownState(result);
   return {
-    workspaces: result.data ?? NO_WORKSPACES,
-    // 一覧がまだ無い間だけ読み込み中（失敗のあと取り直している間も含む）。一覧を持っているうちの
-    // 取り直しは、成功しても失敗しても持っている一覧を出し続ける（読み込み中や失敗の表示で隠さない）。
-    loading: result.data === undefined && (result.isPending || result.isFetching),
-    error: result.data === undefined && result.isError && !result.isFetching ? 'ワークスペースを読み込めませんでした' : null,
+    workspaces: view.data ?? NO_WORKSPACES,
+    loading: view.loading,
+    error: view.failed ? 'ワークスペースを読み込めませんでした' : null,
     retry,
     createWorkspace,
     deleteWorkspace,

@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { kbBacklinksQuery, type KbPage } from '@/entities/kb';
 
 export interface KbBacklinksState {
@@ -30,7 +31,7 @@ const LOAD_FAILED = '参照しているページを読み込めませんでし�
 export function useKbBacklinks(workspaceSlug: string | undefined, pageId: string | undefined): KbBacklinksState {
   const hasTarget = workspaceSlug !== undefined && pageId !== undefined;
   const result = useQuery({ ...kbBacklinksQuery(workspaceSlug ?? '', pageId ?? ''), enabled: hasTarget });
-  const missing = result.data === undefined;
+  const view = queryShownState(result, hasTarget);
 
   const { refetch } = result;
   const retry = useCallback(() => {
@@ -38,9 +39,9 @@ export function useKbBacklinks(workspaceSlug: string | undefined, pageId: string
   }, [refetch]);
 
   return {
-    pages: hasTarget ? (result.data ?? NO_PAGES) : NO_PAGES,
-    loading: hasTarget && missing && (result.isPending || result.isFetching),
-    error: hasTarget && missing && result.isError && !result.isFetching ? LOAD_FAILED : null,
+    pages: view.data ?? NO_PAGES,
+    loading: view.loading,
+    error: view.failed ? LOAD_FAILED : null,
     retry,
   };
 }

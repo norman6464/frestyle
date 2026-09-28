@@ -46,9 +46,21 @@ type Story = StoryObj<typeof meta>;
  * 新規のコメント欄は畳んだ姿から始まる（設計 04・06）。開くまで入力欄は無いので、
  * 置き文句のボタンを押してから中身を確かめる。
  */
+/**
+ * 畳んだ欄を開き、カーソルが乗るまで待つ。
+ *
+ * 開いたあとのフォーカスは 2 段遅れて入る（欄を描いてから setTimeout、さらに tiptap が次の描画の
+ * 刻みで当てる）。入り終える前に次の操作をすると、遅れて届いたフォーカスがその操作の入力欄
+ * （リンク先 URL など）から焦点を奪う。CI が重いとこの並びになって揺れていた。人が「開いた」と
+ * 分かるのはカーソルが乗ってからなので、そこまで待ってから次へ進む。
+ */
 async function openComposer(canvas: ReturnType<typeof within>) {
   await userEvent.click(canvas.getByRole('button', { name: 'コメントを追加する...' }));
-  return canvas.findByRole('textbox', { name: 'コメントを追加する...' });
+  const composer = await canvas.findByRole('textbox', { name: 'コメントを追加する...' });
+  await waitFor(async () => {
+    await expect(composer).toHaveFocus();
+  });
+  return composer;
 }
 
 export const 空: Story = {

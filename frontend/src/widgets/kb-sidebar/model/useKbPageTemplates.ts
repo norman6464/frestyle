@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { reflectWriteAll } from '@/shared/api/queryCache';
 import { KbRepository, kbKeys, kbSpaceTemplatesQuery, type KbPage, type KbPageTemplate } from '@/entities/kb';
 
@@ -35,7 +36,7 @@ export function useKbPageTemplates(workspaceSlug: string | undefined, spaceId: s
   const queryClient = useQueryClient();
   const shown = open && workspaceSlug !== undefined && spaceId !== undefined;
   const result = useQuery({ ...kbSpaceTemplatesQuery(workspaceSlug ?? '', spaceId ?? ''), enabled: shown });
-  const missing = result.data === undefined;
+  const view = queryShownState(result, shown);
 
   /**
    * deleteTemplate はテンプレートを削除する。成功したら、そのテンプレートを載せている一覧
@@ -67,10 +68,9 @@ export function useKbPageTemplates(workspaceSlug: string | undefined, spaceId: s
   );
 
   return {
-    templates: shown ? (result.data ?? NO_TEMPLATES) : NO_TEMPLATES,
-    // 一覧がまだ無い間だけ読み込み中・失敗を出す。持っている一覧は取り直しの間も失敗しても出し続ける。
-    loading: shown && missing && (result.isPending || result.isFetching),
-    error: shown && missing && result.isError && !result.isFetching ? LOAD_FAILED : null,
+    templates: view.data ?? NO_TEMPLATES,
+    loading: view.loading,
+    error: view.failed ? LOAD_FAILED : null,
     deleteTemplate,
     createPageFromTemplate,
   };
