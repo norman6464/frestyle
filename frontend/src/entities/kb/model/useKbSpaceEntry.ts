@@ -87,7 +87,7 @@ export function useKbSpaceEntry(
   if (spaceId) {
     const located = locateKbSpace(
       spaceId,
-      { workspaceSlug: locatedSlug, lostAccess: location.lostAccess, failed: location.failed },
+      { owner: locatedSlug, lostAccess: location.lostAccess, failed: location.failed },
       {
         data: locatedList.data,
         lostAccess: locatedList.lostAccess,
