@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   lint-and-build:
-    name: Lint / typecheck / build / knip / size-limit
+    name: Lint / typecheck / build / knip / initial-load
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -71,14 +71,16 @@ jobs:
           VITE_OIDC_SCOPE: openid profile email offline_access
         run: pnpm run build
 
-      - name: Run size-limit (report only)
+      # 最初に読む JS を index.html から実際にたどって数える（ファイル名の決め打ちでは、ビルドが
+      # 別の名前の塊へ分けた分を数え漏らす）。予算は scripts/check-initial-load.mjs。
+      - name: 最初に読む JS の大きさ (report only)
         continue-on-error: true
         run: |
           set +e
-          pnpm exec size-limit > /tmp/size-report.txt 2>&1
+          node scripts/check-initial-load.mjs > /tmp/size-report.txt 2>&1
           status=$?
           {
-            echo "## Frontend bundle size (size-limit, gzip)"
+            echo "## 最初に読む JavaScript（gzip）"
             echo ""
             echo '```'
             cat /tmp/size-report.txt
