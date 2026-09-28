@@ -71,14 +71,13 @@ export function useTicketPage(ticketId: string | undefined) {
       const slug = workspaceSlug;
       const project = projectId;
       setBusyFor(id);
-      try {
+      const write = async () => {
         const result = await run(slug, id);
         await reflectTicket(queryClient, slug, project, id, updated(result));
         refreshTicketDerived(queryClient, slug, project);
         return result;
-      } finally {
-        setBusyFor((prev) => (prev === id ? null : prev));
-      }
+      };
+      return write().finally(() => setBusyFor((prev) => (prev === id ? null : prev)));
     },
     [ticketId, workspaceSlug, projectId, queryClient],
   );

@@ -3,7 +3,7 @@ import { formatTicketKey, type MyAssignedTicket } from '@/entities/ticket';
 import { EmptyNotice, ErrorNotice, FsIcon, SkeletonRows } from '@/shared/ui';
 import { formatDueDate } from '../lib/homeDates';
 import { homeTextLink } from '../lib/homeStyles';
-import type { HomeResource } from '../model/useHomeResource';
+import type { HomeResource } from '../model/homeResource';
 
 export interface HomeAssignedSectionProps {
   assigned: HomeResource<MyAssignedTicket[]>;

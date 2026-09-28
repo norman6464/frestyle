@@ -57,16 +57,15 @@ export function useSignupPage(): SignupPageState {
   const [password, setPassword] = useState('');
   const [sessionError, setSessionError] = useState<string | null>(null);
 
-  const establishSessionAndNavigate = async () => {
-    try {
-      await authRepository.login();
-      dispatch(setAuthData());
-      setAuthHint();
-      navigate(consumePostLoginPath() ?? '/');
-    } catch (err) {
-      setSessionError(classifyApiError(err, 'アカウントの作成に失敗しました。'));
-    }
-  };
+  const establishSessionAndNavigate = () =>
+    authRepository.login().then(
+      () => {
+        dispatch(setAuthData());
+        setAuthHint();
+        navigate(consumePostLoginPath() ?? '/');
+      },
+      (err: unknown) => setSessionError(classifyApiError(err, 'アカウントの作成に失敗しました。')),
+    );
 
   const handleEmailSignUp = (e: FormEvent) => {
     e.preventDefault();

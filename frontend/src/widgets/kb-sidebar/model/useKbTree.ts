@@ -327,16 +327,16 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
                 : { afterPageId: target.pageId }),
             };
 
-      try {
-        await KbRepository.movePage(activeSlug, pageId, request);
-      } catch (error) {
-        // 自分が描いた木がまだ控えにあるときだけ戻す。別のものに変わっていたら
-        // （取り直し）、そちらのほうが新しいので触らない。
-        queryClient.setQueryData(treeQueryKey, (prev) => (prev === optimistic ? previous : prev));
-        throw error;
-      } finally {
-        moving.current = false;
-      }
+      await KbRepository.movePage(activeSlug, pageId, request)
+        .catch((error: unknown) => {
+          // 自分が描いた木がまだ控えにあるときだけ戻す。別のものに変わっていたら
+          // （取り直し）、そちらのほうが新しいので触らない。
+          queryClient.setQueryData(treeQueryKey, (prev) => (prev === optimistic ? previous : prev));
+          throw error;
+        })
+        .finally(() => {
+          moving.current = false;
+        });
     },
     [activeSlug, spaceId, archivedMode, tree, queryClient],
   );

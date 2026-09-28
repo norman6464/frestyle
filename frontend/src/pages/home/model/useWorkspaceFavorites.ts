@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { kbFavoritesQuery, type KbFavoritePage } from '@/entities/kb';
-import { toHomeResource, type HomeResource } from './useHomeResource';
+import { toHomeResource, type HomeResource } from './homeResource';
 
 const EMPTY: KbFavoritePage[] = [];
 

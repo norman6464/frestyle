@@ -1,6 +1,6 @@
 import babel from '@rolldown/plugin-babel';
 import { reactCompilerPreset } from '@vitejs/plugin-react';
-import { REACT_COMPILER_DIRS, REACT_COMPILER_EXCLUDED_DIRS } from './react-compiler-scope.js';
+import { REACT_COMPILER_DIRS } from './react-compiler-scope.js';
 
 /*
  * React Compiler。部品と hook に「前と同じ値なら計算も描き直しもしない」を自動で付ける
@@ -17,11 +17,7 @@ export function reactCompiler() {
   const preset = reactCompilerPreset();
   preset.rolldown.filter.id = {
     include: REACT_COMPILER_DIRS.map((dir) => new RegExp(`/${dirPattern(dir)}/.+\\.tsx?$`)),
-    exclude: [
-      /\/__tests__\//,
-      /\.stories\.tsx$/,
-      ...REACT_COMPILER_EXCLUDED_DIRS.map((dir) => new RegExp(`/${dirPattern(dir)}/`)),
-    ],
+    exclude: [/\/__tests__\//, /\.stories\.tsx$/],
   };
   return babel({ presets: [preset] });
 }

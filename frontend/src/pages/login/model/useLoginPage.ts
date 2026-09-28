@@ -66,16 +66,15 @@ export function useLoginPage(): LoginPageState {
   const [password, setPassword] = useState('');
   const [sessionError, setSessionError] = useState<string | null>(null);
 
-  const establishSessionAndNavigate = async () => {
-    try {
-      await authRepository.login();
-      dispatch(setAuthData());
-      setAuthHint();
-      navigate(consumePostLoginPath() ?? '/');
-    } catch (err) {
-      setSessionError(classifyApiError(err, 'ログインに失敗しました。'));
-    }
-  };
+  const establishSessionAndNavigate = () =>
+    authRepository.login().then(
+      () => {
+        dispatch(setAuthData());
+        setAuthHint();
+        navigate(consumePostLoginPath() ?? '/');
+      },
+      (err: unknown) => setSessionError(classifyApiError(err, 'ログインに失敗しました。')),
+    );
 
   const handleEmailSignIn = (e: FormEvent) => {
     e.preventDefault();

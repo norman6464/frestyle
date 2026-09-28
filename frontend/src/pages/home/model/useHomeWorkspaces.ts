@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { kbWorkspacesQuery, type KbWorkspace } from '@/entities/kb';
-import { toHomeResource, type HomeResource } from './useHomeResource';
+import { toHomeResource, type HomeResource } from './homeResource';
 
 const EMPTY: KbWorkspace[] = [];
 

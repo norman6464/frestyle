@@ -107,18 +107,19 @@ export function useKbShare(workspaceSlug: string | undefined, pageId: string | u
       if (!workspaceSlug || !pageId || pageKey === null) return false;
       setInFlight((n) => n + 1);
       setWriteError(null);
-      try {
-        try {
-          await run(workspaceSlug, pageId);
-        } catch {
+      const send = async (): Promise<boolean> => {
+        const sent = await run(workspaceSlug, pageId).then(
+          () => true,
+          () => false,
+        );
+        if (!sent) {
           setWriteError({ pageKey });
           return false;
         }
         await queryClient.invalidateQueries({ queryKey: kbKeys.pageGrants(workspaceSlug, pageId) });
         return shownPageKey.current === pageKey;
-      } finally {
-        setInFlight((n) => n - 1);
-      }
+      };
+      return send().finally(() => setInFlight((n) => n - 1));
     },
     [workspaceSlug, pageId, pageKey, queryClient],
   );

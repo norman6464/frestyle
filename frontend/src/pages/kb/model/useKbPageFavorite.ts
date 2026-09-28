@@ -29,16 +29,18 @@ export function useKbPageFavorite(workspaceSlug: string | undefined, pageId: str
     const next = !favorite;
     setFavorite(next);
     setPending(true);
-    try {
-      if (next) await KbRepository.addFavorite(workspaceSlug, pageId);
-      else await KbRepository.removeFavorite(workspaceSlug, pageId);
-      void queryClient.invalidateQueries({ queryKey: kbKeys.favorites(workspaceSlug) });
-    } catch (cause) {
-      setFavorite(!next);
-      throw cause;
-    } finally {
-      setPending(false);
-    }
+    const send = next
+      ? () => KbRepository.addFavorite(workspaceSlug, pageId)
+      : () => KbRepository.removeFavorite(workspaceSlug, pageId);
+    await send()
+      .then(
+        () => void queryClient.invalidateQueries({ queryKey: kbKeys.favorites(workspaceSlug) }),
+        (cause: unknown) => {
+          setFavorite(!next);
+          throw cause;
+        },
+      )
+      .finally(() => setPending(false));
   }, [workspaceSlug, pageId, pending, favorite, queryClient]);
 
   return { favorite, pending, toggle };

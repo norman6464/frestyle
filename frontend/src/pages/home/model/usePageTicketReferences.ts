@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { pageTicketReferencesQuery, type TicketReference } from '@/entities/ticket';
-import { toHomeResource, type HomeResource } from './useHomeResource';
+import { toHomeResource, type HomeResource } from './homeResource';
 
 /** 最後に開いたページに添える参照チケットの上限。 */
 export const REFERENCE_PREVIEW_LIMIT = 2;

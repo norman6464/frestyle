@@ -33,8 +33,16 @@ const SAVE_DEBOUNCE_MS = 800;
  */
 export function useKbPageDoc(pageId: string | undefined) {
   const queryClient = useQueryClient();
-  const [state, setState] = useState<KbPageDocState>({ data: null, loading: false, error: null });
+  const [state, setState] = useState<KbPageDocState>({ data: null, loading: pageId !== undefined, error: null });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  // ページが変わったら、描いている途中で読み込み中へ切り替える（effect の頭で切り替えると、
+  // 前の状態のまま 1 回描いてから描き直す）。前のページの本文は読み終えるまで出したまま。
+  const [shownPageId, setShownPageId] = useState(pageId);
+  if (shownPageId !== pageId) {
+    setShownPageId(pageId);
+    setState((prev) => (pageId ? { ...prev, loading: true, error: null } : { data: null, loading: false, error: null }));
+    setSaveStatus('idle');
+  }
   // 本文保存が block_id_conflict（409）で失敗した回数。0 は「まだ起きていない」。
   // 呼び出し側（KbPage）はこの値が変わるたびに再読み込みを促す通知を出す
   // （boolean だと同じ真値が続くだけで2回目以降の発火を検知できないため回数にする）。
@@ -71,48 +79,53 @@ export function useKbPageDoc(pageId: string | undefined) {
   const saveInFlightPromise = useRef<Promise<void> | null>(null);
 
   const flushSave = useCallback((): Promise<void> => {
-    if (saveInFlight.current) return saveInFlightPromise.current ?? Promise.resolve();
-    const head = pendingSaves.current.entries().next();
-    if (head.done) return Promise.resolve();
-    const [key, pending] = head.value;
-    pendingSaves.current.delete(key);
-    saveInFlight.current = true;
-    setSaveStatus('saving');
-    const promise = KbRepository.replaceContent(pending.workspaceSlug, pending.pageId, pending.doc)
-      .then((res) => {
-        saveInFlight.current = false;
-        // 画面は現在ユーザーの名前を持っていないので、保存後の「最終編集」はこの応答で
-        // 更新する。移った先で戻ってきた応答（pending.pageId が古い画面のページ）は
-        // 反映しない — 反映すると、いま見ているページの最終編集が別ページのものになる。
-        setState((prev) => {
-          if (!prev.data || prev.data.page.id !== pending.pageId) return prev;
-          return {
-            ...prev,
-            data: { ...prev.data, lastEditedBy: res.lastEditedBy, lastEditedAt: res.lastEditedAt },
-          };
+    // 続けて送るときに自分を呼ぶので、名前付きの関数にする（useCallback の変数を中から呼ぶと、
+    // React Compiler が「宣言より前に使っている」としてこの hook ごと対象から外す）。
+    function send(): Promise<void> {
+      if (saveInFlight.current) return saveInFlightPromise.current ?? Promise.resolve();
+      const head = pendingSaves.current.entries().next();
+      if (head.done) return Promise.resolve();
+      const [key, pending] = head.value;
+      pendingSaves.current.delete(key);
+      saveInFlight.current = true;
+      setSaveStatus('saving');
+      const promise = KbRepository.replaceContent(pending.workspaceSlug, pending.pageId, pending.doc)
+        .then((res) => {
+          saveInFlight.current = false;
+          // 画面は現在ユーザーの名前を持っていないので、保存後の「最終編集」はこの応答で
+          // 更新する。移った先で戻ってきた応答（pending.pageId が古い画面のページ）は
+          // 反映しない — 反映すると、いま見ているページの最終編集が別ページのものになる。
+          setState((prev) => {
+            if (!prev.data || prev.data.page.id !== pending.pageId) return prev;
+            return {
+              ...prev,
+              data: { ...prev.data, lastEditedBy: res.lastEditedBy, lastEditedAt: res.lastEditedAt },
+            };
+          });
+          if (pendingSaves.current.size === 0) {
+            setSaveStatus('saved');
+            return;
+          }
+          // 送信中にさらに書かれていた。次を続けて送る（書いた順を守る）。
+          // 呼び出し元が最後まで待てるよう、続きの promise をそのまま返す（チェーン）。
+          setSaveStatus('unsaved');
+          return send();
+        })
+        .catch((err) => {
+          saveInFlight.current = false;
+          setSaveStatus('unsaved');
+          // ブロック id の衝突（別ページの id を乗っ取ろうとした・他クライアントとの
+          // 並行編集で起きるレース）は、この画面の状態を書き換えても再送で直らない
+          // （エディタ側が古いページの block id を持ったままの可能性がある）。
+          // 呼び出し側で再読み込みを促す通知を出せるよう、原因を区別して伝える。
+          if (getApiError(err).serverCode === 'block_id_conflict') {
+            setContentConflictCount((n) => n + 1);
+          }
         });
-        if (pendingSaves.current.size === 0) {
-          setSaveStatus('saved');
-          return;
-        }
-        // 送信中にさらに書かれていた。次を続けて送る（書いた順を守る）。
-        // 呼び出し元が最後まで待てるよう、続きの promise をそのまま返す（チェーン）。
-        setSaveStatus('unsaved');
-        return flushSave();
-      })
-      .catch((err) => {
-        saveInFlight.current = false;
-        setSaveStatus('unsaved');
-        // ブロック id の衝突（別ページの id を乗っ取ろうとした・他クライアントとの
-        // 並行編集で起きるレース）は、この画面の状態を書き換えても再送で直らない
-        // （エディタ側が古いページの block id を持ったままの可能性がある）。
-        // 呼び出し側で再読み込みを促す通知を出せるよう、原因を区別して伝える。
-        if (getApiError(err).serverCode === 'block_id_conflict') {
-          setContentConflictCount((n) => n + 1);
-        }
-      });
-    saveInFlightPromise.current = promise;
-    return promise;
+      saveInFlightPromise.current = promise;
+      return promise;
+    }
+    return send();
   }, []);
 
   /**
@@ -142,14 +155,9 @@ export function useKbPageDoc(pageId: string | undefined) {
 
 
   useEffect(() => {
-    if (!pageId) {
-      setState({ data: null, loading: false, error: null });
-      setSaveStatus('idle');
-      return;
-    }
+    // ページが変わったら（外れても）、前のページの応答は捨てる。
     const token = ++generation.current;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    setSaveStatus('idle');
+    if (!pageId) return;
 
     KbRepository.resolvePage(pageId)
       .then((data) => {

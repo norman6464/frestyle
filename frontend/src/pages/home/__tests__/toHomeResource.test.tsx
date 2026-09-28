@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { describe, it, expect, vi } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
 import { queryWrapper } from '@/test/queryClient';
-import { toHomeResource } from '../model/useHomeResource';
+import { toHomeResource } from '../model/homeResource';
 
 function useResource(load: () => Promise<string[]>, enabled = true) {
   return toHomeResource(useQuery({ queryKey: ['home-test'], queryFn: load, enabled }), [] as string[]);

@@ -169,7 +169,8 @@ describe('useNotification', () => {
         await result.current.refresh();
       });
 
-      expect(result.current.error).toBeTruthy();
+      // 置き場の知らせは次の刻みで届くので、失敗が映るのを待つ。
+      await waitFor(() => expect(result.current.error).toBeTruthy());
       expect(result.current.notifications).toHaveLength(2);
       expect(result.current.unreadCount).toBe(1);
     });
@@ -184,7 +185,7 @@ describe('useNotification', () => {
         await result.current.refresh();
       });
 
-      expect(result.current.error).toBeNull();
+      await waitFor(() => expect(result.current.error).toBeNull());
       expect(result.current.notifications).toHaveLength(2);
     });
   });
@@ -205,9 +206,40 @@ describe('useNotification', () => {
       await result.current.refresh();
     });
 
-    expect(result.current.error).toBeTruthy();
+    await waitFor(() => expect(result.current.error).toBeTruthy());
     expect(result.current.notifications).toEqual([]);
     expect(result.current.unreadCount).toBe(0);
+  });
+
+  it('再取得が 401 でも取得済みの通知と未読数を捨てる', async () => {
+    const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
+    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+
+    const unauthorized = new AxiosError('unauthorized', undefined, undefined, undefined, {
+      status: 401, data: {}, statusText: '', headers: {}, config: {},
+    } as unknown as AxiosResponse);
+    mockGetAll.mockRejectedValue(unauthorized);
+    mockGetUnreadCount.mockRejectedValue(unauthorized);
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(result.current.notifications).toEqual([]);
+    expect(result.current.unreadCount).toBe(0);
+  });
+
+  it('画面を開き直したら、取ってある一覧を出しつつ一覧と未読数を取り直す', async () => {
+    const client = createTestQueryClient();
+    const first = renderHook(() => useNotification(), { wrapper: queryWrapper(client) });
+    await waitFor(() => expect(first.result.current.notifications).toHaveLength(2));
+    first.unmount();
+
+    const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper(client) });
+    expect(result.current.notifications).toHaveLength(2);
+    await waitFor(() => expect(mockGetAll).toHaveBeenCalledTimes(2));
+    expect(mockGetUnreadCount).toHaveBeenCalledTimes(2);
   });
 
   // この再取得が消えると「押したのに変わらない」状態に戻るため契約として固定する。

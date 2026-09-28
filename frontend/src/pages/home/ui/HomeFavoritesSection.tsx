@@ -5,7 +5,7 @@ import { kbSpacesQuery, type KbFavoritePage, type KbSpace, type KbWorkspace } fr
 import { KbSearchDialog } from '@/widgets/kb-sidebar';
 import { EmptyNotice, ErrorNotice, FieldSelect, FsIcon, SkeletonRows } from '@/shared/ui';
 import { homeRowLink, homeTextLink } from '../lib/homeStyles';
-import type { HomeResource } from '../model/useHomeResource';
+import type { HomeResource } from '../model/homeResource';
 
 const NO_SPACES: KbSpace[] = [];
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { KbWorkspace } from '@/entities/kb';
 import { useCurrentUserId } from '@/entities/user';
 
@@ -29,16 +29,16 @@ function remember(userId: number, slug: string) {
  */
 export function useFavoritesWorkspace(workspaces: KbWorkspace[]): [string | null, (slug: string) => void] {
   const userId = useCurrentUserId();
-  const [chosen, setChosen] = useState<string | null>(null);
-
-  useEffect(() => {
-    setChosen(userId === null ? null : readRemembered(userId));
-  }, [userId]);
+  // 端末に覚えた値は、自分の ID が決まるたびに読む（effect で読むと、読む前の値で 1 回描く）。
+  const remembered = useMemo(() => (userId === null ? null : readRemembered(userId)), [userId]);
+  // この画面で選び直した値は、誰が選んだかと組で持つ（アカウントが替わったら使わない）。
+  const [picked, setPicked] = useState<{ userId: number | null; slug: string } | null>(null);
+  const chosen = picked !== null && picked.userId === userId ? picked.slug : remembered;
 
   const current = chosen !== null && workspaces.some((w) => w.slug === chosen) ? chosen : (workspaces[0]?.slug ?? null);
 
   const select = (slug: string) => {
-    setChosen(slug);
+    setPicked({ userId, slug });
     if (userId !== null) remember(userId, slug);
   };
 

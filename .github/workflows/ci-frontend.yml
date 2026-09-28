@@ -56,6 +56,11 @@ jobs:
       - name: ESLint (max-warnings=0)
         run: pnpm exec eslint . --max-warnings=0
 
+      # 範囲の部品・hook を React Compiler が 1 つも諦めていないこと（諦めても画面もテストも通るので、
+      # ここで止めないと気づけない）。
+      - name: React Compiler が範囲をすべて扱えること
+        run: pnpm run check:compiler
+
       - name: Build (verify only)
         env:
           VITE_API_BASE_URL: https://example.invalid

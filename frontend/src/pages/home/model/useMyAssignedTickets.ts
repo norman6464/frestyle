@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { myAssignedTicketsQuery, type MyAssignedTicket } from '@/entities/ticket';
-import { toHomeResource, type HomeResource } from './useHomeResource';
+import { toHomeResource, type HomeResource } from './homeResource';
 
 /** 広い画面で並べる件数（狭い画面はこのうち先頭の 2 件）。 */
 export const ASSIGNED_PREVIEW_LIMIT = 3;

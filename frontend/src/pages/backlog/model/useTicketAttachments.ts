@@ -138,14 +138,15 @@ export function useTicketAttachments(workspaceSlug: string | undefined, ticketId
     async (attachmentId: string) => {
       if (!workspaceSlug || !ticketId || key === null) throw new Error('ticket attachments: no active scope');
       setBusy({ key, attachmentId });
-      try {
+      const removeAndReflect = async () => {
         await TicketRepository.deleteTicketAttachment(workspaceSlug, ticketId, attachmentId);
         await reflectWrite(queryClient, ticketAttachmentsQuery(workspaceSlug, ticketId).queryKey, (prev) =>
           prev.filter((a) => a.id !== attachmentId),
         );
-      } finally {
-        setBusy((prev) => (prev !== null && prev.key === key && prev.attachmentId === attachmentId ? null : prev));
-      }
+      };
+      await removeAndReflect().finally(() =>
+        setBusy((prev) => (prev !== null && prev.key === key && prev.attachmentId === attachmentId ? null : prev)),
+      );
     },
     [workspaceSlug, ticketId, key, queryClient],
   );

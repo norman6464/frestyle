@@ -23,12 +23,11 @@ export function useTicketWatch(workspaceSlug: string, ticketId: string) {
   const setWatching = useCallback(
     async (watching: boolean) => {
       setSendingFor(ticketId);
-      try {
+      const send = async () => {
         const next = await TicketRepository.setTicketWatching(workspaceSlug, ticketId, watching);
         await reflectWrite(queryClient, ticketWatchQuery(workspaceSlug, ticketId).queryKey, () => next);
-      } finally {
-        setSendingFor((prev) => (prev === ticketId ? null : prev));
-      }
+      };
+      await send().finally(() => setSendingFor((prev) => (prev === ticketId ? null : prev)));
     },
     [workspaceSlug, ticketId, queryClient],
   );

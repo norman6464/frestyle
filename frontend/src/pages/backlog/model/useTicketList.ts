@@ -133,6 +133,10 @@ export function useTicketList(
   /**
    * mutate は 1 件への操作を行い、書いた時点の一覧を応答で直す。そのチケットを載せている
    * ほかの控えにも新しい値を映し（見つかれば）、派生を古いものにする。
+   *
+   * 依存に setBusyId も書く。この hook は描いている途中で state を揃える（setShownList）ので、
+   * React Compiler は state の書き換え関数も依存に数える。書かないと手書きの控えと食い違い、
+   * コンパイラがこの hook ごと対象から外す（move も同じ）。
    */
   const mutate = useCallback(
     async <T,>(
@@ -145,18 +149,17 @@ export function useTicketList(
       const slug = workspaceSlug;
       const project = projectId;
       setBusyId(ticketId);
-      try {
+      const write = async () => {
         const written = await run(slug, project);
         await reflectWrite(queryClient, currentKey, (prev) => apply(prev, written));
         const update = updated?.(written) ?? null;
         if (update) await reflectTicket(queryClient, slug, project, ticketId, update);
         refreshTicketDerived(queryClient, slug, project);
         return written;
-      } finally {
-        setBusyId((prev) => (prev === ticketId ? null : prev));
-      }
+      };
+      return write().finally(() => setBusyId((prev) => (prev === ticketId ? null : prev)));
     },
-    [workspaceSlug, projectId, currentKey, queryClient],
+    [workspaceSlug, projectId, currentKey, queryClient, setBusyId],
   );
 
   const replaceInPlace = (tickets: Ticket[], replacement: Ticket): Ticket[] =>
@@ -262,14 +265,12 @@ export function useTicketList(
     async (ticketId: string, input: { anchorTicketId?: string; anchorAfter?: boolean }) => {
       if (!workspaceSlug) return;
       setBusyId(ticketId);
-      try {
-        await TicketRepository.moveTicket(workspaceSlug, ticketId, input);
-      } finally {
-        setBusyId((prev) => (prev === ticketId ? null : prev));
-      }
+      await TicketRepository.moveTicket(workspaceSlug, ticketId, input).finally(() =>
+        setBusyId((prev) => (prev === ticketId ? null : prev)),
+      );
       await queryClient.invalidateQueries({ queryKey: currentKey, exact: true });
     },
-    [workspaceSlug, currentKey, queryClient],
+    [workspaceSlug, currentKey, queryClient, setBusyId],
   );
 
   const addLabel = useCallback(

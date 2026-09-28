@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { kbRecentPagesQuery, type KbRecentPage } from '@/entities/kb';
-import { toHomeResource, type HomeResource } from './useHomeResource';
+import { toHomeResource, type HomeResource } from './homeResource';
 
 const EMPTY: KbRecentPage[] = [];
 
