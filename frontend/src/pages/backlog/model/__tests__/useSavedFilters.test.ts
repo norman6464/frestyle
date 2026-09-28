@@ -1,6 +1,7 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { TicketSavedFilter } from '@/entities/ticket';
+import { queryWrapper } from '@/test/queryClient';
 import { useSavedFilters } from '../useSavedFilters';
 
 const hoisted = vi.hoisted(() => ({
@@ -10,14 +11,19 @@ const hoisted = vi.hoisted(() => ({
   deleteSavedFilter: vi.fn(),
 }));
 
-vi.mock('@/entities/ticket', () => ({
-  TicketRepository: {
+// 取得の本体を偽物にする（公開口の TicketRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/ticket/api/ticketRepository', () => ({
+  default: {
     fetchSavedFilters: hoisted.fetchSavedFilters,
     createSavedFilter: hoisted.createSavedFilter,
     updateSavedFilter: hoisted.updateSavedFilter,
     deleteSavedFilter: hoisted.deleteSavedFilter,
   },
 }));
+
+// 共有の問い合わせを使うので、テストごとに新しい置き場の中で描く。
+const renderHook = ((callback, options) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 const SLUG = 'acme';
 const PROJECT = 'p-1';
@@ -94,7 +100,8 @@ describe('useSavedFilters', () => {
       await result.current.create({ name: '新しい', overdue: true });
     });
     expect(hoisted.createSavedFilter).toHaveBeenCalledWith(SLUG, PROJECT, { name: '新しい', overdue: true });
-    expect(result.current.filters.map((f) => f.id)).toEqual(['f-1', 'f-2']);
+    // 置き場の知らせは次の刻みで届くので、映るのを待つ。
+    await waitFor(() => expect(result.current.filters.map((f) => f.id)).toEqual(['f-1', 'f-2']));
     expect(hoisted.fetchSavedFilters).toHaveBeenCalledTimes(1);
   });
 
@@ -119,7 +126,7 @@ describe('useSavedFilters', () => {
       overdue: true,
       q: '検索',
     });
-    expect(result.current.filters[0].name).toBe('新名');
+    await waitFor(() => expect(result.current.filters[0].name).toBe('新名'));
   });
 
   it('削除すると一覧から外す', async () => {
@@ -132,7 +139,7 @@ describe('useSavedFilters', () => {
       await result.current.remove('f-1');
     });
     expect(hoisted.deleteSavedFilter).toHaveBeenCalledWith(SLUG, PROJECT, 'f-1');
-    expect(result.current.filters.map((f) => f.id)).toEqual(['f-2']);
+    await waitFor(() => expect(result.current.filters.map((f) => f.id)).toEqual(['f-2']));
   });
 
   it('失敗は投げ返し、一覧は変えない', async () => {

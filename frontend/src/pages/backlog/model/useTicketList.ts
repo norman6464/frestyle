@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { partialMatchKey, useQuery, useQueryClient } from '@tanstack/react-query';
+import { reflectWrite } from '@/shared/api/queryCache';
+import { queryShownState } from '@/shared/api/queryState';
 import {
   TicketRepository,
+  ticketKeys,
+  ticketListQuery,
   type ChangeTicketStatusInput,
   type CreateTicketInput,
   type Label,
@@ -8,6 +13,7 @@ import {
   type TicketListFilter,
   type UpdateTicketInput,
 } from '@/entities/ticket';
+import { reflectTicket, refreshTicketAncestry, refreshTicketDerived } from '@/features/ticket-cache';
 import { reuseUnchanged } from '../lib/reuseUnchanged';
 
 export interface UseTicketListOptions {
@@ -29,54 +35,27 @@ export interface TicketListState {
   error: string | null;
   /** 一覧に載る 1 件への操作（並び替え・状態変更等）が飛んでいる間、その ticketId。 */
   busyId: string | null;
-  /**
-   * この画面で成功した書き込みの回数。件数バッジ（保存した絞り込み）のように「チケットを
-   * 動かしたら取り直す」派生値の引き金に使う。読み直し（load）では増えない。
-   */
-  mutations: number;
 }
 
 const LOAD_FAILED = 'チケットを読み込めませんでした。時間をおいて開き直すと最新の状態が出ます。';
+const NO_TICKETS: Ticket[] = [];
 
-interface ListTarget {
-  key: string;
-  workspaceSlug: string;
-  projectId: string;
-  filter: TicketListFilter;
-}
-
-function targetOf(
-  workspaceSlug: string | undefined,
-  projectId: string | undefined,
-  options: UseTicketListOptions,
-): ListTarget | null {
-  if (!workspaceSlug || !projectId) return null;
-  const filter: TicketListFilter = {
-    archived: options.archived,
-    statusId: options.statusId,
-    typeId: options.typeId,
-    assigneePrincipalId: options.assigneePrincipalId,
-    labelId: options.labelId,
-    unassigned: options.unassigned,
-    assignedToMe: options.assignedToMe,
-    overdue: options.overdue,
-    q: options.q,
-  };
-  // 区切りは全角空白（slug にも UUID にも現れない。useKbComments と同じ理由）。
-  const key = [
-    workspaceSlug,
-    projectId,
-    options.archived ? 'arc' : 'live',
-    options.statusId ?? '',
-    options.typeId ?? '',
-    options.assigneePrincipalId ?? '',
-    options.labelId ?? '',
-    options.unassigned ? 'u' : '',
-    options.assignedToMe ? 'me' : '',
-    options.overdue ? 'od' : '',
-    options.q ?? '',
-  ].join(' ');
-  return { key, workspaceSlug, projectId, filter };
+/**
+ * 絞り込みの条件。条件の無い項目は入れない（鍵が同じ条件で揃うように）。現役（archived が偽）も
+ * 条件の無い側 — 送る問い合わせが同じなので、親を選ぶ候補（条件なし）と同じ控えを使う。
+ */
+function filterOf(options: UseTicketListOptions): TicketListFilter {
+  const filter: TicketListFilter = {};
+  if (options.archived) filter.archived = true;
+  if (options.statusId) filter.statusId = options.statusId;
+  if (options.typeId) filter.typeId = options.typeId;
+  if (options.assigneePrincipalId) filter.assigneePrincipalId = options.assigneePrincipalId;
+  if (options.labelId) filter.labelId = options.labelId;
+  if (options.unassigned) filter.unassigned = true;
+  if (options.assignedToMe) filter.assignedToMe = true;
+  if (options.overdue) filter.overdue = true;
+  if (options.q) filter.q = options.q;
+  return filter;
 }
 
 /**
@@ -86,110 +65,102 @@ function targetOf(
  * 別に取得しない — 選択中の 1 件をこの配列から `find` するだけでよい
  * （履歴だけは別 hook `useTicketDetail` が持つ）。
  *
- * 宛先（workspaceSlug + projectId + 現役/アーカイブ + 絞り込み）が変わるたびに取り直す。
- * 応答は要求を始めたときの宛先が今も見えているときだけ反映し、古い応答で
- * 新しい画面を上書きしない（useKbComments と同じ 3 点確認: 宛先一致・seq 一致・
- * 取得中に割り込んだ書き込みが無いこと）。
+ * 一覧は絞り込みごとの共有の問い合わせ（ticketListQuery）から読む。宛先（workspaceSlug +
+ * projectId + 現役/アーカイブ + 絞り込み）ごとの鍵なので、古い宛先の応答で新しい画面を上書き
+ * しない。同じプロジェクトの中で絞り込みを変えたら、取り終えるまで前の一覧を出したまま
+ * `loading`（「更新中」）を立てる — 消して読み込み表示にすると、押した行がその瞬間だけ消えて
+ * 選び直すことになる。中身の変わらないチケットは前に出していた値を使う（reuseUnchanged）ので、
+ * 絞り込みの 1 文字・取り直しでは変わった行だけが描き直る。
  *
- * 楽観更新はしない（設計 Ⅳ-E）。応答をそのまま state へ入れ、失敗は投げる
- * （呼び出し側がトーストで知らせる）。
+ * 楽観更新はしない（設計 Ⅳ-E）。書き込みの応答で、書いた時点の一覧を直し（reflectWrite）、
+ * そのチケットを載せているほかの一覧とチケットの画面にも新しい値を映す（reflectTicket）。
+ * 件数・保存した絞り込み・状態の使用中の件数・担当の一覧などの派生は古いものにする
+ * （refreshTicketDerived）。失敗は投げる（呼び出し側がトーストで知らせる）。
  */
 export function useTicketList(
   workspaceSlug: string | undefined,
   projectId: string | undefined,
   options: UseTicketListOptions,
 ) {
-  const [state, setState] = useState<TicketListState>({
-    tickets: [],
-    loading: false,
-    error: null,
-    busyId: null,
-    mutations: 0,
+  const queryClient = useQueryClient();
+  const active = workspaceSlug !== undefined && projectId !== undefined;
+  const { archived, statusId, typeId, assigneePrincipalId, labelId, unassigned, assignedToMe, overdue, q } = options;
+  // 絞り込みは項目ごとに見て控える（描くたびに新しい物を作ると、鍵を使う操作の関数が毎回作り直される）。
+  const listQuery = useMemo(
+    () =>
+      ticketListQuery(
+        workspaceSlug ?? '',
+        projectId ?? '',
+        filterOf({ archived, statusId, typeId, assigneePrincipalId, labelId, unassigned, assignedToMe, overdue, q }),
+      ),
+    [workspaceSlug, projectId, archived, statusId, typeId, assigneePrincipalId, labelId, unassigned, assignedToMe, overdue, q],
+  );
+  const result = useQuery({
+    ...listQuery,
+    enabled: active,
+    // 同じプロジェクトの一覧（絞り込みだけが違う）なら、取り終えるまでそれを出しておく。
+    // プロジェクトを移ったら、前のプロジェクトのチケットは出さない。
+    placeholderData: (previous, previousQuery) =>
+      previousQuery && partialMatchKey(previousQuery.queryKey, ticketKeys.lists(workspaceSlug ?? '', projectId ?? ''))
+        ? previous
+        : undefined,
   });
+  const shown = queryShownState(result, active);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  const active = useRef<ListTarget | null>(null);
-  const seq = useRef(0);
-  const writeCount = useRef(0);
+  // 置き場が変わらない部分を使い回すのは同じ鍵の中だけなので、絞り込みを変えて鍵が移ったときは
+  // ここで前に出していた値に揃える（行は memo で、同じ値なら描き直さない）。描いている途中で
+  // 揃える（effect で揃えると、揃える前の値で全行を 1 回描いてしまう）。
+  const [shownList, setShownList] = useState<{ source: Ticket[] | undefined; tickets: Ticket[] }>({
+    source: undefined,
+    tickets: NO_TICKETS,
+  });
+  if (shownList.source !== shown.data) {
+    setShownList({
+      source: shown.data,
+      tickets: shown.data === undefined ? NO_TICKETS : reuseUnchanged(shownList.tickets, shown.data),
+    });
+  }
 
-  const target = targetOf(workspaceSlug, projectId, options);
-  const targetKey = target?.key ?? null;
-
-  const load = useCallback(async (to: ListTarget) => {
-    const request = ++seq.current;
-    const writesAtStart = writeCount.current;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const tickets = await TicketRepository.fetchTickets(to.workspaceSlug, to.projectId, to.filter);
-      if (active.current?.key !== to.key || seq.current !== request) return;
-      if (writeCount.current !== writesAtStart) {
-        setState((prev) => ({ ...prev, loading: false }));
-        return;
-      }
-      // 中身の変わらないチケットは前の値を使い、変わった行だけを描き直させる（reuseUnchanged）。
-      setState((prev) => ({ ...prev, tickets: reuseUnchanged(prev.tickets, tickets), loading: false, error: null, busyId: null }));
-    } catch {
-      if (active.current?.key !== to.key || seq.current !== request) return;
-      if (writeCount.current !== writesAtStart) {
-        setState((prev) => ({ ...prev, loading: false }));
-        return;
-      }
-      setState((prev) => ({ ...prev, tickets: [], loading: false, error: LOAD_FAILED, busyId: null }));
-    }
-  }, []);
-
-  useEffect(() => {
-    active.current = target;
-    if (!target) {
-      seq.current += 1;
-      setState((prev) => ({ ...prev, tickets: [], loading: false, error: null, busyId: null }));
-      return;
-    }
-    void load(target);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetKey, load]);
-
+  const { refetch } = result;
   const refresh = useCallback(() => {
-    if (active.current) void load(active.current);
-  }, [load]);
+    if (active) void refetch();
+  }, [active, refetch]);
+
+  // 書いた時点の一覧の鍵。書いている間に絞り込みを変えても、書いた一覧を直す。
+  const currentKey = listQuery.queryKey;
 
   /**
-   * mutate は 1 件への操作を行い、宛先が変わっていなければ結果を局所的に反映する
-   * （useKbComments.mutate と同じ形。宛先が変わっていたら画面には触らない）。
+   * mutate は 1 件への操作を行い、書いた時点の一覧を応答で直す。そのチケットを載せている
+   * ほかの控えにも新しい値を映し（見つかれば）、派生を古いものにする。
    */
   const mutate = useCallback(
     async <T,>(
       ticketId: string,
-      run: (to: ListTarget) => Promise<T>,
+      run: (slug: string, project: string) => Promise<T>,
       apply: (prev: Ticket[], result: T) => Ticket[],
+      updated?: (result: T) => ((ticket: Ticket) => Ticket) | null,
     ): Promise<T> => {
-      const to = active.current;
-      if (!to) throw new Error('backlog: no active target');
-      const request = seq.current;
-      setState((prev) => ({ ...prev, busyId: ticketId }));
+      if (!workspaceSlug || !projectId) throw new Error('backlog: no active target');
+      const slug = workspaceSlug;
+      const project = projectId;
+      setBusyId(ticketId);
       try {
-        const result = await run(to);
-        if (active.current?.key === to.key && seq.current === request) {
-          writeCount.current += 1;
-          setState((prev) => ({
-            ...prev,
-            tickets: apply(prev.tickets, result),
-            busyId: null,
-            mutations: prev.mutations + 1,
-          }));
-        }
-        return result;
-      } catch (cause) {
-        if (active.current?.key === to.key && seq.current === request) {
-          setState((prev) => ({ ...prev, busyId: null }));
-        }
-        throw cause;
+        const written = await run(slug, project);
+        await reflectWrite(queryClient, currentKey, (prev) => apply(prev, written));
+        const update = updated?.(written) ?? null;
+        if (update) await reflectTicket(queryClient, slug, project, ticketId, update);
+        refreshTicketDerived(queryClient, slug, project);
+        return written;
+      } finally {
+        setBusyId((prev) => (prev === ticketId ? null : prev));
       }
     },
-    [],
+    [workspaceSlug, projectId, currentKey, queryClient],
   );
 
-  const replaceInPlace = (tickets: Ticket[], updated: Ticket): Ticket[] =>
-    tickets.map((t) => (t.id === updated.id ? updated : t));
+  const replaceInPlace = (tickets: Ticket[], replacement: Ticket): Ticket[] =>
+    tickets.map((t) => (t.id === replacement.id ? replacement : t));
 
   const removeFromList = (tickets: Ticket[], ticketId: string): Ticket[] =>
     tickets.filter((t) => t.id !== ticketId);
@@ -198,8 +169,8 @@ export function useTicketList(
     (input: CreateTicketInput) =>
       mutate(
         '',
-        (to) => TicketRepository.createTicket(to.workspaceSlug, to.projectId, input),
-        (tickets, created) => [...tickets, created],
+        (slug, project) => TicketRepository.createTicket(slug, project, input),
+        (tickets, created) => (tickets.some((t) => t.id === created.id) ? tickets : [...tickets, created]),
       ),
     [mutate],
   );
@@ -208,8 +179,9 @@ export function useTicketList(
     (ticketId: string, input: UpdateTicketInput) =>
       mutate(
         ticketId,
-        (to) => TicketRepository.updateTicket(to.workspaceSlug, ticketId, input),
+        (slug) => TicketRepository.updateTicket(slug, ticketId, input),
         replaceInPlace,
+        (replacement) => () => replacement,
       ),
     [mutate],
   );
@@ -219,8 +191,9 @@ export function useTicketList(
     (ticketId: string) =>
       mutate(
         ticketId,
-        (to) => TicketRepository.archiveTicket(to.workspaceSlug, ticketId),
+        (slug) => TicketRepository.archiveTicket(slug, ticketId),
         (tickets) => removeFromList(tickets, ticketId),
+        (replacement) => () => replacement,
       ),
     [mutate],
   );
@@ -229,8 +202,9 @@ export function useTicketList(
     (ticketId: string) =>
       mutate(
         ticketId,
-        (to) => TicketRepository.restoreTicket(to.workspaceSlug, ticketId),
+        (slug) => TicketRepository.restoreTicket(slug, ticketId),
         (tickets) => removeFromList(tickets, ticketId),
+        (replacement) => () => replacement,
       ),
     [mutate],
   );
@@ -239,29 +213,35 @@ export function useTicketList(
     (ticketId: string, input: ChangeTicketStatusInput) =>
       mutate(
         ticketId,
-        (to) => TicketRepository.changeTicketStatus(to.workspaceSlug, ticketId, input),
+        (slug) => TicketRepository.changeTicketStatus(slug, ticketId, input),
         replaceInPlace,
+        (replacement) => () => replacement,
       ),
     [mutate],
   );
 
+  // 親を変えると、そのチケットと子孫の祖先の列（チケットの画面のパンくず）も変わる。
   const changeParent = useCallback(
-    (ticketId: string, parentId: string | null) =>
-      mutate(
+    async (ticketId: string, parentId: string | null) => {
+      const written = await mutate(
         ticketId,
-        (to) => TicketRepository.changeTicketParent(to.workspaceSlug, ticketId, parentId),
+        (slug) => TicketRepository.changeTicketParent(slug, ticketId, parentId),
         replaceInPlace,
-      ),
-    [mutate],
+        (replacement) => () => replacement,
+      );
+      void refreshTicketAncestry(queryClient);
+      return written;
+    },
+    [mutate, queryClient],
   );
 
   const assign = useCallback(
     (ticketId: string, assigneePrincipalId: string) =>
       mutate(
         ticketId,
-        (to) => TicketRepository.assignTicket(to.workspaceSlug, ticketId, assigneePrincipalId),
-        (tickets) =>
-          tickets.map((t) => (t.id === ticketId ? { ...t, assigneePrincipalId } : t)),
+        (slug) => TicketRepository.assignTicket(slug, ticketId, assigneePrincipalId),
+        (tickets) => tickets.map((t) => (t.id === ticketId ? { ...t, assigneePrincipalId } : t)),
+        () => (t) => ({ ...t, assigneePrincipalId }),
       ),
     [mutate],
   );
@@ -270,56 +250,62 @@ export function useTicketList(
     (ticketId: string) =>
       mutate(
         ticketId,
-        (to) => TicketRepository.unassignTicket(to.workspaceSlug, ticketId),
+        (slug) => TicketRepository.unassignTicket(slug, ticketId),
         (tickets) => tickets.map((t) => (t.id === ticketId ? { ...t, assigneePrincipalId: null } : t)),
+        () => (t) => ({ ...t, assigneePrincipalId: null }),
       ),
     [mutate],
   );
 
-  /** 並び替えは新しい順位が応答に無いので一覧を取り直す（設計 Ⅶ）。 */
+  /** 並び替えは新しい順位が応答に無いので一覧を取り直す（設計 Ⅶ）。取り直しを待ってから返す。 */
   const move = useCallback(
     async (ticketId: string, input: { anchorTicketId?: string; anchorAfter?: boolean }) => {
-      const to = active.current;
-      if (!to) return;
-      setState((prev) => ({ ...prev, busyId: ticketId }));
+      if (!workspaceSlug) return;
+      setBusyId(ticketId);
       try {
-        await TicketRepository.moveTicket(to.workspaceSlug, ticketId, input);
+        await TicketRepository.moveTicket(workspaceSlug, ticketId, input);
       } finally {
-        setState((prev) => ({ ...prev, busyId: null }));
+        setBusyId((prev) => (prev === ticketId ? null : prev));
       }
-      if (active.current?.key === to.key) {
-        refresh();
-      }
+      await queryClient.invalidateQueries({ queryKey: currentKey, exact: true });
     },
-    [refresh],
+    [workspaceSlug, currentKey, queryClient],
   );
 
   const addLabel = useCallback(
-    (ticketId: string, label: Label) =>
-      mutate(
+    (ticketId: string, label: Label) => {
+      const add = (t: Ticket): Ticket =>
+        t.labels.some((l) => l.id === label.id) ? t : { ...t, labels: [...t.labels, label] };
+      return mutate(
         ticketId,
-        (to) => TicketRepository.addTicketLabel(to.workspaceSlug, ticketId, label.id),
-        (tickets) =>
-          tickets.map((t) =>
-            t.id === ticketId && !t.labels.some((l) => l.id === label.id)
-              ? { ...t, labels: [...t.labels, label] }
-              : t,
-          ),
-      ),
+        (slug) => TicketRepository.addTicketLabel(slug, ticketId, label.id),
+        (tickets) => tickets.map((t) => (t.id === ticketId ? add(t) : t)),
+        () => add,
+      );
+    },
     [mutate],
   );
 
   const removeLabel = useCallback(
-    (ticketId: string, labelId: string) =>
-      mutate(
+    (ticketId: string, labelId: string) => {
+      const remove = (t: Ticket): Ticket => ({ ...t, labels: t.labels.filter((l) => l.id !== labelId) });
+      return mutate(
         ticketId,
-        (to) => TicketRepository.removeTicketLabel(to.workspaceSlug, ticketId, labelId),
-        (tickets) =>
-          tickets.map((t) => (t.id === ticketId ? { ...t, labels: t.labels.filter((l) => l.id !== labelId) } : t)),
-      ),
+        (slug) => TicketRepository.removeTicketLabel(slug, ticketId, labelId),
+        (tickets) => tickets.map((t) => (t.id === ticketId ? remove(t) : t)),
+        () => remove,
+      );
+    },
     [mutate],
   );
 
+  const state: TicketListState = {
+    tickets: shownList.tickets,
+    // 前の一覧を出したままの取り直しも「更新中」として知らせる。
+    loading: active && (shown.loading || result.isFetching),
+    error: shown.failed ? LOAD_FAILED : null,
+    busyId,
+  };
   return {
     ...state,
     refresh,

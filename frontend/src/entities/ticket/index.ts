@@ -7,6 +7,10 @@ export {
   assignedTicketsQuery,
   myAssignedTicketsQuery,
   pageTicketReferencesQuery,
+  ticketListQuery,
+  ticketCountsQuery,
+  savedFiltersQuery,
+  resolvedTicketQuery,
 } from './api/ticketQueries';
 export type {
   CreateTicketInput,

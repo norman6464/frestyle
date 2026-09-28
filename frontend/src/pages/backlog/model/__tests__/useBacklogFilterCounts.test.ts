@@ -1,13 +1,18 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { queryWrapper } from '@/test/queryClient';
 import { useBacklogFilterCounts } from '../useBacklogFilterCounts';
+
+const renderHook: typeof rtlRenderHook = ((callback: Parameters<typeof rtlRenderHook>[0], options?: Parameters<typeof rtlRenderHook>[1]) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 const hoisted = vi.hoisted(() => ({
   fetchTicketCounts: vi.fn(),
 }));
 
-vi.mock('@/entities/ticket', () => ({
-  TicketRepository: { fetchTicketCounts: hoisted.fetchTicketCounts },
+// 取得の本体を偽物にする（公開口の TicketRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/ticket/api/ticketRepository', () => ({
+  default: { fetchTicketCounts: hoisted.fetchTicketCounts },
 }));
 
 const SLUG = 'acme';

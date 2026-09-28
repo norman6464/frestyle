@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 import KbTicketPage from './KbTicketPage';
 import { routerWithParam, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
@@ -218,11 +219,15 @@ export const アーカイブ済み: Story = {
 export const 見つからない: Story = {
   decorators: [
     withApi({
+      // 失敗の状態は getApiError が `instanceof AxiosError` で読むので、本物の AxiosError を投げる。
       '/tickets/t-1': () => {
-        const err = new Error('not found') as Error & { isAxiosError: boolean; response: unknown };
-        err.isAxiosError = true;
-        err.response = { status: 404, data: { error: 'not_found' } };
-        throw err;
+        throw new AxiosError('not found', 'ERR_BAD_REQUEST', undefined, undefined, {
+          status: 404,
+          statusText: '',
+          headers: {},
+          config: { headers: new AxiosHeaders() },
+          data: { error: 'not_found' },
+        });
       },
     }),
   ],

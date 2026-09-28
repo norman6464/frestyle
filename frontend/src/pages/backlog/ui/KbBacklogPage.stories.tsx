@@ -199,7 +199,8 @@ export const 見出しと絞り込みタブ: Story = {
       await expect(canvas.getByRole('heading', { level: 1, name: 'バックログ' })).toBeInTheDocument();
     });
     await expect(canvas.getByText('プロジェクト FRESTYLE')).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: 'すべて' })).toHaveAttribute('aria-pressed', 'true');
+    // 絞り込みのタブは状態・種別を読み終えてから出る（見出しはプロジェクトが分かった時点で先に出る）。
+    await expect(await canvas.findByRole('button', { name: 'すべて' })).toHaveAttribute('aria-pressed', 'true');
     await waitFor(async () => {
       await expect(canvas.getByRole('button', { name: /期限切れ/ })).toHaveTextContent('1');
     });

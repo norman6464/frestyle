@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { projectScope, workspaceScope } from '@/shared/api/queryKeys';
 import TicketRepository from './ticketRepository';
+import type { TicketListFilter } from '../model/types';
 
 /**
  * チケットの鍵。ラベルはワークスペースの中（ページとチケットで共有する語彙）、状態と種別は
@@ -23,6 +24,20 @@ export const ticketKeys = {
   /** ページを本文で参照しているチケット（上限つき）。 */
   pageReferences: (workspaceSlug: string, pageId: string, limit: number) =>
     [...workspaceScope(workspaceSlug), 'page', pageId, 'ticket-references', limit] as const,
+  /** プロジェクトのチケットの一覧すべて（絞り込みごとの一覧を束ねる）。 */
+  lists: (workspaceSlug: string, projectId: string) => [...projectScope(workspaceSlug, projectId), 'ticket-list'] as const,
+  /** プロジェクトのチケットの一覧（絞り込みごと。条件の無い項目は鍵に入らない）。 */
+  list: (workspaceSlug: string, projectId: string, filter: TicketListFilter) =>
+    [...projectScope(workspaceSlug, projectId), 'ticket-list', filter] as const,
+  /** バックログの見出しの件数（全件・自分の担当・期限切れ・未割り当て）。 */
+  counts: (workspaceSlug: string, projectId: string) => [...projectScope(workspaceSlug, projectId), 'ticket-counts'] as const,
+  /** 本人がそのプロジェクトで保存した絞り込み（件数つき）。 */
+  savedFilters: (workspaceSlug: string, projectId: string) =>
+    [...projectScope(workspaceSlug, projectId), 'saved-filters'] as const,
+  /** チケット 1 件を ID だけで解決したもの（ワークスペース・祖先・権限つき）。ワークスペースを知らずに開くのでワークスペースの外。 */
+  resolved: (ticketId: string) => ['resolved-tickets', ticketId] as const,
+  /** 解決したチケットのすべて。親を変えると子孫の祖先の列も変わるので、この鍵でまとめて古くする。 */
+  allResolved: () => ['resolved-tickets'] as const,
 };
 
 /** ワークスペースのラベルの定義。バックログ・チケットの画面が共有する。 */
@@ -70,5 +85,37 @@ export function pageTicketReferencesQuery(workspaceSlug: string, pageId: string,
   return queryOptions({
     queryKey: ticketKeys.pageReferences(workspaceSlug, pageId, limit),
     queryFn: ({ signal }) => TicketRepository.fetchPageTicketReferences(workspaceSlug, pageId, limit, signal),
+  });
+}
+
+/** プロジェクトのチケットの一覧（絞り込みごと）。 */
+export function ticketListQuery(workspaceSlug: string, projectId: string, filter: TicketListFilter) {
+  return queryOptions({
+    queryKey: ticketKeys.list(workspaceSlug, projectId, filter),
+    queryFn: () => TicketRepository.fetchTickets(workspaceSlug, projectId, filter),
+  });
+}
+
+/** バックログの見出しの件数。 */
+export function ticketCountsQuery(workspaceSlug: string, projectId: string) {
+  return queryOptions({
+    queryKey: ticketKeys.counts(workspaceSlug, projectId),
+    queryFn: () => TicketRepository.fetchTicketCounts(workspaceSlug, projectId),
+  });
+}
+
+/** 本人がそのプロジェクトで保存した絞り込み（件数つき）。 */
+export function savedFiltersQuery(workspaceSlug: string, projectId: string) {
+  return queryOptions({
+    queryKey: ticketKeys.savedFilters(workspaceSlug, projectId),
+    queryFn: () => TicketRepository.fetchSavedFilters(workspaceSlug, projectId),
+  });
+}
+
+/** チケット 1 件を ID だけで解決する（通知・本文中の参照・ブックマークからはワークスペースを知らずに来る）。 */
+export function resolvedTicketQuery(ticketId: string) {
+  return queryOptions({
+    queryKey: ticketKeys.resolved(ticketId),
+    queryFn: () => TicketRepository.resolveTicket(ticketId),
   });
 }

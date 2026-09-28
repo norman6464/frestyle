@@ -1,7 +1,8 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useTicketList } from '../useTicketList';
 import type { Label, Ticket } from '@/entities/ticket';
+import { queryWrapper } from '@/test/queryClient';
+import { useTicketList } from '../useTicketList';
 
 const hoisted = vi.hoisted(() => ({
   fetchTickets: vi.fn(),
@@ -14,22 +15,23 @@ const hoisted = vi.hoisted(() => ({
   removeTicketLabel: vi.fn(),
 }));
 
-vi.mock('@/entities/ticket', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/ticket')>();
-  return {
-    ...actual,
-    TicketRepository: {
-      fetchTickets: hoisted.fetchTickets,
-      createTicket: hoisted.createTicket,
-      archiveTicket: hoisted.archiveTicket,
-      restoreTicket: hoisted.restoreTicket,
-      changeTicketStatus: hoisted.changeTicketStatus,
-      moveTicket: hoisted.moveTicket,
-      addTicketLabel: hoisted.addTicketLabel,
-      removeTicketLabel: hoisted.removeTicketLabel,
-    },
-  };
-});
+// 取得の本体を偽物にする（公開口の TicketRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/ticket/api/ticketRepository', () => ({
+  default: {
+    fetchTickets: hoisted.fetchTickets,
+    createTicket: hoisted.createTicket,
+    archiveTicket: hoisted.archiveTicket,
+    restoreTicket: hoisted.restoreTicket,
+    changeTicketStatus: hoisted.changeTicketStatus,
+    moveTicket: hoisted.moveTicket,
+    addTicketLabel: hoisted.addTicketLabel,
+    removeTicketLabel: hoisted.removeTicketLabel,
+  },
+}));
+
+// 共有の問い合わせを使うので、テストごとに新しい置き場の中で描く。
+const renderHook = ((callback, options) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 const SLUG = 'acme';
 const SPACE = 's-1';
@@ -79,12 +81,8 @@ describe('useTicketList', () => {
   it('揃うと現役の絞り込みで取得する', async () => {
     const { result } = renderHook(() => useTicketList(SLUG, SPACE, { archived: false }));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(hoisted.fetchTickets).toHaveBeenCalledWith(SLUG, SPACE, {
-      archived: false,
-      statusId: undefined,
-      typeId: undefined,
-      assigneePrincipalId: undefined,
-    });
+    // 現役は条件の無い側（送る問い合わせは同じ）。条件の無い項目は入れない。
+    expect(hoisted.fetchTickets).toHaveBeenCalledWith(SLUG, SPACE, {});
     expect(result.current.tickets).toHaveLength(1);
   });
 
@@ -93,17 +91,7 @@ describe('useTicketList', () => {
       useTicketList(SLUG, SPACE, { archived: false, unassigned: true, overdue: true, q: '認証' }),
     );
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(hoisted.fetchTickets).toHaveBeenCalledWith(SLUG, SPACE, {
-      archived: false,
-      statusId: undefined,
-      typeId: undefined,
-      assigneePrincipalId: undefined,
-      labelId: undefined,
-      unassigned: true,
-      assignedToMe: undefined,
-      overdue: true,
-      q: '認証',
-    });
+    expect(hoisted.fetchTickets).toHaveBeenCalledWith(SLUG, SPACE, { unassigned: true, overdue: true, q: '認証' });
   });
 
   it('絞り込みが変わると取り直す(キーに含めている)', async () => {
@@ -247,5 +235,55 @@ describe('useTicketList', () => {
 
       expect(result.current.tickets[0].labels).toEqual([]);
     });
+  });
+});
+
+describe('絞り込み・宛先を変えたときの見え方', () => {
+  it('同じプロジェクトで絞り込みを変えたら、取り終えるまで前の一覧を出したまま「更新中」にする', async () => {
+    const { result, rerender } = renderHook(({ q }) => useTicketList(SLUG, SPACE, { archived: false, q }), {
+      initialProps: { q: undefined as string | undefined },
+    });
+    await waitFor(() => expect(result.current.tickets.map((t) => t.id)).toEqual(['t-1']));
+
+    let finish!: (tickets: Ticket[]) => void;
+    hoisted.fetchTickets.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+    rerender({ q: '認証' });
+
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    expect(result.current.tickets.map((t) => t.id)).toEqual(['t-1']);
+
+    act(() => finish([ticket({ id: 't-2', number: 2 })]));
+    await waitFor(() => expect(result.current.tickets.map((t) => t.id)).toEqual(['t-2']));
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('プロジェクトを移ったら、前のプロジェクトのチケットは出さない', async () => {
+    const { result, rerender } = renderHook(({ project }) => useTicketList(SLUG, project, { archived: false }), {
+      initialProps: { project: SPACE },
+    });
+    await waitFor(() => expect(result.current.tickets).toHaveLength(1));
+
+    hoisted.fetchTickets.mockImplementationOnce(() => new Promise(() => {}));
+    rerender({ project: 's-2' });
+
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    expect(result.current.tickets).toEqual([]);
+  });
+
+  it('絞り込みを変えても、中身の変わらないチケットは前と同じ値を返す（行を描き直させない）', async () => {
+    hoisted.fetchTickets.mockResolvedValue([ticket({ id: 't-1' }), ticket({ id: 't-2', number: 2 })]);
+    const { result, rerender } = renderHook(({ q }) => useTicketList(SLUG, SPACE, { archived: false, q }), {
+      initialProps: { q: undefined as string | undefined },
+    });
+    await waitFor(() => expect(result.current.tickets).toHaveLength(2));
+    const [first, second] = result.current.tickets;
+
+    // 応答は新しい値だが、1 件目の中身は同じ・2 件目は題名が違う。
+    hoisted.fetchTickets.mockResolvedValue([ticket({ id: 't-1' }), ticket({ id: 't-2', number: 2, title: '変わった' })]);
+    rerender({ q: '件' });
+
+    await waitFor(() => expect(result.current.tickets[1].title).toBe('変わった'));
+    expect(result.current.tickets[0]).toBe(first);
+    expect(result.current.tickets[1]).not.toBe(second);
   });
 });
