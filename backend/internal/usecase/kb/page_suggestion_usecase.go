@@ -56,11 +56,11 @@ type CreateSuggestionInput struct {
 	AuthorUserID uint64
 }
 
-func (u *CreateSuggestionUseCase) Execute(ctx context.Context, in CreateSuggestionInput) (*domain.PageSuggestion, error) {
-	if in.AuthorUserID == 0 {
+func (u *CreateSuggestionUseCase) Execute(ctx context.Context, input CreateSuggestionInput) (*domain.PageSuggestion, error) {
+	if input.AuthorUserID == 0 {
 		return nil, ErrPageEditorRequired
 	}
-	page, err := u.kbRepo.FindPage(ctx, in.WorkspaceID, in.PageID)
+	page, err := u.kbRepo.FindPage(ctx, input.WorkspaceID, input.PageID)
 	if err != nil {
 		return nil, err
 	}
@@ -69,14 +69,14 @@ func (u *CreateSuggestionUseCase) Execute(ctx context.Context, in CreateSuggesti
 	}
 	// 上限判定は doc の妥当性検証より前に行う。既に溜まっている数は投稿の中身と無関係に
 	// 決まるので、先に弾いた方が無駄がない。
-	byAuthor, err := u.suggestions.CountOpenByAuthor(ctx, in.WorkspaceID, in.PageID, in.AuthorUserID)
+	byAuthor, err := u.suggestions.CountOpenByAuthor(ctx, input.WorkspaceID, input.PageID, input.AuthorUserID)
 	if err != nil {
 		return nil, err
 	}
 	if byAuthor >= maxOpenSuggestionsPerAuthorPerPage {
 		return nil, ErrTooManyOpenSuggestions
 	}
-	total, err := u.suggestions.CountOpen(ctx, in.WorkspaceID, in.PageID)
+	total, err := u.suggestions.CountOpen(ctx, input.WorkspaceID, input.PageID)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (u *CreateSuggestionUseCase) Execute(ctx context.Context, in CreateSuggesti
 	}
 	// ReplacePageBlocksUseCase.Execute と全く同じ検証パイプラインに通す。ここで弾かないと、
 	// あとで採用したときに初めて壊れて発覚してしまう。
-	tree, err := parsePageDoc(StripPageRefTitles(in.Doc))
+	tree, err := parsePageDoc(StripPageRefTitles(input.Doc))
 	if err != nil {
 		return nil, err
 	}
@@ -101,11 +101,11 @@ func (u *CreateSuggestionUseCase) Execute(ctx context.Context, in CreateSuggesti
 	var suggestion *domain.PageSuggestion
 
 	err = u.txManager.DoInTx(ctx, func(ctx context.Context) error {
-		if err := u.versionRepo.LockPage(ctx, in.WorkspaceID, in.PageID); err != nil {
+		if err := u.versionRepo.LockPage(ctx, input.WorkspaceID, input.PageID); err != nil {
 			return err
 		}
 
-		page, err := u.kbRepo.FindPage(ctx, in.WorkspaceID, in.PageID)
+		page, err := u.kbRepo.FindPage(ctx, input.WorkspaceID, input.PageID)
 		if err != nil {
 			return err
 		}
@@ -114,12 +114,12 @@ func (u *CreateSuggestionUseCase) Execute(ctx context.Context, in CreateSuggesti
 			return ErrPageArchived
 		}
 
-		if page.ContentRevision != in.BaseRevision {
+		if page.ContentRevision != input.BaseRevision {
 			return domain.ErrPageSuggestionStale
 		}
 
 		var baseSeq *int64
-		latest, err := u.versionRepo.GetLatestVersion(ctx, in.WorkspaceID, in.PageID)
+		latest, err := u.versionRepo.GetLatestVersion(ctx, input.WorkspaceID, input.PageID)
 		if err != nil {
 			return err
 		}
@@ -128,14 +128,14 @@ func (u *CreateSuggestionUseCase) Execute(ctx context.Context, in CreateSuggesti
 			baseSeq = &seq
 		}
 
-		baseRevision := in.BaseRevision
+		baseRevision := input.BaseRevision
 		suggestion = &domain.PageSuggestion{
-			WorkspaceID:  in.WorkspaceID,
-			PageID:       in.PageID,
+			WorkspaceID:  input.WorkspaceID,
+			PageID:       input.PageID,
 			BaseSeq:      baseSeq,
 			BaseRevision: &baseRevision,
 			Doc:          normalized,
-			AuthorUserID: in.AuthorUserID,
+			AuthorUserID: input.AuthorUserID,
 		}
 
 		return u.suggestions.Create(ctx, suggestion)
@@ -225,14 +225,14 @@ func suggestionIsStale(baseRevision *int64, contentRevision int64) bool {
 	return baseRevision == nil || *baseRevision != contentRevision
 }
 
-func (u *AcceptPageSuggestionUseCase) Execute(ctx context.Context, in AcceptSuggestionInput) (*domain.PageSuggestion, error) {
+func (u *AcceptPageSuggestionUseCase) Execute(ctx context.Context, input AcceptSuggestionInput) (*domain.PageSuggestion, error) {
 	var resolved *domain.PageSuggestion
 	err := u.txManager.DoInTx(ctx, func(ctx context.Context) error {
-		if err := u.versionRepo.LockPage(ctx, in.WorkspaceID, in.PageID); err != nil {
+		if err := u.versionRepo.LockPage(ctx, input.WorkspaceID, input.PageID); err != nil {
 			return err
 		}
 
-		page, err := u.kbRepo.FindPage(ctx, in.WorkspaceID, in.PageID)
+		page, err := u.kbRepo.FindPage(ctx, input.WorkspaceID, input.PageID)
 		if err != nil {
 			return err
 		}
@@ -240,7 +240,7 @@ func (u *AcceptPageSuggestionUseCase) Execute(ctx context.Context, in AcceptSugg
 			return ErrPageArchived
 		}
 
-		s, err := u.suggestions.Get(ctx, in.WorkspaceID, in.PageID, in.SuggestionID)
+		s, err := u.suggestions.Get(ctx, input.WorkspaceID, input.PageID, input.SuggestionID)
 		if err != nil {
 			return err
 		}
@@ -251,17 +251,17 @@ func (u *AcceptPageSuggestionUseCase) Execute(ctx context.Context, in AcceptSugg
 			return domain.ErrPageSuggestionStale
 		}
 		resolvedSuggestion, err := u.suggestions.Resolve(
-			ctx, in.WorkspaceID, in.PageID, in.SuggestionID, domain.PageSuggestionStatusAccepted, in.ResolverUserID, time.Now(),
+			ctx, input.WorkspaceID, input.PageID, input.SuggestionID, domain.PageSuggestionStatusAccepted, input.ResolverUserID, time.Now(),
 		)
 		if err != nil {
 			return err
 		}
 		// ForceVersion は必須 — 10 分規則の間引きを無視して必ず版を切る（「版を残す」・復元と同じ扱い）。
 		if _, err := u.replaceBlocks.Execute(ctx, ReplacePageBlocksInput{
-			WorkspaceID:  in.WorkspaceID,
-			PageID:       in.PageID,
+			WorkspaceID:  input.WorkspaceID,
+			PageID:       input.PageID,
 			Doc:          resolvedSuggestion.Doc,
-			EditorUserID: in.ResolverUserID,
+			EditorUserID: input.ResolverUserID,
 			ForceVersion: true,
 		}); err != nil {
 			return err
