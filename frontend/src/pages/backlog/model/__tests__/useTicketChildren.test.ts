@@ -1,19 +1,32 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useTicketChildren } from '../useTicketChildren';
 import type { Ticket } from '@/entities/ticket';
+import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
+import { useTicketChildCount, useTicketChildren } from '../useTicketChildren';
 
 const hoisted = vi.hoisted(() => ({
   fetchTicketChildren: vi.fn(),
 }));
 
-vi.mock('@/entities/ticket', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/ticket')>();
-  return {
-    ...actual,
-    TicketRepository: { fetchTicketChildren: hoisted.fetchTicketChildren },
-  };
-});
+// 取得の本体を偽物にする（公開口だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/ticket/api/ticketRepository', () => ({
+  default: { fetchTicketChildren: hoisted.fetchTicketChildren },
+}));
+
+// 共有の問い合わせを使うので、テストごとに新しい置き場の中で描く。
+const renderHook = ((callback, options) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
+
+function httpError(status: number): AxiosError {
+  return new AxiosError('x', 'ERR_BAD_REQUEST', undefined, undefined, {
+    status,
+    statusText: '',
+    headers: {},
+    config: { headers: new AxiosHeaders() },
+    data: {},
+  });
+}
 
 function ticket(over: Partial<Ticket> & { id: string }): Ticket {
   return {
@@ -77,5 +90,27 @@ describe('useTicketChildren', () => {
     hoisted.fetchTicketChildren.mockResolvedValue([ticket({ id: 'c-1' })]);
     result.current.refresh();
     await waitFor(() => expect(result.current.children).toHaveLength(1));
+  });
+});
+
+describe('useTicketChildCount', () => {
+  it('節の中身と同じ結果を数え、取り直さない', async () => {
+    hoisted.fetchTicketChildren.mockResolvedValue([ticket({ id: 'c-1' }), ticket({ id: 'c-2' })]);
+    const client = createTestQueryClient();
+    const section = renderHook(() => useTicketChildren(SLUG, TICKET), { wrapper: queryWrapper(client) });
+    await waitFor(() => expect(section.result.current.children).toHaveLength(2));
+
+    const { result } = renderHook(() => useTicketChildCount(SLUG, TICKET), { wrapper: queryWrapper(client) });
+    expect(result.current).toBe(2);
+    expect(hoisted.fetchTicketChildren).toHaveBeenCalledTimes(1);
+  });
+
+  it('読めていない間と読めなかったときは undefined（0 と取り違えない）', async () => {
+    hoisted.fetchTicketChildren.mockRejectedValue(httpError(500));
+    const { result } = renderHook(() => useTicketChildCount(SLUG, TICKET));
+    expect(result.current).toBeUndefined();
+    await waitFor(() => expect(hoisted.fetchTicketChildren).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(result.current).toBeUndefined();
   });
 });

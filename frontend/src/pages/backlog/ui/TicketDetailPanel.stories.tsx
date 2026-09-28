@@ -281,3 +281,36 @@ export const 基本とその他に分かれる: Story = {
     await expect(canvas.getByText('報告者')).not.toBeVisible();
   },
 };
+
+/**
+ * 添付とサブタスクは畳んだまま、見出しに件数だけ出す。件数は節の中身と同じ取得を数える（二重に
+ * 取らない）。入っているスプリントは身元の行の右に出る。
+ */
+export const 添付とサブタスクの件数とスプリント: Story = {
+  decorators: [
+    withApi({
+      '/profile/me': { userId: 1, displayName: 'norman6464', email: '', bio: '', avatarUrl: '', status: '', updatedAt: '' },
+      '/workspaces/acme/tickets/t-1/comments': { comments: [] },
+      '/workspaces/acme/tickets/t-1/attachments': {
+        attachments: [
+          { id: 'at-1', ticketId: 't-1', filename: '設計資料.pdf', contentType: 'application/pdf', sizeBytes: 234_567, uploadedByUserId: 1, createdAt: '2026-09-10T00:00:00Z' },
+          { id: 'at-2', ticketId: 't-1', filename: '画面.png', contentType: 'image/png', sizeBytes: 12_345, uploadedByUserId: 1, createdAt: '2026-09-10T00:00:00Z' },
+        ],
+      },
+      '/workspaces/acme/tickets/t-1/children': { tickets: [{ ...ticket, id: 't-2', number: 458, parentId: 't-1', title: '子の課題' }] },
+      '/workspaces/acme/tickets/t-1/sprint': { sprint: { id: 'sp-1', projectId: 's-1', name: 'Sprint 3', state: 'active' } },
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // 身元の行と「その他」の欄の両方に出る（「バックログ」のまま残らない）。
+    await expect(await canvas.findAllByText('Sprint 3')).toHaveLength(2);
+    await expect(canvas.queryByText('バックログ')).toBeNull();
+    await waitFor(async () => {
+      await expect(canvas.getByRole('button', { name: /添付\s*2/ })).toHaveAttribute('aria-expanded', 'false');
+    });
+    await waitFor(async () => {
+      await expect(canvas.getByRole('button', { name: /サブタスク\s*1/ })).toHaveAttribute('aria-expanded', 'false');
+    });
+  },
+};

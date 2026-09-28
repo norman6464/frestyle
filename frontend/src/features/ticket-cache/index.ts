@@ -6,4 +6,4 @@
  * チケットの一覧・件数に加えてスプリントの一覧（件数つき）もまたぐので、1 つの entity には
  * 置けず feature に置く。
  */
-export { reflectTicket, refreshTicketAncestry, refreshTicketDerived } from './model/ticketCache';
+export { reflectTicket, refreshTicketDerived, refreshTicketHierarchy } from './model/ticketCache';

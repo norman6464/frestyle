@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { TicketRepository } from '@/entities/ticket';
 import { FsIcon } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
+import { useTicketWatch } from '../model/useTicketWatch';
 
 export interface TicketWatchButtonProps {
   workspaceSlug: string;
@@ -18,50 +17,27 @@ export interface TicketWatchButtonProps {
  * 外れるのを防ぐ（backend の PUT も同じ形で受ける）。
  */
 export default function TicketWatchButton({ workspaceSlug, ticketId }: TicketWatchButtonProps) {
-  // 監視の状態は「どのチケットの状態か」の鍵と一緒に持つ。今のチケットの状態がまだ無い間
-  // （取得中・取れなかった）は出さない。effect の頭で「未取得」へ戻すと、描いた直後にもう 1 回描き直す。
-  const key = `${workspaceSlug} ${ticketId}`;
-  const [watch, setWatch] = useState<{ key: string; watching: boolean; count: number } | null>(null);
-  const [busy, setBusy] = useState(false);
+  // 状態がまだ無い間（取得中・取れなかった）は出さない。取れなくてもチケットは読めるので、
+  // 押せないまま黙って畳む（fail-open）。
+  const { watch, busy, setWatching } = useTicketWatch(workspaceSlug, ticketId);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    let alive = true;
-    TicketRepository.fetchTicketWatchState(workspaceSlug, ticketId)
-      .then((state) => {
-        if (alive) setWatch({ key: `${workspaceSlug} ${ticketId}`, watching: state.watching, count: state.count });
-      })
-      .catch(() => {
-        // 取れなくてもチケットは読める。押せないまま黙って畳む（fail-open）。
-      });
-    return () => {
-      alive = false;
-    };
-  }, [workspaceSlug, ticketId]);
-
-  const current = watch?.key === key ? watch : null;
-  const watching = current?.watching ?? false;
-
-  const toggle = useCallback(async () => {
-    if (busy) return;
-    setBusy(true);
-    // 知らせの文言は try の外で決める（try/catch の中の条件式と try … finally は React Compiler が
-    // 扱えず、部品ごと対象から外す）。
-    const failure = watching ? 'ウォッチを外せませんでした。' : 'ウォッチできませんでした。';
+  const toggle = async () => {
+    if (busy || !watch) return;
+    // 知らせの文言は try の外で決める（try/catch の中の条件式は React Compiler が扱えず、
+    // 部品ごと対象から外す）。
+    const failure = watch.watching ? 'ウォッチを外せませんでした。' : 'ウォッチできませんでした。';
     try {
-      const next = await TicketRepository.setTicketWatching(workspaceSlug, ticketId, !watching);
-      setWatch({ key, watching: next.watching, count: next.count });
+      await setWatching(!watch.watching);
     } catch {
       // 失敗したら見た目を変えない（押す前の状態のまま）。黙っていると押せなかったことに
       // 気づけないので、失敗は知らせる。
       showToast('error', failure);
     }
-    setBusy(false);
-  }, [busy, key, ticketId, watching, workspaceSlug, showToast]);
+  };
 
-  if (!current) return null;
-  const { count } = current;
-
+  if (!watch) return null;
+  const { watching, count } = watch;
 
   return (
     <button

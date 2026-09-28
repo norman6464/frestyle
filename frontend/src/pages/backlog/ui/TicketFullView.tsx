@@ -105,7 +105,7 @@ export default function TicketFullView({
   const back = ticketReturnPath((location.state as { from?: unknown } | null)?.from, ticket.projectId, ticket.id);
 
   // 版・チーム（プロジェクトの語彙）と、このチケットに付いている分・所属スプリント。
-  const vocabulary = useTicketVocabulary(workspaceSlug, ticket.projectId, ticket.id, ticket.teamId);
+  const vocabulary = useTicketVocabulary(workspaceSlug, ticket.projectId, ticket.id);
   const editor = useTicketEditor(ticket, canEdit && !archived, onUpdate);
   const writes = useTicketFieldWrites(statuses, {
     changeStatus: onChangeStatus,
@@ -136,7 +136,7 @@ export default function TicketFullView({
         teams={vocabulary.teams}
         fixVersions={vocabulary.fixVersions}
         sprint={vocabulary.sprint}
-        teamId={vocabulary.teamId}
+        teamId={ticket.teamId}
         onSetFixVersion={(versionId, attach) => void vocabulary.setFixVersion(versionId, attach)}
         onChangeTeam={(next) => void vocabulary.changeTeam(next)}
         allLabels={allLabels}

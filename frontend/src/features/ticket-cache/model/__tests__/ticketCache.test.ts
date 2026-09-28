@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ticketKeys, type Ticket } from '@/entities/ticket';
 import { sprintKeys } from '@/entities/sprint';
 import { createTestQueryClient } from '@/test/queryClient';
-import { reflectTicket, refreshTicketDerived } from '../ticketCache';
+import { reflectTicket, refreshTicketDerived, refreshTicketHierarchy } from '../ticketCache';
 
 const ticket = (id: string, title = id) => ({ id, projectId: 'p-1', title }) as unknown as Ticket;
 
@@ -22,6 +22,52 @@ describe('reflectTicket', () => {
     expect(client.getQueryData<Ticket[]>(ticketKeys.list('acme', 'p-1', { statusId: 's-1' }))?.[0].title).toBe('新しい題名');
     expect(client.getQueryData(ticketKeys.list('acme', 'p-1', { statusId: 's-2' }))).toBe(without);
     expect(client.getQueryData<{ ticket: Ticket }>(ticketKeys.resolved('t-1'))?.ticket.title).toBe('新しい題名');
+  });
+
+  it('親の「子」の一覧にも映す（載せていない親の一覧には触らない）', async () => {
+    const client = createTestQueryClient();
+    const otherParent = [ticket('t-9')];
+    client.setQueryData(ticketKeys.children('acme', 'parent-1'), [ticket('t-1'), ticket('t-2')]);
+    client.setQueryData(ticketKeys.children('acme', 'parent-2'), otherParent);
+
+    await reflectTicket(client, 'acme', 'p-1', 't-1', (t) => ({ ...t, title: '新しい題名' }));
+
+    expect(client.getQueryData<Ticket[]>(ticketKeys.children('acme', 'parent-1'))?.[0].title).toBe('新しい題名');
+    expect(client.getQueryData(ticketKeys.children('acme', 'parent-2'))).toBe(otherParent);
+  });
+
+  it('そのチケットの変更履歴を古くする（ほかのチケットの履歴には触らない）', async () => {
+    const client = createTestQueryClient();
+    client.setQueryData(ticketKeys.history('acme', 't-1'), []);
+    client.setQueryData(ticketKeys.history('acme', 't-2'), []);
+
+    await reflectTicket(client, 'acme', 'p-1', 't-1', (t) => t);
+
+    expect(client.getQueryState(ticketKeys.history('acme', 't-1'))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(ticketKeys.history('acme', 't-2'))?.isInvalidated).toBe(false);
+  });
+});
+
+describe('refreshTicketHierarchy', () => {
+  it('解決したチケット（祖先の列）と、そのワークスペースの子の一覧をすべて古くする', async () => {
+    const client = createTestQueryClient();
+    client.setQueryData(ticketKeys.resolved('t-1'), {});
+    client.setQueryData(ticketKeys.resolved('t-2'), {});
+    client.setQueryData(ticketKeys.children('acme', 'old-parent'), []);
+    client.setQueryData(ticketKeys.children('acme', 'new-parent'), []);
+    client.setQueryData(ticketKeys.children('other', 'x'), []);
+
+    await refreshTicketHierarchy(client, 'acme');
+
+    for (const key of [
+      ticketKeys.resolved('t-1'),
+      ticketKeys.resolved('t-2'),
+      ticketKeys.children('acme', 'old-parent'),
+      ticketKeys.children('acme', 'new-parent'),
+    ]) {
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+    expect(client.getQueryState(ticketKeys.children('other', 'x'))?.isInvalidated).toBe(false);
   });
 });
 

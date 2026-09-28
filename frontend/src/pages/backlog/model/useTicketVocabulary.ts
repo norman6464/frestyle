@@ -1,81 +1,76 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ProjectVersionRepository, type ProjectVersion } from '@/entities/project-version';
-import { TeamRepository, type Team } from '@/entities/team';
-import { SprintRepository, type Sprint } from '@/entities/sprint';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { reflectWrite } from '@/shared/api/queryCache';
+import { queryShownState } from '@/shared/api/queryState';
+import { reflectTicket } from '@/features/ticket-cache';
+import {
+  ProjectVersionRepository,
+  projectVersionsQuery,
+  ticketFixVersionsQuery,
+  type ProjectVersion,
+} from '@/entities/project-version';
+import { TeamRepository, teamsQuery, type Team } from '@/entities/team';
+import { ticketSprintQuery } from '@/entities/sprint';
+
+const NO_VERSIONS: ProjectVersion[] = [];
+const NO_TEAMS: Team[] = [];
 
 /**
  * useTicketVocabulary はチケットの詳細で使う「プロジェクトの語彙」と、そのチケットに
  * 付いている分をまとめて引く。
  *
- * 版・チーム（選択肢）はプロジェクト単位なので、チケットを切り替えても引き直さない。
- * 付いている版・所属スプリントはチケットごとなので、切り替えのたびに引き直す。
- * 取れなくても画面は使える（fail-open。選択肢が空になるだけで、他の項目は読める）。
+ * どれも共有の問い合わせから読む。版・チーム（選択肢）はプロジェクトごとの鍵なので、チケットを
+ * 切り替えても取り直さない。付いている版・入っているスプリントはチケットごとの鍵で、スプリントへ
+ * 入れた・外したら書き込みの側（useSprints）が古いものにする（詳細の欄のスプリントが古いまま
+ * 残らない）。取れなくても画面は使える（fail-open。選択肢が空になるだけで、他の項目は読める）。
+ *
+ * 担当チームはチケットの項目（ticket.teamId）なので、ここでは持たない。専用の口で差し替えたら、
+ * 応答をチケットを載せている控えへ映す（reflectTicket）。
  */
 export function useTicketVocabulary(
   workspaceSlug: string | undefined,
   projectId: string | undefined,
   ticketId: string | undefined,
-  initialTeamId: string | null,
 ) {
-  const [versions, setVersions] = useState<ProjectVersion[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [fixVersions, setFixVersions] = useState<ProjectVersion[]>([]);
-  const [sprint, setSprint] = useState<Sprint | null>(null);
-  // 担当チームはここが持つ。全置換（UpdateTicket）には載らない項目で、専用の口が
-  // 差し替えた結果をそのまま反映したいため（親の再取得を待たない）。
-  const [teamId, setTeamId] = useState<string | null>(initialTeamId);
+  const queryClient = useQueryClient();
+  const hasProject = workspaceSlug !== undefined && projectId !== undefined;
+  const hasTicket = workspaceSlug !== undefined && ticketId !== undefined;
+  const slug = workspaceSlug ?? '';
 
-  useEffect(() => {
-    if (!workspaceSlug || !projectId) return;
-    let alive = true;
-    void ProjectVersionRepository.fetchVersions(workspaceSlug, projectId)
-      .then((list) => alive && setVersions(list))
-      .catch(() => alive && setVersions([]));
-    void TeamRepository.fetchTeams(workspaceSlug, projectId)
-      .then((list) => alive && setTeams(list))
-      .catch(() => alive && setTeams([]));
-    return () => {
-      alive = false;
-    };
-  }, [workspaceSlug, projectId]);
+  const versionsResult = useQuery({ ...projectVersionsQuery(slug, projectId ?? ''), enabled: hasProject });
+  const teamsResult = useQuery({ ...teamsQuery(slug, projectId ?? ''), enabled: hasProject });
+  const fixVersionsResult = useQuery({ ...ticketFixVersionsQuery(slug, ticketId ?? ''), enabled: hasTicket });
+  const sprintResult = useQuery({ ...ticketSprintQuery(slug, ticketId ?? ''), enabled: hasTicket });
 
-  useEffect(() => {
-    if (!workspaceSlug || !ticketId) return;
-    let alive = true;
-    void ProjectVersionRepository.fetchTicketFixVersions(workspaceSlug, ticketId)
-      .then((list) => alive && setFixVersions(list))
-      .catch(() => alive && setFixVersions([]));
-    setTeamId(initialTeamId);
-    void SprintRepository.fetchTicketSprint(workspaceSlug, ticketId)
-      .then((s) => alive && setSprint(s))
-      .catch(() => alive && setSprint(null));
-    return () => {
-      alive = false;
-    };
-    // initialTeamId はチケットが変わったときの種。以降はこのフックが持つ値が正なので
-    // 依存に入れない（入れると親の再描画のたびに手元の差し替えが巻き戻る）。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceSlug, ticketId]);
-
-  /** 版の付け外し。送るのは「どちらにしたいか」で、返ってきた一式をそのまま持ち直す。 */
+  /** 版の付け外し。送るのは「どちらにしたいか」で、返ってきた一式をそのまま映す。 */
   const setFixVersion = useCallback(
     async (versionId: string, attach: boolean) => {
       if (!workspaceSlug || !ticketId) return;
       const next = await ProjectVersionRepository.setTicketFixVersion(workspaceSlug, ticketId, versionId, attach);
-      setFixVersions(next);
+      await reflectWrite(queryClient, ticketFixVersionsQuery(workspaceSlug, ticketId).queryKey, () => next);
     },
-    [workspaceSlug, ticketId],
+    [workspaceSlug, ticketId, queryClient],
   );
 
-  /** 担当チームの差し替え（空文字で外す）。結果は手元にも反映する。 */
+  /** 担当チームの差し替え（空文字で外す）。応答のチームをチケットを載せている控えへ映す。 */
   const changeTeam = useCallback(
     async (next: string) => {
-      if (!workspaceSlug || !ticketId) return;
+      if (!workspaceSlug || !projectId || !ticketId) return;
       const updated = await TeamRepository.setTicketTeam(workspaceSlug, ticketId, next);
-      setTeamId(updated.teamId ?? null);
+      await reflectTicket(queryClient, workspaceSlug, projectId, ticketId, (ticket) => ({
+        ...ticket,
+        teamId: updated.teamId ?? null,
+      }));
     },
-    [workspaceSlug, ticketId],
+    [workspaceSlug, projectId, ticketId, queryClient],
   );
 
-  return { versions, teams, fixVersions, sprint, teamId, setFixVersion, changeTeam };
+  return {
+    versions: queryShownState(versionsResult, hasProject).data ?? NO_VERSIONS,
+    teams: queryShownState(teamsResult, hasProject).data ?? NO_TEAMS,
+    fixVersions: queryShownState(fixVersionsResult, hasTicket).data ?? NO_VERSIONS,
+    sprint: queryShownState(sprintResult, hasTicket).data ?? null,
+    setFixVersion,
+    changeTeam,
+  };
 }

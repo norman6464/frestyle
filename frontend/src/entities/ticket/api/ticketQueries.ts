@@ -38,6 +38,25 @@ export const ticketKeys = {
   resolved: (ticketId: string) => ['resolved-tickets', ticketId] as const,
   /** 解決したチケットのすべて。親を変えると子孫の祖先の列も変わるので、この鍵でまとめて古くする。 */
   allResolved: () => ['resolved-tickets'] as const,
+  /** チケット 1 件の発言（反応つき）。 */
+  comments: (workspaceSlug: string, ticketId: string) =>
+    [...workspaceScope(workspaceSlug), 'ticket-comments', ticketId] as const,
+  /** 発言 1 件の編集前の本文。発言の鍵の下に置く。 */
+  commentEdits: (workspaceSlug: string, ticketId: string, commentId: string) =>
+    [...workspaceScope(workspaceSlug), 'ticket-comments', ticketId, commentId, 'edits'] as const,
+  /** チケット 1 件の添付（確定済みのもの）。 */
+  attachments: (workspaceSlug: string, ticketId: string) =>
+    [...workspaceScope(workspaceSlug), 'ticket-attachments', ticketId] as const,
+  /** 直下の子すべて。親を変えたら、元の親と新しい親の両方が変わるので、この鍵でまとめて古くする。 */
+  allChildren: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'ticket-children'] as const,
+  /** チケット 1 件の直下の子（孫は含まない）。 */
+  children: (workspaceSlug: string, ticketId: string) =>
+    [...workspaceScope(workspaceSlug), 'ticket-children', ticketId] as const,
+  /** チケット 1 件の変更履歴。 */
+  history: (workspaceSlug: string, ticketId: string) =>
+    [...workspaceScope(workspaceSlug), 'ticket-history', ticketId] as const,
+  /** 自分がそのチケットを監視しているかと、監視している人数。 */
+  watch: (workspaceSlug: string, ticketId: string) => [...workspaceScope(workspaceSlug), 'ticket-watch', ticketId] as const,
 };
 
 /** ワークスペースのラベルの定義。バックログ・チケットの画面が共有する。 */
@@ -117,5 +136,53 @@ export function resolvedTicketQuery(ticketId: string) {
   return queryOptions({
     queryKey: ticketKeys.resolved(ticketId),
     queryFn: () => TicketRepository.resolveTicket(ticketId),
+  });
+}
+
+/** チケット 1 件の発言。バックログの詳細の欄とチケットの画面が共有する。 */
+export function ticketCommentsQuery(workspaceSlug: string, ticketId: string) {
+  return queryOptions({
+    queryKey: ticketKeys.comments(workspaceSlug, ticketId),
+    queryFn: () => TicketRepository.fetchTicketComments(workspaceSlug, ticketId),
+  });
+}
+
+/** 発言 1 件の編集前の本文（「編集済み」を開いたときだけ取る）。 */
+export function ticketCommentEditsQuery(workspaceSlug: string, ticketId: string, commentId: string) {
+  return queryOptions({
+    queryKey: ticketKeys.commentEdits(workspaceSlug, ticketId, commentId),
+    queryFn: () => TicketRepository.fetchTicketCommentEdits(workspaceSlug, ticketId, commentId),
+  });
+}
+
+/** チケット 1 件の添付。節の中身と見出しの件数が同じ結果を使う。 */
+export function ticketAttachmentsQuery(workspaceSlug: string, ticketId: string) {
+  return queryOptions({
+    queryKey: ticketKeys.attachments(workspaceSlug, ticketId),
+    queryFn: () => TicketRepository.fetchTicketAttachments(workspaceSlug, ticketId),
+  });
+}
+
+/** チケット 1 件の直下の子。節の中身と見出しの件数が同じ結果を使う。 */
+export function ticketChildrenQuery(workspaceSlug: string, ticketId: string) {
+  return queryOptions({
+    queryKey: ticketKeys.children(workspaceSlug, ticketId),
+    queryFn: () => TicketRepository.fetchTicketChildren(workspaceSlug, ticketId),
+  });
+}
+
+/** チケット 1 件の変更履歴。 */
+export function ticketHistoryQuery(workspaceSlug: string, ticketId: string) {
+  return queryOptions({
+    queryKey: ticketKeys.history(workspaceSlug, ticketId),
+    queryFn: () => TicketRepository.fetchTicketHistory(workspaceSlug, ticketId),
+  });
+}
+
+/** 自分がそのチケットを監視しているかと、監視している人数。 */
+export function ticketWatchQuery(workspaceSlug: string, ticketId: string) {
+  return queryOptions({
+    queryKey: ticketKeys.watch(workspaceSlug, ticketId),
+    queryFn: () => TicketRepository.fetchTicketWatchState(workspaceSlug, ticketId),
   });
 }

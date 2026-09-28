@@ -11,6 +11,12 @@ export {
   ticketCountsQuery,
   savedFiltersQuery,
   resolvedTicketQuery,
+  ticketCommentsQuery,
+  ticketCommentEditsQuery,
+  ticketAttachmentsQuery,
+  ticketChildrenQuery,
+  ticketHistoryQuery,
+  ticketWatchQuery,
 } from './api/ticketQueries';
 export type {
   CreateTicketInput,
