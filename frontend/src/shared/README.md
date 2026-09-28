@@ -16,7 +16,7 @@
 | 対象 | 置き場所 |
 |---|---|
 | `Button` / `Avatar` | **shared/ui** |
-| `UserAvatar` / `CourseCard` | **entities/<slice>/ui** |
+| `TicketKeyBadge` / `KbPageGlyph` | **entities/<slice>/ui** |
 | 日付フォーマット | **shared/lib** |
 | ページ木の祖先 ID 解決 | **entities/kb/lib** |
 
@@ -139,20 +139,11 @@ tiptap / ProseMirror（数百 KB）で、`index.ts` で re-export すると `@/s
 import した全ページがエディタ一式を巻き込み、コード分割が壊れる。
 こういうものは深いパス（`@/shared/ui/RichTextEditor`）で直接 import する。
 
-## 移行状況
-
-FSD 移行の Phase 2 で骨格を作り、**Phase 5a で
-`components/` 直下の汎用 UI 18 件をここへ移した**。残っているのは entity / feature
-固有の部品で、Phase 5b・6 で `entities/` `features/` へ振り分ける。
-
-**新規に追加する汎用資産は、旧ディレクトリ（`src/components` `src/utils`
-`src/constants`）に足さずここへ置くこと。**
-
-### 判断に迷った実例
+## 判断に迷った実例
 
 | 対象 | 置き場所 | 理由 |
 |---|---|---|
-| `LanguageBadge` / `LanguageIcon` | **shared/ui** | ホームの `FeatureCard` が技術ロゴ表示に使う。entity に置くとビジネス層が shared を参照する向きになり FSD 違反。中身も devicon スラッグと Tailwind クラスの対応表で FreStyle 固有ではない |
 | `Toast` | **shared/ui** | 見た目だけを持つ。状態を知らない |
-| `ToastContainer` | **app/providers** | `useToastList` で一覧を購読する（出す関数の `useToast` とは箱を分けてある。一覧まで読むと、通知が出るたびに showToast しか使わない部品まで描き直されるため）。shared に置くと、hooks が features へ移った時点で「下位層が上位層を import する」違反になる |
-| `PrimaryButton` | **削除** | `Button` に `variant="primary" fullWidth` を渡すだけのラッパ。`Button` の既定 variant がすでに primary なので名前が実態とずれており、`size` / `className` / ネイティブ属性も落としていた |
+| `ToastContainer` | **app/providers** | アプリの根に 1 つだけ置く、トーストの並び場所。部品（`Toast`）と hook（`shared/lib/hooks/useToast`）は shared にあり、どこに 1 つ置くかはアプリの組み立ての役目。`useToastList` で一覧を購読する（出す関数の `useToast` とは箱を分けてある。一覧まで読むと、通知が出るたびに showToast しか使わない部品まで描き直されるため） |
+| 読み込み中・失敗・空の表示（`SkeletonRows`・`ErrorNotice`・`EmptyNotice`） | **shared/ui** | 何のデータかを知らない。文言と再試行の関数は使う側が渡す |
+| `Button` に variant を渡すだけの包み | **作らない** | 名前が実態とずれ、`size` / `className` / ネイティブ属性を落としやすい。`Button` をそのまま使う |

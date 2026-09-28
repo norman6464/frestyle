@@ -29,15 +29,6 @@ describe('NotificationRepository', () => {
     expect(mockedGet).toHaveBeenCalledWith('/api/v2/notifications');
   });
 
-  it('getAll: linkPath の無い旧応答もそのまま通す（寄せるのは読む側。一覧 repository は素通しの契約）', async () => {
-    const payload = [{ id: 1, type: 'ticket_mentioned', title: 'テスト', body: '本文', isRead: false, createdAt: '2024-01-01' }];
-    mockedGet.mockResolvedValue({ data: payload });
-
-    const result = await NotificationRepository.getAll();
-    expect(result).toBe(payload);
-    expect(result[0].linkPath).toBeUndefined();
-  });
-
   it('markAsRead: 指定IDの通知を既読にする', async () => {
     mockedPatch.mockResolvedValue({});
 

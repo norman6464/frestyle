@@ -1,2 +1,2 @@
-export { default as KbBacklogPage } from './ui/KbBacklogPage';
-export { default as KbTicketPage } from './ui/KbTicketPage';
+export { default as BacklogPage } from './ui/BacklogPage';
+export { default as TicketPage } from './ui/TicketPage';

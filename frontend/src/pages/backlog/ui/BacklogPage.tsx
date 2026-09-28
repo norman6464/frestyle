@@ -63,18 +63,18 @@ const HEADING: Record<BacklogView, { eyebrow: string; title: string; lede: (proj
   },
 };
 
-export interface KbBacklogPageProps {
+export interface BacklogPageProps {
   /** どの面か。経路が決める（/backlog/:projectId・/settings・/archive）。 */
   view?: BacklogView;
 }
 
 /**
- * KbBacklogPage はバックログ画面の container（設計 0・Ⅲ・Ⅵ）。
+ * BacklogPage はバックログ画面の container（設計 0・Ⅲ・Ⅵ）。
  *
  * 面（バックログ / 状態と種別 / アーカイブ）は本文のタブ列が持ち、1 つずつが固有の URL を
  * 持つ。スプリントは別の面にせず、本文の段としてバックログの上に積む（見本と同じ）。
  */
-export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) {
+export default function BacklogPage({ view = 'backlog' }: BacklogPageProps) {
   const { projectId } = useParams<{ projectId?: string }>();
   const archived = view === 'archive';
   const navigate = useNavigate();

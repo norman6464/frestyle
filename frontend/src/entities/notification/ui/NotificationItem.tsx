@@ -59,8 +59,7 @@ export default memo(function NotificationItem({
   // あって操作の入れ子になるため。押したら既読にしてから遷移する —— 未読のまま飛ぶと、
   // 戻ってきたときにまた未読が光る。既読化は待たない（遷移を止めない。失敗しても一覧の
   // 再取得でサーバーの状態に合う）。
-  // 列が入る前の応答には linkPath が無い（undefined）。無い＝'' と同じ「飛び先なし」。
-  const linkPath = notification.linkPath ?? '';
+  const { linkPath } = notification;
   const linked = isAppPath(linkPath);
   return (
     <div

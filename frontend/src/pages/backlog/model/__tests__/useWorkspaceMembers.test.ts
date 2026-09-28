@@ -10,7 +10,7 @@ const hoisted = vi.hoisted(() => ({
   fetchMembers: vi.fn(),
 }));
 
-// 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+// 取得の本体を偽物にする（公開口の WorkspaceRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
 vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
   default: { fetchMembers: hoisted.fetchMembers },
 }));

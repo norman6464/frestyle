@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
-import KbBacklogPage from './KbBacklogPage';
+import BacklogPage from './BacklogPage';
 import { routerWithParam, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
 
 const workspaces = [{ slug: 'acme', name: '開発チーム', createdAt: '2026-01-01T00:00:00Z', canManage: true }];
@@ -72,11 +72,11 @@ function baseApi(over: ApiStubs = {}): ApiStubs {
 }
 
 const meta = {
-  title: 'pages/backlog/KbBacklogPage',
-  component: KbBacklogPage,
+  title: 'pages/backlog/BacklogPage',
+  component: BacklogPage,
   parameters: { layout: 'fullscreen' },
   decorators: [withToast, routerWithParam('/backlog/:projectId', '/backlog/p-1')],
-} satisfies Meta<typeof KbBacklogPage>;
+} satisfies Meta<typeof BacklogPage>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -499,7 +499,7 @@ export const スプリントの削除は確認してから: Story = {
       ...baseApi(),
     }),
   ],
-  render: () => <KbBacklogPage view="settings" />,
+  render: () => <BacklogPage view="settings" />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await canvas.findByText('スプリント 12');
@@ -656,7 +656,7 @@ export const バックログからはすぐスプリントを作る: Story = {
 /** 設定の面では名前の欄を開く。連番を入れておき、Esc で欄だけを閉じて作成ボタンへ戻る。 */
 export const 設定ではスプリントの名前を決めて作る: Story = {
   decorators: [withApi(sprintApi())],
-  render: () => <KbBacklogPage view="settings" />,
+  render: () => <BacklogPage view="settings" />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: 'スプリントを作成' }));
@@ -680,7 +680,7 @@ export const 設定の面: Story = {
   // 面は経路ではなく prop で決まる（経路 → prop の対応は app/App.tsx が持つ）。
   // ここで router を重ねると入れ子になるので、meta の router のまま prop だけ変える。
   decorators: [withApi(baseApi())],
-  render: () => <KbBacklogPage view="settings" />,
+  render: () => <BacklogPage view="settings" />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(async () => {

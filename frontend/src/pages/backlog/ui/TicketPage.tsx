@@ -10,14 +10,14 @@ import { useTicketHistory } from '../model/useTicketHistory';
 import TicketFullView from './TicketFullView';
 
 /**
- * KbTicketPage は `/tickets/:ticketId`（ワークスペースを URL に持たない口）の受け皿で、
+ * TicketPage は `/tickets/:ticketId`（ワークスペースを URL に持たない口）の受け皿で、
  * チケット 1 件を全画面で開く。
  *
  * 通知・本文中の参照・ブックマークからの再訪はワークスペースを知らないまま来るので、
  * ID だけで開ける必要がある。アーカイブ済みでも普通に開ける（一覧の現役タブには
  * 現れないので、こちらが唯一の入口になる）。
  */
-export default function KbTicketPage() {
+export default function TicketPage() {
   const { ticketId } = useParams<{ ticketId: string }>();
   const { showToast } = useToast();
   const navigate = useNavigate();

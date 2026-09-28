@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { AxiosError, AxiosHeaders } from 'axios';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
-import KbTicketPage from './KbTicketPage';
+import TicketPage from './TicketPage';
 import { routerWithParam, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
 
 const status = (over: Record<string, unknown> = {}) => ({
@@ -101,11 +101,11 @@ function baseApi(over: ApiStubs = {}): ApiStubs {
 }
 
 const meta = {
-  title: 'pages/backlog/KbTicketPage',
-  component: KbTicketPage,
+  title: 'pages/backlog/TicketPage',
+  component: TicketPage,
   parameters: { layout: 'fullscreen' },
   decorators: [withToast, routerWithParam('/tickets/:ticketId', '/tickets/t-1')],
-} satisfies Meta<typeof KbTicketPage>;
+} satisfies Meta<typeof TicketPage>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
