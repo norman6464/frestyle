@@ -1,6 +1,10 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { queryWrapper } from '@/test/queryClient';
 import { useAssignedTickets } from '../useAssignedTickets';
+
+const renderHook: typeof rtlRenderHook = ((callback: Parameters<typeof rtlRenderHook>[0], options?: Parameters<typeof rtlRenderHook>[1]) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 import type { AssignedTicket } from '@/entities/ticket';
 
 const hoisted = vi.hoisted(() => ({
@@ -8,15 +12,13 @@ const hoisted = vi.hoisted(() => ({
   fetchAssignedTickets: vi.fn(),
 }));
 
-vi.mock('@/entities/kb', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/kb')>();
-  return { ...actual, KbRepository: { fetchWorkspaces: hoisted.fetchWorkspaces } };
-});
-
-vi.mock('@/entities/ticket', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/ticket')>();
-  return { ...actual, TicketRepository: { fetchAssignedTickets: hoisted.fetchAssignedTickets } };
-});
+// 取得の本体を偽物にする（公開口だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/kb/api/kbRepository', () => ({
+  default: { fetchWorkspaces: hoisted.fetchWorkspaces },
+}));
+vi.mock('@/entities/ticket/api/ticketRepository', () => ({
+  default: { fetchAssignedTickets: hoisted.fetchAssignedTickets },
+}));
 
 function ticket(id: string, statusName: string): AssignedTicket {
   return {
@@ -97,5 +99,29 @@ describe('useAssignedTickets', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBe('担当の一覧を取得できませんでした。');
     expect(result.current.groups).toEqual([]);
+  });
+
+  it('一部のワークスペースだけ読めなければ、一部で束ねずに失敗にし、読めなかった分だけ取り直せる', async () => {
+    hoisted.fetchWorkspaces.mockResolvedValue([
+      { slug: 'a', name: 'A', createdAt: '', canManage: true },
+      { slug: 'b', name: 'B', createdAt: '', canManage: true },
+    ]);
+    let failB = true;
+    hoisted.fetchAssignedTickets.mockImplementation(async (slug: string) => {
+      if (slug === 'b' && failB) throw new Error('boom');
+      return slug === 'a' ? [ticket('t-1', '進行中')] : [ticket('t-2', '未着手')];
+    });
+    const { result } = renderHook(() => useAssignedTickets());
+    await waitFor(() => expect(result.current.error).toBe('担当の一覧を取得できませんでした。'));
+    expect(result.current.loading).toBe(false);
+
+    failB = false;
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    await waitFor(() => expect(result.current.total).toBe(2));
+    expect(result.current.error).toBeNull();
+    expect(hoisted.fetchAssignedTickets.mock.calls.filter(([slug]) => slug === 'a')).toHaveLength(1);
   });
 });

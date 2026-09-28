@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ProjectRepository, type Project } from '@/entities/project';
+import { useQuery } from '@tanstack/react-query';
+import { projectListQuery, type Project } from '@/entities/project';
+import { queryShownState } from '@/shared/api/queryState';
 import { EmptyNotice, ErrorNotice, FsIcon, SkeletonRows } from '@/shared/ui';
 import { useDismissOnOutside } from '@/shared/lib/hooks/useDismissOnOutside';
 
@@ -21,21 +23,14 @@ const NO_PROJECTS: Project[] = [];
  */
 export default function BacklogProjectSwitcher({ workspaceSlug, project }: BacklogProjectSwitcherProps) {
   const [open, setOpen] = useState(false);
-  // 再試行・開き直しの引き金（値に意味は無い。増えたら同じ問い合わせをもう一度投げる）。
-  // 開くたびにも増やす —— 閉じて開き直したときに、取り直しが終わるまで前の一覧（や解消した
-  // かもしれない失敗）を出さないため（開くたびに取り直すのは、閉じている間に増えた・消えた
-  // プロジェクトを拾うため）。
-  const [attempt, setAttempt] = useState(0);
-  // 一覧の取得の結果は「どの問い合わせの結果か」の鍵と一緒に持つ。今の鍵の結果がまだ無い間が
-  // 読み込み中（effect の頭で「読み込み中」へ戻すと、描いた直後にもう 1 回描き直す）。
-  // 読み込み中・失敗・0 件を同じ「プロジェクトはありません」に畳まない（失敗を「無い」と
-  // 言い切ると、あるのに切り替えられないと誤解される）。
-  const requestKey = `${workspaceSlug ?? ''}#${attempt}`;
-  const [result, setResult] = useState<
-    { key: string; status: 'ready'; projects: Project[] } | { key: string; status: 'error' } | null
-  >(null);
-  const listStatus = result?.key === requestKey ? result.status : 'loading';
-  const projects = result?.key === requestKey && result.status === 'ready' ? result.projects : NO_PROJECTS;
+  // 同じワークスペースのプロジェクトの一覧（バックログの解決・ホームの作成の窓と共有）。開いている
+  // 間だけ読み、開くたびに裏で取り直す（閉じている間に増えた・消えたプロジェクトを拾う）。取ってある
+  // 一覧はすぐ出す。読み込み中・失敗・0 件を同じ「プロジェクトはありません」に畳まない（失敗を
+  // 「無い」と言い切ると、あるのに切り替えられないと誤解される）。
+  const listResult = useQuery({ ...projectListQuery(workspaceSlug ?? ''), enabled: open && workspaceSlug !== undefined });
+  const shown = queryShownState(listResult, open && workspaceSlug !== undefined);
+  const listStatus: 'loading' | 'error' | 'ready' = shown.loading ? 'loading' : shown.failed ? 'error' : 'ready';
+  const projects = shown.data ?? NO_PROJECTS;
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const key = project.key.toUpperCase();
@@ -43,31 +38,13 @@ export default function BacklogProjectSwitcher({ workspaceSlug, project }: Backl
   // 外を押したら・Escape で閉じる（ナレッジの切替と同じ作り）。Escape のときは引き金へ戻す。
   useDismissOnOutside(open, [containerRef], () => setOpen(false), { returnFocus: triggerRef });
 
-  // 開いたときだけ一覧を取る（閉じている間は要らない問い合わせを出さない）。
-  useEffect(() => {
-    if (!open || !workspaceSlug) return;
-    let alive = true;
-    const forKey = `${workspaceSlug}#${attempt}`;
-    void ProjectRepository.fetchProjects(workspaceSlug)
-      .then((list) => {
-        if (alive) setResult({ key: forKey, status: 'ready', projects: list });
-      })
-      .catch(() => {
-        // 一覧が取れなくても今のプロジェクトは開いたまま使える（fail-open）。失敗は失敗と示す。
-        if (alive) setResult({ key: forKey, status: 'error' });
-      });
-    return () => {
-      alive = false;
-    };
-  }, [open, workspaceSlug, attempt]);
-
   return (
     <div ref={containerRef} className="relative shrink-0">
       <button
         ref={triggerRef}
         type="button"
         onClick={() => {
-          if (!open) setAttempt((prev) => prev + 1);
+          if (!open && workspaceSlug !== undefined) void listResult.refetch();
           setOpen(!open);
         }}
         aria-expanded={open}
@@ -87,7 +64,7 @@ export default function BacklogProjectSwitcher({ workspaceSlug, project }: Backl
             <ErrorNotice
               variant="inline"
               message="プロジェクトを読み込めませんでした"
-              onRetry={() => setAttempt((prev) => prev + 1)}
+              onRetry={() => void listResult.refetch()}
               className="px-2 py-1"
             />
           ) : projects.length === 0 ? (

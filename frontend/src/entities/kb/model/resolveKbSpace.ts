@@ -1,3 +1,4 @@
+import { findAcrossLists, firstAcrossLists, type OwnedListState } from '@/shared/lib/acrossLists';
 import type { KbMySpace, KbWorkspace } from './types';
 
 /** 1 つのワークスペースの「自分が役割を持つスペースの一覧」の、今の取り具合。 */
@@ -45,12 +46,8 @@ export function orderWorkspaces(workspaces: KbWorkspace[], preferredWorkspaceSlu
  * スペースが、取り直せば入ってくる）。
  */
 export function pickEntryKbSpace(lists: MySpacesState[]): KbSpaceResolution<string> {
-  for (const list of lists) {
-    if (list.data === undefined) return list.isError && !list.isFetching ? { kind: 'error' } : { kind: 'loading' };
-    if (list.data[0]) return { kind: 'found', value: list.data[0].id };
-    if (list.isFetching) return { kind: 'loading' };
-  }
-  return { kind: 'none' };
+  const resolved = firstAcrossLists(lists.map(toOwned));
+  return resolved.kind === 'found' ? { kind: 'found', value: resolved.item.id } : resolved;
 }
 
 /**
@@ -62,11 +59,12 @@ export function pickEntryKbSpace(lists: MySpacesState[]): KbSpaceResolution<stri
  * （作ったばかりのスペースへ移った直後は、一覧を取り直している間は見つからない）。
  */
 export function locateKbSpace(spaceId: string, lists: MySpacesState[]): KbSpaceResolution<ResolvedKbSpace> {
-  for (const list of lists) {
-    const space = list.data?.find((s) => s.id === spaceId);
-    if (space) return { kind: 'found', value: { workspaceSlug: list.workspaceSlug, space } };
-  }
-  if (lists.some((list) => list.isFetching || (list.data === undefined && !list.isError))) return { kind: 'loading' };
-  if (lists.some((list) => list.data === undefined)) return { kind: 'error' };
-  return { kind: 'none' };
+  const resolved = findAcrossLists(lists.map(toOwned), (space) => space.id === spaceId);
+  return resolved.kind === 'found'
+    ? { kind: 'found', value: { workspaceSlug: resolved.owner, space: resolved.item } }
+    : resolved;
+}
+
+function toOwned(list: MySpacesState): OwnedListState<KbMySpace> {
+  return { owner: list.workspaceSlug, data: list.data, isError: list.isError, isFetching: list.isFetching };
 }

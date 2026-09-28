@@ -1,13 +1,17 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useSprintTickets } from '../useSprintTickets';
+import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
+
+const renderHook: typeof rtlRenderHook = ((callback: Parameters<typeof rtlRenderHook>[0], options?: Parameters<typeof rtlRenderHook>[1]) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 const hoisted = vi.hoisted(() => ({ fetchSprintTicketIds: vi.fn() }));
 
-vi.mock('@/entities/sprint', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/sprint')>();
-  return { ...actual, SprintRepository: { fetchSprintTicketIds: hoisted.fetchSprintTicketIds } };
-});
+// 取得の本体を偽物にする（公開口の SprintRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/sprint/api/sprintRepository', () => ({
+  SprintRepository: { fetchSprintTicketIds: hoisted.fetchSprintTicketIds },
+}));
 
 /** あとから好きな時点で決着させられる約束。応答の返る順を入れ替えるために使う。 */
 function deferred<T>() {
@@ -106,5 +110,19 @@ describe('useSprintTickets', () => {
     });
     expect(result.current.error).toBeNull();
     expect(result.current.bySprint).toEqual({ 's-2': ['t-new'] });
+  });
+
+  // バックログの段（進行中・予定のスプリント）とスプリントのボード（すべて）は、同じスプリントの中身を使う。
+  it('バックログの段とスプリントのボードは、同じスプリントの中身を 1 回だけ取る', async () => {
+    hoisted.fetchSprintTicketIds.mockResolvedValue(['t-1']);
+    const client = createTestQueryClient();
+    const { result } = renderHook(
+      () => ({ band: useSprintTickets('acme', ['s-1']), board: useSprintTickets('acme', ['s-1', 's-2']) }),
+      { wrapper: queryWrapper(client) },
+    );
+
+    await waitFor(() => expect(Object.keys(result.current.board.bySprint)).toEqual(['s-1', 's-2']));
+    expect(result.current.band.bySprint).toEqual({ 's-1': ['t-1'] });
+    expect(hoisted.fetchSprintTicketIds.mock.calls.filter(([, id]) => id === 's-1')).toHaveLength(1);
   });
 });

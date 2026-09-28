@@ -6,10 +6,10 @@ import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
 import { useStableCallback } from '@/shared/lib/hooks/useStableCallback';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { TicketRepository, formatTicketKey, type TicketSavedFilter } from '@/entities/ticket';
-import { ProjectRepository } from '@/entities/project';
 import type { SprintState } from '@/entities/sprint';
 import { useTicketList } from '../model/useTicketList';
 import { useTicketMasters } from '../model/useTicketMasters';
+import { useCreateProject } from '../model/useCreateProject';
 import { useTicketLabels } from '../model/useTicketLabels';
 import { usePrincipalNames } from '../model/usePrincipalNames';
 import { useBacklogProject } from '../model/useBacklogProject';
@@ -152,6 +152,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   // スプリントは「チケット」の面（入れ先の選択）と「スプリント」の面の両方が要るので、
   // ページで 1 つ持って両方へ渡す（同じ一覧を 2 回取らない）。
   const sprints = useSprints(workspaceSlug ?? undefined, project?.id);
+  const createProject = useCreateProject(workspaceSlug ?? undefined);
   // どのチケットがどのスプリントに入っているかは ID だけ引き、中身は一覧の応答から引き当てる。
   const openSprints = useMemo(() => sprints.sprints.filter((sprint) => sprint.state !== 'completed'), [sprints.sprints]);
   const { bySprint, error: sprintTicketsError, reload: reloadSprintTickets } = useSprintTickets(
@@ -542,7 +543,7 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
                   <NameCreateForm
                     what="プロジェクト"
                     onCreate={async ({ name }) => {
-                      const created = await ProjectRepository.createProject(workspaceSlug, { name });
+                      const created = await createProject({ name });
                       navigate(backlogPath(created.id, 'backlog'));
                     }}
                   />

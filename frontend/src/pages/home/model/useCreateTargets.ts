@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { kbMySpacesQuery, kbSpaceTemplatesQuery, type KbMySpace, type KbPageTemplate } from '@/entities/kb';
-import { ProjectRepository, type Project } from '@/entities/project';
+import { projectListQuery, type Project } from '@/entities/project';
 import { ticketStatusesQuery, type TicketStatus } from '@/entities/ticket';
-import { toHomeResource, useHomeResource, type HomeResource } from './useHomeResource';
+import { toHomeResource, type HomeResource } from './useHomeResource';
 
 const NO_SPACES: KbMySpace[] = [];
 const NO_TEMPLATES: KbPageTemplate[] = [];
@@ -45,10 +45,10 @@ export function usePageTemplates(workspaceSlug: string | null, spaceId: string |
 }
 
 /** ワークスペースのプロジェクト（チケットの所属先）。 */
-export function useProjects(workspaceSlug: string | null) {
-  return useHomeResource(
-    workspaceSlug ? `projects:${workspaceSlug}` : null,
-    () => ProjectRepository.fetchProjects(workspaceSlug ?? ''),
+export function useProjects(workspaceSlug: string | null): HomeResource<Project[]> {
+  // バックログの解決・プロジェクトの切替と同じ一覧を使う（取ってあれば取り直さない）。
+  return toHomeResource(
+    useQuery({ ...projectListQuery(workspaceSlug ?? ''), enabled: workspaceSlug !== null }),
     NO_PROJECTS,
   );
 }

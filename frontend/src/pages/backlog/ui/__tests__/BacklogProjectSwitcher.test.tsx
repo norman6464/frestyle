@@ -2,11 +2,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project } from '@/entities/project';
+import { queryWrapper } from '@/test/queryClient';
 import BacklogProjectSwitcher from '../BacklogProjectSwitcher';
 
 const hoisted = vi.hoisted(() => ({ fetchProjects: vi.fn() }));
 
-vi.mock('@/entities/project', () => ({
+// 取得の本体を偽物にする（公開口の ProjectRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/project/api/projectRepository', () => ({
   ProjectRepository: { fetchProjects: hoisted.fetchProjects },
 }));
 
@@ -26,6 +28,7 @@ function renderSidebar() {
     <MemoryRouter>
       <BacklogProjectSwitcher workspaceSlug="acme" project={current} />
     </MemoryRouter>,
+    { wrapper: queryWrapper() },
   );
 }
 
@@ -98,18 +101,23 @@ describe('BacklogProjectSwitcher', () => {
     expect(screen.getByRole('button', { name: 'プロジェクト P1 を切り替える' })).toHaveFocus();
   });
 
-  it('閉じて開き直したら、取り直しが終わるまで前の一覧を出さずに読み込み中にする', async () => {
+  it('閉じて開き直したら、取ってある一覧をすぐ出し、裏で取り直して届いたら差し替える', async () => {
     hoisted.fetchProjects.mockResolvedValueOnce([current, project('p2', 'Design')]);
     renderSidebar();
     openSwitcher();
     expect(await screen.findByRole('link', { name: /Design/ })).toBeInTheDocument();
 
-    // 閉じる（もう一度押す）。開き直すときの取得は返らないまま。
+    // 閉じる（もう一度押す）。開き直すと、閉じている間に増えたプロジェクトを拾いに行く。
     openSwitcher();
-    hoisted.fetchProjects.mockReturnValueOnce(new Promise(() => {}));
+    let resolveNext: (value: Project[]) => void = () => {};
+    hoisted.fetchProjects.mockReturnValueOnce(new Promise<Project[]>((resolve) => (resolveNext = resolve)));
     openSwitcher();
 
-    expect(screen.getByRole('status', { name: 'プロジェクトを読み込み中' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Design/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Design/ })).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'プロジェクトを読み込み中' })).not.toBeInTheDocument();
+    expect(hoisted.fetchProjects).toHaveBeenCalledTimes(2);
+
+    resolveNext([current, project('p2', 'Design'), project('p3', 'Research')]);
+    expect(await screen.findByRole('link', { name: /Research/ })).toBeInTheDocument();
   });
 });
