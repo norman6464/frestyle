@@ -1,8 +1,8 @@
 import type { KbResolvedCover } from '@/entities/kb';
 
 export interface KbPageCoverProps {
-  /** 未設定は null（明示的に外した）と undefined（旧応答）のどちらもあり得る。 */
-  cover?: KbResolvedCover | null;
+  /** カバー画像。未設定は null。 */
+  cover: KbResolvedCover | null;
 }
 
 /**

@@ -27,6 +27,25 @@ import type {
   KbSpace,
   KbSpaceMember,
 } from '../model/types';
+import {
+  normalizeFavorite,
+  normalizePage,
+  normalizePageDoc,
+  normalizePageTree,
+  normalizeRecentPage,
+  normalizeResolvedPage,
+  normalizeSaveResult,
+  normalizeSearchResult,
+  normalizeTemplate,
+  type KbFavoritePageWire,
+  type KbPageContentSaveResultWire,
+  type KbPageDocWire,
+  type KbPageTemplateWire,
+  type KbPageWire,
+  type KbRecentPageWire,
+  type KbResolvedPageWire,
+  type KbSearchResultWire,
+} from './kbResponses';
 
 /**
  * ナレッジの API（/api/v2/kb/…）の薄いラッパ。
@@ -97,8 +116,8 @@ function normalizeVersionDetail(raw: KbPageVersionDetailWire): KbPageVersionDeta
 const KbRepository = {
   /** 最近開いたページのメタデータ。ページ本文の resolve は閲覧記録を更新するため使わない。 */
   async fetchRecentPages(signal?: AbortSignal): Promise<KbRecentPage[]> {
-    const res = await apiClient.get<KbRecentPage[]>(KB_API.recentPages, { signal });
-    return toArray<KbRecentPage>(res.data);
+    const res = await apiClient.get<KbRecentPageWire[]>(KB_API.recentPages, { signal });
+    return toArray<KbRecentPageWire>(res.data).map(normalizeRecentPage);
   },
 
   /**
@@ -131,15 +150,11 @@ const KbRepository = {
     spaceId: string,
     options: { archived?: boolean } = {},
   ): Promise<KbPageTree> {
-    const res = await apiClient.get<KbPageTree>(KB_API.pages(workspaceSlug, spaceId), {
+    const res = await apiClient.get<Parameters<typeof normalizePageTree>[0]>(KB_API.pages(workspaceSlug, spaceId), {
       // 既定は現役。別の口ではなく同じ口のスコープなので、応答の形も同じ。
       params: options.archived ? { archived: 'true' } : undefined,
     });
-    // pages が欠けた応答（想定外）でも描画側が落ちないよう、配列だけは必ず用意する。
-    return {
-      pages: toArray(res.data?.pages),
-      hasHiddenChildren: res.data?.hasHiddenChildren ?? false,
-    };
+    return normalizePageTree(res.data);
   },
 
   /**
@@ -185,10 +200,10 @@ const KbRepository = {
     query: string,
     limit?: number,
   ): Promise<KbSearchResult[]> {
-    const res = await apiClient.get<KbSearchResult[]>(KB_API.search(workspaceSlug), {
+    const res = await apiClient.get<KbSearchResultWire[]>(KB_API.search(workspaceSlug), {
       params: { q: query, ...(limit ? { limit } : {}) },
     });
-    return toArray(res.data);
+    return toArray<KbSearchResultWire>(res.data).map(normalizeSearchResult);
   },
 
   /**
@@ -197,8 +212,8 @@ const KbRepository = {
    * 同じ規則をサーバーが持つ。**失敗は例外として投げる。**
    */
   async listBacklinks(workspaceSlug: string, pageId: string): Promise<KbPage[]> {
-    const res = await apiClient.get<KbPage[]>(KB_API.pageBacklinks(workspaceSlug, pageId));
-    return toArray(res.data);
+    const res = await apiClient.get<KbPageWire[]>(KB_API.pageBacklinks(workspaceSlug, pageId));
+    return toArray<KbPageWire>(res.data).map(normalizePage);
   },
 
   /**
@@ -213,12 +228,12 @@ const KbRepository = {
     spaceId: string,
     input: { title: string; parentId?: string },
   ): Promise<KbPage> {
-    const res = await apiClient.post<KbPage>(KB_API.pages(workspaceSlug, spaceId), {
+    const res = await apiClient.post<KbPageWire>(KB_API.pages(workspaceSlug, spaceId), {
       title: input.title,
       // backend は空文字を「親なし」として扱う（binding が omitempty ではないため必ず送る）。
       parentId: input.parentId ?? '',
     });
-    return res.data;
+    return normalizePage(res.data);
   },
 
   /**
@@ -231,8 +246,8 @@ const KbRepository = {
 
   /** ページの題名を変える。**失敗は例外として投げる**（createPage と同じ理由）。 */
   async renamePage(workspaceSlug: string, pageId: string, title: string): Promise<KbPage> {
-    const res = await apiClient.patch<KbPage>(KB_API.page(workspaceSlug, pageId), { title });
-    return res.data;
+    const res = await apiClient.patch<KbPageWire>(KB_API.page(workspaceSlug, pageId), { title });
+    return normalizePage(res.data);
   },
 
   /**
@@ -246,11 +261,11 @@ const KbRepository = {
     pageId: string,
     input: { parentId: string; beforePageId?: string; afterPageId?: string },
   ): Promise<KbPage> {
-    const res = await apiClient.post<KbPage>(
+    const res = await apiClient.post<KbPageWire>(
       `${KB_API.page(workspaceSlug, pageId)}/move`,
       input,
     );
-    return res.data;
+    return normalizePage(res.data);
   },
 
   /**
@@ -267,10 +282,10 @@ const KbRepository = {
    * 迷子ページができるため）。**失敗は例外として投げる。**
    */
   async unarchivePage(workspaceSlug: string, pageId: string): Promise<KbPage> {
-    const res = await apiClient.post<KbPage>(
+    const res = await apiClient.post<KbPageWire>(
       `${KB_API.page(workspaceSlug, pageId)}/unarchive`,
     );
-    return res.data;
+    return normalizePage(res.data);
   },
 
   /**
@@ -280,8 +295,8 @@ const KbRepository = {
    * 直リンクでも開けない（継承する）。
    */
   async fetchPage(workspaceSlug: string, pageId: string): Promise<KbPageDoc> {
-    const res = await apiClient.get<KbPageDoc>(KB_API.page(workspaceSlug, pageId));
-    return res.data;
+    const res = await apiClient.get<KbPageDocWire>(KB_API.page(workspaceSlug, pageId));
+    return normalizePageDoc(res.data);
   },
 
   /**
@@ -291,8 +306,8 @@ const KbRepository = {
    * 応答の workspaceSlug を以降の呼び出し（木・保存）に使う。
    */
   async resolvePage(pageId: string): Promise<KbResolvedPage> {
-    const res = await apiClient.get<KbResolvedPage>(KB_API.resolvePage(pageId));
-    return res.data;
+    const res = await apiClient.get<KbResolvedPageWire>(KB_API.resolvePage(pageId));
+    return normalizeResolvedPage(res.data);
   },
 
   /**
@@ -337,8 +352,8 @@ const KbRepository = {
 
   /** 自分のお気に入りページの一覧（段 7）。ワークスペースに所属していれば誰でも叩ける。 */
   async fetchFavorites(workspaceSlug: string): Promise<KbFavoritePage[]> {
-    const res = await apiClient.get<KbFavoritePage[]>(KB_API.favorites(workspaceSlug));
-    return toArray<KbFavoritePage>(res.data);
+    const res = await apiClient.get<KbFavoritePageWire[]>(KB_API.favorites(workspaceSlug));
+    return toArray<KbFavoritePageWire>(res.data).map(normalizeFavorite);
   },
 
   /** ページをお気に入りに入れる（冪等）。 */
@@ -380,19 +395,19 @@ const KbRepository = {
     pageId: string,
     doc: unknown,
   ): Promise<KbPageContentSaveResult> {
-    const res = await apiClient.put<KbPageContentSaveResult>(
+    const res = await apiClient.put<KbPageContentSaveResultWire>(
       KB_API.pageContent(workspaceSlug, pageId),
       { doc },
     );
-    return res.data;
+    return normalizeSaveResult(res.data);
   },
 
   /**
    * ページのアイコンを設定する（絵文字）。編集権限が要る。**失敗は例外として投げる。**
    */
   async setPageIcon(workspaceSlug: string, pageId: string, icon: KbIcon): Promise<KbPage> {
-    const res = await apiClient.put<KbPage>(KB_API.pageIcon(workspaceSlug, pageId), icon);
-    return res.data;
+    const res = await apiClient.put<KbPageWire>(KB_API.pageIcon(workspaceSlug, pageId), icon);
+    return normalizePage(res.data);
   },
 
   /**
@@ -402,8 +417,8 @@ const KbRepository = {
    * ページが要るため — backend 側の判断で、応答の形はそれに合わせてある）。
    */
   async clearPageIcon(workspaceSlug: string, pageId: string): Promise<KbPage> {
-    const res = await apiClient.delete<KbPage>(KB_API.pageIcon(workspaceSlug, pageId));
-    return res.data;
+    const res = await apiClient.delete<KbPageWire>(KB_API.pageIcon(workspaceSlug, pageId));
+    return normalizePage(res.data);
   },
 
   /**
@@ -472,11 +487,11 @@ const KbRepository = {
     pageId: string,
     key: string,
   ): Promise<{ page: KbPage; cover: KbResolvedCover | null }> {
-    const res = await apiClient.put<{ page: KbPage; cover: KbResolvedCover | null }>(
+    const res = await apiClient.put<{ page: KbPageWire; cover?: KbResolvedCover | null }>(
       KB_API.pageCover(workspaceSlug, pageId),
       { type: 'file', key },
     );
-    return res.data;
+    return { page: normalizePage(res.data.page), cover: res.data.cover ?? null };
   },
 
   /**
@@ -486,10 +501,8 @@ const KbRepository = {
     workspaceSlug: string,
     pageId: string,
   ): Promise<{ page: KbPage; cover: null }> {
-    const res = await apiClient.delete<{ page: KbPage; cover: null }>(
-      KB_API.pageCover(workspaceSlug, pageId),
-    );
-    return res.data;
+    const res = await apiClient.delete<{ page: KbPageWire }>(KB_API.pageCover(workspaceSlug, pageId));
+    return { page: normalizePage(res.data.page), cover: null };
   },
 
   /**
@@ -634,10 +647,10 @@ const KbRepository = {
     pageId: string,
     seq: number,
   ): Promise<KbPageContentSaveResult> {
-    const res = await apiClient.post<KbPageContentSaveResult>(
+    const res = await apiClient.post<KbPageContentSaveResultWire>(
       KB_API.restorePageVersion(workspaceSlug, pageId, seq),
     );
-    return res.data;
+    return normalizeSaveResult(res.data);
   },
 
   /**
@@ -646,10 +659,10 @@ const KbRepository = {
    * doc は含まない軽い形。ワークスペース所属者なら誰でも読める。**失敗は例外として投げる。**
    */
   async listPageTemplates(workspaceSlug: string, spaceId?: string): Promise<KbPageTemplate[]> {
-    const res = await apiClient.get<KbPageTemplate[]>(KB_API.templates(workspaceSlug), {
+    const res = await apiClient.get<KbPageTemplateWire[]>(KB_API.templates(workspaceSlug), {
       params: spaceId ? { spaceId } : undefined,
     });
-    return toArray<KbPageTemplate>(res.data);
+    return toArray<KbPageTemplateWire>(res.data).map(normalizeTemplate);
   },
 
   /**
@@ -662,8 +675,8 @@ const KbRepository = {
     pageId: string,
     input: { name: string; spaceId?: string | null },
   ): Promise<KbPageTemplate> {
-    const res = await apiClient.post<KbPageTemplate>(KB_API.pageTemplates(workspaceSlug, pageId), input);
-    return res.data;
+    const res = await apiClient.post<KbPageTemplateWire>(KB_API.pageTemplates(workspaceSlug, pageId), input);
+    return normalizeTemplate(res.data);
   },
 
   /** テンプレートを削除する。ワークスペースの編集者（editor）以上が要る。**失敗は例外として投げる。** */
@@ -680,8 +693,8 @@ const KbRepository = {
     spaceId: string,
     input: { templateId: string; parentId?: string; title: string },
   ): Promise<KbPage> {
-    const res = await apiClient.post<KbPage>(KB_API.pageFromTemplate(workspaceSlug, spaceId), input);
-    return res.data;
+    const res = await apiClient.post<KbPageWire>(KB_API.pageFromTemplate(workspaceSlug, spaceId), input);
+    return normalizePage(res.data);
   },
 
   /**

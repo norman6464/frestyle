@@ -401,7 +401,7 @@ export default function KbFrame({
               <KbTreeList
                 nodes={shownNodes}
                 depth={0}
-                parentId={focusRoot ? (focusRoot.page.parentId ?? null) : null}
+                parentId={focusRoot ? focusRoot.page.parentId : null}
                 hasHiddenChildren={shownHiddenAtRoot}
                 expandedPageIds={shownExpanded}
                 activePageId={activePageId}

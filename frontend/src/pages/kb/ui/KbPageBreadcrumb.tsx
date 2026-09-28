@@ -4,7 +4,7 @@ import { useKbFrameSpace } from '@/widgets/kb-frame';
 
 export interface KbPageBreadcrumbProps {
   workspaceSlug: string;
-  workspaceName?: string;
+  workspaceName: string;
   /** 今のページのスペース。枠が持つスペースと一致したときだけ、その名前を段として出す。 */
   spaceId: string;
   /** 閲覧できる祖先だけが根から順に入る。見えない祖先は行ごと無い（穴があき得る）。 */
@@ -32,7 +32,7 @@ export default function KbPageBreadcrumb({ workspaceSlug, workspaceName, spaceId
   return (
     <nav aria-label="ページの場所" className="mb-2 flex min-w-0 flex-wrap items-center gap-1 text-xs text-[var(--color-text-muted)]">
       <Link to={`/kb/spaces?workspace=${encodeURIComponent(workspaceSlug)}`} className={CRUMB_LINK_CLASS}>
-        {workspaceName ?? workspaceSlug}
+        {workspaceName}
       </Link>
       {space && (
         <span className="flex min-w-0 items-center gap-1">

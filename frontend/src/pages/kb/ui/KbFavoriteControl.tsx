@@ -5,7 +5,7 @@ import KbFavoriteButton from './KbFavoriteButton';
 export interface KbFavoriteControlProps {
   workspaceSlug: string;
   pageId: string;
-  /** ページの応答の isFavorite（旧応答では undefined = 入れていない扱い）。 */
+  /** ページの応答の isFavorite。 */
   initial: boolean;
 }
 

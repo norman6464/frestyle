@@ -6,9 +6,8 @@ import KbPageMeta from './KbPageMeta';
  * 題名の下に出すバイライン（見本 3a）。左から 最終編集 → 公開範囲 → ラベル → 権限の印、
  * 右端に 閲覧数・読了時間・保存状態。
  *
- * lastEditedBy / lastEditedAt が無ければその部分だけ省く（旧応答・未保存のページの
- * どちらも該当し得るので、無いことを匂わせる空欄は置かない）。公開範囲・保存状態は
- * それでも要るので、行ごとは消さない。
+ * lastEditedBy / lastEditedAt が無ければ（まだ保存の記録が無いページ）その部分だけ省く
+ * （無いことを匂わせる空欄は置かない）。公開範囲・保存状態はそれでも要るので、行ごとは消さない。
  */
 const meta = {
   title: 'pages/kb/KbPageMeta',
@@ -18,6 +17,8 @@ const meta = {
     lastEditedBy: { userId: 1, name: '田中 太郎' },
     // 'Z' を付けない — 実行環境のタイムゾーンによらず、書いたとおりの時刻として読める。
     lastEditedAt: '2026-09-06T13:05:00',
+    visibility: 'space',
+    labels: [],
   },
 } satisfies Meta<typeof KbPageMeta>;
 
@@ -40,7 +41,7 @@ export const 名前が引けない: Story = {
   },
 };
 
-/** まだ一度も保存されていない（旧応答も同じ形）。最終編集の部分だけ省き、公開範囲は出す。 */
+/** まだ一度も保存されていない。最終編集の部分だけ省き、公開範囲は出す。 */
 export const 最終編集が無い: Story = {
   args: { lastEditedBy: null, lastEditedAt: null },
   play: async ({ canvasElement }) => {
