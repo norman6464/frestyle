@@ -1,7 +1,7 @@
 import apiClient from '@/shared/api/axios';
 import { toArray } from '@/shared/lib/toArray';
 import { PROJECT_API } from '@/shared/config/apiRoutes';
-import type { CreateProjectInput, Project } from '../model/types';
+import type { CreateProjectInput, Project, ProjectLocation } from '../model/types';
 
 export const ProjectRepository = {
   /** GET /workspaces/:slug/projects（key 順）。 */
@@ -13,6 +13,15 @@ export const ProjectRepository = {
   /** GET /workspaces/:slug/projects/:projectId。 */
   async fetchProject(workspaceSlug: string, projectId: string): Promise<Project> {
     const res = await apiClient.get<Project>(PROJECT_API.project(workspaceSlug, projectId));
+    return res.data;
+  },
+
+  /**
+   * GET /projects/:projectId。プロジェクトの所在（どのワークスペースのプロジェクトか）。
+   * 所属していないワークスペースのプロジェクトは、存在しない ID と同じ 404 になる。
+   */
+  async resolveProject(projectId: string): Promise<ProjectLocation> {
+    const res = await apiClient.get<ProjectLocation>(PROJECT_API.resolveProject(projectId));
     return res.data;
   },
 

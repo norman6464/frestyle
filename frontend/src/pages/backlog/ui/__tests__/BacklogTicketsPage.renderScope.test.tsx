@@ -51,6 +51,12 @@ function stubs(): [string, (config: InternalAxiosRequestConfig) => unknown][] {
     ['/workspaces/acme/projects/p-1/saved-filters', () => ({ savedFilters: [] })],
     ['/workspaces/acme/projects/p-1/sprints', () => ({ sprints: [] })],
     ['/workspaces/acme/projects', () => ({ projects: [{ id: 'p-1', workspaceId: 'w-1', key: 'frestyle', name: 'frestyle', createdAt: '', updatedAt: '' }] })],
+    // プロジェクトの所在（親ルートが引く）。前を付けて `/workspaces/acme/projects/p-1/…` に当てない。
+    ['/api/v2/projects/p-1', () => ({
+      workspaceSlug: 'acme',
+      workspaceName: '開発チーム',
+      project: { id: 'p-1', workspaceId: 'w-1', key: 'frestyle', name: 'frestyle', createdAt: '', updatedAt: '' },
+    })],
     // 人の一覧は `/kb/workspaces` より先に置く（後ろだと、ワークスペースの一覧が当たる）。
     ['/kb/workspaces/acme/members', () => [{ principalId: 'pr-1', userId: 1, name: '川野 拓馬' }]],
     ['/kb/workspaces', () => [{ slug: 'acme', name: '開発チーム', createdAt: '', canManage: true }]],

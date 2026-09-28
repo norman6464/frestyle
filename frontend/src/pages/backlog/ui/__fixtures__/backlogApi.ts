@@ -6,7 +6,7 @@ import type { ApiStubs } from '../../../../../.storybook/decorators';
  */
 
 export const workspaces = [{ slug: 'acme', name: '開発チーム', createdAt: '2026-01-01T00:00:00Z', canManage: true }];
-const projects = [
+export const projects = [
   { id: 'p-1', workspaceId: 'w-1', key: 'frestyle', name: 'frestyle', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
 ];
 
@@ -68,6 +68,9 @@ export function baseApi(over: ApiStubs = {}): ApiStubs {
     '/workspaces/acme/projects/p-1/tickets': { tickets: [ticket({})] },
     '/workspaces/acme/projects/p-1/saved-filters': { savedFilters: [] },
     '/workspaces/acme/projects': { projects },
+    // プロジェクトの所在（親ルートが URL のプロジェクトのワークスペースを引く口）。`/projects/p-1` のままだと
+    // `/workspaces/acme/projects/p-1/…` にも部分一致するので、前を付けて所在の口だけに当てる。
+    '/api/v2/projects/p-1': { workspaceSlug: 'acme', workspaceName: '開発チーム', project: projects[0] },
     // 担当の名前と選択肢の元（ワークスペースに属する人）。`/kb/workspaces` より先に置く
     // （後ろだと、人の一覧の宛先にワークスペースの一覧が当たる）。
     '/kb/workspaces/acme/members': [{ principalId: 'pr-1', userId: 1, name: '川野 拓馬' }],

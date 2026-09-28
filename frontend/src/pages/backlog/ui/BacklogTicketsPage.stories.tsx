@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import BacklogTicketsPage from './BacklogTicketsPage';
 import { backlogRoute, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
-import { baseApi, sprintApi, ticket, workspaces } from './__fixtures__/backlogApi';
+import { baseApi, projects, sprintApi, ticket } from './__fixtures__/backlogApi';
 
 /**
  * 本番と同じくバックログの親ルートの中に置く。親ルートがプロジェクトを取りに行くので、経路は
@@ -60,12 +60,13 @@ export const プロジェクトを読み込めない: Story = {
     route,
     withApi(
       baseApi({
-        '/kb/workspaces': (() => {
+        // 親ルートは所在の口でプロジェクトのワークスペースを引く。最初の 1 回だけ届かない。
+        '/api/v2/projects/p-1': (() => {
           let calls = 0;
           return () => {
             calls += 1;
             if (calls === 1) throw new Error('offline');
-            return workspaces;
+            return { workspaceSlug: 'acme', workspaceName: '開発チーム', project: projects[0] };
           };
         })(),
       }),
