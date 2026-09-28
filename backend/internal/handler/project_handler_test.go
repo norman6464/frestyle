@@ -92,6 +92,7 @@ func (f *projectFakeRepo) RenameProject(_ context.Context, workspaceID, projectI
 
 type projectFixture struct {
 	projects *projectFakeRepo
+	pages    *kbFakePages
 	router   *gin.Engine
 }
 
@@ -121,7 +122,7 @@ func newProjectFixture(uid uint64, role domain.GrantRole) projectFixture {
 		})
 	}
 	registerProjectRoutesWith(g, projects, perms, pages)
-	return projectFixture{projects: projects, router: r}
+	return projectFixture{projects: projects, pages: pages, router: r}
 }
 
 func (f projectFixture) do(t *testing.T, method, path, body string) *httptest.ResponseRecorder {
@@ -275,4 +276,18 @@ func Test_プロジェクトの解決_未認証は401(t *testing.T) {
 	w := f.do(t, http.MethodGet, projectResolvePath+"project-mine", "")
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// 所属の判定は解決した slug で行う。所在を引いてから判定するまでの間に slug が消されて別の
+// ワークスペースに付け直されても、そのワークスペースの所属でプロジェクトを返さない
+// （判定が返したワークスペースと、プロジェクトのワークスペースが同じことを確かめる）。
+func Test_プロジェクトの解決_slugが別のワークスペースを指していたら返さない(t *testing.T) {
+	f := newProjectFixture(kbUserID, domain.GrantRoleViewer)
+	// 所在の口が見るのは古いワークスペース（ID は別・slug は今の所属先と同じ）。
+	f.pages.workspaces["acme-before-reuse"] = &domain.Workspace{ID: "ws-before-reuse", Slug: kbWorkspaceSlug, IsActive: true}
+	f.addProject("project-old", "ws-before-reuse")
+
+	w := f.do(t, http.MethodGet, projectResolvePath+"project-old", "")
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 }

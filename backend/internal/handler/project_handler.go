@@ -125,11 +125,19 @@ func (h *ProjectHandler) ResolveByID(c *gin.Context) {
 	// 解決はテナント確定前の読みなので、**ここで必ず**そのワークスペースで判定を通す。判定は
 	// slug の経路（一覧・1 件の取得が通る middleware）と同じ ResolveWorkspaceUseCase を、解決した
 	// slug でそのまま使う。所属していなければ ErrWorkspaceNotFound で、存在しない ID と同じ 404。
-	if _, err := h.resolveWorkspace.Execute(c.Request.Context(), kb.ResolveWorkspaceInput{
+	ws, err := h.resolveWorkspace.Execute(c.Request.Context(), kb.ResolveWorkspaceInput{
 		Slug:   loc.Workspace.Slug,
 		UserID: uid,
-	}); err != nil {
+	})
+	if err != nil {
 		respondProjectErr(c, err)
+		return
+	}
+	// slug で判定したワークスペースが、プロジェクトのワークスペースと同じことも確かめる。所在を
+	// 引いてから判定するまでの間に slug が消されて別のワークスペースに付け直されると、そちらの
+	// 所属で通ってしまうため（存在しない ID と同じ 404 に落とす）。
+	if ws.ID != loc.Workspace.ID {
+		respondProjectErr(c, repository.ErrProjectNotFound)
 		return
 	}
 	c.JSON(http.StatusOK, dto.ResolvedProjectFromDomain(&loc.Workspace, &loc.Project))
