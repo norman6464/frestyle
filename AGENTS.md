@@ -81,7 +81,7 @@ app > pages > widgets > features > entities > shared
 - **pages**: one screen = one Slice. Hooks / components used only by that screen live alongside it in `pages/<slice>/{ui,model,lib,config}`
 - **widgets**: self-contained UI blocks that combine several features (e.g. `app-shell` = header + sidebar + command palette)
 - **features**: reusable user actions (e.g. `auth` = login / logout / fetching auth state)
-- **entities**: business "things" (`course` / `exercise` / `user` / `note` / `ai-chat`, etc.). `api` (repository) / `model` (types, slice) / `ui` (standalone display)
+- **entities**: business "things" (`kb` / `workspace` / `ticket` / `project` / `user`, etc.). `api` (repository, query options) / `model` (types, hooks) / `ui` (standalone display)
 - **shared**: reusable assets with no business knowledge. UI kit (`shared/ui`) / axios (`shared/api`) / generic hooks and functions (`shared/lib`) / typed Redux hooks (`shared/lib/store`) / constants (`shared/config`)
 
 **Rules (the boundary lint in `eslint.config.js` enforces them as `error` in CI)**

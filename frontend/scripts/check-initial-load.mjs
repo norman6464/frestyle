@@ -4,7 +4,7 @@
  * dist/index.html が読み込む JS（script と modulepreload）から始め、そこから静的に import される塊を
  * すべてたどる（`import("./x.js")` の遅延読み込みは数えない）。ファイル名の決め打ちで数えると、ビルドが
  * 共有の部分を別の名前の塊（例: 認証まわり・アイコン）へ分けたときに数え漏れ、コードを少し変えただけで
- * 数字が大きく揺れる（以前の size-limit の設定がそうだった）。
+ * 数字が大きく揺れる。
  *
  * 使い方: pnpm run build のあとに pnpm run size（ビルドもする）/ node scripts/check-initial-load.mjs
  */

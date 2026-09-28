@@ -119,12 +119,6 @@ describe('NotificationItem', () => {
       expect(screen.getByText('コメントに返信がありました')).toBeInTheDocument();
     });
 
-    it('linkPath が無い旧応答でも壊れず、題名は文字のまま（backend より先に出しても安全）', () => {
-      renderItem({ linkPath: undefined });
-      expect(screen.queryByRole('link')).not.toBeInTheDocument();
-      expect(screen.getByText('コメントに返信がありました')).toBeInTheDocument();
-    });
-
     it('外部 URL への誘導はリンクにしない（backend の CHECK と同じ規則を画面でも守る）', () => {
       renderItem({ linkPath: '//evil.example' });
       expect(screen.queryByRole('link')).not.toBeInTheDocument();

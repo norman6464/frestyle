@@ -107,7 +107,7 @@ const ENTITY_SAME_LAYER_PATTERN = {
 /*
  * Slice の自己参照禁止（テストも対象にする）。
  *
- * `entities/note/api/noteRepository.ts` が `@/entities/note`（自分の barrel）を参照すると
+ * `entities/kb/api/kbRepository.ts` が `@/entities/kb`（自分の公開口）を参照すると
  * 循環になるうえ、テストで自分の barrel を読むと Slice 内の全ファイルが読み込まれて
  * カバレッジの分母に未テストのファイルまで入る。自分の Slice 内は相対パスで参照する。
  *

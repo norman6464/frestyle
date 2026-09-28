@@ -44,13 +44,13 @@ const AssignedPage = lazyWithReload(
   () => import('@/pages/assigned').then((m) => ({ default: m.AssignedPage })),
   'AssignedPage',
 );
-const KbBacklogPage = lazyWithReload(
-  () => import('@/pages/backlog').then((m) => ({ default: m.KbBacklogPage })),
-  'KbBacklogPage',
+const BacklogPage = lazyWithReload(
+  () => import('@/pages/backlog').then((m) => ({ default: m.BacklogPage })),
+  'BacklogPage',
 );
-const KbTicketPage = lazyWithReload(
-  () => import('@/pages/backlog').then((m) => ({ default: m.KbTicketPage })),
-  'KbTicketPage',
+const TicketPage = lazyWithReload(
+  () => import('@/pages/backlog').then((m) => ({ default: m.TicketPage })),
+  'TicketPage',
 );
 const InvitationsPage = lazyWithReload(
   () => import('@/pages/invitations').then((m) => ({ default: m.InvitationsPage })),
@@ -203,11 +203,11 @@ export default function App() {
         <Route path="/assigned" element={<AssignedPage />} />
         {/* バックログの面は経路が持つ。戻る・進む・リンクの共有がそのまま効くようにするため、
             問い合わせ文字列（?tab=）ではなくパスの段に出す。 */}
-        <Route path="/backlog" element={<KbBacklogPage />} />
-        <Route path="/backlog/:projectId" element={<KbBacklogPage view="backlog" />} />
-        <Route path="/backlog/:projectId/settings" element={<KbBacklogPage view="settings" />} />
-        <Route path="/backlog/:projectId/archive" element={<KbBacklogPage view="archive" />} />
-        <Route path="/tickets/:ticketId" element={<KbTicketPage />} />
+        <Route path="/backlog" element={<BacklogPage />} />
+        <Route path="/backlog/:projectId" element={<BacklogPage view="backlog" />} />
+        <Route path="/backlog/:projectId/settings" element={<BacklogPage view="settings" />} />
+        <Route path="/backlog/:projectId/archive" element={<BacklogPage view="archive" />} />
+        <Route path="/tickets/:ticketId" element={<TicketPage />} />
         <Route path="/notifications" element={<NotificationPage />} />
         {/* 自分宛の招待。通知の飛び先で、/invite からログインした後の戻り先。 */}
         <Route path="/invitations" element={<InvitationsPage />} />

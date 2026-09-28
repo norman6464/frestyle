@@ -18,7 +18,8 @@ export interface SprintCardProps {
   onRemoveTicket?: (ticketId: string) => void;
   /**
    * スプリントの中で 1 つ動かす。バックログの並べ替えと同じ「ボタンで動かす」流儀に揃える
-   * （ドラッグは入れない。BacklogReorderBar の doc 参照）。
+   * （ドラッグは入れない。キーボードだけで完結し、依存も増やさない。ボタンは選択中の帯
+   * BacklogSelectionBand に集まっている）。
    */
   onMoveTicket?: (ticketId: string, anchorTicketId: string, anchorAfter: boolean) => void;
 }

@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import apiClient from '@/shared/api/axios';
-import KbBacklogPage from '../KbBacklogPage';
+import BacklogPage from '../BacklogPage';
 import { queryWrapper } from '@/test/queryClient';
 
 // 行は本物を描き、チケットごとに描かれた回数だけ数える。本物の行は memo なので、数える包みも
@@ -82,7 +82,7 @@ async function renderReady() {
   render(
     <MemoryRouter initialEntries={['/backlog/p-1']}>
       <Routes>
-        <Route path="/backlog/:projectId" element={<KbBacklogPage view="backlog" />} />
+        <Route path="/backlog/:projectId" element={<BacklogPage view="backlog" />} />
       </Routes>
     </MemoryRouter>, { wrapper: queryWrapper() },
   );
@@ -95,7 +95,7 @@ async function renderReady() {
   hoisted.rowRenders = {};
 }
 
-describe('KbBacklogPage の描き直しの範囲', () => {
+describe('BacklogPage の描き直しの範囲', () => {
   it('行の部品は memo（渡すものが変わらない限り描き直さない）', async () => {
     const actual = await vi.importActual<typeof import('../BacklogRow')>('../BacklogRow');
     expect((actual.default as unknown as { $$typeof: symbol }).$$typeof).toBe(Symbol.for('react.memo'));
