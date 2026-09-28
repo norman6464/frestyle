@@ -6,8 +6,11 @@ import { useKbInvitations } from '../useKbInvitations';
 
 const hoisted = vi.hoisted(() => ({ fetchInvitations: vi.fn(), inviteByEmail: vi.fn() }));
 
-vi.mock('@/entities/kb/api/kbRepository', () => ({
-  default: { fetchInvitations: hoisted.fetchInvitations, inviteByEmail: hoisted.inviteByEmail },
+vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
+  default: {
+    fetchInvitations: hoisted.fetchInvitations,
+    inviteByEmail: hoisted.inviteByEmail,
+  },
 }));
 
 function status(code: number): AxiosError {

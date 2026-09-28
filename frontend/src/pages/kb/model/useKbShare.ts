@@ -7,9 +7,9 @@ import {
   kbKeys,
   kbPageGrantsQuery,
   type KbGrantablePrincipal,
-  type KbGrantRole,
   type KbPageGrant,
 } from '@/entities/kb';
+import type { GrantRole } from '@/entities/workspace';
 import type { SharePrincipal, ShareRow } from '@/features/permission-sharing';
 
 export interface NoteShareState {
@@ -121,7 +121,7 @@ export function useKbShare(workspaceSlug: string | undefined, pageId: string | u
   );
 
   const grant = useCallback(
-    (principalId: string, role: KbGrantRole) =>
+    (principalId: string, role: GrantRole) =>
       write((slug, page) => KbRepository.grantPageRole(slug, page, principalId, role)),
     [write],
   );

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { AxiosError } from 'axios';
-import type { KbInvitation } from '@/entities/kb';
+import type { Invitation } from '@/entities/workspace';
 import KbInvitationsPage from './KbInvitationsPage';
 import { kbWorkspaceAdminRoute, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
 
@@ -37,7 +37,7 @@ function baseApi(over: ApiStubs = {}): ApiStubs {
   };
 }
 
-const invitation = (over: Partial<KbInvitation> = {}): KbInvitation => ({
+const invitation = (over: Partial<Invitation> = {}): Invitation => ({
   id: 'inv-1',
   scope: 'workspace',
   role: 'editor',
@@ -59,7 +59,7 @@ const invitation = (over: Partial<KbInvitation> = {}): KbInvitation => ({
  * 招待 API の見本。一覧は rows を返し、発行・取消は rows を書き換える（成功後に引き直す
  * 画面の動きが見本でも再現される）。突き合わせは前から順なので、細かい宛先を先に書く。
  */
-function invitationApi(rows: KbInvitation[]): ApiStubs {
+function invitationApi(rows: Invitation[]): ApiStubs {
   const state = { rows };
   return {
     '/kb/workspaces/acme/invitations/inv-1/resend': () => ({
@@ -74,7 +74,7 @@ function invitationApi(rows: KbInvitation[]): ApiStubs {
     '/kb/workspaces/acme/invitations': (config: { method?: string; data?: unknown }) => {
       if (config.method === 'post') {
         const body = JSON.parse(String(config.data)) as { email: string; name?: string; role: string };
-        const created = invitation({ id: 'inv-new', email: body.email.trim().toLowerCase(), inviteeName: body.name ?? '', role: body.role as KbInvitation['role'] });
+        const created = invitation({ id: 'inv-new', email: body.email.trim().toLowerCase(), inviteeName: body.name ?? '', role: body.role as Invitation['role'] });
         state.rows = [created, ...state.rows];
         return { invitation: created, token: 'fresh-token-abc', mailStatus: 'sent' };
       }

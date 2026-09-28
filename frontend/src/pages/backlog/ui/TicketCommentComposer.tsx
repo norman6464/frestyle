@@ -5,7 +5,7 @@ import { Placeholder } from '@tiptap/extensions';
 import Link from '@tiptap/extension-link';
 import { isAllowedLinkHref, LinkUrlForm } from '@/shared/ui/RichTextEditor';
 import { FormatIcon, type FormatIconName } from '@/shared/ui';
-import type { KbWorkspaceMember } from '@/entities/kb';
+import type { WorkspaceMember } from '@/entities/workspace';
 import type { TicketCommentBlock } from '@/entities/ticket';
 import { CommentComposerEnter, Mention, setMentionMembers } from './mentionExtension';
 import { editorContentToBlocks, isEditorContentEmpty, blocksToEditorContent } from '../lib/mentionComposerContent';
@@ -14,7 +14,7 @@ export interface TicketCommentComposerProps {
   /** 失敗は投げてくる前提（投げられたら入力を保つ）。 */
   onSubmit: (body: TicketCommentBlock[]) => Promise<void>;
   /** '@' の候補。ワークスペースに属する人（useWorkspaceMembers）。 */
-  members: KbWorkspaceMember[];
+  members: WorkspaceMember[];
   /** 発言の編集を開いたときの下書きの種。省略時は空欄から始める。 */
   initialBlocks?: TicketCommentBlock[];
   /** initialBlocks の mention に表示名を当てる（引けなければ「不明なユーザー」）。 */
@@ -165,7 +165,7 @@ export default function TicketCommentComposer({
   };
 
   /** 名前を 1 件挿し込む（'@' を打たずに候補から選ぶ経路）。 */
-  const insertMention = (member: KbWorkspaceMember) => {
+  const insertMention = (member: WorkspaceMember) => {
     if (!editor || editor.isDestroyed) return;
     editor
       .chain()

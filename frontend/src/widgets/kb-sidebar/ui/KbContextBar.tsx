@@ -1,11 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
 import { FsIcon } from '@/shared/ui';
-import type { KbSpace, KbWorkspace } from '@/entities/kb';
+import type { KbSpace } from '@/entities/kb';
+import type { Workspace } from '@/entities/workspace';
 import KbWorkspaceSwitcher from './KbWorkspaceSwitcher';
 import KbSpaceSwitcher from './KbSpaceSwitcher';
 
 export interface KbContextBarProps {
-  workspaces: KbWorkspace[];
+  workspaces: Workspace[];
   activeSlug: string | null;
   onSelectWorkspace: (slug: string) => void;
   onCreateWorkspace: (input: { name: string }) => Promise<void>;

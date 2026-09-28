@@ -6,7 +6,7 @@ import { useBacklogProject } from '../useBacklogProject';
 
 const hoisted = vi.hoisted(() => ({ fetchWorkspaces: vi.fn(), fetchProjects: vi.fn() }));
 
-vi.mock('@/entities/kb/api/kbRepository', () => ({
+vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
   default: { fetchWorkspaces: hoisted.fetchWorkspaces },
 }));
 vi.mock('@/entities/project/api/projectRepository', () => ({

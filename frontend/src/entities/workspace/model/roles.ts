@@ -1,4 +1,4 @@
-import type { KbGrantRole } from './types';
+import type { GrantRole } from './types';
 
 /**
  * 役割の呼び名。画面に出す日本語はここにだけ置く（画面ごとに表を持つと、同じ役割が画面に
@@ -7,7 +7,7 @@ import type { KbGrantRole } from './types';
  * 値（admin / editor / commenter / viewer）は backend の domain.GrantRole と同じで、画面には
  * 出さない。
  */
-export const KB_ROLE_LABEL: Readonly<Record<KbGrantRole, string>> = {
+export const GRANT_ROLE_LABEL: Readonly<Record<GrantRole, string>> = {
   admin: '管理者',
   editor: '編集者',
   commenter: 'コメント可',
@@ -15,7 +15,7 @@ export const KB_ROLE_LABEL: Readonly<Record<KbGrantRole, string>> = {
 };
 
 /** 役割でできること（招待の選択肢や、招待の案内に添える）。 */
-export const KB_ROLE_DESCRIPTION: Readonly<Record<KbGrantRole, string>> = {
+export const GRANT_ROLE_DESCRIPTION: Readonly<Record<GrantRole, string>> = {
   admin: 'メンバーと権限の管理もできる',
   editor: 'ページを作り、編集できる',
   commenter: '閲覧とコメントができる',
@@ -23,23 +23,23 @@ export const KB_ROLE_DESCRIPTION: Readonly<Record<KbGrantRole, string>> = {
 };
 
 /** 強い順。選択肢はこの順に並べる（一覧と追加で並びが食い違わないよう、1 つだけ持つ）。 */
-export const KB_ROLES_STRONGEST_FIRST: ReadonlyArray<KbGrantRole> = ['admin', 'editor', 'commenter', 'viewer'];
+export const GRANT_ROLES_STRONGEST_FIRST: ReadonlyArray<GrantRole> = ['admin', 'editor', 'commenter', 'viewer'];
 
-function isKbGrantRole(value: string): value is KbGrantRole {
-  return (KB_ROLES_STRONGEST_FIRST as ReadonlyArray<string>).includes(value);
+function isGrantRole(value: string): value is GrantRole {
+  return (GRANT_ROLES_STRONGEST_FIRST as ReadonlyArray<string>).includes(value);
 }
 
 /**
- * kbRoleLabel は役割の値を呼び名にする。知らない値（backend が先に増やした場合など）は、
+ * grantRoleLabel は役割の値を呼び名にする。知らない値（backend が先に増やした場合など）は、
  * 空欄にせずそのまま出す（何かが出ていれば、読めない値だと気づける）。
  */
-export function kbRoleLabel(role: string | null | undefined): string {
+export function grantRoleLabel(role: string | null | undefined): string {
   if (!role) return '';
-  return isKbGrantRole(role) ? KB_ROLE_LABEL[role] : role;
+  return isGrantRole(role) ? GRANT_ROLE_LABEL[role] : role;
 }
 
-/** kbRoleDescription は役割でできること。知らない値は空文字。 */
-export function kbRoleDescription(role: string | null | undefined): string {
+/** grantRoleDescription は役割でできること。知らない値は空文字。 */
+export function grantRoleDescription(role: string | null | undefined): string {
   if (!role) return '';
-  return isKbGrantRole(role) ? KB_ROLE_DESCRIPTION[role] : '';
+  return isGrantRole(role) ? GRANT_ROLE_DESCRIPTION[role] : '';
 }

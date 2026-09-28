@@ -1,18 +1,21 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { AxiosError, AxiosHeaders } from 'axios';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { kbKeys } from '@/entities/kb/api/kbQueries';
-import type { KbAdminWorkspaceMember } from '@/entities/kb/model/types';
+import { workspaceKeys } from '@/entities/workspace/api/workspaceQueries';
+import type { AdminWorkspaceMember } from '@/entities/kb/model/types';
 import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 import { useKbAdminMembers } from '../useKbAdminMembers';
 
 const hoisted = vi.hoisted(() => ({ fetchAdminMembers: vi.fn(), suspendMember: vi.fn() }));
 
-vi.mock('@/entities/kb/api/kbRepository', () => ({
-  default: { fetchAdminMembers: hoisted.fetchAdminMembers, suspendMember: hoisted.suspendMember },
+vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
+  default: {
+    fetchAdminMembers: hoisted.fetchAdminMembers,
+    suspendMember: hoisted.suspendMember,
+  },
 }));
 
-const member = (userId: number, suspended = false): KbAdminWorkspaceMember => ({
+const member = (userId: number, suspended = false): AdminWorkspaceMember => ({
   userId,
   principalId: `p-${userId}`,
   name: `人${userId}`,
@@ -47,7 +50,7 @@ describe('useKbAdminMembers', () => {
 
   it('書き込みが成功したら一覧を丸ごと取り直し、取り直しを待ってから返す。名指しの候補も古くする', async () => {
     const client = createTestQueryClient();
-    client.setQueryData(kbKeys.members('acme'), []);
+    client.setQueryData(workspaceKeys.members('acme'), []);
     const { result } = renderHook(() => useKbAdminMembers('acme'), { wrapper: queryWrapper(client) });
     await waitFor(() => expect(result.current.members).toHaveLength(2));
     hoisted.fetchAdminMembers.mockResolvedValue([member(1), member(2, true)]);
@@ -62,10 +65,10 @@ describe('useKbAdminMembers', () => {
     });
 
     expect(hoisted.fetchAdminMembers).toHaveBeenCalledTimes(2);
-    const members = client.getQueryData<KbAdminWorkspaceMember[]>(kbKeys.adminMembers('acme'));
+    const members = client.getQueryData<AdminWorkspaceMember[]>(workspaceKeys.adminMembers('acme'));
     expect(members?.find(({ userId }) => userId === 2)?.accountStatus).toBe('suspended');
     expect(result.current.members.find(({ userId }) => userId === 2)?.accountStatus).toBe('suspended');
-    expect(client.getQueryState(kbKeys.members('acme'))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(workspaceKeys.members('acme'))?.isInvalidated).toBe(true);
     await waitFor(() => expect(result.current.busyUserId).toBeNull());
   });
 

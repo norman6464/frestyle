@@ -1,5 +1,6 @@
 import { findAcrossLists, firstAcrossLists, type OwnedListState } from '@/shared/lib/acrossLists';
-import type { KbMySpace, KbWorkspace } from './types';
+import type { Workspace } from '@/entities/workspace/@x/kb';
+import type { KbMySpace } from './types';
 
 /** 1 つのワークスペースの「自分が役割を持つスペースの一覧」の、今の取り具合。 */
 export interface MySpacesState {
@@ -29,7 +30,7 @@ export interface ResolvedKbSpace {
  * 「すべてのスペース」が対象ワークスペースを持ち越すため）。所属に無い slug
  * （招待の取り消し等）は無視し、所属の順のまま返す。
  */
-export function orderWorkspaces(workspaces: KbWorkspace[], preferredWorkspaceSlug?: string): KbWorkspace[] {
+export function orderWorkspaces(workspaces: Workspace[], preferredWorkspaceSlug?: string): Workspace[] {
   if (!preferredWorkspaceSlug || !workspaces.some((w) => w.slug === preferredWorkspaceSlug)) return workspaces;
   return [
     ...workspaces.filter((w) => w.slug === preferredWorkspaceSlug),

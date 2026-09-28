@@ -40,15 +40,6 @@ describe('KbRepository', () => {
     await expect(KbRepository.fetchRecentPages()).resolves.toEqual([]);
   });
 
-  it('fetchWorkspaces は GET /kb/workspaces で配列を返す', async () => {
-    mockGet.mockResolvedValue({ data: [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-08-01T00:00:00Z' }] });
-
-    const list = await KbRepository.fetchWorkspaces();
-
-    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces');
-    expect(list).toHaveLength(1);
-  });
-
   it('fetchSpaces は slug を URL に埋める', async () => {
     mockGet.mockResolvedValue({ data: [] });
 
@@ -61,22 +52,7 @@ describe('KbRepository', () => {
     // 0 件を null で返されると map / for-of が落ちて画面が開けなくなる。
     mockGet.mockResolvedValue({ data: null });
 
-    await expect(KbRepository.fetchWorkspaces()).resolves.toEqual([]);
     await expect(KbRepository.fetchSpaces('acme')).resolves.toEqual([]);
-  });
-
-  it('fetchMembers は GET /kb/workspaces/:slug/members を叩き、裸の配列をそのまま返す', async () => {
-    mockGet.mockResolvedValue({ data: [{ principalId: 'p-1', userId: 42, name: '田中 太郎' }] });
-
-    const members = await KbRepository.fetchMembers('acme');
-
-    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/workspaces/acme/members');
-    expect(members).toEqual([{ principalId: 'p-1', userId: 42, name: '田中 太郎' }]);
-  });
-
-  it('fetchMembers も null 応答は空配列にする', async () => {
-    mockGet.mockResolvedValue({ data: null });
-    await expect(KbRepository.fetchMembers('acme')).resolves.toEqual([]);
   });
 
   describe('fetchPageTree', () => {

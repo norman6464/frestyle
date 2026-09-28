@@ -10,7 +10,6 @@ import {
   kbSpacesQuery,
   refreshKbPageTrees,
   reflectKbPageInTrees,
-  kbWorkspacesQuery,
   emitKbTreeEvent,
   collectKbAncestorIds,
   forgetVisitedPageIfMatches,
@@ -20,10 +19,10 @@ import {
   type KbPage,
   type KbPageTree,
   type KbSpace,
-  type KbWorkspace,
 } from '@/entities/kb';
+import { workspacesQuery, type Workspace, WorkspaceRepository } from '@/entities/workspace';
 
-const NO_WORKSPACES: KbWorkspace[] = [];
+const NO_WORKSPACES: Workspace[] = [];
 const NO_SPACES: KbSpace[] = [];
 
 /** 今のスペースの読み込み状態。 */
@@ -62,7 +61,7 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   // 所属ワークスペースの一覧。管理の画面・ホームなどと同じ問い合わせを使い、1 回だけ取る。
   // 読み込み中・失敗の出し方は queryShownState（一覧が 1 度も取れていないときだけ出す。取り直しが
   // 403・404 なら持っている一覧も出さない）。
-  const workspacesResult = useQuery(kbWorkspacesQuery());
+  const workspacesResult = useQuery(workspacesQuery());
   const workspacesView = queryShownState(workspacesResult);
   const workspaces = workspacesView.data ?? NO_WORKSPACES;
   const workspacesLoading = workspacesView.loading;
@@ -88,7 +87,7 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   const [seenWorkspaces, setSeenWorkspaces] = useState(workspacesResult.data);
   if (workspacesResult.data !== seenWorkspaces) {
     setSeenWorkspaces(workspacesResult.data);
-    const listed = (list: KbWorkspace[] | undefined) => list?.some((w) => w.slug === chosenSlug) ?? false;
+    const listed = (list: Workspace[] | undefined) => list?.some((w) => w.slug === chosenSlug) ?? false;
     if (chosenSlug !== null && listed(seenWorkspaces) && !listed(workspacesResult.data)) setChosenSlug(null);
   }
 
@@ -184,11 +183,11 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
    * 作った本人が admin になるので、続けてスペースを作れる。作ったら一覧へ足し、
    * そのワークスペースへ切り替える（作ってから自分で選び直させない）。
    */
-  const createWorkspace = useCallback(async (input: { name: string }): Promise<KbWorkspace> => {
+  const createWorkspace = useCallback(async (input: { name: string }): Promise<Workspace> => {
     // URL に出る slug はサーバーが自動採番する（人に決めさせない）。
-    const workspace = await KbRepository.createWorkspace({ name: input.name });
+    const workspace = await WorkspaceRepository.createWorkspace({ name: input.name });
     // 一覧は管理の画面・ホームと共有している。差し替えればどこにも出る。
-    await reflectWrite(queryClient, kbWorkspacesQuery().queryKey, (prev) =>
+    await reflectWrite(queryClient, workspacesQuery().queryKey, (prev) =>
       prev.some((w) => w.slug === workspace.slug) ? prev : [...prev, workspace],
     );
     setChosenSlug(workspace.slug);

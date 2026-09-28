@@ -2,11 +2,17 @@ import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { reflectWrite } from '@/shared/api/queryCache';
 import { queryShownState } from '@/shared/api/queryState';
-import { KbRepository, kbKeys, kbMyInvitationsQuery, type KbAcceptedInvitation, type KbInvitation } from '@/entities/kb';
+import {
+  myInvitationsQuery,
+  type AcceptedInvitation,
+  type Invitation,
+  WorkspaceRepository,
+  workspaceKeys,
+} from '@/entities/workspace';
 import { getApiError } from '@/shared/lib/classifyApiError';
 
 export interface MyInvitationsState {
-  invitations: KbInvitation[];
+  invitations: Invitation[];
   loading: boolean;
   /**
    * 失敗の理由。'notVerified' は確認済みの email が無いアカウント（403 email_not_verified）—
@@ -17,12 +23,12 @@ export interface MyInvitationsState {
   busyId: string | null;
 }
 
-const NO_INVITATIONS: KbInvitation[] = [];
+const NO_INVITATIONS: Invitation[] = [];
 
 /**
  * useMyInvitations は自分宛の招待の一覧と、承諾・辞退。
  *
- * 一覧は共有の問い合わせ（kbMyInvitationsQuery）から読む。最初は「読み込み中」から始まる
+ * 一覧は共有の問い合わせ（myInvitationsQuery）から読む。最初は「読み込み中」から始まる
  * （読み込み前を「0 件」で始めると、一瞬「新しい招待はありません」が出てから一覧に替わり、
  * 届いているのに無いと読める）。
  *
@@ -34,7 +40,7 @@ const NO_INVITATIONS: KbInvitation[] = [];
  */
 export function useMyInvitations() {
   const queryClient = useQueryClient();
-  const result = useQuery(kbMyInvitationsQuery());
+  const result = useQuery(myInvitationsQuery());
   const { data, loading, failed } = queryShownState(result);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -48,7 +54,7 @@ export function useMyInvitations() {
       setBusyId(invitationId);
       const runAndReflect = async () => {
         const settled = await run();
-        await reflectWrite(queryClient, kbMyInvitationsQuery().queryKey, (prev) =>
+        await reflectWrite(queryClient, myInvitationsQuery().queryKey, (prev) =>
           prev.filter((inv) => inv.id !== invitationId),
         );
         return settled;
@@ -60,9 +66,9 @@ export function useMyInvitations() {
 
   /** 承諾する。成功したら入った先を返し、一覧から外す。 */
   const accept = useCallback(
-    async (invitationId: string): Promise<KbAcceptedInvitation> => {
-      const accepted = await settle(invitationId, () => KbRepository.acceptInvitation(invitationId));
-      void queryClient.invalidateQueries({ queryKey: kbKeys.workspaces() });
+    async (invitationId: string): Promise<AcceptedInvitation> => {
+      const accepted = await settle(invitationId, () => WorkspaceRepository.acceptInvitation(invitationId));
+      void queryClient.invalidateQueries({ queryKey: workspaceKeys.all() });
       return accepted;
     },
     [settle, queryClient],
@@ -71,7 +77,7 @@ export function useMyInvitations() {
   /** 辞退する。成功したら一覧から外す。 */
   const decline = useCallback(
     async (invitationId: string): Promise<void> => {
-      await settle(invitationId, () => KbRepository.declineInvitation(invitationId));
+      await settle(invitationId, () => WorkspaceRepository.declineInvitation(invitationId));
     },
     [settle],
   );

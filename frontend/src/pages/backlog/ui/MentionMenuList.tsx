@@ -1,11 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { Avatar } from '@/shared/ui';
-import type { KbWorkspaceMember } from '@/entities/kb';
+import type { WorkspaceMember } from '@/entities/workspace';
 
 export interface MentionMenuListProps {
-  items: KbWorkspaceMember[];
+  items: WorkspaceMember[];
   /** 項目確定時に呼ばれる（Enter / クリック）。 */
-  onSelect: (item: KbWorkspaceMember) => void;
+  onSelect: (item: WorkspaceMember) => void;
   /** listbox 要素に付与する id（editor 側の aria-controls と対にする）。 */
   listboxId?: string;
   /**
@@ -21,7 +21,7 @@ export interface MentionMenuListHandle {
   onKeyDown: (event: KeyboardEvent) => boolean;
 }
 
-function optionId(listboxId: string | undefined, item: KbWorkspaceMember): string {
+function optionId(listboxId: string | undefined, item: WorkspaceMember): string {
   return `${listboxId ?? 'ticket-mention'}-option-${item.userId}`;
 }
 

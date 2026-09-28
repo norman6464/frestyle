@@ -1,6 +1,8 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Outlet, useMatch, useParams } from 'react-router-dom';
-import { useWorkspaceList } from '@/entities/kb';
+import { useQueryClient } from '@tanstack/react-query';
+import { forgetKbWorkspace } from '@/entities/kb';
+import { useWorkspaceList } from '@/entities/workspace';
 import KbWorkspaceTabs from './KbWorkspaceTabs';
 import { ErrorNotice, Loading } from '@/shared/ui';
 import { useKbFrameLocation } from '../model/kbFrameLocation';
@@ -19,7 +21,16 @@ import KbAdminOnlyNotice from './KbAdminOnlyNotice';
  */
 export default function KbWorkspaceAdminLayout() {
   const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
-  const { workspaces, loading, error, retry, deleteWorkspace } = useWorkspaceList();
+  const queryClient = useQueryClient();
+  const { workspaces, loading, error, retry, deleteWorkspace: deleteWorkspaceOnly } = useWorkspaceList();
+  // ワークスペースを消したら、ナレッジに固有の後始末（最近のページ・開いているページへの合図）もする。
+  const deleteWorkspace = useCallback(
+    async (slug: string) => {
+      await deleteWorkspaceOnly(slug);
+      forgetKbWorkspace(queryClient, slug);
+    },
+    [deleteWorkspaceOnly, queryClient],
+  );
   const onInvitations = useMatch('/kb/:workspaceSlug/invitations') !== null;
 
   // ナレッジの枠（文脈バーのワークスペース側）の中に出す。スペースを持たない画面なので

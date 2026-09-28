@@ -1,21 +1,21 @@
-import { kbRoleLabel, type KbInvitation } from '@/entities/kb';
+import { grantRoleLabel, type Invitation } from '@/entities/workspace';
 import { Button, Disclosure, EmptyNotice, ErrorNotice, FsIcon, Loading } from '@/shared/ui';
 import { INVITATION_STATUS_CLASS, INVITATION_STATUS_LABEL, formatInvitationDate } from '../lib/invitationMessages';
 
 export interface KbInvitationsSectionProps {
-  invitations: KbInvitation[];
+  invitations: Invitation[];
   loading: boolean;
   /** 取得に失敗した（admin でない場合は画面ごと出し分けるので、ここへは来ない）。 */
   failed: boolean;
   busyId: string | null;
   onRetry: () => void;
-  onResend: (invitation: KbInvitation) => void;
-  onRevoke: (invitation: KbInvitation) => void;
+  onResend: (invitation: Invitation) => void;
+  onRevoke: (invitation: Invitation) => void;
 }
 
 const HEAD_CLASS = 'px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]';
 
-function StatusBadge({ invitation }: { invitation: KbInvitation }) {
+function StatusBadge({ invitation }: { invitation: Invitation }) {
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${INVITATION_STATUS_CLASS[invitation.status]}`}>
       {INVITATION_STATUS_LABEL[invitation.status]}
@@ -83,7 +83,7 @@ export default function KbInvitationsSection({
                     </td>
                     <td role="cell" className="px-3 py-2 md:px-4 md:py-3">
                       <span aria-hidden="true" className="mb-1 block text-xs text-[var(--color-text-muted)] md:hidden">役割</span>
-                      <span className="text-sm text-[var(--color-text-secondary)]">{kbRoleLabel(inv.role)}</span>
+                      <span className="text-sm text-[var(--color-text-secondary)]">{grantRoleLabel(inv.role)}</span>
                     </td>
                     <td role="cell" className="px-3 py-2 md:px-4 md:py-3">
                       <span aria-hidden="true" className="mb-1 block text-xs text-[var(--color-text-muted)] md:hidden">状態</span>
@@ -123,7 +123,7 @@ export default function KbInvitationsSection({
             {history.map((inv) => (
               <li key={inv.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-sm">
                 <span className="min-w-0 flex-1 font-medium text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{inv.email}</span>
-                <span className="text-[var(--color-text-secondary)]">{kbRoleLabel(inv.role)}</span>
+                <span className="text-[var(--color-text-secondary)]">{grantRoleLabel(inv.role)}</span>
                 <StatusBadge invitation={inv} />
                 <span className="text-xs text-[var(--color-text-muted)]">
                   <FsIcon name="clock" className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />

@@ -2,7 +2,7 @@ import { Node, mergeAttributes, type Editor } from '@tiptap/core';
 import { Extension, ReactRenderer } from '@tiptap/react';
 import Suggestion, { type SuggestionProps, type SuggestionKeyDownProps } from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
-import type { KbWorkspaceMember } from '@/entities/kb';
+import type { WorkspaceMember } from '@/entities/workspace';
 import { filterMentionCandidates } from '../lib/filterMentionCandidates';
 import MentionMenuList, { type MentionMenuListHandle, type MentionMenuListProps } from './MentionMenuList';
 
@@ -31,7 +31,7 @@ let listboxSeq = 0;
 
 export interface MentionOptions {
   /** 拡張の生成時点の候補の全件（以降の更新は storage 経由。下記 addStorage 参照）。 */
-  members: KbWorkspaceMember[];
+  members: WorkspaceMember[];
 }
 
 export interface MentionStorage {
@@ -41,7 +41,7 @@ export interface MentionStorage {
    * なく storage に置いて呼び出し側が読み込み完了後に書き換えられるようにする
    * （tiptap の「実行時に変わる値は storage、初期設定は options」という分担）。
    */
-  members: KbWorkspaceMember[];
+  members: WorkspaceMember[];
 }
 
 // editor.storage.mention に型を与える（tiptap 公式の module augmentation。Storage は
@@ -107,7 +107,7 @@ export const Mention = Node.create<MentionOptions, MentionStorage>({
 
   addProseMirrorPlugins() {
     return [
-      Suggestion<KbWorkspaceMember, KbWorkspaceMember>({
+      Suggestion<WorkspaceMember, WorkspaceMember>({
         editor: this.editor,
         char: '@',
         startOfLine: false,
@@ -147,7 +147,7 @@ export const Mention = Node.create<MentionOptions, MentionStorage>({
             renderer = null;
           };
 
-          const menuProps = (props: SuggestionProps<KbWorkspaceMember, KbWorkspaceMember>): MentionMenuListProps => ({
+          const menuProps = (props: SuggestionProps<WorkspaceMember, WorkspaceMember>): MentionMenuListProps => ({
             items: props.items,
             onSelect: (item) => props.command(item),
             listboxId,
@@ -157,7 +157,7 @@ export const Mention = Node.create<MentionOptions, MentionStorage>({
           });
 
           return {
-            onStart: (props: SuggestionProps<KbWorkspaceMember, KbWorkspaceMember>) => {
+            onStart: (props: SuggestionProps<WorkspaceMember, WorkspaceMember>) => {
               listboxSeq += 1;
               listboxId = `ticket-mention-listbox-${listboxSeq}`;
               renderer = new ReactRenderer(MentionMenuList, {
@@ -167,7 +167,7 @@ export const Mention = Node.create<MentionOptions, MentionStorage>({
               setMenuAria(props.editor.view.dom);
               unmount = props.mount(renderer.element);
             },
-            onUpdate: (props: SuggestionProps<KbWorkspaceMember, KbWorkspaceMember>) => {
+            onUpdate: (props: SuggestionProps<WorkspaceMember, WorkspaceMember>) => {
               renderer?.updateProps(menuProps(props));
             },
             onKeyDown: (props: SuggestionKeyDownProps) => {
@@ -177,7 +177,7 @@ export const Mention = Node.create<MentionOptions, MentionStorage>({
               }
               return renderer?.ref?.onKeyDown(props.event) ?? false;
             },
-            onExit: (props: SuggestionProps<KbWorkspaceMember, KbWorkspaceMember>) => {
+            onExit: (props: SuggestionProps<WorkspaceMember, WorkspaceMember>) => {
               close(props.editor.view.dom);
             },
           };
@@ -226,6 +226,6 @@ export const CommentComposerEnter = Extension.create({
  * setMentionMembers は候補の全件を後から書き換える（members の読み込みが遅れて、
  * 先にコンポーザが描画されていた場合に呼び出し側から使う）。
  */
-export function setMentionMembers(editor: Editor, members: KbWorkspaceMember[]): void {
+export function setMentionMembers(editor: Editor, members: WorkspaceMember[]): void {
   editor.storage.mention.members = members;
 }

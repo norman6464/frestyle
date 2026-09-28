@@ -126,12 +126,14 @@ vi.mock('@/entities/kb/api/kbRepository', () => ({
     listOpenSuggestions: hoisted.listOpenSuggestions,
     acceptSuggestion: hoisted.acceptSuggestion,
     rejectSuggestion: hoisted.rejectSuggestion,
-    fetchWorkspaces: hoisted.fetchWorkspaces,
     fetchSpaces: hoisted.fetchSpaces,
     fetchPageTree: hoisted.fetchPageTree,
     addFavorite: hoisted.addFavorite,
     removeFavorite: hoisted.removeFavorite,
   },
+}));
+vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
+  default: { fetchWorkspaces: hoisted.fetchWorkspaces },
 }));
 
 vi.mock('@/entities/kb', async (importOriginal) => {

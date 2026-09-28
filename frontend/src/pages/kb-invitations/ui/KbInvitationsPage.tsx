@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { KbInvitation, KbIssuedInvitation } from '@/entities/kb';
+import type { Invitation, IssuedInvitation } from '@/entities/workspace';
 import { Button, ConfirmModal, FsIcon } from '@/shared/ui';
 import { KbAdminOnlyNotice, useKbWorkspaceAdminOutlet } from '@/widgets/kb-sidebar';
 import { useToast } from '@/shared/lib/hooks/useToast';
@@ -23,15 +23,15 @@ export default function KbInvitationsPage() {
   const invitations = useKbInvitations(workspaceSlug);
   // 招待ダイアログ。issuedForDialog は「再送」の結果（新しいリンク）を見せるために開くときの中身。
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [issuedForDialog, setIssuedForDialog] = useState<KbIssuedInvitation | null>(null);
-  const [revoking, setRevoking] = useState<KbInvitation | null>(null);
+  const [issuedForDialog, setIssuedForDialog] = useState<IssuedInvitation | null>(null);
+  const [revoking, setRevoking] = useState<Invitation | null>(null);
 
   const openInviteDialog = () => {
     setIssuedForDialog(null);
     setInviteOpen(true);
   };
 
-  const resendInvitation = async (invitation: KbInvitation) => {
+  const resendInvitation = async (invitation: Invitation) => {
     try {
       const issued = await invitations.resend(invitation.id);
       setIssuedForDialog(issued);
@@ -42,7 +42,7 @@ export default function KbInvitationsPage() {
     }
   };
 
-  const revokeInvitation = async (invitation: KbInvitation) => {
+  const revokeInvitation = async (invitation: Invitation) => {
     try {
       await invitations.revoke(invitation.id);
     } catch (cause) {

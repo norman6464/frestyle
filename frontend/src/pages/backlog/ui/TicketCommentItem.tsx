@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatDateTime, formatTime } from '@/shared/lib/formatters';
 import type { TicketComment, TicketCommentBlock } from '@/entities/ticket';
-import type { KbWorkspaceMember } from '@/entities/kb';
+import type { WorkspaceMember } from '@/entities/workspace';
 import { useCommentEdits } from '../model/useCommentEdits';
 import { summarizeReactions } from '../lib/summarizeReactions';
 import TicketCommentBody from './TicketCommentBody';
@@ -20,7 +20,7 @@ export interface TicketCommentItemProps {
   workspaceSlug: string;
   ticketId: string;
   /** 返信・編集欄の '@' 候補。 */
-  members: KbWorkspaceMember[];
+  members: WorkspaceMember[];
   replyOpen: boolean;
   onToggleReply: () => void;
   onReply: (body: TicketCommentBlock[]) => Promise<void>;

@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { kbKeys } from '@/entities/kb/api/kbQueries';
+import { workspaceKeys } from '@/entities/workspace/api/workspaceQueries';
 import { ticketKeys } from '@/entities/ticket/api/ticketQueries';
 import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 import { useMyInvitations } from '../useMyInvitations';
@@ -10,7 +11,7 @@ const hoisted = vi.hoisted(() => ({
   acceptInvitation: vi.fn(),
 }));
 
-vi.mock('@/entities/kb/api/kbRepository', () => ({
+vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
   default: {
     fetchMyInvitations: hoisted.fetchMyInvitations,
     acceptInvitation: hoisted.acceptInvitation,
@@ -28,7 +29,7 @@ describe('useMyInvitations', () => {
   it('承諾したら、所属の一覧とその中のものを古いものとして取り直させる', async () => {
     hoisted.acceptInvitation.mockResolvedValue({ workspaceSlug: 'acme' });
     const client = createTestQueryClient();
-    client.setQueryData(kbKeys.workspaces(), []);
+    client.setQueryData(workspaceKeys.all(), []);
     client.setQueryData(kbKeys.mySpaces('other'), []);
     client.setQueryData(ticketKeys.labels('other'), []);
     const { result } = renderHook(() => useMyInvitations(), { wrapper: queryWrapper(client) });
@@ -38,7 +39,7 @@ describe('useMyInvitations', () => {
       await result.current.accept('inv-1');
     });
 
-    expect(client.getQueryState(kbKeys.workspaces())?.isInvalidated).toBe(true);
+    expect(client.getQueryState(workspaceKeys.all())?.isInvalidated).toBe(true);
     expect(client.getQueryState(kbKeys.mySpaces('other'))?.isInvalidated).toBe(true);
     expect(client.getQueryState(ticketKeys.labels('other'))?.isInvalidated).toBe(true);
     expect(result.current.invitations).toEqual([]);
@@ -47,7 +48,7 @@ describe('useMyInvitations', () => {
   it('承諾に失敗したら、所属の一覧はそのまま', async () => {
     hoisted.acceptInvitation.mockRejectedValue(new Error('gone'));
     const client = createTestQueryClient();
-    client.setQueryData(kbKeys.workspaces(), []);
+    client.setQueryData(workspaceKeys.all(), []);
     const { result } = renderHook(() => useMyInvitations(), { wrapper: queryWrapper(client) });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -55,6 +56,6 @@ describe('useMyInvitations', () => {
       await expect(result.current.accept('inv-1')).rejects.toThrow('gone');
     });
 
-    expect(client.getQueryState(kbKeys.workspaces())?.isInvalidated).toBe(false);
+    expect(client.getQueryState(workspaceKeys.all())?.isInvalidated).toBe(false);
   });
 });

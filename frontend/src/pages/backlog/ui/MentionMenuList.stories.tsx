@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import MentionMenuList from './MentionMenuList';
-import type { KbWorkspaceMember } from '@/entities/kb';
+import type { WorkspaceMember } from '@/entities/workspace';
 
-const MEMBERS: KbWorkspaceMember[] = [
+const MEMBERS: WorkspaceMember[] = [
   { principalId: 'p-1', userId: 1, name: 'norman6464' },
   { principalId: 'p-2', userId: 2, name: '佐藤 花子' },
   { principalId: 'p-3', userId: 3, name: '田中 太郎' },

@@ -1,13 +1,18 @@
-import { KB_ROLE_LABEL, KB_ROLES_STRONGEST_FIRST, type KbAdminWorkspaceMember, type KbGrantRole } from '@/entities/kb';
+import {
+  GRANT_ROLE_LABEL,
+  GRANT_ROLES_STRONGEST_FIRST,
+  type AdminWorkspaceMember,
+  type GrantRole,
+} from '@/entities/workspace';
 import { FsIcon, Avatar } from '@/shared/ui';
 
 export interface KbMemberRowProps {
-  member: KbAdminWorkspaceMember;
+  member: AdminWorkspaceMember;
   /** このメンバーが操作している本人か。自分自身には停止・削除の入口を出さない。 */
   isSelf: boolean;
   /** このメンバー宛ての操作が飛んでいる間 true（役割変更・停止・復帰・削除のどれか）。 */
   busy: boolean;
-  onChangeRole: (role: KbGrantRole | null) => void;
+  onChangeRole: (role: GrantRole | null) => void;
   onSuspend: () => void;
   onRestore: () => void;
   onRemove: () => void;
@@ -46,19 +51,19 @@ export default function KbMemberRow({
       <td role="cell" className="min-w-0 px-3 py-2 md:px-4 md:py-3">
         <span aria-hidden="true" className="mb-2 block text-xs text-[var(--color-text-muted)] md:hidden">役割</span>
         {suspended ? (
-          <span className="text-sm text-[var(--color-text-muted)]">{member.role ? KB_ROLE_LABEL[member.role] : '役割なし'}</span>
+          <span className="text-sm text-[var(--color-text-muted)]">{member.role ? GRANT_ROLE_LABEL[member.role] : '役割なし'}</span>
         ) : (
           <select
             aria-label={`${member.name || '相手'} の役割`}
             value={member.role ?? ''}
             disabled={busy}
-            onChange={(e) => onChangeRole(e.target.value === '' ? null : (e.target.value as KbGrantRole))}
+            onChange={(e) => onChangeRole(e.target.value === '' ? null : (e.target.value as GrantRole))}
             className="min-h-11 w-full rounded-md border border-surface-3 bg-surface-1 px-2 py-2 text-base font-medium text-[var(--color-text-secondary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50 md:w-auto md:text-sm"
           >
             <option value="">役割なし</option>
-            {KB_ROLES_STRONGEST_FIRST.map((role) => (
+            {GRANT_ROLES_STRONGEST_FIRST.map((role) => (
               <option key={role} value={role}>
-                {KB_ROLE_LABEL[role]}
+                {GRANT_ROLE_LABEL[role]}
               </option>
             ))}
           </select>
