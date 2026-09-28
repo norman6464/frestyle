@@ -142,6 +142,18 @@ test.describe('スペース追加導線（POST モック）', () => {
       }),
     );
 
+    // スペースの画面の親ルートは、URL のスペースがどのワークスペースのものかを所在の口
+    // （/kb/spaces/:spaceId）で引く。作ったスペースへ移ったあとも同じ口を引く。
+    await page.route('**/api/v2/kb/spaces/*', (route) => {
+      const spaceId = new URL(route.request().url()).pathname.split('/').pop();
+      const space = spaceId === CREATED_ID ? CREATED : EXISTING;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ workspaceSlug: 'w-3f2a9c', workspaceName: '開発チーム', space }),
+      });
+    });
+
     // 文脈バーのスペース切替は「今いる 1 スペース」の名前を出し、切替と作成は自分のスペース
     // 一覧（/me/spaces）から辿るので、経路を通すにはこちらのモックが要る。
     await page.route('**/api/v2/kb/workspaces/w-3f2a9c/me/spaces', (route) =>
