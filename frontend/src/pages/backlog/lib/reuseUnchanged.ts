@@ -13,7 +13,7 @@ export function reuseUnchanged<T extends { id: string }>(prev: readonly T[], nex
   let sameAsPrev = prev.length === next.length;
   const merged = next.map((item, index) => {
     const old = byId.get(item.id);
-    const kept = old !== undefined && JSON.stringify(old) === JSON.stringify(item) ? old : item;
+    const kept = old !== undefined && (old === item || JSON.stringify(old) === JSON.stringify(item)) ? old : item;
     if (kept !== prev[index]) sameAsPrev = false;
     return kept;
   });

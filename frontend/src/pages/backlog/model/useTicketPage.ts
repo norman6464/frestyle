@@ -1,39 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
+import { getApiError } from '@/shared/lib/classifyApiError';
 import {
   TicketRepository,
+  resolvedTicketQuery,
   type ChangeTicketStatusInput,
   type Label,
   type Ticket,
-  type TicketPermission,
   type UpdateTicketInput,
 } from '@/entities/ticket';
-import { ProjectRepository, type Project } from '@/entities/project';
+import { projectQuery } from '@/entities/project';
+import { reflectTicket, refreshTicketAncestry, refreshTicketDerived } from '@/features/ticket-cache';
 
-export interface TicketPageState {
-  /** 以降の API 呼び出しに使う。解決するまで null。 */
-  workspaceSlug: string | null;
-  ticket: Ticket | null;
-  /** 根から順の祖先（自分自身は含まない）。 */
-  ancestors: Ticket[];
-  permission: TicketPermission | null;
-  /** 表示キーの組み立てとバックログへ戻る導線に要る。 */
-  project: Project | null;
-  loading: boolean;
-  error: string | null;
-  /** この 1 件への書き込みが飛んでいる間 true。 */
-  busy: boolean;
-}
-
-const EMPTY: TicketPageState = {
-  workspaceSlug: null,
-  ticket: null,
-  ancestors: [],
-  permission: null,
-  project: null,
-  loading: false,
-  error: null,
-  busy: false,
-};
+const NO_ANCESTORS: Ticket[] = [];
 
 const NOT_FOUND = 'チケットが見つかりませんでした。';
 const LOAD_FAILED = 'チケットを開けませんでした。時間をおいて開き直すと最新の状態が出ます。';
@@ -47,95 +27,71 @@ const LOAD_FAILED = 'チケットを開けませんでした。時間をおい�
  * プロジェクトを別に引くのは**表示キー（例 FRESTYLE-12）に projects.key が要る**ため。
  * チケットの応答には projectId しか入っておらず、key は入っていない。
  *
- * 楽観更新はしない。応答をそのまま state へ入れ、失敗は投げる（呼び出し側が知らせる）。
- * 遅れて返ってきた前のチケットの応答で今の画面を上書きしないよう、宛先と世代を確かめる。
+ * 解決した 1 件は共有の問い合わせ（resolvedTicketQuery）から読む。チケットごとの鍵なので、
+ * 遅れて返ってきた前のチケットの応答が今の画面に混ざらない。楽観更新はしない。書き込みの応答を
+ * この 1 件とバックログの一覧の控えの両方へ映し（reflectTicket）、件数などの派生を古いものにする。
+ * 失敗は投げる（呼び出し側が知らせる）。
  */
 export function useTicketPage(ticketId: string | undefined) {
-  const [state, setState] = useState<TicketPageState>(EMPTY);
-  const active = useRef<string | null>(null);
-  const seq = useRef(0);
+  const queryClient = useQueryClient();
+  const active = ticketId !== undefined;
+  const resolvedResult = useQuery({ ...resolvedTicketQuery(ticketId ?? ''), enabled: active });
+  const shown = queryShownState(resolvedResult, active);
+  const resolved = shown.data;
+  const workspaceSlug = resolved?.workspaceSlug ?? null;
+  const projectId = resolved?.ticket.projectId ?? null;
 
-  const load = useCallback(async (id: string) => {
-    const request = ++seq.current;
-    setState({ ...EMPTY, loading: true });
-    try {
-      const resolved = await TicketRepository.resolveTicket(id);
-      if (active.current !== id || seq.current !== request) return;
-      // プロジェクトは表示キーのためだけに引く。引けなくてもチケットは出す（キーが出ないだけ）。
-      let project: Project | null = null;
-      try {
-        project = await ProjectRepository.fetchProject(resolved.workspaceSlug, resolved.ticket.projectId);
-      } catch {
-        project = null;
-      }
-      if (active.current !== id || seq.current !== request) return;
-      setState({
-        workspaceSlug: resolved.workspaceSlug,
-        ticket: resolved.ticket,
-        ancestors: resolved.ancestors,
-        permission: resolved.permission,
-        project,
-        loading: false,
-        error: null,
-        busy: false,
-      });
-    } catch (cause) {
-      if (active.current !== id || seq.current !== request) return;
-      const status = (cause as { response?: { status?: number } })?.response?.status;
-      setState({ ...EMPTY, error: status === 404 ? NOT_FOUND : LOAD_FAILED });
-    }
-  }, []);
+  // プロジェクトは表示キーのためだけに引く。引けなくてもチケットは出す（キーが出ないだけ）。
+  // 取れるか失敗するかが決まるまでは読み込み中にする（キーがあとから出ると見出しがずれる）。
+  const projectResult = useQuery({
+    ...projectQuery(workspaceSlug ?? '', projectId ?? ''),
+    enabled: workspaceSlug !== null && projectId !== null,
+  });
+  const projectSettling = resolved !== undefined && projectResult.isPending && projectResult.isFetching;
 
-  useEffect(() => {
-    active.current = ticketId ?? null;
-    if (!ticketId) {
-      seq.current += 1;
-      setState(EMPTY);
-      return;
-    }
-    void load(ticketId);
-  }, [ticketId, load]);
+  // 書き込みが飛んでいる間は、どのチケットへの書き込みかと組で持つ（別のチケットへ移ったら出さない）。
+  const [busyFor, setBusyFor] = useState<string | null>(null);
 
+  const { refetch } = resolvedResult;
+  const { refetch: refetchProject, isError: projectFailed } = projectResult;
   const refresh = useCallback(() => {
-    if (active.current) void load(active.current);
-  }, [load]);
+    if (!active) return;
+    void refetch();
+    if (projectFailed) void refetchProject();
+  }, [active, refetch, projectFailed, refetchProject]);
 
-  /** 1 件への書き込み。宛先が変わっていなければ結果を反映する。 */
+  /** 1 件への書き込み。応答をこの 1 件と一覧の控えへ映し、派生を古いものにする。 */
   const mutate = useCallback(
     async <T,>(
       run: (slug: string, id: string) => Promise<T>,
-      apply: (prev: Ticket, result: T) => Ticket,
+      updated: (result: T) => (ticket: Ticket) => Ticket,
     ): Promise<T> => {
-      const id = active.current;
-      const slug = state.workspaceSlug;
-      if (!id || !slug) throw new Error('ticket page: not resolved');
-      const request = seq.current;
-      setState((prev) => ({ ...prev, busy: true }));
+      if (!ticketId || !workspaceSlug || !projectId) throw new Error('ticket page: not resolved');
+      const id = ticketId;
+      const slug = workspaceSlug;
+      const project = projectId;
+      setBusyFor(id);
       try {
         const result = await run(slug, id);
-        if (active.current === id && seq.current === request) {
-          setState((prev) => (prev.ticket ? { ...prev, ticket: apply(prev.ticket, result), busy: false } : prev));
-        }
+        await reflectTicket(queryClient, slug, project, id, updated(result));
+        refreshTicketDerived(queryClient, slug, project);
         return result;
-      } catch (cause) {
-        if (active.current === id && seq.current === request) {
-          setState((prev) => ({ ...prev, busy: false }));
-        }
-        throw cause;
+      } finally {
+        setBusyFor((prev) => (prev === id ? null : prev));
       }
     },
-    [state.workspaceSlug],
+    [ticketId, workspaceSlug, projectId, queryClient],
   );
 
   const updateTicket = useCallback(
     (input: UpdateTicketInput) =>
-      mutate((slug, id) => TicketRepository.updateTicket(slug, id, input), (_prev, updated) => updated),
+      mutate((slug, id) => TicketRepository.updateTicket(slug, id, input), (written) => () => written),
     [mutate],
   );
 
   const changeStatus = useCallback(
     (input: ChangeTicketStatusInput) =>
-      mutate((slug, id) => TicketRepository.changeTicketStatus(slug, id, input), (_prev, updated) => updated),
+      mutate((slug, id) => TicketRepository.changeTicketStatus(slug, id, input), (written) => () => written),
     [mutate],
   );
 
@@ -143,7 +99,7 @@ export function useTicketPage(ticketId: string | undefined) {
     (assigneePrincipalId: string) =>
       mutate(
         (slug, id) => TicketRepository.assignTicket(slug, id, assigneePrincipalId),
-        (prev) => ({ ...prev, assigneePrincipalId }),
+        () => (t) => ({ ...t, assigneePrincipalId }),
       ),
     [mutate],
   );
@@ -153,18 +109,18 @@ export function useTicketPage(ticketId: string | undefined) {
     () =>
       mutate(
         (slug, id) => TicketRepository.unassignTicket(slug, id),
-        (prev) => ({ ...prev, assigneePrincipalId: null }),
+        () => (t) => ({ ...t, assigneePrincipalId: null }),
       ),
     [mutate],
   );
 
   const archive = useCallback(
-    () => mutate((slug, id) => TicketRepository.archiveTicket(slug, id), (_prev, updated) => updated),
+    () => mutate((slug, id) => TicketRepository.archiveTicket(slug, id), (written) => () => written),
     [mutate],
   );
 
   const restore = useCallback(
-    () => mutate((slug, id) => TicketRepository.restoreTicket(slug, id), (_prev, updated) => updated),
+    () => mutate((slug, id) => TicketRepository.restoreTicket(slug, id), (written) => () => written),
     [mutate],
   );
 
@@ -172,7 +128,7 @@ export function useTicketPage(ticketId: string | undefined) {
     (label: Label) =>
       mutate(
         (slug, id) => TicketRepository.addTicketLabel(slug, id, label.id),
-        (prev) => (prev.labels.some((l) => l.id === label.id) ? prev : { ...prev, labels: [...prev.labels, label] }),
+        () => (t) => (t.labels.some((l) => l.id === label.id) ? t : { ...t, labels: [...t.labels, label] }),
       ),
     [mutate],
   );
@@ -181,33 +137,38 @@ export function useTicketPage(ticketId: string | undefined) {
     (labelId: string) =>
       mutate(
         (slug, id) => TicketRepository.removeTicketLabel(slug, id, labelId),
-        (prev) => ({ ...prev, labels: prev.labels.filter((l) => l.id !== labelId) }),
+        () => (t) => ({ ...t, labels: t.labels.filter((l) => l.id !== labelId) }),
       ),
     [mutate],
   );
 
   /**
-   * 親を変える。祖先列（パンくず）も変わるので、`ticket` だけ差し替える mutate では
-   * 済まず取り直す（useTicketList.move と同じ理由）。
+   * 親を変える。祖先の列（パンくず）は応答に入っていないので、応答を映したうえで解決した 1 件を
+   * 取り直す（取り直しの間も今の画面は出したまま）。
    */
   const changeParent = useCallback(
     async (parentId: string | null) => {
-      const id = active.current;
-      const slug = state.workspaceSlug;
-      if (!id || !slug) throw new Error('ticket page: not resolved');
-      setState((prev) => ({ ...prev, busy: true }));
-      try {
-        await TicketRepository.changeTicketParent(slug, id, parentId);
-      } finally {
-        setState((prev) => ({ ...prev, busy: false }));
-      }
-      if (active.current === id) refresh();
+      await mutate((slug, id) => TicketRepository.changeTicketParent(slug, id, parentId), (written) => () => written);
+      await refreshTicketAncestry(queryClient);
     },
-    [state.workspaceSlug, refresh],
+    [mutate, queryClient],
   );
 
+  const status = shown.failed ? getApiError(resolvedResult.error).status : undefined;
+
   return {
-    ...state,
+    /** 以降の API 呼び出しに使う。解決するまで null。 */
+    workspaceSlug,
+    ticket: resolved?.ticket ?? null,
+    /** 根から順の祖先（自分自身は含まない）。 */
+    ancestors: resolved?.ancestors ?? NO_ANCESTORS,
+    permission: resolved?.permission ?? null,
+    /** 表示キーの組み立てとバックログへ戻る導線に要る。引けなければ null（キーが出ないだけ）。 */
+    project: resolved ? (projectResult.data ?? null) : null,
+    loading: shown.loading || projectSettling,
+    error: shown.failed ? (status === 404 ? NOT_FOUND : LOAD_FAILED) : null,
+    /** この 1 件への書き込みが飛んでいる間 true。 */
+    busy: active && busyFor === ticketId,
     refresh,
     updateTicket,
     changeStatus,

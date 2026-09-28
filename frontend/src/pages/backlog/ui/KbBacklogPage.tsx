@@ -174,15 +174,8 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   // 利用者が名前を付けて保存した絞り込み（件数付き）。固定のタブの後ろに並ぶ（設計ボード ST09）。
   const saved = useSavedFilters(workspaceSlug ?? undefined, project?.id);
 
-  // チケットを動かしたら（状態・担当・期限・ラベル・作成・アーカイブ）件数を取り直す。
-  // 一覧の読み直しでは動かない（mutations は書き込みの成功でだけ増える）。
-  const refreshCounts = counts.refresh;
-  const refreshSaved = saved.refresh;
-  useEffect(() => {
-    if (list.mutations === 0) return;
-    refreshCounts();
-    refreshSaved();
-  }, [list.mutations, refreshCounts, refreshSaved]);
+  // チケットを動かしたら（状態・担当・期限・ラベル・作成・アーカイブ）、件数と保存した絞り込みの
+  // 件数は書き込みの側（useTicketList の refreshTicketDerived）が古いものにして取り直させる。
 
   /**
    * 一覧を段に割る。1 件のチケットはどこか 1 つの段にしか出さない —— 見本と同じく、
@@ -243,14 +236,9 @@ export default function KbBacklogPage({ view = 'backlog' }: KbBacklogPageProps) 
   // 入れる／から出す）。どちらも選択中の帯から。
   const reorder = useBacklogReorder(groups, selectedTicket?.id ?? null, {
     onMove: list.move,
-    // 段の中の順はスプリントの中身（ID の並び）で決まるので、それも取り直す。一覧だけ
-    // 取り直すと、並べ替えは成功しているのに段の中の順が変わらない。
-    onMoveInSprint: (ticketId, anchorTicketId, anchorAfter) =>
-      sprints
-        .moveTicket(ticketId, anchorTicketId, anchorAfter)
-        .then(async () => {
-          await Promise.all([list.refresh(), reloadSprintTickets()]);
-        }),
+    // 段の中の順はスプリントの中身（ID の並び）で決まる。moveTicket がその中身を取り直し終える
+    // まで待つので、並べ替えが終わった時点で段の中の順も変わっている。
+    onMoveInSprint: sprints.moveTicket,
   });
 
   // 一覧の行で状態を変えた結果（行ごと）。

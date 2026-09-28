@@ -1,8 +1,10 @@
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Dialog } from '@base-ui/react/dialog';
 import { Tabs } from '@base-ui/react/tabs';
-import { KbRepository, type KbWorkspace } from '@/entities/kb';
+import { refreshTicketDerived } from '@/features/ticket-cache';
+import { KbRepository, refreshKbPageTrees, type KbWorkspace } from '@/entities/kb';
 import { TicketRepository } from '@/entities/ticket';
 import { Button, FsIcon } from '@/shared/ui';
 import { createFailureMessage } from '../lib/createFailure';
@@ -234,6 +236,7 @@ interface PageFormProps {
 
 function PageForm({ workspaces, initialWorkspaceSlug, onPendingChange }: PageFormProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const ids = { ws: useId(), space: useId(), title: useId(), template: useId() };
   const [workspaceSlug, setWorkspaceSlug] = useState(initialWorkspaceSlug ?? workspaces[0]?.slug ?? '');
   // 自分で選んだスペース。'' は「まだ選んでいない」で、候補が読めたら先頭を選んだものとして扱う
@@ -279,6 +282,9 @@ function PageForm({ workspaces, initialWorkspaceSlug, onPendingChange }: PageFor
       : () => KbRepository.createPage(workspace.slug, space.id, { title: title.trim() });
     try {
       const page = await create();
+      // 木（サイドバー）の控えを古くする。30 秒以内に見ていた木は取り直さないので、そのままだと
+      // 作ったページが開いた先のサイドバーに出ない。
+      void refreshKbPageTrees(queryClient, workspace.slug, page.spaceId);
       navigate(`/kb/${encodeURIComponent(page.id)}`);
     } catch (cause) {
       setFailure(createFailureMessage(cause, 'page'));
@@ -401,6 +407,7 @@ interface TicketFormProps {
 
 function TicketForm({ workspaces, initialWorkspaceSlug, onPendingChange }: TicketFormProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const ids = { ws: useId(), project: useId(), title: useId() };
   const creatable = workspaces.filter((w) => w.canCreateTickets);
   const initial = creatable.some((w) => w.slug === initialWorkspaceSlug) ? (initialWorkspaceSlug ?? '') : '';
@@ -441,6 +448,8 @@ function TicketForm({ workspaces, initialWorkspaceSlug, onPendingChange }: Ticke
     setFailure(null);
     try {
       const ticket = await TicketRepository.createTicket(workspace.slug, project.id, { title: title.trim() });
+      // バックログの一覧・件数などの控えを古くする（作ったチケットが次に開いたバックログに出るように）。
+      refreshTicketDerived(queryClient, workspace.slug, project.id);
       navigate(`/tickets/${encodeURIComponent(ticket.id)}`, { state: { from: '/' } });
     } catch (cause) {
       setFailure(createFailureMessage(cause, 'ticket'));

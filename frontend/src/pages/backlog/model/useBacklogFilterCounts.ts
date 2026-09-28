@@ -1,16 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { TicketRepository, type TicketCounts } from '@/entities/ticket';
-
-interface CountsTarget {
-  key: string;
-  workspaceSlug: string;
-  projectId: string;
-}
-
-function targetOf(workspaceSlug: string | undefined, projectId: string | undefined): CountsTarget | null {
-  if (!workspaceSlug || !projectId) return null;
-  return { key: `${workspaceSlug} ${projectId}`, workspaceSlug, projectId };
-}
+import { useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { ticketCountsQuery, type TicketCounts } from '@/entities/ticket';
 
 export interface BacklogFilterCounts {
   /** 件数。まだ取れていなければ null。 */
@@ -20,7 +10,7 @@ export interface BacklogFilterCounts {
    * 「動かしたのに減らない」と読まれる。0 と同じ表示にすると失敗が隠れる）。
    */
   failed: boolean;
-  /** チケットを動かしたあとに取り直す。 */
+  /** 取り直す。 */
   refresh: () => void;
 }
 
@@ -32,51 +22,22 @@ export interface BacklogFilterCounts {
  *
  * 失敗しても画面は塞がない（件数は絞り込みの補助表示でしかなく、ここでエラーを出しても
  * 行き止まりにしかならない）。ただし失敗したことは `failed` で表に出す。
+ *
+ * 件数は共有の問い合わせ（ticketCountsQuery）から読み、チケットを書き換えたら書き込みの側
+ * （refreshTicketDerived）が古いものにして取り直させる。**一覧と違い、取り直しに失敗したら
+ * `failed` を立てる**（持っている数字があっても。画面は数字の代わりに「—」を出す）。
  */
 export function useBacklogFilterCounts(
   workspaceSlug: string | undefined,
   projectId: string | undefined,
 ): BacklogFilterCounts {
-  const [counts, setCounts] = useState<TicketCounts | null>(null);
-  const [failed, setFailed] = useState(false);
-  const active = useRef<CountsTarget | null>(null);
-  const seq = useRef(0);
-  const target = targetOf(workspaceSlug, projectId);
-  const targetKey = target?.key ?? null;
-
-  const load = useCallback((to: CountsTarget) => {
-    const request = ++seq.current;
-    void TicketRepository.fetchTicketCounts(to.workspaceSlug, to.projectId)
-      .then((result) => {
-        if (active.current?.key !== to.key || seq.current !== request) return;
-        setCounts(result);
-        setFailed(false);
-      })
-      .catch(() => {
-        if (active.current?.key !== to.key || seq.current !== request) return;
-        setFailed(true);
-      });
-  }, []);
-
-  useEffect(() => {
-    active.current = target;
-    if (!target) {
-      seq.current += 1;
-      setCounts(null);
-      setFailed(false);
-      return;
-    }
-    // プロジェクトを移ったら前の数字は捨てる（別のプロジェクトの件数を一瞬でも出さない）。
-    setCounts(null);
-    setFailed(false);
-    load(target);
-    // target は毎描画で作り直すオブジェクトなので、鍵で比べる（useKbPageTemplates と同じ形）。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetKey, load]);
-
+  const active = workspaceSlug !== undefined && projectId !== undefined;
+  const result = useQuery({ ...ticketCountsQuery(workspaceSlug ?? '', projectId ?? ''), enabled: active });
+  const failed = active && result.isError && !result.isFetching;
+  const { refetch } = result;
   const refresh = useCallback(() => {
-    if (active.current) load(active.current);
-  }, [load]);
-
-  return { counts, failed, refresh };
+    if (active) void refetch();
+  }, [active, refetch]);
+  // 取り直しに失敗しても数字は持ったまま failed を立てる（「—」に出し替えるのは画面の側）。
+  return { counts: active ? (result.data ?? null) : null, failed, refresh };
 }
