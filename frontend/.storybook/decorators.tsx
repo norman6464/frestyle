@@ -11,6 +11,7 @@ import { ToastProvider } from '@/app/providers/ToastProvider';
 import ToastContainer from '@/app/providers/ToastContainer';
 import apiClient from '@/shared/api/axios';
 import { KbFrameLayout, KbSpaceLayout, KbWorkspaceAdminLayout } from '@/widgets/kb-frame';
+import { BacklogLayout } from '@/pages/backlog';
 
 /*
  * story を単体で描くための「まわりの装置」。
@@ -87,6 +88,15 @@ export function kbSpaceRoute(pattern: string, path: string): Decorator {
  */
 export function kbWorkspaceAdminRoute(pattern: string, path: string): Decorator {
   return routeDecorator(pattern, path, [<KbFrameLayout key="frame" />, <KbWorkspaceAdminLayout key="admin" />]);
+}
+
+/**
+ * backlogRoute — バックログの面（一覧・アーカイブ・設定）を、本番と同じくバックログの親ルート
+ * （BacklogLayout）の中に置く。面は自分ではプロジェクトを解決せず、親ルートが解決したものを受け取る。
+ * 読み込み中・見つからない・読み込めない・プロジェクトが無い、も親ルートが出す。
+ */
+export function backlogRoute(pattern: string, path: string): Decorator {
+  return routeDecorator(pattern, path, [<BacklogLayout key="backlog" />]);
 }
 
 /** 親ルートを外から順に重ねる（先頭がいちばん外）。 */

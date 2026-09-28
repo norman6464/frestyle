@@ -44,9 +44,17 @@ const AssignedPage = lazyWithReload(
   () => import('@/pages/assigned').then((m) => ({ default: m.AssignedPage })),
   'AssignedPage',
 );
-const BacklogPage = lazyWithReload(
-  () => import('@/pages/backlog').then((m) => ({ default: m.BacklogPage })),
-  'BacklogPage',
+const BacklogLayout = lazyWithReload(
+  () => import('@/pages/backlog').then((m) => ({ default: m.BacklogLayout })),
+  'BacklogLayout',
+);
+const BacklogTicketsPage = lazyWithReload(
+  () => import('@/pages/backlog').then((m) => ({ default: m.BacklogTicketsPage })),
+  'BacklogTicketsPage',
+);
+const BacklogSettingsPage = lazyWithReload(
+  () => import('@/pages/backlog').then((m) => ({ default: m.BacklogSettingsPage })),
+  'BacklogSettingsPage',
 );
 const TicketPage = lazyWithReload(
   () => import('@/pages/backlog').then((m) => ({ default: m.TicketPage })),
@@ -202,11 +210,14 @@ export default function App() {
         {/* 自分の担当。プロジェクトを横断するので URL にプロジェクトを取らない。 */}
         <Route path="/assigned" element={<AssignedPage />} />
         {/* バックログの面は経路が持つ。戻る・進む・リンクの共有がそのまま効くようにするため、
-            問い合わせ文字列（?tab=）ではなくパスの段に出す。 */}
-        <Route path="/backlog" element={<BacklogPage />} />
-        <Route path="/backlog/:projectId" element={<BacklogPage view="backlog" />} />
-        <Route path="/backlog/:projectId/settings" element={<BacklogPage view="settings" />} />
-        <Route path="/backlog/:projectId/archive" element={<BacklogPage view="archive" />} />
+            問い合わせ文字列（?tab=）ではなくパスの段に出す。プロジェクトの解決は共通の親ルート
+            （BacklogLayout）が持ち、面を移っても解決し直さない。 */}
+        <Route element={<BacklogLayout />}>
+          <Route path="/backlog" element={<BacklogTicketsPage />} />
+          <Route path="/backlog/:projectId" element={<BacklogTicketsPage />} />
+          <Route path="/backlog/:projectId/archive" element={<BacklogTicketsPage archived />} />
+          <Route path="/backlog/:projectId/settings" element={<BacklogSettingsPage />} />
+        </Route>
         <Route path="/tickets/:ticketId" element={<TicketPage />} />
         <Route path="/notifications" element={<NotificationPage />} />
         {/* 自分宛の招待。通知の飛び先で、/invite からログインした後の戻り先。 */}

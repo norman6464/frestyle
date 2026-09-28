@@ -1,88 +1,27 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
-import BacklogPage from './BacklogPage';
-import { routerWithParam, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
+import BacklogTicketsPage from './BacklogTicketsPage';
+import { backlogRoute, withApi, withToast, type ApiStubs } from '../../../../.storybook/decorators';
+import { baseApi, sprintApi, ticket, workspaces } from './__fixtures__/backlogApi';
 
-const workspaces = [{ slug: 'acme', name: '開発チーム', createdAt: '2026-01-01T00:00:00Z', canManage: true }];
-const projects = [
-  { id: 'p-1', workspaceId: 'w-1', key: 'frestyle', name: 'frestyle', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
-];
-
-const status = (over: Record<string, unknown>) => ({
-  id: 'st-1',
-  workspaceId: 'w-1',
-  projectId: 'p-1',
-  name: 'To Do',
-  category: 'todo',
-  color: '#5b6b7a',
-  position: 'a0',
-  isInitial: true,
-  createdAt: '2026-09-08T00:00:00Z',
-  updatedAt: '2026-09-08T00:00:00Z',
-  activeTicketCount: 1,
-  ...over,
-});
-
-const type = (over: Record<string, unknown>) => ({
-  id: 'ty-1',
-  workspaceId: 'w-1',
-  projectId: 'p-1',
-  name: '開発タスク',
-  hierarchyLevel: 0,
-  color: '#2563eb',
-  position: 'a0',
-  isDefault: true,
-  createdAt: '2026-09-08T00:00:00Z',
-  updatedAt: '2026-09-08T00:00:00Z',
-  activeTicketCount: 1,
-  ...over,
-});
-
-const ticket = (over: Record<string, unknown>) => ({
-  id: 't-1',
-  workspaceId: 'w-1',
-  projectId: 'p-1',
-  number: 457,
-  typeId: 'ty-1',
-  statusId: 'st-1',
-  title: '段1: チケットの骨格（9表）',
-  doc: { type: 'doc', content: [] },
-  priority: 1,
-  position: 'a0',
-  createdByUserId: 1,
-  createdAt: '2026-09-08T00:00:00Z',
-  updatedAt: '2026-09-09T00:00:00Z',
-  ...over,
-});
-
-function baseApi(over: ApiStubs = {}): ApiStubs {
-  return {
-    '/workspaces/acme/projects/p-1/ticket-statuses': { statuses: [status({})] },
-    '/workspaces/acme/projects/p-1/ticket-types': { types: [type({})] },
-    '/workspaces/acme/labels': { labels: [] },
-    // 宛先は「先に登録した鍵の部分一致」で決まる。`…/tickets` は `…/tickets/counts` にも一致するので、
-    // 長い方を先に置く。
-    '/workspaces/acme/projects/p-1/tickets/counts': { total: 1, assignedToMe: 0, overdue: 1, unassigned: 1 },
-    '/workspaces/acme/projects/p-1/tickets': { tickets: [ticket({})] },
-    '/workspaces/acme/projects/p-1/saved-filters': { savedFilters: [] },
-    '/workspaces/acme/projects': { projects },
-    '/kb/workspaces': workspaces,
-    ...over,
-  };
-}
+/**
+ * 本番と同じくバックログの親ルートの中に置く。親ルートがプロジェクトを取りに行くので、経路は
+ * API の見本より内側（decorators の配列の先頭）に置く（先に書いたものほど内側になる）。
+ */
+const route = backlogRoute('/backlog/:projectId', '/backlog/p-1');
 
 const meta = {
-  title: 'pages/backlog/BacklogPage',
-  component: BacklogPage,
+  title: 'pages/backlog/BacklogTicketsPage',
+  component: BacklogTicketsPage,
   parameters: { layout: 'fullscreen' },
-  decorators: [withToast, routerWithParam('/backlog/:projectId', '/backlog/p-1')],
-} satisfies Meta<typeof BacklogPage>;
+  decorators: [withToast],
+} satisfies Meta<typeof BacklogTicketsPage>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const ふつう: Story = {
-  decorators: [withApi(baseApi())],
+  decorators: [route, withApi(baseApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(async () => {
@@ -92,13 +31,13 @@ export const ふつう: Story = {
 };
 
 export const 狭い画面: Story = {
-  decorators: [withApi(baseApi())],
+  decorators: [route, withApi(baseApi())],
   globals: { viewport: { value: 'mobile1', isRotated: false } },
 };
 
 export const アーカイブが空: Story = {
-  decorators: [withApi(baseApi({ '/workspaces/acme/projects/p-1/tickets': { tickets: [] } }))],
-  args: { view: 'archive' },
+  decorators: [route, withApi(baseApi({ '/workspaces/acme/projects/p-1/tickets': { tickets: [] } }))],
+  args: { archived: true },
   play: async ({ canvasElement }) => {
     await expect(await within(canvasElement).findByRole('heading', { name: 'アーカイブされたチケットはありません' })).toBeVisible();
   },
@@ -106,7 +45,7 @@ export const アーカイブが空: Story = {
 
 /** URL のプロジェクトが見つからない。行き止まりにせず、バックログの入口へ戻れる。 */
 export const プロジェクトが見つからない: Story = {
-  decorators: [withApi(baseApi({ '/workspaces/acme/projects': { projects: [] } }))],
+  decorators: [route, withApi(baseApi({ '/workspaces/acme/projects': { projects: [] } }))],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByRole('heading', { name: 'このプロジェクトは見つかりませんでした' })).toBeVisible();
@@ -118,6 +57,7 @@ export const プロジェクトが見つからない: Story = {
 /** プロジェクトを読み込めなかった。「見つからない」とは言わず、取り直せる。 */
 export const プロジェクトを読み込めない: Story = {
   decorators: [
+    route,
     withApi(
       baseApi({
         '/kb/workspaces': (() => {
@@ -141,7 +81,7 @@ export const プロジェクトを読み込めない: Story = {
 };
 
 export const 設定の取得失敗を未有効化と取り違えない: Story = {
-  decorators: [withApi(baseApi({ '/workspaces/acme/projects/p-1/ticket-statuses': () => { throw new Error('offline'); } }))],
+  decorators: [route, withApi(baseApi({ '/workspaces/acme/projects/p-1/ticket-statuses': () => { throw new Error('offline'); } }))],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByRole('heading', { name: 'チケットの設定を読み込めませんでした' })).toBeVisible();
@@ -152,6 +92,7 @@ export const 設定の取得失敗を未有効化と取り違えない: Story = 
 
 export const 未有効化: Story = {
   decorators: [
+    route,
     withApi(
       baseApi({
         '/workspaces/acme/projects/p-1/ticket-statuses': { statuses: [] },
@@ -173,7 +114,7 @@ export const 未有効化: Story = {
  * リンクなので中クリックで別タブにも開ける。
  */
 export const 面のタブは経路を持つ: Story = {
-  decorators: [withApi(baseApi())],
+  decorators: [route, withApi(baseApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(async () => {
@@ -192,7 +133,7 @@ export const 面のタブは経路を持つ: Story = {
 
 /** 見出しの塊。プロジェクトの行 → 面の名前 → 一文 → 保存した絞り込みのタブ → 操作列（設計ボード ST08）。 */
 export const 見出しと絞り込みタブ: Story = {
-  decorators: [withApi(baseApi())],
+  decorators: [route, withApi(baseApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(async () => {
@@ -231,6 +172,7 @@ const label = { id: 'l-1', name: '不具合', color: '#b3392c', createdAt: '', u
  */
 export const 保存した絞り込みが並ぶ: Story = {
   decorators: [
+    route,
     withApi(
       baseApi({
         '/workspaces/acme/labels': { labels: [label] },
@@ -267,6 +209,7 @@ export const 保存した絞り込みが並ぶ: Story = {
  */
 export const この絞り込みを保存: Story = {
   decorators: [
+    route,
     withApi(
       baseApi({
         '/workspaces/acme/projects/p-1/saved-filters': (config: { method?: string }) =>
@@ -297,6 +240,7 @@ export const この絞り込みを保存: Story = {
 /** 件数が取れなかったら、0 と取り違えないよう数字の代わりに「—」を出す。タブは押せる。 */
 export const 件数が取れないときは数字を出さない: Story = {
   decorators: [
+    route,
     withApi(
       baseApi({
         '/workspaces/acme/projects/p-1/tickets/counts': () => {
@@ -316,7 +260,7 @@ export const 件数が取れないときは数字を出さない: Story = {
 
 /** 担当はフィルターの選択欄からも絞れる。固定のタブ「自分の担当」と同じ条件になり、同じチップが出る。 */
 export const 担当で絞る: Story = {
-  decorators: [withApi(baseApi())],
+  decorators: [route, withApi(baseApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await canvas.findByText('FRESTYLE-457');
@@ -349,7 +293,7 @@ const TITLE = '段1: チケットの骨格（9表）';
  * 開いたら詳細の見出しへ、Escape で閉じて押した行へ戻る（ST14 の 04）。
  */
 export const 選ぶと右に詳細が開く: Story = {
-  decorators: [withApi(detailApi())],
+  decorators: [route, withApi(detailApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
@@ -373,7 +317,7 @@ export const 選ぶと右に詳細が開く: Story = {
 
 /** 詳細を開いたままの形（見た目の確認用。ST10 と見比べる）。 */
 export const 詳細を開いた形: Story = {
-  decorators: [withApi(detailApi())],
+  decorators: [route, withApi(detailApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
@@ -383,7 +327,7 @@ export const 詳細を開いた形: Story = {
 
 /** 狭い画面で選んだだけの形（ST12）。一覧の下に選択中の帯。 */
 export const 狭い画面で選んだ形: Story = {
-  decorators: [withApi(detailApi())],
+  decorators: [route, withApi(detailApi())],
   globals: { viewport: { value: 'mobile1', isRotated: false } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -394,7 +338,7 @@ export const 狭い画面で選んだ形: Story = {
 
 /** 狭い画面で詳細を開いた形（ST13）。 */
 export const 狭い画面で詳細を開いた形: Story = {
-  decorators: [withApi(detailApi())],
+  decorators: [route, withApi(detailApi())],
   globals: { viewport: { value: 'mobile1', isRotated: false } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -406,7 +350,7 @@ export const 狭い画面で詳細を開いた形: Story = {
 
 /** 選択解除は文字のボタン。押すと閉じて、押した行へ戻る。 */
 export const 選択解除で閉じる: Story = {
-  decorators: [withApi(detailApi())],
+  decorators: [route, withApi(detailApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
@@ -426,7 +370,7 @@ export const 選択解除で閉じる: Story = {
  * 全画面の詳細（ST13）、「一覧へ」で戻る。戻っても選択は残る（選択解除とは別の操作）。
  */
 export const 狭い画面で選んで開いて戻る: Story = {
-  decorators: [withApi(detailApi())],
+  decorators: [route, withApi(detailApi())],
   globals: { viewport: { value: 'mobile1', isRotated: false } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -452,7 +396,7 @@ export const 狭い画面で選んで開いて戻る: Story = {
 
 /** 「フィルター」を押すと選択欄が現れ、条件を選ぶと URL とチップに載る。 */
 export const フィルターを開いて条件を付ける: Story = {
-  decorators: [withApi(baseApi())],
+  decorators: [route, withApi(baseApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(async () => {
@@ -467,77 +411,6 @@ export const フィルターを開いて条件を付ける: Story = {
     await expect(canvas.getByLabelText('1 件の条件を適用中')).toBeInTheDocument();
   },
 };
-
-/** 設定の面。状態・種別・スプリントの管理をここに集める。 */
-/**
- * スプリントの削除は確認を挟む（中のチケットはバックログへ戻り、スプリントは元に戻せない）。
- * 取り消せば何も起きない。
- *
- * スタブの宛先は前から順の部分一致なので、スプリントの鍵は `/workspaces/acme/projects` より先に置く。
- */
-export const スプリントの削除は確認してから: Story = {
-  decorators: [
-    withApi({
-      '/workspaces/acme/projects/p-1/sprints': {
-        sprints: [
-          {
-            id: 's-1',
-            workspaceId: 'w-1',
-            projectId: 'p-1',
-            name: 'スプリント 12',
-            state: 'planned',
-            startDate: '2026-09-01',
-            endDate: '2026-09-14',
-            position: 'a0',
-            ticketCount: 2,
-            createdAt: '2026-09-01T00:00:00Z',
-            updatedAt: '2026-09-01T00:00:00Z',
-          },
-        ],
-      },
-      '/workspaces/acme/sprints/s-1/tickets': { ticketIds: ['t-1', 't-2'] },
-      ...baseApi(),
-    }),
-  ],
-  render: () => <BacklogPage view="settings" />,
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await canvas.findByText('スプリント 12');
-    await userEvent.click(canvas.getByRole('button', { name: '削除' }));
-    const dialog = await screen.findByRole('dialog', { name: 'スプリントを削除しますか？' });
-    await expect(dialog).toHaveTextContent('中の 2 件のチケットは消えず、バックログへ戻ります');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'キャンセル' }));
-    await waitFor(async () => {
-      await expect(screen.queryByRole('dialog')).toBeNull();
-    });
-    await expect(canvas.getByText('スプリント 12')).toBeInTheDocument();
-  },
-};
-
-/** スプリント 1 本を持つスタブ。鍵は `/workspaces/acme/projects` より先に置く（前から順の部分一致）。 */
-function sprintApi(): ApiStubs {
-  return {
-    '/workspaces/acme/projects/p-1/sprints': {
-      sprints: [
-        {
-          id: 's-1',
-          workspaceId: 'w-1',
-          projectId: 'p-1',
-          name: 'スプリント 1',
-          state: 'planned',
-          startDate: '2026-09-01',
-          endDate: '2026-09-14',
-          position: 'a0',
-          ticketCount: 0,
-          createdAt: '2026-09-01T00:00:00Z',
-          updatedAt: '2026-09-01T00:00:00Z',
-        },
-      ],
-    },
-    '/workspaces/acme/sprints/s-1/tickets': { ticketIds: [] },
-    ...baseApi(),
-  };
-}
 
 /**
  * スプリントの中身（どのチケットがどの順で入っているか）を覚えて返すスタブ。入れる・出す・並べ替えの
@@ -602,7 +475,7 @@ function sprintRowTitles(canvasElement: HTMLElement): string[] {
 
 /** 選んだチケットを「スプリントへ」で入れると、その場でスプリントの段へ移る。 */
 export const スプリントへ入れるとその段へ移る: Story = {
-  decorators: [withApi(statefulSprintApi([], [ticket({})]))],
+  decorators: [route, withApi(statefulSprintApi([], [ticket({})]))],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
@@ -618,6 +491,7 @@ export const スプリントへ入れるとその段へ移る: Story = {
 /** スプリントの中で「末尾へ」と並べ替えると、段の中の順がその場で変わる。 */
 export const スプリントの中で並べ替えると順が変わる: Story = {
   decorators: [
+    route,
     withApi(
       statefulSprintApi(
         ['t-1', 't-2'],
@@ -643,7 +517,7 @@ export const スプリントの中で並べ替えると順が変わる: Story = 
  * 名前を変えられる場所を知らせる。
  */
 export const バックログからはすぐスプリントを作る: Story = {
-  decorators: [withApi(sprintApi())],
+  decorators: [route, withApi(sprintApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: 'スプリントを作成' }));
@@ -653,41 +527,3 @@ export const バックログからはすぐスプリントを作る: Story = {
   },
 };
 
-/** 設定の面では名前の欄を開く。連番を入れておき、Esc で欄だけを閉じて作成ボタンへ戻る。 */
-export const 設定ではスプリントの名前を決めて作る: Story = {
-  decorators: [withApi(sprintApi())],
-  render: () => <BacklogPage view="settings" />,
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: 'スプリントを作成' }));
-    const name = await canvas.findByRole('textbox', { name: 'スプリントの名前' });
-    await expect(name).toHaveValue('スプリント 2');
-    await expect(name).toHaveFocus();
-    await expect(canvas.getByRole('button', { name: 'スプリントを作る' })).toBeEnabled();
-
-    await userEvent.keyboard('{Escape}');
-    await waitFor(async () => {
-      await expect(canvas.queryByRole('textbox', { name: 'スプリントの名前' })).toBeNull();
-    });
-    // 欄が消えてもフォーカスを body に落とさず、開く前のボタンへ戻す。
-    await waitFor(async () => {
-      await expect(canvas.getByRole('button', { name: 'スプリントを作成' })).toHaveFocus();
-    });
-  },
-};
-
-export const 設定の面: Story = {
-  // 面は経路ではなく prop で決まる（経路 → prop の対応は app/App.tsx が持つ）。
-  // ここで router を重ねると入れ子になるので、meta の router のまま prop だけ変える。
-  decorators: [withApi(baseApi())],
-  render: () => <BacklogPage view="settings" />,
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await waitFor(async () => {
-      // 状態と種別の管理はどちらも色を選ぶ口を持つので、件数で見る（一覧には 1 つも無い）。
-      await expect(canvas.getAllByLabelText('色')).toHaveLength(2);
-    });
-    // スプリントの改名・期間・削除もこの面。バックログの面には置かない。
-    await expect(canvas.getByRole('button', { name: 'スプリントを作成' })).toBeInTheDocument();
-  },
-};
