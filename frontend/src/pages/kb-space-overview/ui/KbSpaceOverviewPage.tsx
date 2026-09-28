@@ -1,5 +1,5 @@
-import { useKbSpaceOutlet } from '@/widgets/kb-sidebar';
-import { KbSpaceHeading, kbRoleLabel } from '@/entities/kb';
+import { KbSpaceHeading, useKbSpaceOutlet } from '@/widgets/kb-sidebar';
+import { kbRoleLabel } from '@/entities/kb';
 
 /**
  * KbSpaceOverviewPage はスペースの「概要」画面（段14）。

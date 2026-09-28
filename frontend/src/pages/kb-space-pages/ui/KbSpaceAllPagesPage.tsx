@@ -1,8 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useKbSpaceOutlet } from '@/widgets/kb-sidebar';
+import { KbSpaceHeading, useKbSpaceOutlet } from '@/widgets/kb-sidebar';
 import { Loading, fsIcon, EmptyState } from '@/shared/ui';
 import { useQueryClient } from '@tanstack/react-query';
-import { KbPageGlyph, KbRepository, KbSpaceHeading, NOTE_NEW_PAGE_TITLE, refreshKbPageTrees } from '@/entities/kb';
+import { KbPageGlyph, KbRepository, NOTE_NEW_PAGE_TITLE, refreshKbPageTrees } from '@/entities/kb';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useKbSpaceAllPages } from '../model/useKbSpaceAllPages';
 

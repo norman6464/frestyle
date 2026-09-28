@@ -2,6 +2,8 @@ export { default as KbFrameLayout } from './ui/KbFrameLayout';
 export { default as KbSpaceLayout } from './ui/KbSpaceLayout';
 export { useKbSpaceOutlet } from './model/kbSpaceOutlet';
 export type { KbSpaceOutlet } from './model/kbSpaceOutlet';
+export { default as KbSpaceHeading } from './ui/KbSpaceHeading';
+export type { KbSpaceHeadingProps } from './ui/KbSpaceHeading';
 export { default as KbWorkspaceAdminLayout } from './ui/KbWorkspaceAdminLayout';
 export { default as KbAdminOnlyNotice } from './ui/KbAdminOnlyNotice';
 export { useKbWorkspaceAdminOutlet } from './model/kbWorkspaceAdminOutlet';

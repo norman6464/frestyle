@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import KbWorkspaceSwitcher from './KbWorkspaceSwitcher';
-import type { KbWorkspace } from '../model/types';
+import type { KbWorkspace } from '@/entities/kb';
 
 /**
  * ナレッジの文脈バーの先頭にある、ワークスペースの切り替え（設計ボード ST03 の「FreStyle ▾」）。
@@ -16,7 +16,7 @@ import type { KbWorkspace } from '../model/types';
  * ワークスペース単位の入口（メンバーと招待・追加）もここに集める。削除はここには置かない。
  */
 const meta = {
-  title: 'entities/kb/KbWorkspaceSwitcher',
+  title: 'widgets/kb-sidebar/KbWorkspaceSwitcher',
   component: KbWorkspaceSwitcher,
   parameters: { layout: 'padded' },
   args: { onSelect: fn(), onCreate: fn(async () => {}) },

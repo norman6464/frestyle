@@ -1,6 +1,6 @@
-import { useKbSpaceOutlet } from '@/widgets/kb-sidebar';
+import { KbSpaceHeading, useKbSpaceOutlet } from '@/widgets/kb-sidebar';
 import { Loading, fsIcon, Avatar, EmptyState } from '@/shared/ui';
-import { KbSpaceHeading, kbRoleLabel } from '@/entities/kb';
+import { kbRoleLabel } from '@/entities/kb';
 import { useKbSpaceMembers } from '../model/useKbSpaceMembers';
 
 const VIA_LABEL: Record<string, string> = {

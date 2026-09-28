@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { NameCreateForm, FsIcon } from '@/shared/ui';
 import { useDismissOnOutside } from '@/shared/lib/hooks/useDismissOnOutside';
-import type { KbWorkspace } from '../model/types';
+import type { KbWorkspace } from '@/entities/kb';
 
 export interface KbWorkspaceSwitcherProps {
   workspaces: KbWorkspace[];
