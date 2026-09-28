@@ -83,6 +83,19 @@ export function kbSpaceRoute(pattern: string, path: string): Decorator {
 }
 
 /**
+ * kbSpaceLocation — スペースの所在の口（`/kb/spaces/:spaceId`）の見本の応答。スペースの画面の親ルートは
+ * この口でどのワークスペースかを引くので、kbSpaceRoute で ID のある経路を開く見本は withApi に
+ * `'/kb/spaces/<spaceId>': kbSpaceLocation(...)` を入れる（無ければ 404 で「見つからない」になる）。
+ */
+export function kbSpaceLocation(spaceId: string, workspaceSlug: string, name = spaceId) {
+  return {
+    workspaceSlug,
+    workspaceName: workspaceSlug,
+    space: { id: spaceId, key: spaceId, name, visibility: 'workspace', createdAt: '2026-01-01T00:00:00Z' },
+  };
+}
+
+/**
  * kbWorkspaceAdminRoute — ワークスペースの管理（メンバー・招待）の画面を、本番と同じく枠の親ルートと、
  * その下の管理の親ルート（KbWorkspaceAdminLayout）の中に置く。admin の判定・見出しとタブは親ルートが出す。
  */

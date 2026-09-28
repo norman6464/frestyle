@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { locateKbSpace, orderWorkspaces, pickEntryKbSpace, type MySpacesState } from '../resolveKbSpace';
+import {
+  locateKbSpace,
+  orderWorkspaces,
+  pickEntryKbSpace,
+  type LocatedMySpacesState,
+  type MySpacesState,
+  type SpaceLocationState,
+} from '../resolveKbSpace';
 
 const WS_A = { slug: 'a', name: 'A', createdAt: '', canManage: true };
 const WS_B = { slug: 'b', name: 'B', createdAt: '', canManage: false };
@@ -66,34 +73,30 @@ describe('pickEntryKbSpace', () => {
   });
 });
 
+// 状態の決め方（所在・一覧のどの状態で何と言うか）は shared/lib/acrossLists の locateInList が持ち、
+// そちらのテストが表を確かめる。ここはスペースの形へ写すことだけを見る。
 describe('locateKbSpace', () => {
-  it('spaceId からワークスペースを引く', () => {
-    expect(locateKbSpace('sp-b1', [loaded('a', [SPACE_A1]), loaded('b', [SPACE_B1])])).toEqual({
+  const located = (workspaceSlug: string): SpaceLocationState => ({ owner: workspaceSlug, lostAccess: false, failed: false });
+  const list = (over: Partial<LocatedMySpacesState> = {}): LocatedMySpacesState => ({
+    data: [SPACE_B1],
+    lostAccess: false,
+    failed: false,
+    isFetching: false,
+    ...over,
+  });
+
+  it('所在の口が教えたワークスペースの一覧から、スペースを読む', () => {
+    expect(locateKbSpace('sp-b1', located('b'), list())).toEqual({
       kind: 'found',
       value: { workspaceSlug: 'b', space: SPACE_B1 },
     });
   });
 
-  it('どこかの一覧にあれば、ほかの一覧を待たない', () => {
-    expect(locateKbSpace('sp-b1', [pending('a'), loaded('b', [SPACE_B1])])).toEqual({
-      kind: 'found',
-      value: { workspaceSlug: 'b', space: SPACE_B1 },
-    });
+  it('所在が 404・403 なら見つからない', () => {
+    expect(locateKbSpace('sp-x', { owner: undefined, lostAccess: true, failed: false }, list())).toEqual({ kind: 'none' });
   });
 
-  it('まだそろっていない一覧があれば、見つからないとは言わない', () => {
-    expect(locateKbSpace('sp-x', [pending('a'), loaded('b', [SPACE_B1])])).toEqual({ kind: 'loading' });
-  });
-
-  it('取り直し中の一覧があれば、見つからないとは言わない（作ったばかりのスペースへ移った直後）', () => {
-    expect(locateKbSpace('sp-new', [loaded('a', [SPACE_A1], true)])).toEqual({ kind: 'loading' });
-  });
-
-  it('見つからず、読めなかった一覧があれば失敗（見つからないとは言えない）', () => {
-    expect(locateKbSpace('sp-x', [failed('a'), loaded('b', [SPACE_B1])])).toEqual({ kind: 'error' });
-  });
-
-  it('すべての一覧がそろって見つからなければ none', () => {
-    expect(locateKbSpace('does-not-exist', [loaded('a', [SPACE_A1])])).toEqual({ kind: 'none' });
+  it('一覧を取り直している間は、見つからないとは言わない', () => {
+    expect(locateKbSpace('sp-new', located('b'), list({ isFetching: true }))).toEqual({ kind: 'loading' });
   });
 });

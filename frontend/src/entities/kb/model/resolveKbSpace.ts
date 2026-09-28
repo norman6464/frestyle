@@ -1,4 +1,10 @@
-import { findAcrossLists, firstAcrossLists, type OwnedListState } from '@/shared/lib/acrossLists';
+import {
+  firstAcrossLists,
+  locateInList,
+  type LocatedListState,
+  type LocationState,
+  type OwnedListState,
+} from '@/shared/lib/acrossLists';
 import type { Workspace } from '@/entities/workspace/@x/kb';
 import type { KbMySpace } from './types';
 
@@ -51,16 +57,22 @@ export function pickEntryKbSpace(lists: MySpacesState[]): KbSpaceResolution<stri
   return resolved.kind === 'found' ? { kind: 'found', value: resolved.item.id } : resolved;
 }
 
+/** 所在の口（/kb/spaces/:spaceId）の今の取り具合。owner はワークスペースの slug。 */
+export type SpaceLocationState = LocationState;
+
+/** 所在が教えたワークスペースの「自分が役割を持つスペースの一覧」の今の取り具合。 */
+export type LocatedMySpacesState = LocatedListState<KbMySpace>;
+
 /**
- * spaceId からワークスペースを引く。spaceId から直接ワークスペースを引く backend の口が無いため、
- * 所属ワークスペースのスペースの一覧からその ID を探す。
- *
- * どこかの一覧にあれば、ほかの一覧を待たずに決める（ID はワークスペースをまたいで一意）。
- * 見つからないと言えるのは、すべての一覧がそろい、どれも取り直し中でないときだけ
- * （作ったばかりのスペースへ移った直後は、一覧を取り直している間は見つからない）。
+ * spaceId のスペースを決める。どのワークスペースかは所在の口で引き、スペースそのもの（名前・役割）は
+ * そのワークスペースの一覧から読む（判断は shared/lib/acrossLists の locateInList）。
  */
-export function locateKbSpace(spaceId: string, lists: MySpacesState[]): KbSpaceResolution<ResolvedKbSpace> {
-  const resolved = findAcrossLists(lists.map(toOwned), (space) => space.id === spaceId);
+export function locateKbSpace(
+  spaceId: string,
+  location: SpaceLocationState,
+  list: LocatedMySpacesState,
+): KbSpaceResolution<ResolvedKbSpace> {
+  const resolved = locateInList(location, list, (space) => space.id === spaceId);
   return resolved.kind === 'found'
     ? { kind: 'found', value: { workspaceSlug: resolved.owner, space: resolved.item } }
     : resolved;

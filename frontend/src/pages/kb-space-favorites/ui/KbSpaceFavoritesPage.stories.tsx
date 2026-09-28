@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, waitFor, within } from 'storybook/test';
 import KbSpaceFavoritesPage from './KbSpaceFavoritesPage';
-import { kbSpaceRoute, withApi, withToast } from '../../../../.storybook/decorators';
+import { kbSpaceLocation, kbSpaceRoute, withApi, withToast } from '../../../../.storybook/decorators';
 
 const workspaces = [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:00:00Z', canManage: true }];
 const mySpaces = [{ id: 'space-1', name: '開発部', role: 'editor' }];
@@ -30,8 +30,9 @@ export const ふつう: Story = {
         { pageId: 'p1', title: '設計メモ', icon: { type: 'emoji', value: '📘' }, spaceId: 'space-1', spaceName: '開発部', createdAt: '2026-09-01T00:00:00Z' },
         { pageId: 'p2', title: '議事録', icon: null, spaceId: 'space-1', spaceName: '開発部', createdAt: '2026-09-02T00:00:00Z' },
       ],
+      '/kb/spaces/space-1': kbSpaceLocation('space-1', 'acme', '開発部'),
       '/me/spaces': mySpaces,
-      '/spaces': spaces,
+      '/workspaces/acme/spaces': spaces,
       '/kb/workspaces': workspaces,
     }),
   ],
@@ -50,8 +51,9 @@ export const お気に入りが無い: Story = {
     withApi({
       '/spaces/space-1/pages': { pages: [], hasHiddenChildren: false },
       '/favorites': [],
+      '/kb/spaces/space-1': kbSpaceLocation('space-1', 'acme', '開発部'),
       '/me/spaces': mySpaces,
-      '/spaces': spaces,
+      '/workspaces/acme/spaces': spaces,
       '/kb/workspaces': workspaces,
     }),
   ],

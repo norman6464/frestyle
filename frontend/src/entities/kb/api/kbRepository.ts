@@ -25,6 +25,7 @@ import type {
   KbResolvedPage,
   KbSearchResult,
   KbSpace,
+  KbSpaceLocation,
   KbSpaceMember,
 } from '../model/types';
 import {
@@ -138,6 +139,15 @@ const KbRepository = {
   async fetchMySpaces(workspaceSlug: string): Promise<KbMySpace[]> {
     const res = await apiClient.get<KbMySpace[]>(KB_API.mySpaces(workspaceSlug));
     return toArray<KbMySpace>(res.data);
+  },
+
+  /**
+   * スペースの所在（どのワークスペースのスペースか）。見る立場に無いスペースは、存在しない ID と
+   * 同じ 404 になる。
+   */
+  async resolveSpace(spaceId: string): Promise<KbSpaceLocation> {
+    const res = await apiClient.get<KbSpaceLocation>(KB_API.resolveSpace(spaceId));
+    return res.data;
   },
 
   /**

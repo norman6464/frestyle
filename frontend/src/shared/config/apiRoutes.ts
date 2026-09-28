@@ -185,6 +185,13 @@ export const KB_API = {
    * 応答の workspaceSlug を以降の呼び出し（木・保存）に使う。
    */
   resolvePage: (pageId: string) => `${API_V2}/kb/pages/${encodeURIComponent(pageId)}`,
+  /**
+   * GET — /api/v2/kb/spaces/:spaceId
+   *
+   * /kb/spaces/{spaceId} の URL からの解決。URL にワークスペースを出さないための口で、
+   * 応答の workspaceSlug でそのワークスペースの一覧を開く（resolvePage と同じ役割）。
+   */
+  resolveSpace: (spaceId: string) => `${API_V2}/kb/spaces/${encodeURIComponent(spaceId)}`,
   /** PUT(本文の置き換え) — /api/v2/kb/workspaces/:slug/pages/:pageId/content */
   pageContent: (workspaceSlug: string, pageId: string) =>
     `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/pages/${encodeURIComponent(pageId)}/content`,

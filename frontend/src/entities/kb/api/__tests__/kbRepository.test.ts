@@ -364,6 +364,20 @@ describe('KbRepository', () => {
     await expect(KbRepository.renameSpace('acme', 'sp-1', 'x')).rejects.toThrow();
   });
 
+  it('resolveSpace は GET /kb/spaces/:id でスペースの所在を返す', async () => {
+    const location = {
+      workspaceSlug: 'acme',
+      workspaceName: '開発チーム',
+      space: { id: 'sp-1', key: 'eng', name: '開発部', visibility: 'workspace', createdAt: '' },
+    };
+    mockGet.mockResolvedValue({ data: location });
+
+    const got = await KbRepository.resolveSpace('sp-1');
+
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/kb/spaces/sp-1');
+    expect(got).toEqual(location);
+  });
+
   it('resolvePage は GET /kb/pages/:id で解決結果を返す', async () => {
     const resolved = {
       workspaceSlug: 'w-3f2a9c',
