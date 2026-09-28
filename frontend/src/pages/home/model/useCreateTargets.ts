@@ -1,5 +1,6 @@
+import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { KbRepository, kbMySpacesQuery, type KbMySpace, type KbPageTemplate } from '@/entities/kb';
+import { kbMySpacesQuery, kbSpaceTemplatesQuery, type KbMySpace, type KbPageTemplate } from '@/entities/kb';
 import { ProjectRepository, type Project } from '@/entities/project';
 import { ticketStatusesQuery, type TicketStatus } from '@/entities/ticket';
 import { toHomeResource, useHomeResource, type HomeResource } from './useHomeResource';
@@ -27,13 +28,18 @@ function selectCreatable(spaces: KbMySpace[]): KbMySpace[] {
  * その場所で使えるテンプレート（ワークスペース全体のものと、選んだスペース専用のもの）。
  * ほかのスペース専用のテンプレートは出さない（そのスペースへは保存しない）。
  */
-export function usePageTemplates(workspaceSlug: string | null, spaceId: string | null) {
-  return useHomeResource(
-    workspaceSlug && spaceId ? `templates:${workspaceSlug}/${spaceId}` : null,
-    async () => {
-      const templates = await KbRepository.listPageTemplates(workspaceSlug ?? '', spaceId ?? undefined);
-      return templates.filter((t) => !t.spaceId || t.spaceId === spaceId);
-    },
+export function usePageTemplates(workspaceSlug: string | null, spaceId: string | null): HomeResource<KbPageTemplate[]> {
+  // 左の列・ページ画面の「テンプレートから作る」と同じ一覧を使う（取ってあれば取り直さない）。
+  const selectUsable = useCallback(
+    (templates: KbPageTemplate[]) => templates.filter((t) => !t.spaceId || t.spaceId === spaceId),
+    [spaceId],
+  );
+  return toHomeResource(
+    useQuery({
+      ...kbSpaceTemplatesQuery(workspaceSlug ?? '', spaceId ?? ''),
+      enabled: workspaceSlug !== null && spaceId !== null,
+      select: selectUsable,
+    }),
     NO_TEMPLATES,
   );
 }

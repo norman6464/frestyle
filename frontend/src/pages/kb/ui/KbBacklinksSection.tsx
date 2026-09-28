@@ -2,13 +2,17 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { KbPageGlyph } from '@/widgets/kb-sidebar';
 import type { KbPage } from '@/entities/kb';
-import { FsIcon } from '@/shared/ui';
+import { ErrorNotice, FsIcon } from '@/shared/ui';
 
 export interface KbBacklinksSectionProps {
   /** このページを参照しているページの一覧。 */
   pages: KbPage[];
   /** 取得中か（useKbBacklinks.loading をそのまま渡す）。 */
   loading: boolean;
+  /** 読めなかった理由（useKbBacklinks.error）。0 件と取り違えないよう、読めなかったことを出す。 */
+  error?: string | null;
+  /** 読めなかったときの取り直し（useKbBacklinks.retry）。 */
+  onRetry?: () => void;
 }
 
 /**
@@ -20,13 +24,23 @@ export interface KbBacklinksSectionProps {
  *
  * 取得中（loading）だけは最小限のローディング表示を出す。0 件と決まる前に何も出さないと、
  * 「読み込みが終わって 0 件だった」のか「まだ数えている」のかが画面から見分けられない。
+ * 読めなかったときも同じ理由で黙らず、読めなかったことと取り直しを出す（本文は読めているので
+ * 画面を塞がない知らせにする）。
  *
  * 開閉状態はこのコンポーネント自身の state（KbPage 側が pageId ごとに作り直すので、
  * ページ遷移をまたいでは保持されない — 毎回閉じた状態から始まる、という画面設計の約束）。
  * 件数は閉じていても見出しに出す。
  */
-export default function KbBacklinksSection({ pages, loading }: KbBacklinksSectionProps) {
+export default function KbBacklinksSection({ pages, loading, error, onRetry }: KbBacklinksSectionProps) {
   const [open, setOpen] = useState(false);
+
+  if (error) {
+    return (
+      <div className="mt-12 border-t border-surface-3 pt-4">
+        <ErrorNotice variant="inline" politeness="polite" message={error} onRetry={onRetry} />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

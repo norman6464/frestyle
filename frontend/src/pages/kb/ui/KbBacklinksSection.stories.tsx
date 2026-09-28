@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { Decorator } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import type { KbPage } from '@/entities/kb';
 import KbBacklinksSection from './KbBacklinksSection';
@@ -51,6 +51,18 @@ export const 空: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.queryByRole('button')).not.toBeInTheDocument();
     await expect(canvas.queryByText(/参照しているページ/)).not.toBeInTheDocument();
+  },
+};
+
+/** 読めなかった。0 件（何も出さない）と取り違えないよう、読めなかったことと取り直しを出す。 */
+export const 読み込めない: Story = {
+  args: { pages: [], loading: false, error: '参照しているページを読み込めませんでした。', onRetry: fn() },
+  decorators: [withLocationProbe],
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('参照しているページを読み込めませんでした。')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '再試行' }));
+    await expect(args.onRetry).toHaveBeenCalled();
   },
 };
 

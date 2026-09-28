@@ -1,7 +1,12 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook as rtlRenderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
+import { kbKeys } from '@/entities/kb/api/kbQueries';
+import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 import { useKbSuggestionDraft } from '../useKbSuggestionDraft';
+
+const renderHook: typeof rtlRenderHook = ((callback: Parameters<typeof rtlRenderHook>[0], options?: Parameters<typeof rtlRenderHook>[1]) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 function tooManyOpenSuggestionsError(): AxiosError {
   return new AxiosError('Too Many Requests', 'ERR_BAD_REQUEST', undefined, undefined, {
@@ -15,10 +20,10 @@ function tooManyOpenSuggestionsError(): AxiosError {
 
 const hoisted = vi.hoisted(() => ({ createSuggestion: vi.fn() }));
 
-vi.mock('@/entities/kb', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/kb')>();
-  return { ...actual, KbRepository: { createSuggestion: hoisted.createSuggestion } };
-});
+// 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/kb/api/kbRepository', () => ({
+  default: { createSuggestion: hoisted.createSuggestion },
+}));
 
 const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '本文' }] }] };
 
@@ -85,6 +90,22 @@ describe('useKbSuggestionDraft', () => {
     expect(hoisted.createSuggestion).toHaveBeenCalledTimes(1);
     expect(hoisted.createSuggestion).toHaveBeenCalledWith('w-1', 'p-1', doc);
     expect(result.current.open).toBe(false);
+  });
+
+  it('送ったら、そのページの提案の一覧を古いものにする（提案のパネルに出る）', async () => {
+    hoisted.createSuggestion.mockResolvedValue({ id: 's-1', doc, status: 'open', author: { userId: 1, name: '' }, createdAt: '2026-09-01T00:00:00Z' });
+    const client = createTestQueryClient();
+    client.setQueryData(kbKeys.suggestions('w-1', 'p-1'), []);
+    client.setQueryData(kbKeys.suggestions('w-1', 'p-2'), []);
+    const { result } = renderHook(() => useKbSuggestionDraft('w-1', 'p-1'), { wrapper: queryWrapper(client) });
+    act(() => result.current.start(doc));
+
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    expect(client.getQueryState(kbKeys.suggestions('w-1', 'p-1'))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(kbKeys.suggestions('w-1', 'p-2'))?.isInvalidated).toBe(false);
   });
 
   it('submit が失敗したらドラフトモードのまま、入力を保持し、エラーを持つ', async () => {

@@ -66,12 +66,15 @@ export const 読み込み中: Story = {
 /** 失敗。 */
 export const 失敗: Story = {
   args: {
-    error:
-      '履歴を読み込めませんでした。通信が切れたか、このページを見る立場でなくなっています。開き直すと最新の状態が出ます。',
+    error: '履歴を読み込めませんでした。通信が切れたか、このページを見る立場でなくなっています。',
+    onRetry: fn(),
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('alert')).toHaveTextContent('履歴を読み込めませんでした');
+    // 行き止まりにせず、その場で取り直せる。
+    await userEvent.click(canvas.getByRole('button', { name: '再試行' }));
+    await expect(args.onRetry).toHaveBeenCalled();
   },
 };
 

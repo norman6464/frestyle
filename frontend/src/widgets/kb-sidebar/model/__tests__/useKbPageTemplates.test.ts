@@ -1,7 +1,11 @@
 import { Profiler, createElement, type ReactNode } from 'react';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { queryWrapper } from '@/test/queryClient';
 import { useKbPageTemplates } from '../useKbPageTemplates';
+
+const renderHook: typeof rtlRenderHook = ((callback: Parameters<typeof rtlRenderHook>[0], options?: Parameters<typeof rtlRenderHook>[1]) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 const hoisted = vi.hoisted(() => ({
   listPageTemplates: vi.fn(),
@@ -9,8 +13,9 @@ const hoisted = vi.hoisted(() => ({
   createPageFromTemplate: vi.fn(),
 }));
 
-vi.mock('@/entities/kb', () => ({
-  KbRepository: {
+// 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/kb/api/kbRepository', () => ({
+  default: {
     listPageTemplates: hoisted.listPageTemplates,
     deletePageTemplate: hoisted.deletePageTemplate,
     createPageFromTemplate: hoisted.createPageFromTemplate,
@@ -160,8 +165,13 @@ describe('useKbPageTemplates の描き直し', () => {
   /** 画面に反映された回数（React の commit）を数える入れもの。 */
   function counted() {
     const commits = { count: 0 };
+    const WithQueryClient = queryWrapper();
     const wrapper = ({ children }: { children: ReactNode }) =>
-      createElement(Profiler, { id: 'templates', onRender: () => (commits.count += 1) }, children);
+      createElement(
+        WithQueryClient,
+        null,
+        createElement(Profiler, { id: 'templates', onRender: () => (commits.count += 1) }, children),
+      );
     return { commits, wrapper };
   }
 

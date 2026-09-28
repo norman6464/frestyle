@@ -1,6 +1,10 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { queryWrapper } from '@/test/queryClient';
 import { useKbComments } from '../useKbComments';
+
+const renderHook: typeof rtlRenderHook = ((callback: Parameters<typeof rtlRenderHook>[0], options?: Parameters<typeof rtlRenderHook>[1]) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 const hoisted = vi.hoisted(() => ({
   listCommentThreads: vi.fn(),
@@ -10,8 +14,9 @@ const hoisted = vi.hoisted(() => ({
   reopenCommentThread: vi.fn(),
 }));
 
-vi.mock('@/entities/kb', () => ({
-  KbRepository: {
+// 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/kb/api/kbRepository', () => ({
+  default: {
     listCommentThreads: hoisted.listCommentThreads,
     createCommentThread: hoisted.createCommentThread,
     addComment: hoisted.addComment,
@@ -322,7 +327,7 @@ describe('useKbComments の宛先', () => {
     expect(result.current.saving).toBe(false);
   });
 
-  it('同じページへの古い読み込みが後から着地しても捨てる（連番）', async () => {
+  it('同じページをいったん離れてすぐ開き直しても、飛んでいる取得を使い回す（同じ一覧を 2 回取らない）', async () => {
     let settleFirst: (value: unknown) => void = () => {};
     hoisted.listCommentThreads.mockImplementationOnce(
       () => new Promise((resolve) => { settleFirst = resolve; }),
@@ -333,27 +338,20 @@ describe('useKbComments の宛先', () => {
       { initialProps: { pageId: PAGE as string | undefined } },
     );
 
-    // 1 本目が飛んでいる間に、いったんページ未確定へ戻してまた同じページを開き直す
-    //（2 本目を起こす。key は workspaceSlug + pageId だけで決まるので、開き直した後も
-    // 1 本目と同じ key になる — その状態で seq が古い応答を正しく弾けるかを見る）。
     rerender({ pageId: undefined });
-    hoisted.listCommentThreads.mockResolvedValue([thread('t-second')]);
     rerender({ pageId: PAGE });
-    await waitFor(() => expect(result.current.threads).toHaveLength(1));
-    expect(result.current.threads[0].id).toBe('t-second');
-
-    // 遅れて着地した 1 本目は捨てる。
     await act(async () => {
       settleFirst([thread('t-first')]);
     });
-    expect(result.current.threads.map((t) => t.id)).toEqual(['t-second']);
+
+    await waitFor(() => expect(result.current.threads.map((t) => t.id)).toEqual(['t-first']));
+    expect(hoisted.listCommentThreads).toHaveBeenCalledTimes(1);
   });
 
-  // CodeRabbit 指摘: key（workspaceSlug + pageId）だけでは、ページを離れてすぐ同じページへ
-  // 戻ったケースを見分けられない（同じページなので key が同じまま）。書き込みが飛んで
-  // いる間に離れて戻ると、古い書き込み応答が新しい閲覧セッションの一覧へ紛れ込み、
-  // スレッド・返信が二重に増える。
-  it('書き込みが飛んでいる間にページを離れてすぐ同じページへ戻ると、古い書き込み応答は反映しない', async () => {
+  // 書き込みが飛んでいる間に離れて同じページへ戻っても、作ったスレッドはサーバーにある。
+  // 捨てると画面から消えたままになり、そのまま足すと取り直した一覧と二重になりうる。
+  // 書いたページの一覧へ、id で重複を見て 1 回だけ足す。
+  it('書き込みが飛んでいる間にページを離れてすぐ同じページへ戻っても、作ったスレッドを 1 回だけ出す', async () => {
     let resolveCreate: (t: ReturnType<typeof thread>) => void = () => {};
     hoisted.createCommentThread.mockImplementation(
       () => new Promise((resolve) => { resolveCreate = resolve; }),
@@ -371,35 +369,52 @@ describe('useKbComments の宛先', () => {
     rerender({ pageId: PAGE });
     await waitFor(() => expect(result.current.threads.map((t) => t.id)).toEqual(['t1']));
 
-    // ここで古い作成応答が着地しても、開き直し後の一覧を汚さない。
     await act(async () => {
       resolveCreate(thread('t2'));
       await createPromise;
     });
-    expect(result.current.threads.map((t) => t.id)).toEqual(['t1']);
+    await waitFor(() => expect(result.current.threads.map((t) => t.id)).toEqual(['t1', 't2']));
+  });
+
+  it('取り直した一覧に作ったスレッドが既に入っていても、二重に増えない', async () => {
+    let resolveCreate: (t: ReturnType<typeof thread>) => void = () => {};
+    hoisted.createCommentThread.mockImplementation(
+      () => new Promise((resolve) => { resolveCreate = resolve; }),
+    );
+    const { result } = renderHook(() => useKbComments(SLUG, PAGE));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const createPromise = result.current.createThread([{ type: 'text', text: '新規' }]);
+    hoisted.listCommentThreads.mockResolvedValue([thread('t1'), thread('t2')]);
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.threads.map((t) => t.id)).toEqual(['t1', 't2']));
+
+    await act(async () => {
+      resolveCreate(thread('t2'));
+      await createPromise;
+    });
+
+    expect(result.current.threads.map((t) => t.id)).toEqual(['t1', 't2']);
   });
 
   // CodeRabbit 指摘: 取得が飛んでいる間に書き込みが成功すると、書き込みが state.threads へ
   // 反映される。その後に届く取得結果は書き込み前のスナップショットなので、丸ごと
   // 上書きすると作成済みのスレッドが画面から消える。
-  it('取得中に書き込みが成功したら、後から着地する古い取得結果で上書きしない', async () => {
-    let resolveList: (threads: ReturnType<typeof thread>[]) => void = () => {};
-    hoisted.listCommentThreads.mockImplementation(
-      () => new Promise((resolve) => { resolveList = resolve; }),
-    );
+  it('最初の読み込み中に作ったら、作った 1 件だけの一覧を作らずに取り直す。古い取得結果でも上書きしない', async () => {
+    let resolveFirst: (threads: ReturnType<typeof thread>[]) => void = () => {};
+    hoisted.listCommentThreads
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockResolvedValue([thread('t1'), thread('t2')]);
     const { result } = renderHook(() => useKbComments(SLUG, PAGE));
+    await waitFor(() => expect(hoisted.listCommentThreads).toHaveBeenCalledTimes(1));
 
-    // 初回取得がまだ飛んでいる間にスレッドを作成する（active は同期的に設定済みなので進める）。
     await act(async () => {
       await result.current.createThread([{ type: 'text', text: '新規' }]);
     });
-    expect(result.current.threads.map((t) => t.id)).toEqual(['t2']);
-
-    // 遅れて着地する初回取得（作成前のスナップショット = 空）で上書きしない。
     await act(async () => {
-      resolveList([]);
+      resolveFirst([]);
     });
-    expect(result.current.threads.map((t) => t.id)).toEqual(['t2']);
+
+    await waitFor(() => expect(result.current.threads.map((t) => t.id)).toEqual(['t1', 't2']));
     expect(result.current.loading).toBe(false);
   });
 });

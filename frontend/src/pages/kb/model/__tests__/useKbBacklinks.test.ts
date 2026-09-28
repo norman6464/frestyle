@@ -1,13 +1,18 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { queryWrapper } from '@/test/queryClient';
 import { useKbBacklinks } from '../useKbBacklinks';
+
+const renderHook: typeof rtlRenderHook = ((callback: Parameters<typeof rtlRenderHook>[0], options?: Parameters<typeof rtlRenderHook>[1]) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 const hoisted = vi.hoisted(() => ({
   listBacklinks: vi.fn(),
 }));
 
-vi.mock('@/entities/kb', () => ({
-  KbRepository: {
+// 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/kb/api/kbRepository', () => ({
+  default: {
     listBacklinks: hoisted.listBacklinks,
   },
 }));
@@ -68,6 +73,17 @@ describe('useKbBacklinks', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toMatch(/参照しているページを読み込めませんでした/);
     expect(result.current.pages).toEqual([]);
+  });
+
+  it('読み込めなかったら取り直せる', async () => {
+    hoisted.listBacklinks.mockRejectedValueOnce(new Error('boom'));
+    const { result } = renderHook(() => useKbBacklinks(SLUG, PAGE));
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+
+    act(() => result.current.retry());
+
+    await waitFor(() => expect(result.current.pages).toHaveLength(1));
+    expect(result.current.error).toBeNull();
   });
 });
 

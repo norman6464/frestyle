@@ -1,6 +1,10 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { queryWrapper } from '@/test/queryClient';
 import { useKbShare } from '../useKbShare';
+
+const renderHook: typeof rtlRenderHook = ((callback: Parameters<typeof rtlRenderHook>[0], options?: Parameters<typeof rtlRenderHook>[1]) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 const hoisted = vi.hoisted(() => ({
   listPageGrants: vi.fn(),
@@ -9,8 +13,9 @@ const hoisted = vi.hoisted(() => ({
   revokePageRole: vi.fn(),
 }));
 
-vi.mock('@/entities/kb', () => ({
-  KbRepository: {
+// 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/kb/api/kbRepository', () => ({
+  default: {
     listPageGrants: hoisted.listPageGrants,
     listGrantablePrincipals: hoisted.listGrantablePrincipals,
     grantPageRole: hoisted.grantPageRole,
@@ -239,27 +244,31 @@ describe('useKbShare の宛先', () => {
 });
 
 describe('useKbShare の要求の連番', () => {
-  it('同じページへの古い読み込みが後から着地しても捨てる', async () => {
+  it('一覧を持っているうちの取り直しの途中で、古い取得があとから着地しても捨てる', async () => {
     // 宛先だけを見ていると、同じページへの 2 本目が飛んでいる最中に 1 本目が着地して
     // 古い一覧で上書きされる（宛先が同じなので見分けられない）。
-    let settleFirst: (value: unknown) => void = () => {};
-    hoisted.listPageGrants.mockImplementationOnce(
-      () => new Promise((resolve) => { settleFirst = resolve; }),
-    );
-
     const { result } = renderHook(() => useKbShare(SLUG, PAGE));
+    await waitFor(() => expect(result.current.rows).toHaveLength(1));
+    let settleStale: (value: unknown) => void = () => {};
+    hoisted.listPageGrants.mockImplementationOnce(
+      () => new Promise((resolve) => { settleStale = resolve; }),
+    );
+    act(() => {
+      void result.current.reload();
+    });
+    await waitFor(() => expect(hoisted.listPageGrants).toHaveBeenCalledTimes(2));
 
-    // 1 本目が飛んでいる間に引き直しを起こす（付与の成功が同じことをする）。
+    // 1 本目が飛んでいる間に取り直しを起こす（付与の成功が同じことをする）。
     hoisted.listPageGrants.mockResolvedValue([grant('pr-dev')]);
     await act(async () => {
       await result.current.reload();
     });
-    await waitFor(() => expect(result.current.rows).toHaveLength(1));
-    expect(result.current.rows[0].principalId).toBe('pr-dev');
+    await waitFor(() => expect(result.current.rows.map((row) => row.principalId)).toEqual(['pr-dev']));
 
     // 遅れて着地した 1 本目は捨てる。
     await act(async () => {
-      settleFirst([grant('pr-tanaka'), grant('pr-dev')]);
+      settleStale([grant('pr-tanaka'), grant('pr-dev')]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(result.current.rows.map((row) => row.principalId)).toEqual(['pr-dev']);
   });

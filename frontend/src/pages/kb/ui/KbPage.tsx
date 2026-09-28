@@ -844,6 +844,7 @@ export default function KbPage() {
                           candidates={share.candidates}
                           loading={share.loading}
                           error={share.error}
+                          onRetry={share.retry}
                           saving={share.saving}
                           onGrant={share.grant}
                           onRevoke={share.revoke}
@@ -923,7 +924,12 @@ export default function KbPage() {
                 本文そのものの末尾（コメントパネル等とは別の場所）。通常の読了後に
                 スクロールして辿り着く位置に、逆リンクの折りたたみを置く。
               */}
-              <KbBacklinksSection pages={backlinks.pages} loading={backlinks.loading} />
+              <KbBacklinksSection
+                pages={backlinks.pages}
+                loading={backlinks.loading}
+                error={backlinks.error}
+                onRetry={backlinks.retry}
+              />
             </article>
           )}
 
@@ -980,6 +986,7 @@ export default function KbPage() {
               versions={versions.versions}
               loading={versions.loading}
               error={versions.error}
+              onRetry={versions.retry}
               canEdit={data?.canEdit ?? false}
               selectedSeq={versions.selected?.seq ?? null}
               onCreateVersion={handleCreateVersion}
@@ -991,6 +998,7 @@ export default function KbPage() {
               suggestions={suggestions.suggestions}
               loading={suggestions.loading}
               error={suggestions.error}
+              onRetry={suggestions.retry}
               canEdit={data?.canEdit ?? false}
               onAccept={handleAcceptSuggestion}
               onReject={handleRejectSuggestion}

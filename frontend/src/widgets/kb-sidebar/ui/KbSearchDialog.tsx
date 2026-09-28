@@ -1,10 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Dialog } from '@base-ui/react/dialog';
-import { KbRepository, type KbSearchResult, type KbSpace } from '@/entities/kb';
+import { kbSearchQuery, type KbSearchResult, type KbSpace } from '@/entities/kb';
 import { buildSearchView } from '../model/searchView';
 import KbSearchResultRow from './KbSearchResultRow';
 import { FsIcon } from '@/shared/ui';
+
+const NO_RESULTS: KbSearchResult[] = [];
 
 export interface KbSearchDialogProps {
   workspaceSlug: string;
@@ -22,7 +25,7 @@ export interface KbSearchDialogProps {
  * 左の列の「このスペースで検索」は木を題名で絞るだけ。本文まで探すときはここを開く
  * （「本文も含めて探す」から、打った語を持ち越して開く）。
  * 検索はサーバーが行い、返るのは木と同じ規則で閲覧できる現役ページだけ。
- * 入力から 250ms 待って問い合わせ、世代番号で古い応答を捨てる。
+ * 入力から 250ms 待って問い合わせる（語ごとの共有の問い合わせなので、古い語の応答は混ざらない）。
  * ↑↓ で選び Enter で開く。Esc・外側クリック・閉じるボタンで閉じる。
  *
  * 枠は Base UI の Dialog。開いている間は Tab が窓の中だけを回り、閉じたら入口のボタンへ
@@ -37,42 +40,38 @@ export default function KbSearchDialog({ workspaceSlug, spaces, initialQuery = '
   const listboxId = useId();
   const [query, setQuery] = useState(initialQuery);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  // 速く打ったときに、古い応答が新しい結果を上書きしないための世代番号。
-  const generation = useRef(0);
-  // 再試行の引き金（値そのものに意味は無い。増えたら同じ問い合わせをもう一度投げる）。
-  const [attempt, setAttempt] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 問い合わせの結果は「どの問い合わせの結果か」の鍵と一緒に持ち、状態（はじめ・検索中・結果・失敗）は
-  // そこから導く。状態を別に持って effect の頭で「検索中」にすると、1 文字打つたびに
+  // 打った語は 250ms 止まってから問い合わせる（1 文字ごとに問い合わせない）。空に戻したときは
+  // 待たずに戻す。状態（はじめ・検索中・結果・失敗）は、今の語と問い合わせた語・その結果から
+  // 描いている途中で導く。状態を別に持って effect の頭で「検索中」にすると、1 文字打つたびに
   // 前の状態のまま 1 回描いてから、検索中にしてもう 1 回描き直すことになる。
   const needle = query.trim();
-  const requestKey = `${workspaceSlug} ${attempt} ${needle}`;
-  const [result, setResult] = useState<{ key: string; pages: KbSearchResult[] | null } | null>(null);
-  const current = result?.key === requestKey ? result : null;
-  const status: 'idle' | 'loading' | 'done' | 'error' =
-    needle === '' ? 'idle' : current === null ? 'loading' : current.pages === null ? 'error' : 'done';
-  const pages = status === 'done' ? (current?.pages ?? []) : [];
-
+  const [asked, setAsked] = useState(needle);
+  if (needle === '' && asked !== '') setAsked('');
   useEffect(() => {
-    // 空入力に戻したときも世代を進める。進めないと、消す前に飛ばした検索の応答が
-    // まだ有効な世代のまま届き、空の入力に古い結果が再表示される。
-    const token = ++generation.current;
-    if (needle === '') return undefined;
-    const timer = setTimeout(() => {
-      KbRepository.searchPages(workspaceSlug, needle)
-        .then((found) => {
-          if (token !== generation.current) return;
-          setResult({ key: requestKey, pages: found });
-          setSelectedIndex(0);
-        })
-        .catch(() => {
-          if (token !== generation.current) return;
-          setResult({ key: requestKey, pages: null });
-        });
-    }, 250);
+    if (needle === asked) return undefined;
+    const timer = setTimeout(() => setAsked(needle), 250);
     return () => clearTimeout(timer);
-  }, [workspaceSlug, needle, requestKey]);
+  }, [needle, asked]);
+  // 語ごとの鍵なので、速く打っても古い語の応答が新しい語の結果に混ざらない。
+  const search = useQuery({ ...kbSearchQuery(workspaceSlug, asked), enabled: asked !== '' });
+  const found = asked === needle ? search.data : undefined;
+  const status: 'idle' | 'loading' | 'done' | 'error' =
+    needle === ''
+      ? 'idle'
+      : found !== undefined
+        ? 'done'
+        : asked === needle && search.isError && !search.isFetching
+          ? 'error'
+          : 'loading';
+  const pages = status === 'done' ? (found ?? NO_RESULTS) : NO_RESULTS;
+  // 新しい結果が届いたら、選択を先頭へ戻す（前の結果の位置のまま別の行を選ばない）。
+  const [selectedFor, setSelectedFor] = useState(found);
+  if (selectedFor !== found) {
+    setSelectedFor(found);
+    setSelectedIndex(0);
+  }
 
   const view = buildSearchView(pages, spaces);
 
@@ -204,7 +203,7 @@ export default function KbSearchDialog({ workspaceSlug, spaces, initialQuery = '
               <p>検索に失敗しました</p>
               <button
                 type="button"
-                onClick={() => setAttempt((prev) => prev + 1)}
+                onClick={() => void search.refetch()}
                 className="mt-1 underline hover:no-underline"
               >
                 再試行
