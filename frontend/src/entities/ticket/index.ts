@@ -1,5 +1,13 @@
 export { default as TicketRepository } from './api/ticketRepository';
-export { ticketKeys, ticketLabelsQuery, ticketStatusesQuery, ticketTypesQuery } from './api/ticketQueries';
+export {
+  ticketKeys,
+  ticketLabelsQuery,
+  ticketStatusesQuery,
+  ticketTypesQuery,
+  assignedTicketsQuery,
+  myAssignedTicketsQuery,
+  pageTicketReferencesQuery,
+} from './api/ticketQueries';
 export type {
   CreateTicketInput,
   UpdateTicketInput,

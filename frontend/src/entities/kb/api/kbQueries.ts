@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { workspaceScope, workspacesKey } from '@/shared/api/queryKeys';
 import KbRepository from './kbRepository';
+import type { KbGrantablePrincipal } from '../model/types';
 
 /**
  * ナレッジの鍵。作成・改名・削除の応答が新しい値そのものなら setQueryData で差し替え、
@@ -73,6 +74,8 @@ export const kbKeys = {
   recentPages: () => ['recent-pages'] as const,
   /** 自分宛ての招待（ワークスペースをまたぐ）。 */
   myInvitations: () => ['my-invitations'] as const,
+  /** ワークスペースで権限を張れる相手（最初のページで代表させたもの。kbWorkspacePrincipalsQuery）。 */
+  workspacePrincipals: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'workspace-principals'] as const,
 };
 
 /** 所属ワークスペースの一覧。ヘッダー・左の列・管理の画面・ホーム・入口の解決が共有する。 */
@@ -244,5 +247,30 @@ export function kbMyInvitationsQuery() {
   return queryOptions({
     queryKey: kbKeys.myInvitations(),
     queryFn: () => KbRepository.fetchMyInvitations(),
+  });
+}
+
+/**
+ * ワークスペースで権限を張れる相手（principalId → 表示名）。チケットの担当者の名前と、担当を選ぶ
+ * 候補に使う。
+ *
+ * **弱点（設計に明記済みの妥協）**: 相手を引く口 `pagePrincipals` はページ ID を取る。チケットしか
+ * 無いスペースには渡すページが無いので、ワークスペース内のスペースを順に見て最初に見つかったページで
+ * 代表させる。1 枚も見つからなければ空。スペースの一覧・木・相手の一覧はそれぞれ共有の問い合わせから
+ * 読む（左の列が取ってあれば取り直さない）。部品の取得はそれぞれ取り直すので、これ自体は取り直さない。
+ */
+export function kbWorkspacePrincipalsQuery(workspaceSlug: string) {
+  return queryOptions({
+    queryKey: kbKeys.workspacePrincipals(workspaceSlug),
+    queryFn: async ({ client }): Promise<KbGrantablePrincipal[]> => {
+      const spaces = await client.fetchQuery(kbSpacesQuery(workspaceSlug));
+      for (const space of spaces) {
+        const tree = await client.fetchQuery(kbPageTreeQuery(workspaceSlug, space.id));
+        const firstPage = tree.pages[0]?.page;
+        if (firstPage) return client.fetchQuery(kbGrantablePrincipalsQuery(workspaceSlug, firstPage.id));
+      }
+      return [];
+    },
+    retry: false,
   });
 }

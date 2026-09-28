@@ -28,6 +28,7 @@ export {
   kbInvitationsQuery,
   kbRecentPagesQuery,
   kbMyInvitationsQuery,
+  kbWorkspacePrincipalsQuery,
 } from './api/kbQueries';
 export { refreshKbPageTrees, reflectKbPageInTrees } from './model/kbPageTreeCache';
 export {

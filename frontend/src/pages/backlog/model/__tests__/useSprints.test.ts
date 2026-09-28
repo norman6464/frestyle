@@ -1,17 +1,23 @@
-import { renderHook, waitFor, act } from '@testing-library/react';
+import { renderHook as rtlRenderHook, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useSprints } from '../useSprints';
 import type { Sprint } from '@/entities/sprint';
+import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
+import { sprintKeys } from '@/entities/sprint/api/sprintQueries';
 
-const hoisted = vi.hoisted(() => ({ fetchSprints: vi.fn(), createSprint: vi.fn() }));
+const renderHook: typeof rtlRenderHook = ((callback: Parameters<typeof rtlRenderHook>[0], options?: Parameters<typeof rtlRenderHook>[1]) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
-vi.mock('@/entities/sprint', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/sprint')>();
-  return {
-    ...actual,
-    SprintRepository: { fetchSprints: hoisted.fetchSprints, createSprint: hoisted.createSprint },
-  };
-});
+const hoisted = vi.hoisted(() => ({ fetchSprints: vi.fn(), createSprint: vi.fn(), addTicketToSprint: vi.fn() }));
+
+// 取得の本体を偽物にする（公開口の SprintRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/sprint/api/sprintRepository', () => ({
+  SprintRepository: {
+    fetchSprints: hoisted.fetchSprints,
+    createSprint: hoisted.createSprint,
+    addTicketToSprint: hoisted.addTicketToSprint,
+  },
+}));
 
 function sprint(id: string, name: string): Sprint {
   return {
@@ -93,7 +99,7 @@ describe('useSprints', () => {
       resolveB([sprint('s-2', 'B のスプリント')]);
     });
 
-    expect(result.current.sprints.map((s) => s.id)).toEqual(['s-2']);
+    await waitFor(() => expect(result.current.sprints.map((s) => s.id)).toEqual(['s-2']));
     expect(result.current.loading).toBe(false);
   });
 
@@ -146,5 +152,23 @@ describe('useSprints', () => {
     expect(result.current.error).toBeNull();
     expect(result.current.loading).toBe(false);
     expect(result.current.sprints).toEqual([]);
+  });
+
+  it('チケットを入れたら、一覧を取り直し、スプリントの中身とチケットの入っているスプリントも古くする', async () => {
+    hoisted.fetchSprints.mockResolvedValue([sprint('s-1', 'A')]);
+    hoisted.addTicketToSprint.mockResolvedValue(undefined);
+    const client = createTestQueryClient();
+    client.setQueryData(sprintKeys.ticketIds('acme', 's-1'), []);
+    client.setQueryData(sprintKeys.ticketSprint('acme', 't-1'), null);
+    const { result } = renderHook(() => useSprints('acme', 'p-1'), { wrapper: queryWrapper(client) });
+    await waitFor(() => expect(result.current.sprints).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.addTicket('s-1', 't-1');
+    });
+
+    expect(hoisted.fetchSprints).toHaveBeenCalledTimes(2);
+    expect(client.getQueryState(sprintKeys.ticketIds('acme', 's-1'))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(sprintKeys.ticketSprint('acme', 't-1'))?.isInvalidated).toBe(true);
   });
 });
