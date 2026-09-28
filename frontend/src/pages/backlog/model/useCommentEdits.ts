@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
-import { TicketRepository, type TicketCommentEdit } from '@/entities/ticket';
+import { useQuery } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
+import { ticketCommentEditsQuery, type TicketCommentEdit } from '@/entities/ticket';
 
 export interface CommentEditsState {
   edits: TicketCommentEdit[];
@@ -7,31 +8,17 @@ export interface CommentEditsState {
   error: string | null;
 }
 
-const EMPTY: CommentEditsState = { edits: [], loading: false, error: null };
+const NO_EDITS: TicketCommentEdit[] = [];
 
 /**
- * useCommentEdits は「（編集済み）」を押した発言 1 件ぶんの編集前の本文を引く。
+ * useCommentEdits は「（編集済み）」を開いた発言 1 件ぶんの編集前の本文を引く。
  *
- * 一覧に混ぜて先読みする口が無いので、押した瞬間に 1 本叩く。同時に開けるのは
- * 呼び出し側（TicketCommentItem の並び）が 1 件に絞る前提で、ここでは宛先の
- * 世代管理はしない（1 発言 1 インスタンスで使う想定の軽い hook）。
+ * 一覧に混ぜて先読みする口が無いので、開いている間（`open`）だけ問い合わせる。共有の問い合わせ
+ * （ticketCommentEditsQuery）から読むので、閉じて開き直しても取ってある分を出し、発言を編集したら
+ * 書き込みの側（useTicketComments）が古いものにする。読めなかったら、閉じて開き直すと取り直す。
  */
-export function useCommentEdits(workspaceSlug: string, ticketId: string, commentId: string) {
-  const [state, setState] = useState<CommentEditsState>(EMPTY);
-  const seq = useRef(0);
-
-  const load = useCallback(async () => {
-    const request = ++seq.current;
-    setState({ edits: [], loading: true, error: null });
-    try {
-      const edits = await TicketRepository.fetchTicketCommentEdits(workspaceSlug, ticketId, commentId);
-      if (seq.current !== request) return;
-      setState({ edits, loading: false, error: null });
-    } catch {
-      if (seq.current !== request) return;
-      setState({ edits: [], loading: false, error: '編集履歴を読み込めませんでした。' });
-    }
-  }, [workspaceSlug, ticketId, commentId]);
-
-  return { ...state, load };
+export function useCommentEdits(workspaceSlug: string, ticketId: string, commentId: string, open: boolean): CommentEditsState {
+  const result = useQuery({ ...ticketCommentEditsQuery(workspaceSlug, ticketId, commentId), enabled: open });
+  const { data, loading, failed } = queryShownState(result, open);
+  return { edits: data ?? NO_EDITS, loading, error: failed ? '編集履歴を読み込めませんでした。' : null };
 }

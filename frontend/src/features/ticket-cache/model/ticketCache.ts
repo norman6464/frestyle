@@ -5,8 +5,9 @@ import { sprintKeys } from '@/entities/sprint';
 
 /**
  * reflectTicket は、書き換えたチケットの新しい値を、そのチケットを載せている控え（プロジェクトの
- * 一覧すべてとチケットの画面）へ映す。載せていない一覧には触らない。飛んでいる取得は止めてから
- * 映す（書き込みより前の古い結果があとから届いて、映した値を上書きしない）。
+ * 一覧すべて・親の「子」の一覧・チケットの画面）へ映す。載せていない一覧には触らない。飛んでいる
+ * 取得は止めてから映す（書き込みより前の古い結果があとから届いて、映した値を上書きしない）。
+ * 書き込みはそのチケットの変更履歴に 1 行足すので、履歴は古くする（応答からは作れない）。
  */
 export async function reflectTicket(
   queryClient: QueryClient,
@@ -15,15 +16,17 @@ export async function reflectTicket(
   ticketId: string,
   update: (ticket: Ticket) => Ticket,
 ): Promise<void> {
+  const inList = (tickets: Ticket[]) =>
+    tickets.some((t) => t.id === ticketId) ? tickets.map((t) => (t.id === ticketId ? update(t) : t)) : tickets;
   await Promise.all([
-    reflectWriteAll<Ticket[]>(queryClient, ticketKeys.lists(workspaceSlug, projectId), (tickets) =>
-      tickets.some((t) => t.id === ticketId) ? tickets.map((t) => (t.id === ticketId ? update(t) : t)) : tickets,
-    ),
+    reflectWriteAll<Ticket[]>(queryClient, ticketKeys.lists(workspaceSlug, projectId), inList),
+    reflectWriteAll<Ticket[]>(queryClient, ticketKeys.allChildren(workspaceSlug), inList),
     reflectWrite(queryClient, resolvedTicketQuery(ticketId).queryKey, (resolved) => ({
       ...resolved,
       ticket: update(resolved.ticket),
     })),
   ]);
+  void queryClient.invalidateQueries({ queryKey: ticketKeys.history(workspaceSlug, ticketId) });
 }
 
 /**
@@ -50,10 +53,17 @@ export function refreshTicketDerived(queryClient: QueryClient, workspaceSlug: st
 }
 
 /**
- * refreshTicketAncestry は親を変えたあとに、解決したチケット（祖先の列つき）をすべて古くする。
- * 祖先の列は書き込みの応答に入っておらず、動かしたチケットの子孫の列も変わるので、手元では直せない。
- * 開いている画面のぶんだけ取り直し、それを待つ。
+ * refreshTicketHierarchy は親を変えたあとに、親子の形に頼る控えをすべて古くする。
+ *
+ * - 解決したチケット（祖先の列つき）: 祖先の列は書き込みの応答に入っておらず、動かしたチケットの
+ *   子孫の列も変わる
+ * - 「子」の一覧: 元の親から抜け、新しい親に入る。元の親は応答からは分からない
+ *
+ * 手元では直せないので、開いている画面のぶんだけ取り直し、それを待つ。
  */
-export function refreshTicketAncestry(queryClient: QueryClient): Promise<void> {
-  return queryClient.invalidateQueries({ queryKey: ticketKeys.allResolved() });
+export async function refreshTicketHierarchy(queryClient: QueryClient, workspaceSlug: string): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ticketKeys.allResolved() }),
+    queryClient.invalidateQueries({ queryKey: ticketKeys.allChildren(workspaceSlug) }),
+  ]);
 }

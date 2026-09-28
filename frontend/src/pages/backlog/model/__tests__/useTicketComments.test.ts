@@ -1,7 +1,8 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook as rtlRenderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ticketKeys, type TicketComment } from '@/entities/ticket';
+import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 import { useTicketComments } from '../useTicketComments';
-import type { TicketComment } from '@/entities/ticket';
 
 const hoisted = vi.hoisted(() => ({
   fetchTicketComments: vi.fn(),
@@ -12,20 +13,21 @@ const hoisted = vi.hoisted(() => ({
   removeTicketCommentReaction: vi.fn(),
 }));
 
-vi.mock('@/entities/ticket', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/ticket')>();
-  return {
-    ...actual,
-    TicketRepository: {
-      fetchTicketComments: hoisted.fetchTicketComments,
-      createTicketComment: hoisted.createTicketComment,
-      updateTicketComment: hoisted.updateTicketComment,
-      deleteTicketComment: hoisted.deleteTicketComment,
-      addTicketCommentReaction: hoisted.addTicketCommentReaction,
-      removeTicketCommentReaction: hoisted.removeTicketCommentReaction,
-    },
-  };
-});
+// 取得の本体を偽物にする（公開口だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/ticket/api/ticketRepository', () => ({
+  default: {
+    fetchTicketComments: hoisted.fetchTicketComments,
+    createTicketComment: hoisted.createTicketComment,
+    updateTicketComment: hoisted.updateTicketComment,
+    deleteTicketComment: hoisted.deleteTicketComment,
+    addTicketCommentReaction: hoisted.addTicketCommentReaction,
+    removeTicketCommentReaction: hoisted.removeTicketCommentReaction,
+  },
+}));
+
+// 共有の問い合わせを使うので、テストごとに新しい置き場の中で描く。
+const renderHook = ((callback, options) =>
+  rtlRenderHook(callback, { wrapper: queryWrapper(), ...options })) as typeof rtlRenderHook;
 
 function fixtureComment(over: Partial<TicketComment> & { id: string }): TicketComment {
   return {
@@ -81,7 +83,8 @@ describe('useTicketComments', () => {
       await result.current.createComment([{ kind: 'text', text: 'hi' }]);
     });
 
-    expect(result.current.comments).toEqual([created]);
+    // 置き場の知らせは次の刻みで届くので、映るのを待つ。
+    await waitFor(() => expect(result.current.comments).toEqual([created]));
     expect(hoisted.createTicketComment).toHaveBeenCalledWith(SLUG, TICKET, [{ kind: 'text', text: 'hi' }], undefined);
   });
 
@@ -104,12 +107,14 @@ describe('useTicketComments', () => {
       await result.current.editComment('c-1', [{ kind: 'text', text: '直した' }]);
     });
 
-    expect(result.current.comments[0]).toMatchObject({
-      body: [{ kind: 'text', text: '直した' }],
-      edited: true,
-      updatedAt: '2026-09-10T00:00:00Z',
-      reactions: [{ userId: 9, emoji: '👍' }],
-    });
+    await waitFor(() =>
+      expect(result.current.comments[0]).toMatchObject({
+        body: [{ kind: 'text', text: '直した' }],
+        edited: true,
+        updatedAt: '2026-09-10T00:00:00Z',
+        reactions: [{ userId: 9, emoji: '👍' }],
+      }),
+    );
   });
 
   it('削除すると一覧から外す', async () => {
@@ -123,7 +128,7 @@ describe('useTicketComments', () => {
       await result.current.deleteComment('c-1');
     });
 
-    expect(result.current.comments).toEqual([]);
+    await waitFor(() => expect(result.current.comments).toEqual([]));
   });
 
   it('反応の追加は204のあと手元で足す。同じ反応を二重に足さない', async () => {
@@ -139,6 +144,7 @@ describe('useTicketComments', () => {
       await result.current.addReaction('c-1', '👍', 5);
     });
 
+    await new Promise((r) => setTimeout(r, 0));
     expect(result.current.comments[0].reactions).toEqual([{ userId: 5, emoji: '👍' }]);
   });
 
@@ -155,7 +161,7 @@ describe('useTicketComments', () => {
       await result.current.removeReaction('c-1', '👍', 5);
     });
 
-    expect(result.current.comments[0].reactions).toEqual([]);
+    await waitFor(() => expect(result.current.comments[0].reactions).toEqual([]));
   });
 
   it('宛先を切り替えたら古い応答での書き込み反映を無視する', async () => {
@@ -183,7 +189,7 @@ describe('useTicketComments', () => {
 });
 
 describe('useTicketComments の開き直し', () => {
-  it('閉じてすぐ同じチケットを開き直したあとに、前の書き込みの応答を重ねない（二重に増えない）', async () => {
+  it('送信中に閉じて同じチケットを開き直し、取り直しに送った発言が入っていても、二重に増やさない', async () => {
     const created = fixtureComment({ id: 'c-new' });
     let resolveCreate: (value: TicketComment) => void = () => {};
     hoisted.createTicketComment.mockImplementation(
@@ -198,25 +204,43 @@ describe('useTicketComments の開き直し', () => {
     });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    // 送信中に閉じて、すぐ同じチケットを開き直す。開き直しの取得には、送った発言がもう入っている。
+    // 送信中に閉じて、すぐ同じチケットを開き直し、取り直す。その取得には、送った発言がもう入っている。
     let sending: Promise<unknown> = Promise.resolve();
     act(() => {
       sending = result.current.createComment([{ kind: 'text', text: 'x' }]);
     });
     rerender({ ticketId: undefined });
-    hoisted.fetchTicketComments.mockResolvedValueOnce([created]);
     rerender({ ticketId: TICKET });
+    hoisted.fetchTicketComments.mockResolvedValueOnce([created]);
+    act(() => result.current.refresh());
     await waitFor(() => expect(result.current.comments).toHaveLength(1));
 
-    // 書き込みの応答は捨てて取り直す。取り直しにも送った発言は 1 つだけ入っている。
-    hoisted.fetchTicketComments.mockResolvedValue([created]);
+    // 書き込みの応答を映しても、同じ発言は足さない。
     await act(async () => {
       resolveCreate(created);
       await sending;
     });
 
-    await waitFor(() => expect(hoisted.fetchTicketComments).toHaveBeenCalledTimes(3));
+    await new Promise((r) => setTimeout(r, 0));
     expect(result.current.comments.map((c) => c.id)).toEqual(['c-new']);
+  });
+
+  it('編集したら、その発言の編集履歴を古くする（開いたときに新しい履歴を取る）', async () => {
+    const original = fixtureComment({ id: 'c-1' });
+    hoisted.fetchTicketComments.mockResolvedValue([original]);
+    hoisted.updateTicketComment.mockResolvedValue({ ...original, edited: true });
+    const client = createTestQueryClient();
+    client.setQueryData(ticketKeys.commentEdits(SLUG, TICKET, 'c-1'), []);
+    client.setQueryData(ticketKeys.commentEdits(SLUG, TICKET, 'c-2'), []);
+    const { result } = renderHook(() => useTicketComments(SLUG, TICKET), { wrapper: queryWrapper(client) });
+    await waitFor(() => expect(result.current.comments).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.editComment('c-1', [{ kind: 'text', text: '直した' }]);
+    });
+
+    expect(client.getQueryState(ticketKeys.commentEdits(SLUG, TICKET, 'c-1'))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(ticketKeys.commentEdits(SLUG, TICKET, 'c-2'))?.isInvalidated).toBe(false);
   });
 });
 

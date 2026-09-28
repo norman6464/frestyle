@@ -76,7 +76,8 @@ export default function TicketCommentItem({
     };
   }, [menuOpen]);
 
-  const edits = useCommentEdits(workspaceSlug, ticketId, comment.id);
+  // 編集前の本文は、履歴を開いている間だけ引く。
+  const edits = useCommentEdits(workspaceSlug, ticketId, comment.id, historyOpen);
   const isMine = currentUserId !== null && currentUserId === comment.author.userId;
   const authorName = comment.author.name || '不明なユーザー';
 
@@ -94,11 +95,7 @@ export default function TicketCommentItem({
     setEditing(false);
   };
 
-  const toggleHistory = () => {
-    const next = !historyOpen;
-    setHistoryOpen(next);
-    if (next) void edits.load();
-  };
+  const toggleHistory = () => setHistoryOpen((open) => !open);
 
   return (
     <article className="flex gap-2 py-2">

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AutoResizeTextarea } from '@/shared/ui';
 import {
@@ -24,6 +23,8 @@ import TicketCommentSection from './TicketCommentSection';
 import TicketDescriptionEditor from './TicketDescriptionEditor';
 import TicketSection from './TicketSection';
 import { useTicketVocabulary } from '../model/useTicketVocabulary';
+import { useTicketAttachmentCount } from '../model/useTicketAttachments';
+import { useTicketChildCount } from '../model/useTicketChildren';
 import TicketStatusSelect from './TicketStatusSelect';
 import TicketWatchButton from './TicketWatchButton';
 import { formatTicketTimestamp } from '../lib/formatTicketTimestamp';
@@ -96,7 +97,7 @@ export default function TicketDetailPanel({
 
   const type = types.find((t) => t.id === ticket.typeId);
   // 版・チーム（プロジェクトの語彙）と、このチケットに付いている分・所属スプリント。
-  const vocabulary = useTicketVocabulary(workspaceSlug, ticket.projectId, ticket.id, ticket.teamId);
+  const vocabulary = useTicketVocabulary(workspaceSlug, ticket.projectId, ticket.id);
   const editor = useTicketEditor(ticket, editable, (input) => onUpdate(ticket.id, input));
   // 状態・担当・ラベル・親の書き換えと結果（PX04）。
   const writes = useTicketFieldWrites(statuses, {
@@ -107,9 +108,9 @@ export default function TicketDetailPanel({
     changeParent: onChangeParent,
   });
   const feedback = buildAttributeFeedback(editor.outcomeOf, writes.outcomeOf, onRefresh);
-  // 添付とサブタスクの件数。数えるのは各節の中（自前の取得を持つ）なので、報告を受けて見出しへ回す。
-  const [attachmentCount, setAttachmentCount] = useState<number | null>(null);
-  const [childCount, setChildCount] = useState<number | null>(null);
+  // 添付とサブタスクの件数。節の中身と同じ共有の問い合わせから数える（取り直さない）。
+  const attachmentCount = useTicketAttachmentCount(workspaceSlug, ticket.id);
+  const childCount = useTicketChildCount(workspaceSlug, ticket.id);
   const docValue = isRichDoc(editor.doc) ? editor.doc : emptyRichDoc();
   const key = formatTicketKey(projectKey, ticket.number);
 
@@ -200,7 +201,7 @@ export default function TicketDetailPanel({
           teams={vocabulary.teams}
           fixVersions={vocabulary.fixVersions}
           sprint={vocabulary.sprint}
-          teamId={vocabulary.teamId}
+          teamId={ticket.teamId}
           onSetFixVersion={(versionId, attach) => void vocabulary.setFixVersion(versionId, attach)}
           onChangeTeam={(next) => void vocabulary.changeTeam(next)}
           allLabels={allLabels}
@@ -224,7 +225,7 @@ export default function TicketDetailPanel({
           title="添付"
           collapsible
           mountWhenClosed
-          count={attachmentCount ?? undefined}
+          count={attachmentCount}
           defaultOpen={false}
           key={`attachments-${ticket.id}`}
         >
@@ -232,7 +233,6 @@ export default function TicketDetailPanel({
             workspaceSlug={workspaceSlug}
             ticketId={ticket.id}
             canEdit={editable}
-            onCountChange={setAttachmentCount}
           />
         </TicketSection>
 
@@ -240,7 +240,7 @@ export default function TicketDetailPanel({
           title="サブタスク"
           collapsible
           mountWhenClosed
-          count={childCount ?? undefined}
+          count={childCount}
           defaultOpen={false}
           key={`children-${ticket.id}`}
         >
@@ -249,7 +249,6 @@ export default function TicketDetailPanel({
             ticketId={ticket.id}
             projectKey={projectKey}
             statuses={statuses}
-            onCountChange={setChildCount}
           />
         </TicketSection>
       </div>

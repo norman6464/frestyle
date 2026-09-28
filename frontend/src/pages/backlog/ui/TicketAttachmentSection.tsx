@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useTicketAttachments } from '../model/useTicketAttachments';
@@ -11,8 +11,6 @@ export interface TicketAttachmentSectionProps {
   workspaceSlug: string;
   ticketId: string;
   canEdit: boolean;
-  /** 取得できた件数を親へ知らせる（見出しに出すため）。 */
-  onCountChange?: (count: number) => void;
 }
 
 /**
@@ -26,17 +24,12 @@ export default function TicketAttachmentSection({
   workspaceSlug,
   ticketId,
   canEdit,
-  onCountChange,
 }: TicketAttachmentSectionProps) {
   const { attachments, pending, loading, error, busyId, upload, retry, dismiss, remove } = useTicketAttachments(
     workspaceSlug,
     ticketId,
   );
   const { showToast } = useToast();
-  // 件数は見出し（TicketSection の count）が持つ。ここは数えて渡すだけで、表示には使わない。
-  useEffect(() => {
-    onCountChange?.(attachments.length);
-  }, [attachments.length, onCountChange]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 

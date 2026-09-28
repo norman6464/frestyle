@@ -7,7 +7,7 @@ import { useTicketPage } from '../model/useTicketPage';
 import { useTicketMasters } from '../model/useTicketMasters';
 import { useTicketLabels } from '../model/useTicketLabels';
 import { usePrincipalNames } from '../model/usePrincipalNames';
-import { useTicketDetail } from '../model/useTicketDetail';
+import { useTicketHistory } from '../model/useTicketHistory';
 import TicketFullView from './TicketFullView';
 
 /**
@@ -27,7 +27,7 @@ export default function KbTicketPage() {
   const masters = useTicketMasters(page.workspaceSlug ?? undefined, page.ticket?.projectId);
   const labels = useTicketLabels(page.workspaceSlug ?? undefined);
   const { principals } = usePrincipalNames(page.workspaceSlug ?? undefined);
-  const history = useTicketDetail(page.workspaceSlug ?? undefined, page.ticket ? (ticketId ?? null) : null);
+  const history = useTicketHistory(page.workspaceSlug ?? undefined, page.ticket ? (ticketId ?? null) : null);
 
   const withToastOnFailure = async (action: () => Promise<unknown>, failureMessage: string) => {
     try {

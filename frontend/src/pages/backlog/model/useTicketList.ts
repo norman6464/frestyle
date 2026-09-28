@@ -13,7 +13,7 @@ import {
   type TicketListFilter,
   type UpdateTicketInput,
 } from '@/entities/ticket';
-import { reflectTicket, refreshTicketAncestry, refreshTicketDerived } from '@/features/ticket-cache';
+import { reflectTicket, refreshTicketDerived, refreshTicketHierarchy } from '@/features/ticket-cache';
 import { reuseUnchanged } from '../lib/reuseUnchanged';
 
 export interface UseTicketListOptions {
@@ -63,7 +63,7 @@ function filterOf(options: UseTicketListOptions): TicketListFilter {
  *
  * 一覧の応答は既に `Ticket` の全項目（doc 含む）を持っているため、詳細パネルは
  * 別に取得しない — 選択中の 1 件をこの配列から `find` するだけでよい
- * （履歴だけは別 hook `useTicketDetail` が持つ）。
+ * （履歴だけは別 hook `useTicketHistory` が持つ）。
  *
  * 一覧は絞り込みごとの共有の問い合わせ（ticketListQuery）から読む。宛先（workspaceSlug +
  * projectId + 現役/アーカイブ + 絞り込み）ごとの鍵なので、古い宛先の応答で新しい画面を上書き
@@ -220,7 +220,7 @@ export function useTicketList(
     [mutate],
   );
 
-  // 親を変えると、そのチケットと子孫の祖先の列（チケットの画面のパンくず）も変わる。
+  // 親を変えると、そのチケットと子孫の祖先の列（チケットの画面のパンくず）と、元の親・新しい親の子の一覧も変わる。
   const changeParent = useCallback(
     async (ticketId: string, parentId: string | null) => {
       const written = await mutate(
@@ -229,10 +229,10 @@ export function useTicketList(
         replaceInPlace,
         (replacement) => () => replacement,
       );
-      void refreshTicketAncestry(queryClient);
+      if (workspaceSlug) void refreshTicketHierarchy(queryClient, workspaceSlug);
       return written;
     },
-    [mutate, queryClient],
+    [mutate, workspaceSlug, queryClient],
   );
 
   const assign = useCallback(

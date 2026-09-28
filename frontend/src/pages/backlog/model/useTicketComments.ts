@@ -1,5 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { TicketRepository, type TicketComment, type TicketCommentBlock } from '@/entities/ticket';
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { reflectWrite } from '@/shared/api/queryCache';
+import { queryShownState } from '@/shared/api/queryState';
+import {
+  TicketRepository,
+  ticketCommentsQuery,
+  ticketKeys,
+  type TicketComment,
+  type TicketCommentBlock,
+} from '@/entities/ticket';
 
 export interface TicketCommentsState {
   comments: TicketComment[];
@@ -8,172 +17,126 @@ export interface TicketCommentsState {
 }
 
 const LOAD_FAILED = 'コメントを読み込めませんでした。時間をおいて開き直すと最新の状態が出ます。';
-
-interface Target {
-  key: string;
-  workspaceSlug: string;
-  ticketId: string;
-}
+const NO_COMMENTS: TicketComment[] = [];
 
 /**
- * useTicketComments はチケット 1 件ぶんの発言を読み書きする（useTicketList・useKbComments と
- * 同じ形: 宛先一致・世代一致・取得中に割り込んだ書き込みが無いことの 3 点確認で、
- * 遅れて返ってきた前の宛先の応答が今の画面を上書きしないようにする）。
+ * useTicketComments はチケット 1 件ぶんの発言を読み書きする。
  *
- * 楽観更新はしない。応答をそのまま state へ入れ、失敗は投げる（呼び出し側が知らせる）。
+ * 発言は共有の問い合わせ（ticketCommentsQuery）から読む。チケットごとの鍵なので、遅れて返って
+ * きた前のチケットの応答が今の画面に混ざらない。書き込みの応答は reflectWrite で映す — 書き込みの
+ * 途中に取り直しが挟まっても、飛んでいる取得を止めてから映すので古い一覧で上書きしない。足す・
+ * 外すは id で見る（取り直した一覧に既に入っていても二重にしない）。
+ *
+ * 楽観更新はしない。失敗は投げる（呼び出し側が知らせる）。
  *
  * **編集の応答は反応を運ばない**（backend が常に空配列で返す）。素直に差し替えると
  * 画面上の反応が消えるので、`editComment` は本文・edited・updatedAt だけを差し替え、
- * reactions は手元の値を残す。
+ * reactions は手元の値を残す。編集すると編集前の本文が 1 つ増えるので、その発言の編集履歴は
+ * 古いものにする。
  */
 export function useTicketComments(workspaceSlug: string | undefined, ticketId: string | undefined) {
-  const [state, setState] = useState<TicketCommentsState>({ comments: [], loading: false, error: null });
-  const active = useRef<Target | null>(null);
-  const seq = useRef(0);
-  const writeCount = useRef(0);
+  const queryClient = useQueryClient();
+  const active = workspaceSlug !== undefined && ticketId !== undefined;
+  const result = useQuery({ ...ticketCommentsQuery(workspaceSlug ?? '', ticketId ?? ''), enabled: active });
+  const { data, loading, failed } = queryShownState(result, active);
 
-  const target: Target | null =
-    workspaceSlug && ticketId ? { key: `${workspaceSlug} ${ticketId}`, workspaceSlug, ticketId } : null;
-  const targetKey = target?.key ?? null;
-
-  const load = useCallback(async (to: Target) => {
-    const request = ++seq.current;
-    const writesAtStart = writeCount.current;
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const comments = await TicketRepository.fetchTicketComments(to.workspaceSlug, to.ticketId);
-      if (active.current?.key !== to.key || seq.current !== request) return;
-      if (writeCount.current !== writesAtStart) {
-        setState((prev) => ({ ...prev, loading: false }));
-        return;
-      }
-      setState({ comments, loading: false, error: null });
-    } catch {
-      if (active.current?.key !== to.key || seq.current !== request) return;
-      if (writeCount.current !== writesAtStart) {
-        setState((prev) => ({ ...prev, loading: false }));
-        return;
-      }
-      setState({ comments: [], loading: false, error: LOAD_FAILED });
-    }
-  }, []);
-
-  useEffect(() => {
-    active.current = target;
-    if (!target) {
-      seq.current += 1;
-      setState({ comments: [], loading: false, error: null });
-      return;
-    }
-    void load(target);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetKey, load]);
-
+  const { refetch } = result;
   const refresh = useCallback(() => {
-    if (active.current) void load(active.current);
-  }, [load]);
+    if (active) void refetch();
+  }, [active, refetch]);
 
-  /**
-   * 書き込みの応答を、書き込みを始めたときと同じ閲覧のままなら反映する。
-   *
-   * **宛先（key）の一致だけでは足りない** — 閉じてすぐ同じチケットを開き直すと key は同じだが、
-   * それは別の閲覧で、開き直しの取得に書き込みの結果がもう入っていることがある。始めたときの
-   * seq も確かめ、開き直しのあとに前の応答を重ねない（発言が二重に増える。useKbComments と同じ）。
-   *
-   * 同じチケットのまま書き込み中に取り直し（refresh・開き直し）が挟まったときは、その取得に
-   * 書き込みの結果が入っているかどうか手元では分からない（backend が書き終える前に読んだかもしれない）。
-   * 応答を重ねも捨てもせず、もう一度取り直して backend の今の一覧に合わせる。
-   */
-  const applyIfCurrent = useCallback(
-    (to: Target, request: number, apply: (comments: TicketComment[]) => TicketComment[]) => {
-      if (active.current?.key !== to.key) return;
-      if (seq.current !== request) {
-        void load(active.current);
-        return;
-      }
-      writeCount.current += 1;
-      setState((prev) => ({ ...prev, comments: apply(prev.comments) }));
+  /** 書き込みを送り、書いた時点のチケットの発言へ応答を映す。 */
+  const write = useCallback(
+    async <T,>(
+      run: (slug: string, id: string) => Promise<T>,
+      apply: (comments: TicketComment[], result: T) => TicketComment[],
+    ): Promise<T> => {
+      if (!workspaceSlug || !ticketId) throw new Error('ticket comments: no active target');
+      const written = await run(workspaceSlug, ticketId);
+      await reflectWrite(queryClient, ticketCommentsQuery(workspaceSlug, ticketId).queryKey, (comments) =>
+        apply(comments, written),
+      );
+      return written;
     },
-    [load],
+    [workspaceSlug, ticketId, queryClient],
   );
 
   const createComment = useCallback(
-    async (body: TicketCommentBlock[], parentCommentId?: string) => {
-      const to = active.current;
-      if (!to) throw new Error('ticket comments: no active target');
-      const request = seq.current;
-      const created = await TicketRepository.createTicketComment(to.workspaceSlug, to.ticketId, body, parentCommentId);
-      applyIfCurrent(to, request, (comments) => [...comments, created]);
-      return created;
-    },
-    [applyIfCurrent],
+    (body: TicketCommentBlock[], parentCommentId?: string) =>
+      write(
+        (slug, id) => TicketRepository.createTicketComment(slug, id, body, parentCommentId),
+        (comments, created) => (comments.some((c) => c.id === created.id) ? comments : [...comments, created]),
+      ),
+    [write],
   );
 
   const editComment = useCallback(
     async (commentId: string, body: TicketCommentBlock[]) => {
-      const to = active.current;
-      if (!to) throw new Error('ticket comments: no active target');
-      const request = seq.current;
-      const updated = await TicketRepository.updateTicketComment(to.workspaceSlug, to.ticketId, commentId, body);
-      applyIfCurrent(to, request, (comments) =>
-        comments.map((c) =>
-          c.id === commentId
-            ? { ...c, body: updated.body, edited: updated.edited, updatedAt: updated.updatedAt }
-            : c,
-        ),
+      await write(
+        (slug, id) => TicketRepository.updateTicketComment(slug, id, commentId, body),
+        (comments, updated) =>
+          comments.map((c) =>
+            c.id === commentId ? { ...c, body: updated.body, edited: updated.edited, updatedAt: updated.updatedAt } : c,
+          ),
       );
+      if (workspaceSlug && ticketId) {
+        void queryClient.invalidateQueries({ queryKey: ticketKeys.commentEdits(workspaceSlug, ticketId, commentId) });
+      }
     },
-    [applyIfCurrent],
+    [write, workspaceSlug, ticketId, queryClient],
   );
 
   const deleteComment = useCallback(
     async (commentId: string) => {
-      const to = active.current;
-      if (!to) throw new Error('ticket comments: no active target');
-      const request = seq.current;
-      await TicketRepository.deleteTicketComment(to.workspaceSlug, to.ticketId, commentId);
-      applyIfCurrent(to, request, (comments) => comments.filter((c) => c.id !== commentId));
+      await write(
+        (slug, id) => TicketRepository.deleteTicketComment(slug, id, commentId),
+        (comments) => comments.filter((c) => c.id !== commentId),
+      );
     },
-    [applyIfCurrent],
+    [write],
   );
 
   /** 204 で本体が返らないので、成功を受けてから手元の反応を足す。 */
   const addReaction = useCallback(
     async (commentId: string, emoji: string, userId: number) => {
-      const to = active.current;
-      if (!to) throw new Error('ticket comments: no active target');
-      const request = seq.current;
-      await TicketRepository.addTicketCommentReaction(to.workspaceSlug, to.ticketId, commentId, emoji);
-      applyIfCurrent(to, request, (comments) =>
-        comments.map((c) =>
-          c.id === commentId
-            ? c.reactions.some((r) => r.userId === userId && r.emoji === emoji)
-              ? c
-              : { ...c, reactions: [...c.reactions, { userId, emoji }] }
-            : c,
-        ),
+      await write(
+        (slug, id) => TicketRepository.addTicketCommentReaction(slug, id, commentId, emoji),
+        (comments) =>
+          comments.map((c) =>
+            c.id === commentId && !c.reactions.some((r) => r.userId === userId && r.emoji === emoji)
+              ? { ...c, reactions: [...c.reactions, { userId, emoji }] }
+              : c,
+          ),
       );
     },
-    [applyIfCurrent],
+    [write],
   );
 
   /** 204 で本体が返らないので、成功を受けてから手元の反応を外す。 */
   const removeReaction = useCallback(
     async (commentId: string, emoji: string, userId: number) => {
-      const to = active.current;
-      if (!to) throw new Error('ticket comments: no active target');
-      const request = seq.current;
-      await TicketRepository.removeTicketCommentReaction(to.workspaceSlug, to.ticketId, commentId, emoji);
-      applyIfCurrent(to, request, (comments) =>
-        comments.map((c) =>
-          c.id === commentId
-            ? { ...c, reactions: c.reactions.filter((r) => !(r.userId === userId && r.emoji === emoji)) }
-            : c,
-        ),
+      await write(
+        (slug, id) => TicketRepository.removeTicketCommentReaction(slug, id, commentId, emoji),
+        (comments) =>
+          comments.map((c) =>
+            c.id === commentId
+              ? { ...c, reactions: c.reactions.filter((r) => !(r.userId === userId && r.emoji === emoji)) }
+              : c,
+          ),
       );
     },
-    [applyIfCurrent],
+    [write],
   );
 
-  return { ...state, refresh, createComment, editComment, deleteComment, addReaction, removeReaction };
+  return {
+    comments: data ?? NO_COMMENTS,
+    loading,
+    error: failed ? LOAD_FAILED : null,
+    refresh,
+    createComment,
+    editComment,
+    deleteComment,
+    addReaction,
+    removeReaction,
+  };
 }

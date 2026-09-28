@@ -11,7 +11,7 @@ import {
   type UpdateTicketInput,
 } from '@/entities/ticket';
 import { projectQuery } from '@/entities/project';
-import { reflectTicket, refreshTicketAncestry, refreshTicketDerived } from '@/features/ticket-cache';
+import { reflectTicket, refreshTicketDerived, refreshTicketHierarchy } from '@/features/ticket-cache';
 
 const NO_ANCESTORS: Ticket[] = [];
 
@@ -143,15 +143,15 @@ export function useTicketPage(ticketId: string | undefined) {
   );
 
   /**
-   * 親を変える。祖先の列（パンくず）は応答に入っていないので、応答を映したうえで解決した 1 件を
+   * 親を変える。祖先の列（パンくず）と子の一覧は応答からは直せないので、応答を映したうえで
    * 取り直す（取り直しの間も今の画面は出したまま）。
    */
   const changeParent = useCallback(
     async (parentId: string | null) => {
       await mutate((slug, id) => TicketRepository.changeTicketParent(slug, id, parentId), (written) => () => written);
-      await refreshTicketAncestry(queryClient);
+      if (workspaceSlug) await refreshTicketHierarchy(queryClient, workspaceSlug);
     },
-    [mutate, queryClient],
+    [mutate, workspaceSlug, queryClient],
   );
 
   const status = shown.failed ? getApiError(resolvedResult.error).status : undefined;
