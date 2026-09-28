@@ -13,9 +13,9 @@ const NO_MEMBERS: KbWorkspaceMember[] = [];
 export function useWorkspaceMembers(workspaceSlug: string | undefined) {
   const active = workspaceSlug !== undefined;
   const result = useQuery({ ...kbMembersQuery(workspaceSlug ?? ''), enabled: active });
-  const { loading, failed } = queryShownState(result, active);
+  const { data, loading, failed } = queryShownState(result, active);
   return {
-    members: active ? (result.data ?? NO_MEMBERS) : NO_MEMBERS,
+    members: data ?? NO_MEMBERS,
     loading,
     error: failed ? '候補を読み込めませんでした。' : null,
   };

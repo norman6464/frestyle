@@ -35,7 +35,7 @@ const NO_INVITATIONS: KbInvitation[] = [];
 export function useMyInvitations() {
   const queryClient = useQueryClient();
   const result = useQuery(kbMyInvitationsQuery());
-  const { loading, failed } = queryShownState(result);
+  const { data, loading, failed } = queryShownState(result);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const { refetch } = result;
@@ -83,7 +83,7 @@ export function useMyInvitations() {
     error = status === 403 && serverCode === 'email_not_verified' ? 'notVerified' : 'unknown';
   }
   const state: MyInvitationsState = {
-    invitations: result.data ?? NO_INVITATIONS,
+    invitations: data ?? NO_INVITATIONS,
     loading,
     error,
     busyId,

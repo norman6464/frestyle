@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryShownState } from '@/shared/api/queryState';
-import { getApiError } from '@/shared/lib/classifyApiError';
 import {
   KbRepository,
   kbInvitationsQuery,
@@ -34,7 +33,8 @@ export function useKbInvitations(workspaceSlug: string | undefined) {
   const queryClient = useQueryClient();
   const active = workspaceSlug !== undefined;
   const result = useQuery({ ...kbInvitationsQuery(workspaceSlug ?? ''), enabled: active });
-  const { loading, failed } = queryShownState(result, active);
+  // 取り直しが 403・404 になったら（admin でなくなった）、持っている一覧も出さずに forbidden にする。
+  const { data, loading, failed, lostAccess } = queryShownState(result, active);
   // 処理中の招待は、どのワークスペースで押したかと組で持つ（移った先の行を閉じない）。
   const [busy, setBusy] = useState<{ workspaceSlug: string; id: string | null } | null>(null);
 
@@ -78,11 +78,10 @@ export function useKbInvitations(workspaceSlug: string | undefined) {
     [mutate],
   );
 
-  const status = failed ? getApiError(result.error).status : undefined;
   const state: KbInvitationsState = {
-    invitations: active ? (result.data ?? NO_INVITATIONS) : NO_INVITATIONS,
+    invitations: data ?? NO_INVITATIONS,
     loading,
-    error: failed ? (status === 403 || status === 404 ? 'forbidden' : 'unknown') : null,
+    error: lostAccess ? 'forbidden' : failed ? 'unknown' : null,
     busyId: busy !== null && busy.workspaceSlug === workspaceSlug ? busy.id : null,
   };
   return { ...state, retry, invite, resend, revoke };

@@ -33,6 +33,18 @@ describe('useKbInvitations', () => {
     await waitFor(() => expect(result.current.error).toBe('forbidden'));
   });
 
+  it('取り直しが 403 になったら（admin でなくなった）、持っている一覧も出さずに forbidden にする', async () => {
+    hoisted.fetchInvitations.mockResolvedValueOnce([{ id: 'i-1', email: 'a@example.com' }]);
+    const { result } = renderHook(() => useKbInvitations('acme'), { wrapper: queryWrapper() });
+    await waitFor(() => expect(result.current.invitations).toHaveLength(1));
+
+    hoisted.fetchInvitations.mockRejectedValue(status(403));
+    act(() => result.current.retry());
+
+    await waitFor(() => expect(result.current.error).toBe('forbidden'));
+    expect(result.current.invitations).toEqual([]);
+  });
+
   it('発行したら一覧を取り直してから、1 回しか返らない token つきの応答を返す', async () => {
     const issued = { invitation: { id: 'i-1', email: 'a@example.com' }, token: 'tok' };
     hoisted.inviteByEmail.mockResolvedValue(issued);

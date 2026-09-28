@@ -38,7 +38,8 @@ export function useKbAdminMembers(workspaceSlug: string | undefined) {
   const queryClient = useQueryClient();
   const active = workspaceSlug !== undefined;
   const result = useQuery({ ...kbAdminMembersQuery(workspaceSlug ?? ''), enabled: active });
-  const { loading, failed } = queryShownState(result, active);
+  // 取り直しが 403 になったら（admin でなくなった）、持っている一覧も出さずに forbidden にする。
+  const { data, loading, failed } = queryShownState(result, active);
   // 処理中の相手は、どのワークスペースで押したかと組で持つ（移った先の行を閉じない）。
   const [busy, setBusy] = useState<{ workspaceSlug: string; userId: number } | null>(null);
 
@@ -90,7 +91,7 @@ export function useKbAdminMembers(workspaceSlug: string | undefined) {
   );
 
   const state: KbAdminMembersState = {
-    members: active ? (result.data ?? NO_MEMBERS) : NO_MEMBERS,
+    members: data ?? NO_MEMBERS,
     loading,
     error: failed ? (getApiError(result.error).status === 403 ? 'forbidden' : 'unknown') : null,
     busyUserId: busy !== null && busy.workspaceSlug === workspaceSlug ? busy.userId : null,

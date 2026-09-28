@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useQuery } from '@tanstack/react-query';
 import { describe, it, expect, vi } from 'vitest';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { queryWrapper } from '@/test/queryClient';
 import { toHomeResource } from '../model/useHomeResource';
 
@@ -57,5 +58,22 @@ describe('toHomeResource', () => {
     act(() => result.current.retry());
 
     await waitFor(() => expect(result.current.status).toBe('loading'));
+  });
+
+  it('取り直しが 403（見る立場を失った）なら、持っている結果も出さずに error', async () => {
+    const lost = new AxiosError('Forbidden', 'ERR_BAD_REQUEST', undefined, undefined, {
+      status: 403,
+      statusText: 'Forbidden',
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+      data: {},
+    });
+    const load = vi.fn().mockResolvedValueOnce(['a']).mockRejectedValueOnce(lost);
+    const { result } = renderHook(() => useResource(load), { wrapper: queryWrapper() });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    act(() => result.current.retry());
+
+    await waitFor(() => expect(result.current).toMatchObject({ data: [], status: 'error' }));
   });
 });

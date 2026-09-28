@@ -11,13 +11,13 @@ const NO_FAVORITES: KbFavoritePage[] = [];
  */
 export function useKbFavorites(workspaceSlug: string) {
   const result = useQuery(kbFavoritesQuery(workspaceSlug));
-  const { loading, failed } = queryShownState(result);
+  const { data, loading, failed } = queryShownState(result);
   const { refetch } = result;
   const retry = useCallback(() => {
     void refetch();
   }, [refetch]);
   return {
-    favorites: result.data ?? NO_FAVORITES,
+    favorites: data ?? NO_FAVORITES,
     loading,
     error: failed ? 'お気に入りを読み込めませんでした。' : null,
     retry,
