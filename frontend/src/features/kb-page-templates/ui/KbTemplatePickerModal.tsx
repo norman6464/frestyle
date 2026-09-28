@@ -25,8 +25,7 @@ export interface KbTemplatePickerModalProps {
  * KbTemplatePickerModal は「雛形からページを作る」の共通ピッカー。
  *
  * サイドバーの「雛形から作る」と、本文の /template コマンドの両方から開かれる想定
- * （widgets/kb-sidebar 側に置くのは useKbPageTemplates と同じ理由 — pages/kb からは
- * import できても widgets からは pages を import できない）。
+ * （サイドバーと本文の 2 か所から開くので、useKbPageTemplates と同じく features に置く）。
  *
  * 2 段階: テンプレートを選ぶ一覧 → 題名を決める入力欄（初期値はテンプレート名、変更可）。
  * KbSearchDialog と同じ流儀（portal・Escape・オーバーレイクリックで閉じる）で、

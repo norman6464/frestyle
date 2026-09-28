@@ -1,4 +1,4 @@
-import { KbSpaceHeading, useKbSpaceOutlet } from '@/widgets/kb-sidebar';
+import { KbSpaceHeading, useKbSpaceOutlet } from '@/widgets/kb-frame';
 import { Loading, fsIcon, Avatar, EmptyState } from '@/shared/ui';
 import { grantRoleLabel } from '@/entities/workspace';
 import { useKbSpaceMembers } from '../model/useKbSpaceMembers';

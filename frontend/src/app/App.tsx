@@ -29,15 +29,15 @@ const loadAuthenticatedLayout = () => import('./layouts/AuthenticatedLayout');
 const AuthenticatedLayout = lazyWithReload(loadAuthenticatedLayout, 'AuthenticatedLayout');
 const KbPage = lazyWithReload(() => import('@/pages/kb').then((m) => ({ default: m.KbPage })), 'KbPage');
 const KbFrameLayout = lazyWithReload(
-  () => import('@/widgets/kb-sidebar').then((m) => ({ default: m.KbFrameLayout })),
+  () => import('@/widgets/kb-frame').then((m) => ({ default: m.KbFrameLayout })),
   'KbFrameLayout',
 );
 const KbWorkspaceAdminLayout = lazyWithReload(
-  () => import('@/widgets/kb-sidebar').then((m) => ({ default: m.KbWorkspaceAdminLayout })),
+  () => import('@/widgets/kb-frame').then((m) => ({ default: m.KbWorkspaceAdminLayout })),
   'KbWorkspaceAdminLayout',
 );
 const KbSpaceLayout = lazyWithReload(
-  () => import('@/widgets/kb-sidebar').then((m) => ({ default: m.KbSpaceLayout })),
+  () => import('@/widgets/kb-frame').then((m) => ({ default: m.KbSpaceLayout })),
   'KbSpaceLayout',
 );
 const AssignedPage = lazyWithReload(

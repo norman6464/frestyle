@@ -16,7 +16,7 @@ import KbFrame from './KbFrame';
  * 左の列で**その場で作れる**入力欄を出す。
  */
 const meta = {
-  title: 'widgets/kb-sidebar/KbFrame',
+  title: 'widgets/kb-frame/KbFrame',
   component: KbFrame,
   parameters: { layout: 'fullscreen' },
   args: {

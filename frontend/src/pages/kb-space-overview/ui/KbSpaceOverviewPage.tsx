@@ -1,4 +1,4 @@
-import { KbSpaceHeading, useKbSpaceOutlet } from '@/widgets/kb-sidebar';
+import { KbSpaceHeading, useKbSpaceOutlet } from '@/widgets/kb-frame';
 import { grantRoleLabel } from '@/entities/workspace';
 
 /**

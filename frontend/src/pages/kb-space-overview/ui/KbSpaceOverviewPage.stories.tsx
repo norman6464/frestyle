@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { expect, waitFor, within } from 'storybook/test';
-import { KbFrameLayout, KbSpaceLayout } from '@/widgets/kb-sidebar';
+import { KbFrameLayout, KbSpaceLayout } from '@/widgets/kb-frame';
 import KbSpaceOverviewPage from './KbSpaceOverviewPage';
 import { kbSpaceRoute, withApi, withToast } from '../../../../.storybook/decorators';
 

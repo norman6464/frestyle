@@ -4,8 +4,7 @@ import { useToast } from '@/shared/lib/hooks/useToast';
 import { FsIcon } from '@/shared/ui';
 import type { KbPage, KbSpace } from '@/entities/kb';
 import KbInlineRename from './KbInlineRename';
-import { useKbPageTemplates } from '../model/useKbPageTemplates';
-import KbTemplatePickerModal from './KbTemplatePickerModal';
+import { KbTemplatePickerModal, useKbPageTemplates } from '@/features/kb-page-templates';
 
 export interface KbPagePanelHeadingProps {
   space: KbSpace;

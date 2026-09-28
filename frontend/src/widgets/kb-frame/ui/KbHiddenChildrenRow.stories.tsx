@@ -13,7 +13,7 @@ import KbHiddenChildrenRow from './KbHiddenChildrenRow';
  * 作らないため。
  */
 const meta = {
-  title: 'widgets/kb-sidebar/KbHiddenChildrenRow',
+  title: 'widgets/kb-frame/KbHiddenChildrenRow',
   component: KbHiddenChildrenRow,
   parameters: { layout: 'padded' },
   decorators: [

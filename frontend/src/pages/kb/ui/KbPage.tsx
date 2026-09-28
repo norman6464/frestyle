@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { KbTemplatePickerModal, useKbFrameLocation, useKbFrameSpace, useKbPageTemplates } from '@/widgets/kb-sidebar';
+import { useKbFrameLocation, useKbFrameSpace } from '@/widgets/kb-frame';
+import { KbSaveAsTemplateButton, KbTemplatePickerModal, useKbPageTemplates } from '@/features/kb-page-templates';
 import {
   emptyRichDoc,
   isRichDoc,
@@ -32,7 +33,6 @@ import KbPageIconButton from './KbPageIconButton';
 import KbPageMeta from './KbPageMeta';
 import KbPageCover from './KbPageCover';
 import KbPageCoverButton from './KbPageCoverButton';
-import KbSaveAsTemplateButton from './KbSaveAsTemplateButton';
 import KbCommentsPanel from './KbCommentsPanel';
 import KbVersionsPanel from './KbVersionsPanel';
 import KbVersionPreviewBanner from './KbVersionPreviewBanner';

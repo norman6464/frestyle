@@ -12,7 +12,7 @@ import KbTemplatePickerModal from './KbTemplatePickerModal';
  * （一覧を見る・テンプレートから作ることは所属者なら誰でもできる）。
  */
 const meta = {
-  title: 'widgets/kb-sidebar/KbTemplatePickerModal',
+  title: 'features/kb-page-templates/KbTemplatePickerModal',
   component: KbTemplatePickerModal,
   parameters: { layout: 'fullscreen' },
   args: {

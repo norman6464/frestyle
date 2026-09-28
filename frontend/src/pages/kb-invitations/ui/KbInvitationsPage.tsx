@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Invitation, IssuedInvitation } from '@/entities/workspace';
 import { Button, ConfirmModal, FsIcon } from '@/shared/ui';
-import { KbAdminOnlyNotice, useKbWorkspaceAdminOutlet } from '@/widgets/kb-sidebar';
+import { KbAdminOnlyNotice, useKbWorkspaceAdminOutlet } from '@/widgets/kb-frame';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useKbInvitations } from '../model/useKbInvitations';
 import { inviteFailure } from '../lib/invitationMessages';

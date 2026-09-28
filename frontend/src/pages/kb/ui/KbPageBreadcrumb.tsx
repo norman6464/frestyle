@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { KbAncestorRef } from '@/entities/kb';
-import { useKbFrameSpace } from '@/widgets/kb-sidebar';
+import { useKbFrameSpace } from '@/widgets/kb-frame';
 
 export interface KbPageBreadcrumbProps {
   workspaceSlug: string;

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { kbSpacesQuery, type KbFavoritePage, type KbSpace } from '@/entities/kb';
 import type { Workspace } from '@/entities/workspace';
-import { KbSearchDialog } from '@/widgets/kb-sidebar';
+import { KbSearchDialog } from '@/features/kb-search';
 import { EmptyNotice, ErrorNotice, FieldSelect, FsIcon, SkeletonRows } from '@/shared/ui';
 import { homeRowLink, homeTextLink } from '../lib/homeStyles';
 import type { HomeResource } from '../model/homeResource';
