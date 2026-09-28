@@ -5,7 +5,6 @@ import { getApiError } from '@/shared/lib/classifyApiError';
 import { useTicketPage } from '../model/useTicketPage';
 import { useTicketMasters } from '../model/useTicketMasters';
 import { useTicketLabels } from '../model/useTicketLabels';
-import { usePrincipalNames } from '../model/usePrincipalNames';
 import { useTicketHistory } from '../model/useTicketHistory';
 import TicketFullView from './TicketFullView';
 
@@ -25,7 +24,6 @@ export default function TicketPage() {
   const page = useTicketPage(ticketId);
   const masters = useTicketMasters(page.workspaceSlug ?? undefined, page.ticket?.projectId);
   const labels = useTicketLabels(page.workspaceSlug ?? undefined);
-  const { principals } = usePrincipalNames(page.workspaceSlug ?? undefined);
   const history = useTicketHistory(page.workspaceSlug ?? undefined, page.ticket ? (ticketId ?? null) : null);
 
   const withToastOnFailure = async (action: () => Promise<unknown>, failureMessage: string) => {
@@ -56,7 +54,6 @@ export default function TicketPage() {
       workspaceSlug={page.workspaceSlug ?? ''}
       statuses={masters.statuses}
       types={masters.types}
-      principals={principals}
       history={history.history}
       historyLoading={history.loading}
       historyError={history.error}

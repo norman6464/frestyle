@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useId, useState } from 'react';
 import type { Label, TicketStatus, TicketType } from '@/entities/ticket';
-import type { KbGrantablePrincipal } from '@/entities/kb';
+import type { WorkspaceMember } from '@/entities/workspace';
 import { Button, FieldSelect, FsIcon } from '@/shared/ui';
 import type { BacklogAssigneeFilter } from '../model/useBacklogUrlState';
 
@@ -8,8 +8,8 @@ export interface BacklogFilterBarProps {
   statuses: TicketStatus[];
   types: TicketType[];
   labels: Label[];
-  /** 担当に選べる相手（kind が user のものだけを候補にする）。 */
-  principals: KbGrantablePrincipal[];
+  /** 担当に選べる人（ワークスペースに属する人）。 */
+  members: WorkspaceMember[];
   statusId: string | null;
   typeId: string | null;
   labelId: string | null;
@@ -73,7 +73,7 @@ export default function BacklogFilterBar({
   statuses,
   types,
   labels,
-  principals,
+  members,
   statusId,
   typeId,
   labelId,
@@ -116,18 +116,19 @@ export default function BacklogFilterBar({
   const nameOf = <T extends { id: string; name: string }>(list: T[], id: string | null) =>
     id ? list.find((item) => item.id === id)?.name ?? null : null;
 
-  const assigneeUsers = principals.filter((p) => p.kind === 'user');
   // 選ばれている人が候補に無い（名前が引けていない・外れた）ときも、選択欄に「いまの値」が
   // 見えるよう、候補に足す。無いと空欄に見えて、条件が効いているのに気づけない。
   const assigneeName =
-    assignee.kind === 'principal' ? nameOf(assigneeUsers, assignee.id) || '不明なユーザー' : null;
+    assignee.kind === 'principal'
+      ? members.find((m) => m.principalId === assignee.id)?.name || '不明なユーザー'
+      : null;
   const assigneeOptions = [
     { value: '', label: 'すべて' },
     { value: ASSIGNEE_ME, label: '自分' },
     { value: ASSIGNEE_NONE, label: '未割り当て' },
-    ...assigneeUsers.map((p) => ({ value: p.id, label: p.name || p.id })),
+    ...members.map((m) => ({ value: m.principalId, label: m.name || m.principalId })),
   ];
-  if (assignee.kind === 'principal' && !assigneeUsers.some((p) => p.id === assignee.id)) {
+  if (assignee.kind === 'principal' && !members.some((m) => m.principalId === assignee.id)) {
     assigneeOptions.push({ value: assignee.id, label: assigneeName ?? '不明なユーザー' });
   }
 

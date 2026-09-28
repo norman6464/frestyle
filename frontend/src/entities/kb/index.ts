@@ -18,7 +18,6 @@ export {
   kbFavoritesQuery,
   kbSpaceMembersQuery,
   kbRecentPagesQuery,
-  kbWorkspacePrincipalsQuery,
 } from './api/kbQueries';
 export { refreshKbPageTrees, reflectKbPageInTrees, forgetKbWorkspace } from './model/kbPageTreeCache';
 export { useKbSpaceEntry } from './model/useKbSpaceEntry';

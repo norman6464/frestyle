@@ -1,75 +1,76 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { kbKeys } from '@/entities/kb/api/kbQueries';
+import { workspaceKeys } from '@/entities/workspace/api/workspaceQueries';
 import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 import { usePrincipalNames } from '../usePrincipalNames';
 
-const hoisted = vi.hoisted(() => ({ fetchSpaces: vi.fn(), fetchPageTree: vi.fn(), listGrantablePrincipals: vi.fn() }));
+const hoisted = vi.hoisted(() => ({ fetchMembers: vi.fn(), listGrantablePrincipals: vi.fn() }));
 
+// 取得の本体を偽物にする（公開口だけを替えると、共有の問い合わせは本物を呼ぶ）。
+vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
+  default: { fetchMembers: hoisted.fetchMembers },
+}));
 vi.mock('@/entities/kb/api/kbRepository', () => ({
-  default: {
-    fetchSpaces: hoisted.fetchSpaces,
-    fetchPageTree: hoisted.fetchPageTree,
-    listGrantablePrincipals: hoisted.listGrantablePrincipals,
-  },
+  default: { listGrantablePrincipals: hoisted.listGrantablePrincipals },
 }));
 
-const space = (id: string) => ({ id, key: id, name: id, visibility: 'workspace' as const, createdAt: '' });
-const tree = (pageIds: string[]) => ({
-  pages: pageIds.map((id) => ({
-    page: { id, spaceId: 's', title: id, createdByUserId: 1, createdAt: '', updatedAt: '' },
-    children: [],
-    hasHiddenChildren: false,
-    parentArchived: false,
-  })),
-  hasHiddenChildren: false,
-});
-const PRINCIPALS = [{ id: 'pr-1', kind: 'user', name: '田中 太郎' }];
+const MEMBERS = [
+  { principalId: 'pr-1', userId: 1, name: '田中 太郎' },
+  { principalId: 'pr-2', userId: 2, name: '' },
+];
 
 beforeEach(() => {
   vi.clearAllMocks();
-  hoisted.fetchSpaces.mockResolvedValue([space('empty'), space('s-1')]);
-  hoisted.fetchPageTree.mockImplementation(async (_slug: string, spaceId: string) =>
-    spaceId === 'empty' ? tree([]) : tree(['p-1']),
-  );
-  hoisted.listGrantablePrincipals.mockResolvedValue(PRINCIPALS);
+  hoisted.fetchMembers.mockResolvedValue(MEMBERS);
 });
 
 describe('usePrincipalNames', () => {
-  it('ページのある最初のスペースの最初のページで代表させ、名前と頭文字を引く', async () => {
+  it('ワークスペースに属する人の一覧から、担当（principalId）の名前を引く', async () => {
     const { result } = renderHook(() => usePrincipalNames('acme'), { wrapper: queryWrapper() });
 
     await waitFor(() => expect(result.current.nameOf('pr-1')).toBe('田中 太郎'));
-    expect(hoisted.listGrantablePrincipals).toHaveBeenCalledWith('acme', 'p-1');
-    expect(result.current.initialsOf('pr-9zz')).toBe('PR');
+    expect(hoisted.fetchMembers).toHaveBeenCalledWith('acme');
+    expect(result.current.members).toEqual(MEMBERS);
   });
 
-  it('どのスペースにもページが無ければ空のまま', async () => {
-    hoisted.fetchPageTree.mockResolvedValue(tree([]));
+  it('権限を張れる相手の口（ページの管理権限が要る）はたどらない', async () => {
     const { result } = renderHook(() => usePrincipalNames('acme'), { wrapper: queryWrapper() });
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.principals).toEqual([]);
+    await waitFor(() => expect(result.current.members).toEqual(MEMBERS));
     expect(hoisted.listGrantablePrincipals).not.toHaveBeenCalled();
   });
 
-  it('左の列が取ってあるスペースの一覧と木を使い、取り直さない', async () => {
+  it('担当が無い・一覧に無い・名前が引けない人は空文字', async () => {
+    const { result } = renderHook(() => usePrincipalNames('acme'), { wrapper: queryWrapper() });
+
+    await waitFor(() => expect(result.current.members).toEqual(MEMBERS));
+    expect(result.current.nameOf(null)).toBe('');
+    expect(result.current.nameOf('pr-9')).toBe('');
+    expect(result.current.nameOf('pr-2')).toBe('');
+  });
+
+  it('発言欄・属性の欄と同じ問い合わせを使い、取り直さない', async () => {
     const client = createTestQueryClient();
-    client.setQueryData(kbKeys.spaces('acme'), [space('s-1')]);
-    client.setQueryData(kbKeys.pageTree('acme', 's-1', false), tree(['p-1']));
+    client.setQueryData(workspaceKeys.members('acme'), MEMBERS);
     const { result } = renderHook(() => usePrincipalNames('acme'), { wrapper: queryWrapper(client) });
 
-    await waitFor(() => expect(result.current.principals).toEqual(PRINCIPALS));
-    expect(hoisted.fetchSpaces).not.toHaveBeenCalled();
-    expect(hoisted.fetchPageTree).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.current.nameOf('pr-1')).toBe('田中 太郎'));
+    expect(hoisted.fetchMembers).not.toHaveBeenCalled();
   });
 
   it('引けなくても落ちず、空のまま', async () => {
-    hoisted.fetchSpaces.mockRejectedValue(new Error('boom'));
+    hoisted.fetchMembers.mockRejectedValue(new Error('boom'));
     const { result } = renderHook(() => usePrincipalNames('acme'), { wrapper: queryWrapper() });
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.principals).toEqual([]);
+    await waitFor(() => expect(hoisted.fetchMembers).toHaveBeenCalled());
+    expect(result.current.members).toEqual([]);
     expect(result.current.nameOf('pr-1')).toBe('');
+  });
+
+  it('ワークスペースが決まるまでは取りに行かない', () => {
+    const { result } = renderHook(() => usePrincipalNames(undefined), { wrapper: queryWrapper() });
+
+    expect(result.current.members).toEqual([]);
+    expect(hoisted.fetchMembers).not.toHaveBeenCalled();
   });
 });

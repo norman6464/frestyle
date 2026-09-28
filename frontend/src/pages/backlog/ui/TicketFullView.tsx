@@ -10,7 +10,6 @@ import {
   type TicketType,
   type UpdateTicketInput,
 } from '@/entities/ticket';
-import type { KbGrantablePrincipal } from '@/entities/kb';
 import { emptyRichDoc, isRichDoc } from '@/shared/ui/RichTextEditor';
 import TicketDescriptionEditor from './TicketDescriptionEditor';
 import { useTicketEditor } from '../model/useTicketEditor';
@@ -36,7 +35,6 @@ export interface TicketFullViewProps {
   workspaceSlug: string;
   statuses: TicketStatus[];
   types: TicketType[];
-  principals: KbGrantablePrincipal[];
   history: TicketChangeGroup[];
   historyLoading: boolean;
   historyError: string | null;
@@ -79,7 +77,6 @@ export default function TicketFullView({
   workspaceSlug,
   statuses,
   types,
-  principals,
   history,
   historyLoading,
   historyError,
@@ -123,7 +120,6 @@ export default function TicketFullView({
         ticket={ticket}
         workspaceSlug={workspaceSlug}
         projectKey={projectKey}
-        principals={principals}
         parentTicket={parentTicket}
         canEdit={canEdit}
         archived={archived}

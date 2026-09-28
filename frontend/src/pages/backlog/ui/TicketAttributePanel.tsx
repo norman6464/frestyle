@@ -4,7 +4,6 @@ import { formatTicketKey, type Label, type Ticket, type TicketPriority } from '@
 import type { ProjectVersion } from '@/entities/project-version';
 import type { Team } from '@/entities/team';
 import type { Sprint } from '@/entities/sprint';
-import type { KbGrantablePrincipal } from '@/entities/kb';
 import { FieldSelect, FsIcon } from '@/shared/ui';
 import { useTicketParentCandidates } from '../model/useTicketParentCandidates';
 import { useWorkspaceMembers } from '../model/useWorkspaceMembers';
@@ -32,7 +31,6 @@ export interface TicketAttributePanelProps {
   ticket: Ticket;
   workspaceSlug: string;
   projectKey: string;
-  principals: KbGrantablePrincipal[];
   parentTicket: Ticket | undefined;
   canEdit: boolean;
   /** アーカイブ済みは全置換の編集を止める（状態と担当は専用の口なので止めない）。 */
@@ -108,7 +106,6 @@ export default function TicketAttributePanel({
   ticket,
   workspaceSlug,
   projectKey,
-  principals,
   parentTicket,
   canEdit,
   archived,
@@ -136,8 +133,8 @@ export default function TicketAttributePanel({
   onChangeParent,
   feedback = {},
 }: TicketAttributePanelProps) {
-  const assigneeUsers = principals.filter((p) => p.kind === 'user');
-  // 報告者の名前。チケットが持つのは作成者の id だけなので、ワークスペースの人から引く。
+  // 担当の選択肢と報告者の名前は、ワークスペースに属する人から引く（担当に入るのは人だけ。
+  // チケットが持つのは作成者の id だけなので、報告者の名前もここから引く）。
   const { members } = useWorkspaceMembers(workspaceSlug);
   const reporterName = members.find((m) => m.userId === ticket.createdByUserId)?.name ?? '';
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
@@ -183,12 +180,12 @@ export default function TicketAttributePanel({
               }}
               options={[
                 { value: '', label: '未割り当て' },
-                ...assigneeUsers.map((p) => ({ value: p.id, label: p.name || p.id })),
+                ...members.map((m) => ({ value: m.principalId, label: m.name || m.principalId })),
               ]}
               className={ATTRIBUTE_SELECT_CLASS}
             />
           ) : (
-            assigneeUsers.find((p) => p.id === ticket.assigneePrincipalId)?.name || <Muted>未割り当て</Muted>
+            members.find((m) => m.principalId === ticket.assigneePrincipalId)?.name || <Muted>未割り当て</Muted>
           )}
         </Field>
 

@@ -2,12 +2,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import BacklogFilterBar from './BacklogFilterBar';
 import type { Label, TicketStatus, TicketType } from '@/entities/ticket';
-import type { KbGrantablePrincipal } from '@/entities/kb';
+import type { WorkspaceMember } from '@/entities/workspace';
 
-const principals: KbGrantablePrincipal[] = [
-  { id: 'u-1', kind: 'user', name: '川野 拓馬' },
-  { id: 'u-2', kind: 'user', name: '山田 花子' },
-  { id: 'g-1', kind: 'group', name: '開発チーム' },
+const members: WorkspaceMember[] = [
+  { principalId: 'u-1', userId: 1, name: '川野 拓馬' },
+  { principalId: 'u-2', userId: 2, name: '山田 花子' },
 ];
 
 const statuses: TicketStatus[] = [
@@ -73,7 +72,7 @@ const meta = {
     statuses,
     types,
     labels,
-    principals,
+    members,
     statusId: null,
     typeId: null,
     labelId: null,
@@ -152,8 +151,8 @@ export const 種別を選ぶ: Story = {
 };
 
 /**
- * 担当は「すべて / 自分 / 未割り当て / この人」の 4 通りを 1 つの選択欄で選ぶ。候補は人だけ
- * （グループやスペース全体は担当にできないので出さない）。
+ * 担当は「すべて / 自分 / 未割り当て / この人」の 4 通りを 1 つの選択欄で選ぶ。候補はワークスペースに
+ * 属する人（担当に入るのは人だけなので、人の一覧をそのまま並べる）。
  */
 export const 担当を選ぶ: Story = {
   play: async ({ canvasElement, args }) => {
@@ -162,7 +161,13 @@ export const 担当を選ぶ: Story = {
     await expect(args.onChangeAssignee).toHaveBeenCalledWith({ kind: 'principal', id: 'u-1' });
     await userEvent.click(canvas.getByLabelText('担当で絞り込む'));
     const listbox = await within(document.body).findByRole('listbox');
-    await expect(within(listbox).queryByRole('option', { name: '開発チーム' })).toBeNull();
+    await expect(within(listbox).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'すべて',
+      '自分',
+      '未割り当て',
+      '川野 拓馬',
+      '山田 花子',
+    ]);
     await userEvent.click(within(listbox).getByRole('option', { name: '未割り当て' }));
     await expect(args.onChangeAssignee).toHaveBeenCalledWith({ kind: 'none' });
   },
@@ -198,7 +203,7 @@ export const 条件が付いている: Story = {
 
 /** 担当の人の名前が引けていなくても、条件が効いていることは見える（空欄に見せない）。 */
 export const 担当の名前が引けない: Story = {
-  args: { principals: [], assignee: { kind: 'principal', id: 'u-9' } },
+  args: { members: [], assignee: { kind: 'principal', id: 'u-9' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('button', { name: '担当: 不明なユーザー の絞り込みを解除' })).toBeVisible();

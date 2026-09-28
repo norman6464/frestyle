@@ -84,6 +84,8 @@ function baseApi(over: ApiStubs = {}): ApiStubs {
     '/workspaces/acme/tickets/t-1/attachments': { attachments: [] },
     '/workspaces/acme/tickets/t-1/children': { tickets: [] },
     '/profile/me': { userId: 1, displayName: 'norman6464', email: '', bio: '', avatarUrl: '', status: '', updatedAt: '' },
+    // 担当の選択肢と報告者の名前の元（ワークスペースに属する人）。
+    '/kb/workspaces/acme/members': [{ principalId: 'p-1', userId: 1, name: 'norman6464' }],
     '/workspaces/acme/projects/p-1/ticket-statuses': { statuses: [status()] },
     '/workspaces/acme/projects/p-1/ticket-types': { types: [type()] },
     '/workspaces/acme/labels': {
