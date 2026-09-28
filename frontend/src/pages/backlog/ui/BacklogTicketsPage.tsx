@@ -125,7 +125,7 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
     void sprints.reload();
     void reloadSprintTickets();
   };
-  const { principals, nameOf } = usePrincipalNames(workspaceSlug);
+  const { members, nameOf } = usePrincipalNames(workspaceSlug);
   // 「保存した絞り込み」の件数と全件数。一覧の真上に出す（設計ボード ST08）。
   const counts = useBacklogFilterCounts(workspaceSlug, project.id);
   // 利用者が名前を付けて保存した絞り込み（件数付き）。固定のタブの後ろに並ぶ（設計ボード ST09）。
@@ -422,7 +422,6 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
       workspaceSlug={workspaceSlug}
       statuses={masters.statuses}
       types={masters.types}
-      principals={principals}
       parentTicket={parentTicket}
       canEdit
       busy={list.busyId === selectedTicket.id}
@@ -562,7 +561,7 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
           statuses={masters.statuses}
           types={masters.types}
           labels={labels.labels}
-          principals={principals}
+          members={members}
           statusId={statusId}
           typeId={typeId}
           labelId={labelId}

@@ -68,6 +68,9 @@ export function baseApi(over: ApiStubs = {}): ApiStubs {
     '/workspaces/acme/projects/p-1/tickets': { tickets: [ticket({})] },
     '/workspaces/acme/projects/p-1/saved-filters': { savedFilters: [] },
     '/workspaces/acme/projects': { projects },
+    // 担当の名前と選択肢の元（ワークスペースに属する人）。`/kb/workspaces` より先に置く
+    // （後ろだと、人の一覧の宛先にワークスペースの一覧が当たる）。
+    '/kb/workspaces/acme/members': [{ principalId: 'pr-1', userId: 1, name: '川野 拓馬' }],
     '/kb/workspaces': workspaces,
     ...over,
   };

@@ -3,7 +3,6 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import TicketAttributePanel from './TicketAttributePanel';
 import { withApi } from '../../../../.storybook/decorators';
 import type { Ticket, TicketStatus } from '@/entities/ticket';
-import type { KbGrantablePrincipal } from '@/entities/kb';
 
 const ticket: Ticket = {
   id: 't-1',
@@ -62,7 +61,10 @@ const statuses: TicketStatus[] = [
   },
 ];
 
-const principals: KbGrantablePrincipal[] = [{ id: 'p-1', kind: 'user', name: 'norman6464' }];
+/** 担当の選択肢と名前の元（ワークスペースに属する人。属性の欄が自分で取る）。 */
+const membersApi = {
+  '/kb/workspaces/acme/members': [{ principalId: 'p-1', userId: 1, name: 'norman6464' }],
+};
 
 function candidateWire(over: Record<string, unknown> & { id: string }) {
   return {
@@ -91,7 +93,6 @@ const meta = {
     ticket,
     workspaceSlug: 'acme',
     projectKey: 'FRESTYLE',
-    principals,
     parentTicket: undefined,
     canEdit: true,
     archived: false,
@@ -118,7 +119,7 @@ const meta = {
     onChangeDueDate: fn(),
     onChangeParent: fn(),
   },
-  decorators: [(Story) => <div className="w-96 bg-surface-1 p-3"><Story /></div>],
+  decorators: [withApi(membersApi), (Story) => <div className="w-96 bg-surface-1 p-3"><Story /></div>],
 } satisfies Meta<typeof TicketAttributePanel>;
 
 export default meta;
@@ -136,8 +137,11 @@ export const 編集できる: Story = {
     // 状態はこの面には無い（題名の直下の TicketStatusSelect が持つ）。
     await expect(canvas.queryByLabelText('状態')).toBeNull();
     // 担当・優先度はネイティブの `<select>` ではなく Base UI の選択欄なので、
-    // 値ではなく起点のボタンが何を表示しているかで見る。
-    await expect(canvas.getByLabelText('担当者')).toHaveTextContent('norman6464');
+    // 値ではなく起点のボタンが何を表示しているかで見る。担当の名前はワークスペースに属する人の
+    // 一覧から引く（この欄が自分で取る）ので、届くのを待つ。
+    await waitFor(async () => {
+      await expect(canvas.getByLabelText('担当者')).toHaveTextContent('norman6464');
+    });
     await expect(canvas.getByLabelText('優先度')).toHaveTextContent('高');
     // 期限は押すまで文字（見本と同じ）。押してはじめて日付の入力欄になる。
     await expect(canvas.queryByLabelText('期限')).toBeNull();
@@ -219,6 +223,7 @@ export const アーカイブ済みは親を編集できない: Story = {
 export const ピッカーを開いて候補から選ぶ: Story = {
   decorators: [
     withApi({
+      ...membersApi,
       '/workspaces/acme/projects/s-1/tickets': {
         tickets: [candidateWire({ id: 'c-1', number: 3, title: '検索の改善' }), candidateWire({ id: 'c-2', number: 9, title: '絞り込みの見直し' })],
       },
@@ -241,6 +246,7 @@ export const ピッカーを開いて候補から選ぶ: Story = {
 export const ピッカーで絞り込む: Story = {
   decorators: [
     withApi({
+      ...membersApi,
       '/workspaces/acme/projects/s-1/tickets': {
         tickets: [candidateWire({ id: 'c-1', number: 3, title: '検索の改善' }), candidateWire({ id: 'c-2', number: 9, title: '絞り込みの見直し' })],
       },
@@ -264,7 +270,7 @@ export const 親を外す: Story = {
     ticket: { ...ticket, parentId: 'p-parent' },
     parentTicket: { ...ticket, id: 'p-parent', number: 3, title: '親チケット' },
   },
-  decorators: [withApi({ '/workspaces/acme/projects/s-1/tickets': { tickets: [] } })],
+  decorators: [withApi({ ...membersApi, '/workspaces/acme/projects/s-1/tickets': { tickets: [] } })],
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     await openSecondary(canvas);

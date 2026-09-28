@@ -8,7 +8,6 @@ import {
   type TicketType,
   type UpdateTicketInput,
 } from '@/entities/ticket';
-import type { KbGrantablePrincipal } from '@/entities/kb';
 import { emptyRichDoc, isRichDoc } from '@/shared/ui/RichTextEditor';
 import { useTicketEditor } from '../model/useTicketEditor';
 import { useTicketFieldWrites } from '../model/useTicketFieldWrites';
@@ -35,7 +34,6 @@ export interface TicketDetailPanelProps {
   workspaceSlug: string;
   statuses: TicketStatus[];
   types: TicketType[];
-  principals: KbGrantablePrincipal[];
   parentTicket: Ticket | undefined;
   canEdit: boolean;
   busy: boolean;
@@ -75,7 +73,6 @@ export default function TicketDetailPanel({
   workspaceSlug,
   statuses,
   types,
-  principals,
   parentTicket,
   canEdit,
   busy,
@@ -188,7 +185,6 @@ export default function TicketDetailPanel({
           ticket={ticket}
           workspaceSlug={workspaceSlug}
           projectKey={projectKey}
-          principals={principals}
           parentTicket={parentTicket}
           canEdit={canEdit}
           archived={archived}

@@ -3,7 +3,6 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import TicketDetailPanel from './TicketDetailPanel';
 import type { Ticket, TicketStatus, TicketType } from '@/entities/ticket';
-import type { KbGrantablePrincipal } from '@/entities/kb';
 import { withApi, withRouter, withToast } from '../../../../.storybook/decorators';
 
 const ticket: Ticket = {
@@ -82,7 +81,10 @@ const types: TicketType[] = [
   },
 ];
 
-const principals: KbGrantablePrincipal[] = [{ id: 'p-1', kind: 'user', name: 'norman6464' }];
+/** 担当の選択肢と名前の元（ワークスペースに属する人。属性の欄が自分で取る）。 */
+const membersApi = {
+  '/kb/workspaces/acme/members': [{ principalId: 'p-1', userId: 1, name: 'norman6464' }],
+};
 
 const meta = {
   title: 'pages/backlog/TicketDetailPanel',
@@ -93,7 +95,6 @@ const meta = {
     projectKey: 'FRESTYLE',
     statuses,
     types,
-    principals,
     parentTicket: undefined,
     canEdit: true,
     busy: false,
@@ -125,6 +126,7 @@ const meta = {
     // TicketAttachmentSection（添付節）が添付一覧を、TicketChildrenSection（子節）が
     // 子一覧を取得する。どの story にも共通で要る宛先なので meta 側の decorator に置く。
     withApi({
+      ...membersApi,
       '/profile/me': { userId: 1, displayName: 'norman6464', email: '', bio: '', avatarUrl: '', status: '', updatedAt: '' },
       '/workspaces/acme/tickets/t-1/comments': { comments: [] },
       '/workspaces/acme/tickets/t-1/attachments': { attachments: [] },
@@ -289,6 +291,7 @@ export const 基本とその他に分かれる: Story = {
 export const 添付とサブタスクの件数とスプリント: Story = {
   decorators: [
     withApi({
+      ...membersApi,
       '/profile/me': { userId: 1, displayName: 'norman6464', email: '', bio: '', avatarUrl: '', status: '', updatedAt: '' },
       '/workspaces/acme/tickets/t-1/comments': { comments: [] },
       '/workspaces/acme/tickets/t-1/attachments': {
