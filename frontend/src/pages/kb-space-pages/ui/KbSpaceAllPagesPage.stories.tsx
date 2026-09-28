@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, waitFor, within } from 'storybook/test';
 import KbSpaceAllPagesPage from './KbSpaceAllPagesPage';
-import { kbSpaceRoute, withApi, withToast } from '../../../../.storybook/decorators';
+import { kbSpaceLocation, kbSpaceRoute, withApi, withToast } from '../../../../.storybook/decorators';
 
 const workspaces = [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:00:00Z', canManage: true }];
 const mySpaces = [{ id: 'space-1', name: '開発部', role: 'editor' }];
@@ -47,8 +47,9 @@ export const ふつう: Story = {
         ],
         hasHiddenChildren: false,
       },
+      '/kb/spaces/space-1': kbSpaceLocation('space-1', 'acme', '開発部'),
       '/me/spaces': mySpaces,
-      '/spaces': spaces,
+      '/workspaces/acme/spaces': spaces,
       '/kb/workspaces': workspaces,
     }),
   ],
@@ -69,8 +70,9 @@ export const ページが無い: Story = {
     kbSpaceRoute('/kb/spaces/:spaceId/pages', '/kb/spaces/space-1/pages'),
     withApi({
       '/spaces/space-1/pages': { pages: [], hasHiddenChildren: false },
+      '/kb/spaces/space-1': kbSpaceLocation('space-1', 'acme', '開発部'),
       '/me/spaces': mySpaces,
-      '/spaces': spaces,
+      '/workspaces/acme/spaces': spaces,
       '/kb/workspaces': workspaces,
     }),
   ],

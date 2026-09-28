@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useEffectEvent } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { workspacesQuery, type Workspace } from '@/entities/workspace/@x/kb';
-import { kbMySpacesQuery } from '../api/kbQueries';
+import { kbKeys, kbMySpacesQuery, kbSpaceLocationQuery } from '../api/kbQueries';
 import type { KbMySpace } from './types';
 import {
   locateKbSpace,
@@ -38,11 +39,15 @@ const LOAD_ERROR = 'スペースを読み込めませんでした。';
 /**
  * useKbSpaceEntry は /kb/spaces（spaceId 無し）と /kb/spaces/:spaceId の両方を解決する
  * （段14。概要・すべてのページ・お気に入り・メンバーの 4 画面が共有する）。
- * 前者は最初に見つかったスペースへ移す・後者は spaceId からワークスペースを引く。
  *
- * 所属ワークスペースと、それぞれの「自分が役割を持つスペースの一覧」を共有の問い合わせから読み、
- * そこから導く（解決の結果を別に控えない）。左の列やスペース切替と同じ一覧を使うので、
- * 同じものを 2 回取らず、スペースの改名や作成はここにもそのまま届く。
+ * - spaceId あり: 所在の口（/kb/spaces/:spaceId）でどのワークスペースかを引き、スペースそのものは
+ *   そのワークスペースの「自分が役割を持つスペースの一覧」から読む（取るのは 2 回。全ワークスペースの
+ *   一覧はたどらない）
+ * - spaceId 無し: 所属ワークスペースを順に見て、最初に見つかったスペースへ移す（どこへ移すかを
+ *   決めるのに一覧が要る）
+ *
+ * スペースの一覧は左の列やスペース切替と同じ共有の問い合わせなので、同じものを 2 回取らず、
+ * スペースの改名や作成はここにもそのまま届く（解決の結果を別に控えない）。
  *
  * `preferredWorkspaceSlug` は spaceId 無し（/kb/spaces）のときだけ効く。スペース切替の
  * 「すべてのスペース」が対象ワークスペースを持ち越すために渡す。
@@ -57,8 +62,18 @@ export function useKbSpaceEntry(
   preferredWorkspaceSlug?: string,
 ) {
   const queryClient = useQueryClient();
-  const workspaces = useQuery(workspacesQuery());
-  const ordered = orderWorkspaces(workspaces.data ?? NO_WORKSPACES, spaceId ? undefined : preferredWorkspaceSlug);
+  const byId = spaceId !== undefined;
+
+  // spaceId あり: 所在 → そのワークスペースの一覧 1 つ。
+  const locationResult = useQuery({ ...kbSpaceLocationQuery(spaceId ?? ''), enabled: byId });
+  const location = queryShownState(locationResult, byId);
+  const locatedSlug = location.data?.workspaceSlug;
+  const locatedListResult = useQuery({ ...kbMySpacesQuery(locatedSlug ?? ''), enabled: locatedSlug !== undefined });
+  const locatedList = queryShownState(locatedListResult, locatedSlug !== undefined);
+
+  // spaceId 無し: 所属ワークスペースを順に見る。
+  const workspaces = useQuery({ ...workspacesQuery(), enabled: !byId });
+  const ordered = byId ? NO_WORKSPACES : orderWorkspaces(workspaces.data ?? NO_WORKSPACES, preferredWorkspaceSlug);
   const lists = useQueries({ queries: ordered.map((w) => kbMySpacesQuery(w.slug)) });
   const states: MySpacesState[] = ordered.map((w, i) => ({
     workspaceSlug: w.slug,
@@ -69,14 +84,23 @@ export function useKbSpaceEntry(
 
   let state: KbSpaceEntryState;
   let entrySpaceId: string | null = null;
-  if (workspaces.data === undefined) {
-    state = workspaces.isError && !workspaces.isFetching ? { ...EMPTY, error: LOAD_ERROR } : { ...EMPTY, loading: true };
-  } else if (spaceId) {
-    const located = locateKbSpace(spaceId, states);
+  if (spaceId) {
+    const located = locateKbSpace(
+      spaceId,
+      { workspaceSlug: locatedSlug, lostAccess: location.lostAccess, failed: location.failed },
+      {
+        data: locatedList.data,
+        lostAccess: locatedList.lostAccess,
+        failed: locatedList.failed,
+        isFetching: locatedListResult.isFetching,
+      },
+    );
     state =
       located.kind === 'found'
         ? { ...EMPTY, workspaceSlug: located.value.workspaceSlug, space: located.value.space }
         : { ...stateOf(located), notFound: located.kind === 'none' };
+  } else if (workspaces.data === undefined) {
+    state = workspaces.isError && !workspaces.isFetching ? { ...EMPTY, error: LOAD_ERROR } : { ...EMPTY, loading: true };
   } else {
     const entry = pickEntryKbSpace(states);
     // 見つかったら移るまで読み込み中のまま（移った先の画面が続きを出す）。
@@ -89,14 +113,16 @@ export function useKbSpaceEntry(
     if (entrySpaceId) resolveEntry(entrySpaceId);
   }, [entrySpaceId]);
 
-  // 読めなかった一覧だけを取り直す（読めている一覧まで取り直して待たせない）。所属の一覧の鍵は
-  // 鍵の根なので、ワークスペースごとのスペースの一覧もこの鍵の下に入る。
+  // 読めなかったものだけを取り直す（読めているものまで取り直して待たせない）。所属の一覧の鍵は
+  // 鍵の根なので、ワークスペースごとのスペースの一覧もこの鍵の下に入る。所在の鍵は根の外にある。
   const retry = useCallback(() => {
-    void queryClient.refetchQueries({
-      queryKey: workspacesQuery().queryKey,
-      type: 'active',
-      predicate: (query) => query.state.status === 'error',
-    });
+    for (const queryKey of [workspacesQuery().queryKey, kbKeys.spaceLocations()]) {
+      void queryClient.refetchQueries({
+        queryKey,
+        type: 'active',
+        predicate: (query) => query.state.status === 'error',
+      });
+    }
   }, [queryClient]);
 
   return { ...state, retry };

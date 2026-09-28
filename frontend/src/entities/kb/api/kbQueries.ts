@@ -8,8 +8,13 @@ import type { KbGrantablePrincipal } from '../model/types';
  * 決まらなければ invalidateQueries で取り直させる（決まりは shared/README.md の「サーバーの状態」）。
  *
  * ワークスペースの中のものは、鍵の根（shared/api/queryKeys.ts）の workspaceScope(slug) の下に置く。
+ * スペースの所在（spaceLocation）だけは、どのワークスペースかを知るための鍵なので根の外に置く。
  */
 export const kbKeys = {
+  /** スペースの所在（どのワークスペースのスペースか）の根。 */
+  spaceLocations: () => ['space-locations'] as const,
+  /** スペースの所在 1 件。 */
+  spaceLocation: (spaceId: string) => ['space-locations', spaceId] as const,
   /** ワークスペースのスペースの一覧（見られるもの全件）。 */
   spaces: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'spaces'] as const,
   /** ワークスペースのうち、自分が役割を持つスペースの一覧（役割つき）。 */
@@ -73,6 +78,22 @@ export function kbSpacesQuery(workspaceSlug: string) {
 }
 
 /** ワークスペースのうち、自分が役割を持つスペースの一覧。 */
+/**
+ * スペースの所在（/kb/spaces/:spaceId）。スペースの画面（URL にワークスペースを持たない）が、
+ * どのワークスペースの一覧を開けばよいかを知るために引く。
+ *
+ * 画面が使うのは「どのワークスペースか」だけで、スペースの名前・役割はそのワークスペースの一覧
+ * （kbMySpacesQuery）から読む。スペースがワークスペースをまたいで動くことは無いので、所在は古くならず
+ * 取り直さない（改名・役割の変更は一覧のほうに届く。一覧から導けるものを別の鍵で控えない決まり）。
+ */
+export function kbSpaceLocationQuery(spaceId: string) {
+  return queryOptions({
+    queryKey: kbKeys.spaceLocation(spaceId),
+    queryFn: () => KbRepository.resolveSpace(spaceId),
+    staleTime: Infinity,
+  });
+}
+
 export function kbMySpacesQuery(workspaceSlug: string) {
   return queryOptions({
     queryKey: kbKeys.mySpaces(workspaceSlug),

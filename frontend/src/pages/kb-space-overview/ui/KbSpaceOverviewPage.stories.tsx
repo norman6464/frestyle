@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { expect, waitFor, within } from 'storybook/test';
 import { KbFrameLayout, KbSpaceLayout } from '@/widgets/kb-frame';
 import KbSpaceOverviewPage from './KbSpaceOverviewPage';
-import { kbSpaceRoute, withApi, withToast } from '../../../../.storybook/decorators';
+import { kbSpaceLocation, kbSpaceRoute, withApi, withToast } from '../../../../.storybook/decorators';
 
 const workspaces = [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:00:00Z', canManage: true }];
 const mySpaces = [{ id: 'space-1', name: '開発部', role: 'editor' }];
@@ -26,8 +27,9 @@ export const ふつう: Story = {
     kbSpaceRoute('/kb/spaces/:spaceId', '/kb/spaces/space-1'),
     withApi({
       '/spaces/space-1/pages': { pages: [], hasHiddenChildren: false },
+      '/kb/spaces/space-1': kbSpaceLocation('space-1', 'acme', '開発部'),
       '/me/spaces': mySpaces,
-      '/spaces': spaces,
+      '/workspaces/acme/spaces': spaces,
       '/kb/workspaces': workspaces,
     }),
   ],
@@ -61,6 +63,8 @@ export const 対象ワークスペースを引き継ぐ: Story = {
       </MemoryRouter>
     ),
     withApi({
+      // 入口で beta のスペースへ移ったあと、親ルートが所在の口で beta を引く。
+      '/kb/spaces/space-9': kbSpaceLocation('space-9', 'beta', '営業部'),
       '/kb/workspaces/acme/me/spaces': [{ id: 'space-1', name: '開発部', role: 'editor' }],
       '/kb/workspaces/beta/me/spaces': [{ id: 'space-9', name: '営業部', role: 'viewer' }],
       '/spaces/space-9/pages': { pages: [], hasHiddenChildren: false },
@@ -96,9 +100,21 @@ export const スペースが見つからない: Story = {
   decorators: [
     kbSpaceRoute('/kb/spaces/:spaceId', '/kb/spaces/space-9'),
     withApi({
+      // 所在の口は、無い・見る立場に無いスペースを 404 で返す。「読み込めない」と取り違えないよう、
+      // 状態コードを持つ本物の失敗で返す。
+      '/kb/spaces/space-9': () => {
+        throw new AxiosError('Not Found', 'ERR_BAD_REQUEST', undefined, undefined, {
+          status: 404,
+          statusText: 'Not Found',
+          data: { error: 'not_found' },
+          headers: {},
+          config: { headers: new AxiosHeaders() },
+        });
+      },
       '/spaces/space-1/pages': { pages: [], hasHiddenChildren: false },
+      '/kb/spaces/space-1': kbSpaceLocation('space-1', 'acme', '開発部'),
       '/me/spaces': mySpaces,
-      '/spaces': spaces,
+      '/workspaces/acme/spaces': spaces,
       '/kb/workspaces': workspaces,
     }),
   ],
@@ -116,10 +132,11 @@ export const スペースを読み込めない: Story = {
   decorators: [
     kbSpaceRoute('/kb/spaces/:spaceId', '/kb/spaces/space-1'),
     withApi({
+      '/kb/spaces/space-1': kbSpaceLocation('space-1', 'acme', '開発部'),
       '/me/spaces': () => {
         throw new Error('offline');
       },
-      '/spaces': spaces,
+      '/workspaces/acme/spaces': spaces,
       '/kb/workspaces': workspaces,
     }),
   ],

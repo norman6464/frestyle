@@ -21,6 +21,16 @@ export interface KbSpace {
 }
 
 /**
+ * スペースの所在（/kb/spaces/:spaceId の応答）。URL にワークスペースを出さないスペースの画面が、
+ * どのワークスペースのスペースかを知るために引く。スペースがワークスペースをまたいで動くことは無い。
+ */
+export interface KbSpaceLocation {
+  workspaceSlug: string;
+  workspaceName: string;
+  space: KbSpace;
+}
+
+/**
  * ページのアイコン。いまは絵文字だけ（`type` を持たせておくのは、いつか他の種類
  * （アップロード画像など）が増えたときに判別できるようにするため）。
  */

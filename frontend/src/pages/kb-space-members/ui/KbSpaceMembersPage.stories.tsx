@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, waitFor, within } from 'storybook/test';
 import KbSpaceMembersPage from './KbSpaceMembersPage';
-import { kbSpaceRoute, withApi, withToast } from '../../../../.storybook/decorators';
+import { kbSpaceLocation, kbSpaceRoute, withApi, withToast } from '../../../../.storybook/decorators';
 
 const workspaces = [{ slug: 'acme', name: 'Acme 社', createdAt: '2026-01-01T00:00:00Z', canManage: true }];
 const mySpaces = [{ id: 'space-1', name: '開発部', role: 'editor' }];
@@ -30,8 +30,9 @@ export const ふつう: Story = {
         { userId: 1, name: '田中 太郎', avatarUrl: '', role: 'admin', via: 'direct' },
         { userId: 2, name: '佐藤 花子', avatarUrl: '', role: 'editor', via: 'workspace' },
       ],
+      '/kb/spaces/space-1': kbSpaceLocation('space-1', 'acme', '開発部'),
       '/me/spaces': mySpaces,
-      '/spaces': spaces,
+      '/workspaces/acme/spaces': spaces,
       '/kb/workspaces': workspaces,
     }),
   ],
@@ -51,8 +52,9 @@ export const メンバーが無い: Story = {
     withApi({
       '/spaces/space-1/pages': { pages: [], hasHiddenChildren: false },
       '/spaces/space-1/members': [],
+      '/kb/spaces/space-1': kbSpaceLocation('space-1', 'acme', '開発部'),
       '/me/spaces': mySpaces,
-      '/spaces': spaces,
+      '/workspaces/acme/spaces': spaces,
       '/kb/workspaces': workspaces,
     }),
   ],
