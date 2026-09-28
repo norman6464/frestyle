@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { reflectWrite } from '@/shared/api/queryCache';
 import { ProfileRepository, myProfileQuery } from '@/entities/user';
-import type { FormMessage } from '@/shared/ui/FormMessage';
+import type { FormMessageData as FormMessage } from '@/shared/ui';
 import type { Profile } from '@/entities/user';
 
 /**

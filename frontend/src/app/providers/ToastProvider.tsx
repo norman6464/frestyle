@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, ReactNode } from 'react';
 import { ToastActionsContext, ToastListContext, type ToastItem } from '@/shared/lib/hooks/useToastContext';
-import type { ToastType } from '@/shared/ui/Toast';
+import type { ToastType } from '@/shared/ui';
 
 let toastId = 0;
 

@@ -21,10 +21,8 @@ import { REACT_COMPILER_DIRS, REACT_COMPILER_IGNORES } from './vite-plugins/reac
  *
  * 例外: app と shared のあいだは相互に import してよい。
  *
- * FSD 移行（Phase 0〜7）が完了したので **'error'** で強制する。移行中は旧新構造の
- * 混在で CI が常時赤にならないよう 'warn' に留めていたが、レイヤー移行が完了し
- * 違反 0 になったため Phase 7 で 'error' へ昇格した。以後、層の
- * 逆流・Slice 間の直接 import・Slice の自己参照は CI（`--max-warnings 0`）で弾かれる。
+ * 層の逆流・Slice 間の直接 import・Slice の自己参照・公開口（index.ts）を通らない import は
+ * **'error'** で止める（CI は `--max-warnings 0`）。
  */
 const FSD_LAYERS = ['app', 'pages', 'widgets', 'features', 'entities', 'shared'];
 
@@ -73,38 +71,38 @@ const BOUNDARY_MESSAGE = (layer) =>
   `FSD 違反: ${layer} 層は自分と同じか上の層を import できません（下向きの一方通行）。` +
   ' 共通化したいものは下の層へ降ろすか、上の層で組み合わせてください。';
 
-const fsdBoundaryConfigs = FSD_LAYERS
-  // app は最上位なので禁止対象が空になる。ESLint は空の group を受け付けないため設定自体を出さない。
-  .filter((layer) => forbiddenLayersFor(layer).length > 0)
-  .map((layer) => ({
-    files: [`src/${layer}/**/*.{ts,tsx}`],
-    ignores: TEST_FILE_PATTERNS,
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns:
-            layer === 'entities'
-              ? [
-                  // 上位層（pages / widgets / features）は無条件に禁止。
-                  {
-                    group: forbiddenLayersFor(layer).filter((p) => !p.startsWith('@/entities')),
-                    message: BOUNDARY_MESSAGE(layer),
-                  },
-                  // 同一レイヤー（entity 同士）は `@x` 経由のみ許可。
-                  {
-                    regex: ENTITIES_SAME_LAYER_REGEX,
-                    message:
-                      'FSD 違反: entity 同士は直接 import できません。' +
-                      ' どうしても参照し合う場合は `@x` 記法（entities/<相手>/@x/<自分>）で明示してください。' +
-                      ' 自分の Slice 内は相対パスで参照します。',
-                  },
-                ]
-              : [{ group: forbiddenLayersFor(layer), message: BOUNDARY_MESSAGE(layer) }],
-        },
-      ],
-    },
-  }));
+/*
+ * 公開口を通す決まり。Slice の中（`@/entities/kb/api/kbQueries` など）へ直接 import せず、
+ * `@/entities/kb` のように公開口（index.ts）から取る。例外は entity 同士の `@x`（相手が
+ * 「誰に何を見せるか」を宣言した口）。テストは対象外（取得の本体を偽物に差し替えるため、深い
+ * パスを指すのが正しい）。
+ */
+const SLICE_PUBLIC_API_PATTERN = {
+  regex: '^@/(?:pages|widgets|features|entities)/[^/]+/(?!@x/).+',
+  message:
+    'FSD 違反: Slice の中へ直接 import できません。公開口（@/<層>/<Slice>）から取ってください。' +
+    ' 公開口に無いものは、その Slice の index.ts に名前付きで足します。',
+};
+
+/*
+ * shared/ui も公開口（`@/shared/ui`）から取る。例外は、公開口に載せない理由がある 2 つの
+ * 下位の公開口だけ: 中身が重い（tiptap 一式）RichTextEditor と、読み込むだけで書体の CSS を
+ * 効かせる inkwell。
+ */
+const SHARED_UI_PUBLIC_API_PATTERN = {
+  regex: '^@/shared/ui/(?!(?:RichTextEditor|inkwell)$).+',
+  message:
+    'shared/ui は公開口（@/shared/ui）から取ってください。公開口に無い部品は shared/ui/index.ts に足します' +
+    '（例外は @/shared/ui/RichTextEditor と @/shared/ui/inkwell）。',
+};
+
+const ENTITY_SAME_LAYER_PATTERN = {
+  regex: ENTITIES_SAME_LAYER_REGEX,
+  message:
+    'FSD 違反: entity 同士は直接 import できません。' +
+    ' どうしても参照し合う場合は `@x` 記法（entities/<相手>/@x/<自分>）で明示してください。' +
+    ' 自分の Slice 内は相対パスで参照します。',
+};
 
 /*
  * Slice の自己参照禁止（テストも対象にする）。
@@ -116,28 +114,54 @@ const fsdBoundaryConfigs = FSD_LAYERS
  * 上の層間ルールはテストを対象外にしている（テストが上位層の Provider で包むのは正当なため）が、
  * 自己参照は正当なケースが無いのでテストにも適用する。
  */
+const selfReferencePattern = (slice) => ({
+  group: [`@/entities/${slice}`, `@/entities/${slice}/*`, `@/entities/${slice}/**`],
+  message:
+    `FSD 違反: entities/${slice} の中から自分自身（@/entities/${slice}）を参照しないでください。` +
+    ' 循環になり、テストでは Slice 全体を読み込んでカバレッジの分母も膨らみます。相対パスで参照してください。',
+});
+
+const restrictImports = (patterns) => ({ 'no-restricted-imports': ['error', { patterns }] });
+
 const entitySlices = readdirSync(new URL('./src/entities', import.meta.url), { withFileTypes: true })
-  .filter((e) => e.isDirectory() && !e.name.startsWith('@'))
+  .filter((e) => e.isDirectory() && !e.name.startsWith('@') && e.name !== '__tests__')
   .map((e) => e.name);
 
-const selfReferenceConfigs = entitySlices.map((slice) => ({
-  files: [`src/entities/${slice}/**/*.{ts,tsx}`],
-  rules: {
-    'no-restricted-imports': [
-      'error',
-      {
-        patterns: [
-          {
-            group: [`@/entities/${slice}`, `@/entities/${slice}/*`, `@/entities/${slice}/**`],
-            message:
-              `FSD 違反: entities/${slice} の中から自分自身（@/entities/${slice}）を参照しないでください。` +
-              ' 循環になり、テストでは Slice 全体を読み込んでカバレッジの分母も膨らみます。相対パスで参照してください。',
-          },
-        ],
-      },
-    ],
-  },
-}));
+/*
+ * import の制限は、1 つのファイルに効く決まり（層の向き・自己参照・公開口）を**1 つの設定に
+ * まとめて**渡す。同じ規則（no-restricted-imports）を別々の設定に書くと、後の設定が前の設定を
+ * 丸ごと上書きする（中身は足し合わされない）。entity ごとの自己参照の設定を後から足していたため、
+ * entities では層の向きと entity 同士の禁止が効いていなかった。
+ */
+const fsdImportConfigs = FSD_LAYERS.flatMap((layer) => {
+  const boundary = forbiddenLayersFor(layer);
+  const publicApi = layer === 'shared' ? [] : [SLICE_PUBLIC_API_PATTERN, SHARED_UI_PUBLIC_API_PATTERN];
+  if (layer !== 'entities') {
+    // app は最上位なので層の禁止が空になる。ESLint は空の group を受け付けないため入れない。
+    const layerPatterns = boundary.length > 0 ? [{ group: boundary, message: BOUNDARY_MESSAGE(layer) }] : [];
+    const patterns = [...layerPatterns, ...publicApi];
+    return patterns.length > 0
+      ? [{ files: [`src/${layer}/**/*.{ts,tsx}`], ignores: TEST_FILE_PATTERNS, rules: restrictImports(patterns) }]
+      : [];
+  }
+  return entitySlices.flatMap((slice) => [
+    {
+      files: [`src/entities/${slice}/**/*.{ts,tsx}`],
+      ignores: TEST_FILE_PATTERNS,
+      rules: restrictImports([
+        selfReferencePattern(slice),
+        // 上位層（pages / widgets / features）は無条件に禁止。
+        { group: boundary.filter((p) => !p.startsWith('@/entities')), message: BOUNDARY_MESSAGE(layer) },
+        ENTITY_SAME_LAYER_PATTERN,
+        ...publicApi,
+      ]),
+    },
+    {
+      files: TEST_FILE_PATTERNS.map((pattern) => `src/entities/${slice}/${pattern}`),
+      rules: restrictImports([selfReferencePattern(slice)]),
+    },
+  ]);
+});
 
 export default defineConfig([globalIgnores(['dist', 'coverage']),
   // TanStack Query の決まり（鍵に使う値の漏れ・不安定な依存・QueryClient の作り直しなど）。
@@ -189,7 +213,7 @@ export default defineConfig([globalIgnores(['dist', 'coverage']),
   // ブラウザに無い識別子の間違いを ESLint が見逃す）。
   files: ['*.config.{js,ts,mjs}', '.storybook/main.ts'],
   languageOptions: { globals: globals.node },
-}, ...fsdBoundaryConfigs, ...selfReferenceConfigs, ...storybook.configs["flat/recommended"], {
+}, ...fsdImportConfigs, ...storybook.configs["flat/recommended"], {
   // story 名もテスト名と同じく日本語で書く（このリポジトリの流儀）。PascalCase の強制だけ外す。
   files: ['**/*.stories.@(ts|tsx)'],
   rules: { 'storybook/prefer-pascal-case': 'off' },

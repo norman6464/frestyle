@@ -19,3 +19,13 @@ export interface Team {
   /** 一覧では詰めて返る。省略されることもある。 */
   members?: TeamMember[];
 }
+
+/**
+ * TicketTeamAssignment はチケットの担当チームを差し替えた結果。応答はチケット 1 件の生の形で、
+ * 外したときは teamId が入らないので、取得の口で null に揃えて返す。
+ */
+export interface TicketTeamAssignment {
+  ticketId: string;
+  /** 担当チーム。外したら null。 */
+  teamId: string | null;
+}

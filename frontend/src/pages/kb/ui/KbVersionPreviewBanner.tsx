@@ -1,6 +1,5 @@
-import Button from '@/shared/ui/Button';
 import { formatHourMinute, formatMonthDay } from '@/shared/lib/formatters';
-import { FsIcon } from '@/shared/ui';
+import { FsIcon, Button } from '@/shared/ui';
 
 export interface KbVersionPreviewBannerProps {
   createdAt: string;

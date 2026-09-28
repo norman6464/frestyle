@@ -1,8 +1,7 @@
-import { FsIcon } from '@/shared/ui';
+import { FsIcon, Loading } from '@/shared/ui';
 import { Link, useLocation } from 'react-router-dom';
 import { GLOBAL_NAV_PRIMARY, navActive } from '../model/globalNav';
 
-import Loading from '@/shared/ui/Loading';
 import HeaderUserMenu from './HeaderUserMenu';
 import { useSidebar } from '../model/useSidebar';
 import { useUnreadCount } from '@/entities/notification';

@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import type { Ticket, TicketStatus, TicketType } from '@/entities/ticket';
 import type { SprintState } from '@/entities/sprint';
-import EmptyState from '@/shared/ui/EmptyState';
-import Loading from '@/shared/ui/Loading';
-import FsIllustration from '@/shared/ui/icons/FsIllustration';
+import { EmptyState, Loading, FsIllustration } from '@/shared/ui';
 import { useContainerNarrowerThan } from '@/shared/lib/hooks/useContainerNarrowerThan';
 import { useLocalToday } from '@/shared/lib/hooks/useLocalToday';
 import type { WriteOutcome } from '../lib/writeOutcome';

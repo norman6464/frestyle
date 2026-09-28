@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import Avatar from '@/shared/ui/Avatar';
-import ConfirmModal from '@/shared/ui/ConfirmModal';
 import { formatDateTime, formatTime } from '@/shared/lib/formatters';
 import type { TicketComment, TicketCommentBlock } from '@/entities/ticket';
 import type { KbWorkspaceMember } from '@/entities/kb';
@@ -10,7 +8,7 @@ import TicketCommentBody from './TicketCommentBody';
 import TicketCommentComposer from './TicketCommentComposer';
 import TicketCommentEditHistory from './TicketCommentEditHistory';
 import TicketReactionBar from './TicketReactionBar';
-import { FsIcon } from '@/shared/ui';
+import { FsIcon, Avatar, ConfirmModal } from '@/shared/ui';
 
 export interface TicketCommentItemProps {
   comment: TicketComment;

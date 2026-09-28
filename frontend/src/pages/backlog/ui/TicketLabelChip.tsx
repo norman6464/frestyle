@@ -1,5 +1,5 @@
 import type { Label } from '@/entities/ticket';
-import LabelChip from '@/shared/ui/LabelChip';
+import { LabelChip } from '@/shared/ui';
 
 export interface TicketLabelChipProps {
   label: Label;

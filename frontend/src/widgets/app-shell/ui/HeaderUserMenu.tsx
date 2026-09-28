@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
-import { FsIcon } from '@/shared/ui';
+import { FsIcon, Avatar } from '@/shared/ui';
 import { Menu } from '@base-ui/react/menu';
-import Avatar from '@/shared/ui/Avatar';
 
 interface HeaderUserMenuProps {
   displayName: string;

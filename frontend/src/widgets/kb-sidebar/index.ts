@@ -10,8 +10,6 @@ export { useKbFrameLocation } from './model/kbFrameLocation';
 export type { KbFrameLocation } from './model/kbFrameLocation';
 export { KbFrameContext, useKbFrameSpace } from './model/kbFrameContext';
 export type { KbFrameValue } from './model/kbFrameContext';
-export { default as KbPageGlyph } from './ui/KbPageGlyph';
-export type { KbPageGlyphProps } from './ui/KbPageGlyph';
 export { default as KbSearchDialog } from './ui/KbSearchDialog';
 export type { KbSearchDialogProps } from './ui/KbSearchDialog';
 export { default as KbTemplatePickerModal } from './ui/KbTemplatePickerModal';

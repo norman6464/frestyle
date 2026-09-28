@@ -1,9 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { KbPageTemplate } from '@/entities/kb';
-import Button from '@/shared/ui/Button';
-import ConfirmModal from '@/shared/ui/ConfirmModal';
-import { EmptyNotice, ErrorNotice, FsIcon, SkeletonRows } from '@/shared/ui';
+import { EmptyNotice, ErrorNotice, FsIcon, SkeletonRows, Button, ConfirmModal } from '@/shared/ui';
 
 export interface KbTemplatePickerModalProps {
   isOpen: boolean;

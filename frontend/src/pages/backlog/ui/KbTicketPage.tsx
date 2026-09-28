@@ -1,8 +1,7 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import { EmptyState, FsIllustration } from '@/shared/ui';
+import { EmptyState, FsIllustration, Loading } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
-import Loading from '@/shared/ui/Loading';
 import { useTicketPage } from '../model/useTicketPage';
 import { useTicketMasters } from '../model/useTicketMasters';
 import { useTicketLabels } from '../model/useTicketLabels';

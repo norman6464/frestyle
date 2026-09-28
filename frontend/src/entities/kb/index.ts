@@ -1,4 +1,6 @@
 export { default as KbRepository } from './api/kbRepository';
+export { default as KbPageGlyph } from './ui/KbPageGlyph';
+export type { KbPageGlyphProps } from './ui/KbPageGlyph';
 export { default as KbWorkspaceSwitcher } from './ui/KbWorkspaceSwitcher';
 export type { KbWorkspaceSwitcherProps } from './ui/KbWorkspaceSwitcher';
 export { default as KbSpaceHeading } from './ui/KbSpaceHeading';

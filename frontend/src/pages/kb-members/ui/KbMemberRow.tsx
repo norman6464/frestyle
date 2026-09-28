@@ -1,6 +1,5 @@
 import { KB_ROLE_LABEL, KB_ROLES_STRONGEST_FIRST, type KbAdminWorkspaceMember, type KbGrantRole } from '@/entities/kb';
-import Avatar from '@/shared/ui/Avatar';
-import { FsIcon } from '@/shared/ui';
+import { FsIcon, Avatar } from '@/shared/ui';
 
 export interface KbMemberRowProps {
   member: KbAdminWorkspaceMember;

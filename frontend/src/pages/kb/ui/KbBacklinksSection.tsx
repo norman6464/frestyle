@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { KbPageGlyph } from '@/widgets/kb-sidebar';
 import type { KbPage } from '@/entities/kb';
 import { ErrorNotice, FsIcon } from '@/shared/ui';
+import { KbPageGlyph } from '@/entities/kb';
 
 export interface KbBacklinksSectionProps {
   /** このページを参照しているページの一覧。 */

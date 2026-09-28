@@ -4,7 +4,7 @@ import { expect, waitFor, within } from 'storybook/test';
 import ToastContainer from './ToastContainer';
 import { ToastProvider } from './ToastProvider';
 import { useToast } from '@/shared/lib/hooks/useToast';
-import type { ToastType } from '@/shared/ui/Toast';
+import type { ToastType } from '@/shared/ui';
 
 /**
  * 知らせ（トースト）を画面上部の中央に積む置き場。

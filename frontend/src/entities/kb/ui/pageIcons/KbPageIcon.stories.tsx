@@ -13,7 +13,7 @@ import KbPageIcon from './KbPageIcon';
  * 色は指定していない。置いた場所の文字色をそのまま継ぐので、選択中の行では文字と一緒に濃くなる。
  */
 const meta = {
-  title: 'shared/icons/kb/KbPageIcon',
+  title: 'entities/kb/pageIcons/KbPageIcon',
   component: KbPageIcon,
   parameters: { layout: 'centered' },
   args: { className: 'h-6 w-6 text-[var(--color-text-secondary)]' },

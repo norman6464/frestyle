@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import InputField from '@/shared/ui/InputField';
-import TextareaField from '@/shared/ui/TextareaField';
-import Button from '@/shared/ui/Button';
-import FormMessage from '@/shared/ui/FormMessage';
-import Avatar from '@/shared/ui/Avatar';
-import Loading from '@/shared/ui/Loading';
 import { useProfileEdit } from '../model/useProfileEdit';
 import { useProfileImageUpload } from '../model/useProfileImageUpload';
-import { FsIcon } from '@/shared/ui';
+import { FsIcon, InputField, TextareaField, Button, FormMessage, Avatar, Loading } from '@/shared/ui';
 
 type AvatarResult = { tone: 'saved' | 'error'; text: string } | null;
 

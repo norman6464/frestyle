@@ -9,11 +9,7 @@ import {
   type CommentAnchor,
   type CommentBadgeCounts,
 } from '@/shared/ui/RichTextEditor';
-import Loading from '@/shared/ui/Loading';
-import EmptyState from '@/shared/ui/EmptyState';
-import ConfirmModal from '@/shared/ui/ConfirmModal';
-import Button from '@/shared/ui/Button';
-import { FsIcon, fsIcon } from '@/shared/ui';
+import { FsIcon, fsIcon, Loading, EmptyState, ConfirmModal, Button } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
 import { getApiError } from '@/shared/lib/classifyApiError';

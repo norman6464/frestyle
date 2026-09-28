@@ -10,7 +10,7 @@ import KbPageGroupIcon from './KbPageGroupIcon';
  * 「押しても本文が無い」と読まれてしまう。
  */
 const meta = {
-  title: 'shared/icons/kb/KbPageGroupIcon',
+  title: 'entities/kb/pageIcons/KbPageGroupIcon',
   component: KbPageGroupIcon,
   parameters: { layout: 'centered' },
   args: { className: 'h-6 w-6 text-[var(--color-text-secondary)]' },

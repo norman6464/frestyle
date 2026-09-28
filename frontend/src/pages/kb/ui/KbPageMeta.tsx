@@ -1,8 +1,6 @@
 import type { KbEditorRef, KbLabel } from '@/entities/kb';
-import Avatar from '@/shared/ui/Avatar';
-import LabelChip from '@/shared/ui/LabelChip';
 import { formatHourMinute, formatMonthDay } from '@/shared/lib/formatters';
-import { FsIcon } from '@/shared/ui';
+import { FsIcon, Avatar, LabelChip } from '@/shared/ui';
 import { SAVE_STATUS_LABEL, type SaveStatus } from '@/shared/ui/RichTextEditor';
 
 export type KbPageVisibility = 'public' | 'space' | 'private';
