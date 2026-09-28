@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import Button from '@/shared/ui/Button';
+import { Button } from '@/shared/ui';
 
 export interface KbCommentComposerProps {
   /** 送信。**失敗は投げてくる**前提（投げられたら入力を保つ。書き直させないため）。 */

@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import type { KbPageVersion } from '@/entities/kb';
-import Button from '@/shared/ui/Button';
 import KbVersionListItem from './KbVersionListItem';
 import KbVersionSaveForm from './KbVersionSaveForm';
-import { EmptyNotice, ErrorNotice, SkeletonRows } from '@/shared/ui';
+import { EmptyNotice, ErrorNotice, SkeletonRows, Button } from '@/shared/ui';
 
 export interface KbVersionsPanelProps {
   versions: KbPageVersion[];

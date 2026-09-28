@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
-import Avatar from '@/shared/ui/Avatar';
+import { Avatar } from '@/shared/ui';
 import type { KbWorkspaceMember } from '@/entities/kb';
 
 export interface MentionMenuListProps {

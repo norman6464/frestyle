@@ -9,8 +9,7 @@ import {
   type KbInviteByEmailInput,
   type KbIssuedInvitation,
 } from '@/entities/kb';
-import { Button, FsIcon } from '@/shared/ui';
-import FormFieldError from '@/shared/ui/FormFieldError';
+import { Button, FsIcon, FormFieldError } from '@/shared/ui';
 import { useCopyToClipboard } from '@/shared/lib/hooks/useCopyToClipboard';
 import { inviteFailure } from '../lib/invitationMessages';
 

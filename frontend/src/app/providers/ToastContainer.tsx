@@ -1,4 +1,4 @@
-import Toast from '@/shared/ui/Toast';
+import { Toast } from '@/shared/ui';
 import { useToast, useToastList } from '@/shared/lib/hooks/useToast';
 
 /**

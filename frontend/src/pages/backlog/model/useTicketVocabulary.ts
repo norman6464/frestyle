@@ -59,7 +59,7 @@ export function useTicketVocabulary(
       const updated = await TeamRepository.setTicketTeam(workspaceSlug, ticketId, next);
       await reflectTicket(queryClient, workspaceSlug, projectId, ticketId, (ticket) => ({
         ...ticket,
-        teamId: updated.teamId ?? null,
+        teamId: updated.teamId,
       }));
     },
     [workspaceSlug, projectId, ticketId, queryClient],

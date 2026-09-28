@@ -9,7 +9,7 @@ import KbPageGroupIcon from './KbPageGroupIcon';
  * どれなのかを、色の濃さに頼らずに示せる。
  */
 const meta = {
-  title: 'shared/icons/kb/KbPageGroupOpenIcon',
+  title: 'entities/kb/pageIcons/KbPageGroupOpenIcon',
   component: KbPageGroupOpenIcon,
   parameters: { layout: 'centered' },
   args: { className: 'h-6 w-6 text-[var(--color-text-secondary)]' },

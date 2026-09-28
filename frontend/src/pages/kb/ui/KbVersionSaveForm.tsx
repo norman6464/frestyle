@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import Button from '@/shared/ui/Button';
+import { Button } from '@/shared/ui';
 
 export interface KbVersionSaveFormProps {
   /** 送信。note は空でもよい。**失敗は投げてくる**前提（投げられたら入力を保つ）。 */

@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import type { KbPageSuggestion } from '@/entities/kb';
-import Button from '@/shared/ui/Button';
 import { formatHourMinute, formatMonthDay } from '@/shared/lib/formatters';
 import { computeSuggestionDiff } from '../lib/suggestionDiff';
 import KbSuggestionDiffView from './KbSuggestionDiffView';
-import { EmptyNotice, ErrorNotice, SkeletonRows } from '@/shared/ui';
+import { EmptyNotice, ErrorNotice, SkeletonRows, Button } from '@/shared/ui';
 
 export interface KbSuggestionsPanelProps {
   suggestions: KbPageSuggestion[];

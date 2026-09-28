@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { kbMoveActions, type KbDropTarget, type KbPageTreeNode } from '@/entities/kb';
+import { KbPageGlyph, kbMoveActions, type KbDropTarget, type KbPageTreeNode } from '@/entities/kb';
 import KbRowActions from './KbRowActions';
 import KbInlineRename from './KbInlineRename';
-import KbPageGlyph from './KbPageGlyph';
 import { dropZoneFromEvent, type KbDropZone } from '../model/dropZone';
 import { FsIcon } from '@/shared/ui';
 

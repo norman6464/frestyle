@@ -2,10 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, within } from 'storybook/test';
 import { withRouter } from '../../../../.storybook/decorators';
 import AuthLayout from './AuthLayout';
-import Button from '@/shared/ui/Button';
-import InputField from '@/shared/ui/InputField';
-import LinkText from '@/shared/ui/LinkText';
-import PublicHeader from '@/shared/ui/PublicHeader';
+import { Button, InputField, LinkText, PublicHeader } from '@/shared/ui';
 
 /**
  * ログイン前の画面（ログイン・アカウント作成）の外枠。

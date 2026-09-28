@@ -1,5 +1,5 @@
-import { KbPageGroupIcon, KbPageGroupOpenIcon, KbPageIcon } from '@/shared/ui/icons/kb';
-import type { KbPage } from '@/entities/kb';
+import type { KbPage } from '../model/types';
+import { KbPageGroupIcon, KbPageGroupOpenIcon, KbPageIcon } from './pageIcons';
 
 export interface KbPageGlyphProps {
   /** 見るのは絵文字（icon）だけ。ページの形を丸ごと持たない一覧（お気に入り）からも使えるようにする。 */

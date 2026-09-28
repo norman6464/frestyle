@@ -1,6 +1,6 @@
 import type { KbSearchResult } from '@/entities/kb';
 import { splitExcerptMatch } from '../lib/highlightExcerpt';
-import KbPageGlyph from './KbPageGlyph';
+import { KbPageGlyph } from '@/entities/kb';
 
 export interface KbSearchResultRowProps {
   page: KbSearchResult;

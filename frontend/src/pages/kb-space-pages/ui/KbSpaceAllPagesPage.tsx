@@ -1,10 +1,9 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { KbPageGlyph, useKbSpaceOutlet } from '@/widgets/kb-sidebar';
-import { Loading, fsIcon } from '@/shared/ui';
+import { useKbSpaceOutlet } from '@/widgets/kb-sidebar';
+import { Loading, fsIcon, EmptyState } from '@/shared/ui';
 import { useQueryClient } from '@tanstack/react-query';
-import { KbRepository, KbSpaceHeading, NOTE_NEW_PAGE_TITLE, refreshKbPageTrees } from '@/entities/kb';
+import { KbPageGlyph, KbRepository, KbSpaceHeading, NOTE_NEW_PAGE_TITLE, refreshKbPageTrees } from '@/entities/kb';
 import { useToast } from '@/shared/lib/hooks/useToast';
-import EmptyState from '@/shared/ui/EmptyState';
 import { useKbSpaceAllPages } from '../model/useKbSpaceAllPages';
 
 /** すべてのページ（段14）。木を深さ優先で開いた、フラットな一覧。 */

@@ -1,8 +1,7 @@
 import apiClient from '@/shared/api/axios';
 import { toArray } from '@/shared/lib/toArray';
 import { PROJECT_VOCABULARY_API } from '@/shared/config/apiRoutes';
-import type { Ticket } from '@/entities/ticket';
-import type { Team, TeamMember } from '../model/types';
+import type { Team, TeamMember, TicketTeamAssignment } from '../model/types';
 
 export const TeamRepository = {
   /** GET — プロジェクトのチーム（所属つき）。 */
@@ -41,9 +40,15 @@ export const TeamRepository = {
     return toArray<TeamMember>(res.data?.members);
   },
 
-  /** PUT — チケットの担当チーム。空文字を渡すと外す。 */
-  async setTicketTeam(workspaceSlug: string, ticketId: string, teamId: string): Promise<Ticket> {
-    const res = await apiClient.put<Ticket>(PROJECT_VOCABULARY_API.ticketTeam(workspaceSlug, ticketId), { teamId });
-    return res.data;
+  /**
+   * PUT — チケットの担当チーム。空文字を渡すと外す。応答はチケット 1 件の生の形なので、
+   * 使う 2 項目だけを取り出す（外したときは teamId が入らない）。
+   */
+  async setTicketTeam(workspaceSlug: string, ticketId: string, teamId: string): Promise<TicketTeamAssignment> {
+    const res = await apiClient.put<{ id: string; teamId?: string | null }>(
+      PROJECT_VOCABULARY_API.ticketTeam(workspaceSlug, ticketId),
+      { teamId },
+    );
+    return { ticketId: res.data.id, teamId: res.data.teamId ?? null };
   },
 };

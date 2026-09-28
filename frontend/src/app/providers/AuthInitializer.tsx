@@ -4,7 +4,7 @@ import { useAppSelector, useAppDispatch } from '@/shared/lib/store';
 import { setAuthData, clearAuth, finishLoading } from '@/entities/user';
 
 import { AuthRepository as authRepository } from '@/entities/user';
-import Loading from '@/shared/ui/Loading';
+import { Loading } from '@/shared/ui';
 import { setAuthHint, clearAuthHintIfUnauthenticated } from '@/shared/lib/authHint';
 import { subscribeAuthState } from '@/features/auth';
 

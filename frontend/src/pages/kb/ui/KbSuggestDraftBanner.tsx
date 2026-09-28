@@ -1,5 +1,4 @@
-import Button from '@/shared/ui/Button';
-import { FsIcon } from '@/shared/ui';
+import { FsIcon, Button } from '@/shared/ui';
 
 export interface KbSuggestDraftBannerProps {
   /** createSuggestion が飛んでいる間 true（両ボタンとも押せなくする）。 */

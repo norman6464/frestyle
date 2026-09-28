@@ -31,6 +31,8 @@ export { default as PublicHeader } from './PublicHeader';
 export { default as NameCreateForm } from './NameCreateForm';
 export { default as Loading } from './Loading';
 export { default as Avatar } from './Avatar';
+export { default as LabelChip } from './LabelChip';
+export type { LabelChipProps } from './LabelChip';
 
 // --- フォーム補助 ---
 export { default as FormFieldError } from './FormFieldError';
@@ -51,6 +53,7 @@ export { default as PageFrame } from './PageFrame';
 export { default as ContentSection } from './ContentSection';
 export { default as Disclosure } from './Disclosure';
 export { default as Toast } from './Toast';
+export type { ToastType } from './Toast';
 
 /*
  * RichTextEditor は **意図的にこの barrel から出さない**。

@@ -1,10 +1,9 @@
 import { useId, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FsIcon } from '@/shared/ui';
+import { FsIcon, Button } from '@/shared/ui';
 import { KbRepository, kbKeys } from '@/entities/kb';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useToast } from '@/shared/lib/hooks/useToast';
-import Button from '@/shared/ui/Button';
 
 export interface KbSaveAsTemplateButtonProps {
   workspaceSlug: string;

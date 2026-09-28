@@ -102,7 +102,7 @@ describe('useTicketVocabulary', () => {
   });
 
   it('担当チームを差し替えたら、チケットを載せている控え（一覧と 1 件の画面）へ映す', async () => {
-    hoisted.setTicketTeam.mockResolvedValue({ id: 't-1', teamId: 'team-1' });
+    hoisted.setTicketTeam.mockResolvedValue({ ticketId: 't-1', teamId: 'team-1' });
     const client = createTestQueryClient();
     const listKey = ticketKeys.list('acme', 'p-1', {});
     client.setQueryData(listKey, [{ id: 't-1', teamId: null } as unknown as Ticket]);
@@ -118,8 +118,8 @@ describe('useTicketVocabulary', () => {
     expect(client.getQueryData<{ ticket: Ticket }>(ticketKeys.resolved('t-1'))?.ticket.teamId).toBe('team-1');
   });
 
-  it('チームを外した応答（teamId が無い）は null として映す', async () => {
-    hoisted.setTicketTeam.mockResolvedValue({ id: 't-1' });
+  it('チームを外したら、チケットを載せている控えの担当チームも外す', async () => {
+    hoisted.setTicketTeam.mockResolvedValue({ ticketId: 't-1', teamId: null });
     const client = createTestQueryClient();
     const listKey = ticketKeys.list('acme', 'p-1', {});
     client.setQueryData(listKey, [{ id: 't-1', teamId: 'team-1' } as unknown as Ticket]);

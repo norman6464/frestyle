@@ -3,7 +3,7 @@ import { Routes, Route, useLocation, Navigate, useParams } from 'react-router-do
 import AuthInitializer from './providers/AuthInitializer';
 import Protected from './providers/Protected';
 import ErrorBoundary from './providers/ErrorBoundary';
-import Loading from '@/shared/ui/Loading';
+import { Loading } from '@/shared/ui';
 import { ToastProvider } from './providers/ToastProvider';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import ToastContainer from '@/app/providers/ToastContainer';
