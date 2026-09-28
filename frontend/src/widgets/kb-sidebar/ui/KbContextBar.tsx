@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { FsIcon } from '@/shared/ui';
-import { KbWorkspaceSwitcher, type KbSpace, type KbWorkspace } from '@/entities/kb';
+import type { KbSpace, KbWorkspace } from '@/entities/kb';
+import KbWorkspaceSwitcher from './KbWorkspaceSwitcher';
 import KbSpaceSwitcher from './KbSpaceSwitcher';
 
 export interface KbContextBarProps {

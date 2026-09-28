@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Outlet, useMatch, useParams } from 'react-router-dom';
-import { KbWorkspaceTabs, useWorkspaceList } from '@/entities/kb';
+import { useWorkspaceList } from '@/entities/kb';
+import KbWorkspaceTabs from './KbWorkspaceTabs';
 import { ErrorNotice, Loading } from '@/shared/ui';
 import { useKbFrameLocation } from '../model/kbFrameLocation';
 import type { KbWorkspaceAdminOutlet } from '../model/kbWorkspaceAdminOutlet';

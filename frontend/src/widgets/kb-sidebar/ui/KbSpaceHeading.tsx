@@ -1,4 +1,4 @@
-import type { KbMySpace } from '../model/types';
+import type { KbMySpace } from '@/entities/kb';
 
 export interface KbSpaceHeadingProps {
   space: KbMySpace;
