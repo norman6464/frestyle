@@ -235,6 +235,7 @@ func registerKnowledgeBaseRoutesWith(
 		kb.NewListPageFavoritesUseCase(favorites, kb.NewCheckPagePermissionUseCase(permissions)),
 		kb.NewListSpaceMembersUseCase(permissions),
 		kb.NewListMySpacesUseCase(permissions),
+		kb.NewResolveSpaceLocationUseCase(pages),
 	)
 
 	// 権限操作 API の認可判定はこの 1 つの gate を共有する。
@@ -297,6 +298,9 @@ func registerKnowledgeBaseRoutesWith(
 	// /p/{pageId} の解決。URL にテナントを持たないため slug の middleware は通せない
 	// （権限判定は handler の中で、解決した workspace に対して必ず行う）。
 	g.GET("/kb/pages/:pageId", h.ResolveByID)
+	// /kb/spaces/{spaceId} の解決。ページと同じ理由で slug の middleware は通せない
+	// （権限判定は handler の中で、解決した workspace に対して必ず行う）。
+	g.GET("/kb/spaces/:spaceId", wh.ResolveSpace)
 	// 自分の最近見たページ（段2）。同じ理由でワークスペース横断のまま g に直接登録する。
 	g.GET("/kb/me/recent-pages", meh.ListRecentPages)
 	// 作成は認証済みなら誰でも叩けて、slug はテナントをまたいで一意。

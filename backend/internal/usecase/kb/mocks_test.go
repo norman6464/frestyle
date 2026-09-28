@@ -121,6 +121,12 @@ func (m *mockKnowledgeBaseRepo) ListAncestorPageIDs(ctx context.Context, workspa
 	return ids, args.Error(1)
 }
 
+func (m *mockKnowledgeBaseRepo) FindSpaceByIDAcrossWorkspaces(ctx context.Context, spaceID string) (*domain.Space, error) {
+	args := m.Called(ctx, spaceID)
+	s, _ := args.Get(0).(*domain.Space)
+	return s, args.Error(1)
+}
+
 func (m *mockKnowledgeBaseRepo) FindPageByIDAcrossWorkspaces(ctx context.Context, pageID string) (*domain.Page, error) {
 	args := m.Called(ctx, pageID)
 	p, _ := args.Get(0).(*domain.Page)

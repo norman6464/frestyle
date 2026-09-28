@@ -561,6 +561,28 @@ func TestKnowledgeBasePageUseCases_Integration(t *testing.T) {
 		require.ErrorIs(t, err, repository.ErrSpaceNotFound)
 	})
 
+	// /kb/spaces/{spaceId} の解決用。ID だけで引くので、別テナントのスペースも引ける
+	// （越境を防ぐのは、引いた直後にそのワークスペースで権限判定を通す呼び出し側の handler）。
+	t.Run("スペースをIDだけで引く", func(t *testing.T) {
+		ws, spaceA, _ := setup(t)
+		wsOther := createWorkspace(t, sqlDB, "ws-other")
+		spaceOther := createSpace(t, sqlDB, wsOther, "other")
+
+		sp, err := repo.FindSpaceByIDAcrossWorkspaces(ctx, spaceA)
+		require.NoError(t, err)
+		assert.Equal(t, ws, sp.WorkspaceID)
+		assert.Equal(t, "aaa", sp.Key)
+
+		other, err := repo.FindSpaceByIDAcrossWorkspaces(ctx, spaceOther)
+		require.NoError(t, err)
+		assert.Equal(t, wsOther, other.WorkspaceID, "どのワークスペースのスペースかは行から決まる")
+
+		_, err = repo.FindSpaceByIDAcrossWorkspaces(ctx, newID())
+		require.ErrorIs(t, err, repository.ErrSpaceNotFound)
+		_, err = repo.FindSpaceByIDAcrossWorkspaces(ctx, "not-a-uuid")
+		require.ErrorIs(t, err, repository.ErrSpaceNotFound, "不正な形式は DB エラーでなく存在しない扱い")
+	})
+
 	// URL 由来の生文字列がそのまま来る想定の入口検証。UUID として不正な ID は
 	// DB エラーではなく「存在しない」と同じ結果に落ちること。
 	t.Run("不正な形式のIDは存在しない扱いになる", func(t *testing.T) {

@@ -218,6 +218,15 @@ func (f *kbFakePages) FindSpace(_ context.Context, workspaceID, spaceID string) 
 	return &c, nil
 }
 
+func (f *kbFakePages) FindSpaceByIDAcrossWorkspaces(_ context.Context, spaceID string) (*domain.Space, error) {
+	s, ok := f.spaces[spaceID]
+	if !ok {
+		return nil, repository.ErrSpaceNotFound
+	}
+	c := *s
+	return &c, nil
+}
+
 func (f *kbFakePages) UpdateSpaceName(_ context.Context, workspaceID, spaceID, name string) error {
 	s, ok := f.spaces[spaceID]
 	if !ok || s.WorkspaceID != workspaceID {

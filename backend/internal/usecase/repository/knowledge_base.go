@@ -109,6 +109,10 @@ type KnowledgeBaseRepository interface {
 	FindPersonalWorkspaceByOwner(ctx context.Context, userID uint64) (*domain.Workspace, error)
 	// FindSpace はスペースを 1 件引く。無い・別ワークスペースなら ErrSpaceNotFound。
 	FindSpace(ctx context.Context, workspaceID, spaceID string) (*domain.Space, error)
+	// FindSpaceByIDAcrossWorkspaces はスペースを ID だけで引く（/kb/spaces/{spaceId} の解決用）。
+	// FindPageByIDAcrossWorkspaces と同じく、テナントを確定せずに読む口。呼び出し側は結果を
+	// 応答に使う前に**必ずその workspace の権限判定を通す**。無ければ ErrSpaceNotFound。
+	FindSpaceByIDAcrossWorkspaces(ctx context.Context, spaceID string) (*domain.Space, error)
 	// UpdateSpaceName はスペースの表示名だけを変える（key は不変）。
 	UpdateSpaceName(ctx context.Context, workspaceID, spaceID, name string) error
 	// CreateSpace はスペースを作成する（ID は UUIDv7 を採番。key が使用済みなら

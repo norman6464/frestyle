@@ -8,6 +8,42 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 )
 
+// ResolveSpaceLocationUseCase は URL の /kb/spaces/{spaceId}（テナントを出さない）から
+// スペースの居場所（ワークスペース）を特定する。テナント確定前の読みなので権限判定はしない。
+// 呼び出し側は返った Workspace.ID で必ず CheckSpacePermissionUseCase を通すこと
+// （ResolvePageLocationUseCase と同じ約束）。
+type ResolveSpaceLocationUseCase struct {
+	repo repository.KnowledgeBaseRepository
+}
+
+func NewResolveSpaceLocationUseCase(r repository.KnowledgeBaseRepository) *ResolveSpaceLocationUseCase {
+	return &ResolveSpaceLocationUseCase{repo: r}
+}
+
+type ResolveSpaceLocationOutput struct {
+	Space     domain.Space
+	Workspace domain.Workspace
+}
+
+func (u *ResolveSpaceLocationUseCase) Execute(ctx context.Context, spaceID string) (*ResolveSpaceLocationOutput, error) {
+	if spaceID == "" {
+		return nil, repository.ErrSpaceNotFound
+	}
+	space, err := u.repo.FindSpaceByIDAcrossWorkspaces(ctx, spaceID)
+	if err != nil {
+		return nil, err
+	}
+	ws, err := u.repo.FindWorkspaceByID(ctx, space.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	// この id 経路は ResolveWorkspaceUseCase（slug 経路）を通らないため、停止判定をここでも行う。
+	if !ws.IsActive {
+		return nil, repository.ErrSpaceNotFound
+	}
+	return &ResolveSpaceLocationOutput{Space: *space, Workspace: *ws}, nil
+}
+
 // CreateSpaceUseCase はワークスペース配下にスペースを作る。
 // 誰が作れるかの判定は handler が CheckWorkspacePermissionUseCase で先に行う（認可は 1 か所）。
 type CreateSpaceUseCase struct {

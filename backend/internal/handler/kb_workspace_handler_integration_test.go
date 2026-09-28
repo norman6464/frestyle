@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/norman6464/frestyle/backend/internal/domain"
+	"github.com/norman6464/frestyle/backend/internal/handler/dto"
 	"github.com/norman6464/frestyle/backend/internal/testsupport"
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 	"github.com/stretchr/testify/assert"
@@ -45,7 +46,7 @@ func TestKnowledgeBaseWorkspaceAPI_Integration(t *testing.T) {
 		spacesPath := "/api/v2/kb/workspaces/startup/spaces"
 		spaceRes := e.do(t, http.MethodPost, spacesPath, `{"key":"eng","name":"開発部"}`)
 		require.Equal(t, http.StatusCreated, spaceRes.Code, spaceRes.Body.String())
-		var space kbSpaceResponse
+		var space dto.KbSpaceResponse
 		require.NoError(t, json.Unmarshal(spaceRes.Body.Bytes(), &space))
 
 		// 4. 空のスペースに最初のページを作る（parentId 無し）。
@@ -199,7 +200,7 @@ func (e *kbEnv) listSpaces(t *testing.T, userID uint64) (*httptest.ResponseRecor
 	if w.Code != http.StatusOK {
 		return w, nil
 	}
-	var got []kbSpaceResponse
+	var got []dto.KbSpaceResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 	keys := make([]string, 0, len(got))
 	for _, s := range got {
@@ -366,7 +367,7 @@ func TestKnowledgeBasePrivateSpaceAPI_Integration(t *testing.T) {
 	created := env.as(bob).do(t, http.MethodPost, spacesPath,
 		`{"name":"bob の下書き","visibility":"private"}`)
 	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
-	var space kbSpaceResponse
+	var space dto.KbSpaceResponse
 	require.NoError(t, json.Unmarshal(created.Body.Bytes(), &space))
 	require.Equal(t, "private", space.Visibility)
 
@@ -497,12 +498,67 @@ func TestKnowledgeBaseWorkspaceMembership_Integration(t *testing.T) {
 		created := env.as(bob).do(t, http.MethodPost, "/api/v2/kb/workspaces/acme/spaces",
 			`{"name":"bob の下書き","visibility":"private"}`)
 		require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
-		var private kbSpaceResponse
+		var private dto.KbSpaceResponse
 		require.NoError(t, json.Unmarshal(created.Body.Bytes(), &private))
 
 		listed := env.as(alice).do(t, http.MethodGet, "/api/v2/kb/workspaces/acme/spaces", "")
 		require.Equal(t, http.StatusOK, listed.Code)
 		assert.NotContains(t, listed.Body.String(), private.ID,
 			"ワークスペースの admin にも、他人のプライベートスペースは見えない")
+	})
+}
+
+// TestKnowledgeBaseResolveSpaceAPI_Integration は URL にワークスペースを出さないスペースの解決
+// （/kb/spaces/{spaceId}）を実 PostgreSQL・本番と同じ配線で確かめる。
+//
+// この口は slug の middleware を通らない。スペースを ID だけで引いたあと、そのワークスペースで
+// 権限を判定するのが越境を防ぐ唯一の砦なので、判定に渡す事実（どの grant が届くか）を本物の
+// DB で集めて確かめる。
+func TestKnowledgeBaseResolveSpaceAPI_Integration(t *testing.T) {
+	sqlDB := testsupport.OpenTestDB(t)
+
+	env := newKbEnv(t, sqlDB, "acme")
+	ops := kbInsertSpace(t, sqlDB, env.workspaceID, "ops")
+	rival := kbInsertWorkspace(t, sqlDB, "rival")
+	rivalSpace := kbInsertSpace(t, sqlDB, rival, "secret")
+
+	// 所属だけさせて、ワークスペース全体の grant は張らない（張ると全スペースに届く）。
+	bob := kbInsertUser(t, sqlDB, "bob")
+	bobPrincipal, err := env.permissions.EnsureUserPrincipal(t.Context(), env.workspaceID, bob)
+	require.NoError(t, err)
+	_, err = env.permissions.UpsertSpaceGrant(t.Context(), env.workspaceID, ops, bobPrincipal.ID, domain.GrantRoleViewer)
+	require.NoError(t, err)
+
+	resolve := func(t *testing.T, spaceID string) *httptest.ResponseRecorder {
+		t.Helper()
+		return env.as(bob).do(t, http.MethodGet, "/api/v2/kb/spaces/"+spaceID, "")
+	}
+
+	t.Run("役割の届いているスペースはワークスペースとスペースを返す", func(t *testing.T) {
+		w := resolve(t, ops)
+
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		var got dto.KbResolvedSpaceResponse
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+		assert.Equal(t, "acme", got.WorkspaceSlug)
+		assert.Equal(t, ops, got.Space.ID)
+		assert.Equal(t, "ops", got.Space.Key)
+	})
+
+	t.Run("所属していても役割の無いスペースは存在しないIDと同じ404", func(t *testing.T) {
+		noRole := resolve(t, env.spaceID)
+		missing := resolve(t, "00000000-0000-7000-8000-00000000dead")
+
+		require.Equal(t, http.StatusNotFound, noRole.Code, noRole.Body.String())
+		require.Equal(t, http.StatusNotFound, missing.Code)
+		assert.Equal(t, missing.Body.String(), noRole.Body.String(), "見えないスペースの実在を教えない")
+	})
+
+	t.Run("所属していないワークスペースのスペースは404", func(t *testing.T) {
+		w := resolve(t, rivalSpace)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.NotContains(t, w.Body.String(), "rival")
+		assert.NotContains(t, w.Body.String(), "secret")
 	})
 }

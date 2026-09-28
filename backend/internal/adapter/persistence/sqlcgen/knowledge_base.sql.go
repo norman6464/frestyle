@@ -430,6 +430,31 @@ func (q *Queries) GetSpace(ctx context.Context, arg GetSpaceParams) (Space, erro
 	return i, err
 }
 
+const getSpaceAcrossWorkspaces = `-- name: GetSpaceAcrossWorkspaces :one
+SELECT id, workspace_id, key, name, visibility, created_at, updated_at FROM spaces
+WHERE id = $1
+`
+
+// スペースを **ID だけ** で引く。/kb/spaces/{spaceId} の URL からワークスペースを特定するための
+// 読み取りで、GetPageAcrossWorkspaces と同じく workspace_id を WHERE に持たない。
+// 引いた直後に必ずその workspace の権限判定を通すこと（判定なしで応答に使わない）。
+// id は uuid の主キーで全テナント一意なので、これ自体が越境にはならない
+// （危ういのは結果の使い方で、それは呼び出し側の handler が縛る）。
+func (q *Queries) GetSpaceAcrossWorkspaces(ctx context.Context, id uuid.UUID) (Space, error) {
+	row := q.db.QueryRowContext(ctx, getSpaceAcrossWorkspaces, id)
+	var i Space
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Key,
+		&i.Name,
+		&i.Visibility,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getWorkspaceByID = `-- name: GetWorkspaceByID :one
 
 SELECT id, slug, name, is_active, personal_owner_user_id, created_at, updated_at FROM workspaces
