@@ -25,6 +25,10 @@ type ProjectRepository interface {
 	ListProjects(ctx context.Context, workspaceID string) ([]domain.Project, error)
 	// FindProject は 1 件引く。無い・別ワークスペースなら ErrProjectNotFound。
 	FindProject(ctx context.Context, workspaceID, projectID string) (*domain.Project, error)
+	// FindProjectByIDAcrossWorkspaces はプロジェクトを ID だけで引く（/projects/{projectId} の解決用）。
+	// テナントを確定せずに読む唯一の口で、呼び出し側は結果を応答に使う前に**必ずその
+	// workspace の判定を通す**。無ければ ErrProjectNotFound。
+	FindProjectByIDAcrossWorkspaces(ctx context.Context, projectID string) (*domain.Project, error)
 	// FindProjectByKey は表示キーの接頭辞（大文字小文字を問わない）から引く。
 	// チケットの表示キー（FRESTYLE-12）の解決が使う。
 	FindProjectByKey(ctx context.Context, workspaceID, key string) (*domain.Project, error)

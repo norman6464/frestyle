@@ -36,6 +36,30 @@ func (q *Queries) GetProject(ctx context.Context, arg GetProjectParams) (Project
 	return i, err
 }
 
+const getProjectAcrossWorkspaces = `-- name: GetProjectAcrossWorkspaces :one
+SELECT id, workspace_id, key, name, created_at, updated_at FROM projects
+WHERE id = $1
+`
+
+// プロジェクトを **ID だけ** で引く。/projects/{projectId} の URL からワークスペースを特定するための、
+// このファイルで唯一 workspace_id を WHERE に持たない読み取り（冒頭の作法の例外）。
+// 引いた直後に必ずその workspace の判定を通すこと（判定なしで応答に使わない）。
+// id は uuid の主キーで全テナント一意なので、これ自体が越境にはならない
+// （危ういのは結果の使い方で、それは呼び出し側の handler が縛る）。
+func (q *Queries) GetProjectAcrossWorkspaces(ctx context.Context, id uuid.UUID) (Project, error) {
+	row := q.db.QueryRowContext(ctx, getProjectAcrossWorkspaces, id)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Key,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getProjectByKey = `-- name: GetProjectByKey :one
 SELECT id, workspace_id, key, name, created_at, updated_at FROM projects
 WHERE workspace_id = $1 AND lower("key") = $2

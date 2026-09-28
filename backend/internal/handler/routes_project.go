@@ -45,7 +45,13 @@ func registerProjectRoutesWith(
 		project.NewListProjectsUseCase(projects),
 		project.NewGetProjectUseCase(projects),
 		project.NewRenameProjectUseCase(projects),
+		project.NewResolveProjectLocationUseCase(projects, workspaces),
+		kb.NewResolveWorkspaceUseCase(workspaces, permissions),
 	)
+
+	// slug 無しの解決だけは middleware.KnowledgeBaseWorkspace を通さない（handler が ID から
+	// ワークスペースを解決し、その場で所属の判定を通す。/tickets/:ticketId と同じ）。
+	g.GET("/projects/:projectId", h.ResolveByID)
 
 	pjGroup := g.Group("", middleware.KnowledgeBaseWorkspace(
 		kb.NewResolveWorkspaceUseCase(workspaces, permissions),

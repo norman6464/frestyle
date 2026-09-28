@@ -44,6 +44,12 @@ func (m *mockProjectRepo) FindProject(ctx context.Context, workspaceID, projectI
 	return p, args.Error(1)
 }
 
+func (m *mockProjectRepo) FindProjectByIDAcrossWorkspaces(ctx context.Context, projectID string) (*domain.Project, error) {
+	args := m.Called(ctx, projectID)
+	p, _ := args.Get(0).(*domain.Project)
+	return p, args.Error(1)
+}
+
 func (m *mockProjectRepo) FindProjectByKey(ctx context.Context, workspaceID, key string) (*domain.Project, error) {
 	args := m.Called(ctx, workspaceID, key)
 	p, _ := args.Get(0).(*domain.Project)

@@ -75,6 +75,32 @@ func TestProjectRepository_Integration(t *testing.T) {
 		assert.Equal(t, "frestyle", renamed.Key, "改名で key は変わらない")
 	})
 
+	// /projects/{projectId} の解決用。ID だけで引くので、別テナントのプロジェクトも引ける
+	// （越境を防ぐのは、引いた直後にそのワークスペースで所属を確かめる呼び出し側の handler）。
+	t.Run("IDだけで引く", func(t *testing.T) {
+		testsupport.TruncateAll(t, sqlDB, "projects", "workspaces")
+		ws := createWorkspace(t, sqlDB, "pj-main")
+		other := createWorkspace(t, sqlDB, "pj-other")
+		mine := &domain.Project{WorkspaceID: ws, Key: "eng", Name: "開発"}
+		require.NoError(t, repo.CreateProject(ctx, mine))
+		theirs := &domain.Project{WorkspaceID: other, Key: "eng", Name: "他社の開発"}
+		require.NoError(t, repo.CreateProject(ctx, theirs))
+
+		got, err := repo.FindProjectByIDAcrossWorkspaces(ctx, mine.ID)
+		require.NoError(t, err)
+		assert.Equal(t, ws, got.WorkspaceID)
+		assert.Equal(t, "開発", got.Name)
+
+		foreign, err := repo.FindProjectByIDAcrossWorkspaces(ctx, theirs.ID)
+		require.NoError(t, err)
+		assert.Equal(t, other, foreign.WorkspaceID, "どのワークスペースのプロジェクトかは行から決まる")
+
+		_, err = repo.FindProjectByIDAcrossWorkspaces(ctx, "00000000-0000-7000-8000-00000000dead")
+		assert.ErrorIs(t, err, repository.ErrProjectNotFound)
+		_, err = repo.FindProjectByIDAcrossWorkspaces(ctx, "ID ではない")
+		assert.ErrorIs(t, err, repository.ErrProjectNotFound, "壊れた ID は DB エラーでなく存在しない扱い")
+	})
+
 	t.Run("keyはワークスペース内で一意", func(t *testing.T) {
 		testsupport.TruncateAll(t, sqlDB, "projects", "workspaces")
 		ws := createWorkspace(t, sqlDB, "pj-main")

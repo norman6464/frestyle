@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/norman6464/frestyle/backend/internal/domain"
+	"github.com/norman6464/frestyle/backend/internal/handler/dto"
 	"github.com/norman6464/frestyle/backend/internal/handler/middleware"
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 	"github.com/stretchr/testify/assert"
@@ -61,6 +62,15 @@ func (f *projectFakeRepo) FindProject(_ context.Context, workspaceID, projectID 
 	return &cp, nil
 }
 
+func (f *projectFakeRepo) FindProjectByIDAcrossWorkspaces(_ context.Context, projectID string) (*domain.Project, error) {
+	p, ok := f.projects[projectID]
+	if !ok {
+		return nil, repository.ErrProjectNotFound
+	}
+	cp := *p
+	return &cp, nil
+}
+
 func (f *projectFakeRepo) FindProjectByKey(_ context.Context, workspaceID, key string) (*domain.Project, error) {
 	for _, p := range f.projects {
 		if p.WorkspaceID == workspaceID && strings.EqualFold(p.Key, key) {
@@ -82,6 +92,7 @@ func (f *projectFakeRepo) RenameProject(_ context.Context, workspaceID, projectI
 
 type projectFixture struct {
 	projects *projectFakeRepo
+	pages    *kbFakePages
 	router   *gin.Engine
 }
 
@@ -111,7 +122,7 @@ func newProjectFixture(uid uint64, role domain.GrantRole) projectFixture {
 		})
 	}
 	registerProjectRoutesWith(g, projects, perms, pages)
-	return projectFixture{projects: projects, router: r}
+	return projectFixture{projects: projects, pages: pages, router: r}
 }
 
 func (f projectFixture) do(t *testing.T, method, path, body string) *httptest.ResponseRecorder {
@@ -133,29 +144,29 @@ func Test_プロジェクト_作成から一覧取得改名まで(t *testing.T) 
 	// 最初は空。
 	w := f.do(t, http.MethodGet, projectAPIBase, "")
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Empty(t, decodeJSON[projectListResponse](t, w).Projects)
+	assert.Empty(t, decodeJSON[dto.ProjectListResponse](t, w).Projects)
 
 	// key を省略するとサーバーが自動採番する。
 	w = f.do(t, http.MethodPost, projectAPIBase, `{"name":"FreStyle 開発"}`)
 	require.Equal(t, http.StatusCreated, w.Code)
-	created := decodeJSON[domain.Project](t, w)
+	created := decodeJSON[dto.ProjectResponse](t, w)
 	require.NotEmpty(t, created.ID)
 	assert.True(t, domain.ValidProjectKey(created.Key))
 
 	w = f.do(t, http.MethodGet, projectAPIBase+"/"+created.ID, "")
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "FreStyle 開発", decodeJSON[domain.Project](t, w).Name)
+	assert.Equal(t, "FreStyle 開発", decodeJSON[dto.ProjectResponse](t, w).Name)
 
 	// 改名は名前だけ。key は変わらない（既に外へ貼られた表示キーの指す先を失わない）。
 	w = f.do(t, http.MethodPatch, projectAPIBase+"/"+created.ID, `{"name":"FreStyle 本体"}`)
 	require.Equal(t, http.StatusOK, w.Code)
-	renamed := decodeJSON[domain.Project](t, w)
+	renamed := decodeJSON[dto.ProjectResponse](t, w)
 	assert.Equal(t, "FreStyle 本体", renamed.Name)
 	assert.Equal(t, created.Key, renamed.Key)
 
 	w = f.do(t, http.MethodGet, projectAPIBase, "")
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Len(t, decodeJSON[projectListResponse](t, w).Projects, 1)
+	assert.Len(t, decodeJSON[dto.ProjectListResponse](t, w).Projects, 1)
 }
 
 func Test_プロジェクト_keyの重複は409(t *testing.T) {
@@ -201,10 +212,82 @@ func Test_プロジェクト_別ワークスペースのIDは404(t *testing.T) {
 	f := newProjectFixture(kbUserID, domain.GrantRoleAdmin)
 	w := f.do(t, http.MethodPost, projectAPIBase, `{"name":"開発"}`)
 	require.Equal(t, http.StatusCreated, w.Code)
-	created := decodeJSON[domain.Project](t, w)
+	created := decodeJSON[dto.ProjectResponse](t, w)
 
 	// 所属していないワークスペース経由では、そもそもワークスペース解決で 404 になる。
 	other := "/api/v2/workspaces/" + kbOtherWorkspaceSlug + "/projects/" + created.ID
 	w = f.do(t, http.MethodGet, other, "")
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// projectResolvePath は URL にワークスペースを出さないプロジェクトの解決（/projects/{projectId}）。
+const projectResolvePath = "/api/v2/projects/"
+
+// addProject は fake にプロジェクトを直に置く（作成の口は admin しか通れないので、判定と
+// 切り離して「どのワークスペースのプロジェクトか」だけを決めたいときに使う）。
+func (f projectFixture) addProject(id, workspaceID string) {
+	f.projects.projects[id] = &domain.Project{ID: id, WorkspaceID: workspaceID, Key: "eng", Name: "開発"}
+}
+
+func Test_プロジェクトの解決_所属しているワークスペースのプロジェクトはワークスペースと中身を返す(t *testing.T) {
+	f := newProjectFixture(kbUserID, domain.GrantRoleViewer)
+	f.addProject("project-mine", kbWorkspaceID)
+
+	w := f.do(t, http.MethodGet, projectResolvePath+"project-mine", "")
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	got := decodeJSON[dto.ResolvedProjectResponse](t, w)
+	assert.Equal(t, kbWorkspaceSlug, got.WorkspaceSlug)
+	assert.Equal(t, kbWorkspaceSlug, got.WorkspaceName)
+	assert.Equal(t, "project-mine", got.Project.ID)
+	assert.Equal(t, "eng", got.Project.Key)
+}
+
+// 判定は slug の経路（プロジェクトの一覧・1 件の取得）と同じ「所属」。役割が無くても所属していれば
+// 引ける（一覧で見えているプロジェクトが、ID で開くと見えない、とならないように）。
+func Test_プロジェクトの解決_役割が無くても所属していれば返す(t *testing.T) {
+	f := newProjectFixture(kbUserID, "")
+	f.addProject("project-mine", kbWorkspaceID)
+
+	w := f.do(t, http.MethodGet, projectResolvePath+"project-mine", "")
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+}
+
+func Test_プロジェクトの解決_所属していないワークスペースのプロジェクトは存在しないIDと同じ404(t *testing.T) {
+	f := newProjectFixture(kbUserID, domain.GrantRoleAdmin)
+	// 他社のテナントのプロジェクト。URL にワークスペースが無いので slug の middleware は通らない。
+	// 解決した先のワークスペースで所属を確かめないと、ID を知っているだけで中身が引ける。
+	f.addProject("project-rival", kbOtherWorkspaceID)
+
+	foreign := f.do(t, http.MethodGet, projectResolvePath+"project-rival", "")
+	missing := f.do(t, http.MethodGet, projectResolvePath+"project-none", "")
+
+	require.Equal(t, http.StatusNotFound, foreign.Code)
+	require.Equal(t, http.StatusNotFound, missing.Code)
+	assert.Equal(t, missing.Body.String(), foreign.Body.String(), "他社のプロジェクトの実在を教えない")
+	assert.NotContains(t, foreign.Body.String(), kbOtherWorkspaceSlug)
+}
+
+func Test_プロジェクトの解決_未認証は401(t *testing.T) {
+	f := newProjectFixture(0, "")
+	f.addProject("project-mine", kbWorkspaceID)
+
+	w := f.do(t, http.MethodGet, projectResolvePath+"project-mine", "")
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+// 所属の判定は解決した slug で行う。所在を引いてから判定するまでの間に slug が消されて別の
+// ワークスペースに付け直されても、そのワークスペースの所属でプロジェクトを返さない
+// （判定が返したワークスペースと、プロジェクトのワークスペースが同じことを確かめる）。
+func Test_プロジェクトの解決_slugが別のワークスペースを指していたら返さない(t *testing.T) {
+	f := newProjectFixture(kbUserID, domain.GrantRoleViewer)
+	// 所在の口が見るのは古いワークスペース（ID は別・slug は今の所属先と同じ）。
+	f.pages.workspaces["acme-before-reuse"] = &domain.Workspace{ID: "ws-before-reuse", Slug: kbWorkspaceSlug, IsActive: true}
+	f.addProject("project-old", "ws-before-reuse")
+
+	w := f.do(t, http.MethodGet, projectResolvePath+"project-old", "")
+
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 }

@@ -23,6 +23,15 @@ ORDER BY created_at, id;
 SELECT * FROM projects
 WHERE workspace_id = $1 AND id = $2;
 
+-- name: GetProjectAcrossWorkspaces :one
+-- プロジェクトを **ID だけ** で引く。/projects/{projectId} の URL からワークスペースを特定するための、
+-- このファイルで唯一 workspace_id を WHERE に持たない読み取り（冒頭の作法の例外）。
+-- 引いた直後に必ずその workspace の判定を通すこと（判定なしで応答に使わない）。
+-- id は uuid の主キーで全テナント一意なので、これ自体が越境にはならない
+-- （危ういのは結果の使い方で、それは呼び出し側の handler が縛る）。
+SELECT * FROM projects
+WHERE id = $1;
+
 -- name: GetProjectByKey :one
 -- 表示キーの接頭辞（小文字）からプロジェクトを引く。チケットのキー解決が使う。
 SELECT * FROM projects

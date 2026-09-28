@@ -5,7 +5,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/norman6464/frestyle/backend/internal/domain"
+	"github.com/norman6464/frestyle/backend/internal/handler/dto"
+	"github.com/norman6464/frestyle/backend/internal/handler/middleware"
 	"github.com/norman6464/frestyle/backend/internal/usecase/kb"
 	"github.com/norman6464/frestyle/backend/internal/usecase/project"
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
@@ -23,6 +24,9 @@ type ProjectHandler struct {
 	list           *project.ListProjectsUseCase
 	get            *project.GetProjectUseCase
 	rename         *project.RenameProjectUseCase
+	// resolveLocation / resolveWorkspace は URL にワークスペースを出さない解決（ResolveByID）用。
+	resolveLocation  *project.ResolveProjectLocationUseCase
+	resolveWorkspace *kb.ResolveWorkspaceUseCase
 }
 
 func NewProjectHandler(
@@ -31,22 +35,13 @@ func NewProjectHandler(
 	list *project.ListProjectsUseCase,
 	get *project.GetProjectUseCase,
 	rename *project.RenameProjectUseCase,
+	resolveLocation *project.ResolveProjectLocationUseCase,
+	resolveWorkspace *kb.ResolveWorkspaceUseCase,
 ) *ProjectHandler {
-	return &ProjectHandler{checkWorkspace: checkWorkspace, create: create, list: list, get: get, rename: rename}
-}
-
-type createProjectRequest struct {
-	// Key は省略可（空ならサーバーが自動採番する）。作成後は変えられない。
-	Key  string `json:"key"`
-	Name string `json:"name" binding:"required"`
-}
-
-type renameProjectRequest struct {
-	Name string `json:"name" binding:"required"`
-}
-
-type projectListResponse struct {
-	Projects []domain.Project `json:"projects"`
+	return &ProjectHandler{
+		checkWorkspace: checkWorkspace, create: create, list: list, get: get, rename: rename,
+		resolveLocation: resolveLocation, resolveWorkspace: resolveWorkspace,
+	}
 }
 
 // respondProjectErr は usecase / repository のセンチネルを HTTP ステータスへ対応づける。
@@ -96,10 +91,7 @@ func (h *ProjectHandler) List(c *gin.Context) {
 		respondProjectErr(c, err)
 		return
 	}
-	if projects == nil {
-		projects = []domain.Project{}
-	}
-	c.JSON(http.StatusOK, projectListResponse{Projects: projects})
+	c.JSON(http.StatusOK, dto.ProjectListFromDomain(projects))
 }
 
 // Get はプロジェクト 1 件を返す。
@@ -113,7 +105,42 @@ func (h *ProjectHandler) Get(c *gin.Context) {
 		respondProjectErr(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, p)
+	c.JSON(http.StatusOK, dto.ProjectFromDomain(p))
+}
+
+// ResolveByID は /projects/{projectId} の URL からプロジェクトとワークスペースを引く（URL に
+// ワークスペースを出さないための口。kb の /kb/pages/{pageId}・/tickets/{ticketId} と同じ形）。
+func (h *ProjectHandler) ResolveByID(c *gin.Context) {
+	uid := middleware.CurrentUserIDOrZero(c)
+	if uid == 0 {
+		c.JSON(http.StatusUnauthorized, errorResponse{Error: "unauthorized"})
+		return
+	}
+	loc, err := h.resolveLocation.Execute(c.Request.Context(), c.Param("projectId"))
+	if err != nil {
+		// 実在しない ID も、この後の判定で伏せられる ID も、同じ経路の 404 に落ちる。
+		respondProjectErr(c, err)
+		return
+	}
+	// 解決はテナント確定前の読みなので、**ここで必ず**そのワークスペースで判定を通す。判定は
+	// slug の経路（一覧・1 件の取得が通る middleware）と同じ ResolveWorkspaceUseCase を、解決した
+	// slug でそのまま使う。所属していなければ ErrWorkspaceNotFound で、存在しない ID と同じ 404。
+	ws, err := h.resolveWorkspace.Execute(c.Request.Context(), kb.ResolveWorkspaceInput{
+		Slug:   loc.Workspace.Slug,
+		UserID: uid,
+	})
+	if err != nil {
+		respondProjectErr(c, err)
+		return
+	}
+	// slug で判定したワークスペースが、プロジェクトのワークスペースと同じことも確かめる。所在を
+	// 引いてから判定するまでの間に slug が消されて別のワークスペースに付け直されると、そちらの
+	// 所属で通ってしまうため（存在しない ID と同じ 404 に落とす）。
+	if ws.ID != loc.Workspace.ID {
+		respondProjectErr(c, repository.ErrProjectNotFound)
+		return
+	}
+	c.JSON(http.StatusOK, dto.ResolvedProjectFromDomain(&loc.Workspace, &loc.Project))
 }
 
 // Create はプロジェクトを作る（ワークスペースの admin だけ）。
@@ -122,7 +149,7 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req createProjectRequest
+	var req dto.CreateProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_request"})
 		return
@@ -139,7 +166,7 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 		respondProjectErr(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, p)
+	c.JSON(http.StatusCreated, dto.ProjectFromDomain(p))
 }
 
 // Rename は表示名だけを変える（key は変えない。ワークスペースの admin だけ）。
@@ -148,7 +175,7 @@ func (h *ProjectHandler) Rename(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req renameProjectRequest
+	var req dto.RenameProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_request"})
 		return
@@ -165,5 +192,5 @@ func (h *ProjectHandler) Rename(c *gin.Context) {
 		respondProjectErr(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, p)
+	c.JSON(http.StatusOK, dto.ProjectFromDomain(p))
 }

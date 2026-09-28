@@ -100,6 +100,23 @@ func (r *projectRepository) FindProject(ctx context.Context, workspaceID, projec
 	return &p, nil
 }
 
+// FindProjectByIDAcrossWorkspaces はプロジェクトを ID だけで引く（詳細は port のコメント）。
+func (r *projectRepository) FindProjectByIDAcrossWorkspaces(ctx context.Context, projectID string) (*domain.Project, error) {
+	prID, ok := kbParseID(projectID)
+	if !ok {
+		return nil, repository.ErrProjectNotFound
+	}
+	row, err := r.queries(ctx).GetProjectAcrossWorkspaces(ctx, prID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, repository.ErrProjectNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	p := toDomainProject(row)
+	return &p, nil
+}
+
 func (r *projectRepository) FindProjectByKey(ctx context.Context, workspaceID, key string) (*domain.Project, error) {
 	wsID, ok := kbParseID(workspaceID)
 	if !ok {
