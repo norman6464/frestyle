@@ -10,9 +10,11 @@ const NO_NOTIFICATIONS: Notification[] = [];
 /**
  * 取り直しが 401・403 で失敗した（もう見てよい人ではない）。取得済みの通知（本文を含む）も
  * 未読数も画面に残さない。403 は queryShownState も隠すが、401 もここでは同じに扱う。
+ * そのあとの取り直しの間も、成功するまでは立てたまま（置き場は前の結果を持ち続けるので、
+ * 取り直している間だけ捨てた通知がまた見えてしまう）。
  */
 function denied(result: UseQueryResult<unknown>): boolean {
-  if (!result.isError || result.isFetching) return false;
+  if (!result.isError) return false;
   const { status } = getApiError(result.error);
   return status === 401 || status === 403;
 }

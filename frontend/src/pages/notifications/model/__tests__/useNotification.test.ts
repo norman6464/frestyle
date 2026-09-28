@@ -230,16 +230,48 @@ describe('useNotification', () => {
     expect(result.current.unreadCount).toBe(0);
   });
 
-  it('画面を開き直したら、取ってある一覧を出しつつ一覧と未読数を取り直す', async () => {
+  it('画面を開き直したら、取ってある一覧を出しつつ一覧と未読数を取り直し、新しい値に替える', async () => {
     const client = createTestQueryClient();
     const first = renderHook(() => useNotification(), { wrapper: queryWrapper(client) });
     await waitFor(() => expect(first.result.current.notifications).toHaveLength(2));
     first.unmount();
 
+    // 開き直したときの取得では、新しい通知が 1 件増え、未読も 2 件になっている。
+    const arrived: Notification = { ...mockNotifications[0], id: 3, title: '新しい通知' };
+    mockGetAll.mockResolvedValue([arrived, ...mockNotifications]);
+    mockGetUnreadCount.mockResolvedValue(2);
     const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper(client) });
     expect(result.current.notifications).toHaveLength(2);
-    await waitFor(() => expect(mockGetAll).toHaveBeenCalledTimes(2));
-    expect(mockGetUnreadCount).toHaveBeenCalledTimes(2);
+    expect(result.current.unreadCount).toBe(1);
+
+    await waitFor(() => expect(result.current.notifications.map((n) => n.id)).toEqual([3, 1, 2]));
+    await waitFor(() => expect(result.current.unreadCount).toBe(2));
+  });
+
+  it('401・403 のあと取り直している間も、捨てた通知と未読数は出さない', async () => {
+    const { result } = renderHook(() => useNotification(), { wrapper: queryWrapper() });
+    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+
+    const forbidden = new AxiosError('forbidden', undefined, undefined, undefined, {
+      status: 403, data: {}, statusText: '', headers: {}, config: {},
+    } as unknown as AxiosResponse);
+    mockGetAll.mockRejectedValue(forbidden);
+    mockGetUnreadCount.mockRejectedValue(forbidden);
+    await act(async () => {
+      await result.current.refresh();
+    });
+    await waitFor(() => expect(result.current.notifications).toEqual([]));
+
+    // 再試行を押した: 取り直しが終わらない間を見る。
+    mockGetAll.mockImplementation(() => new Promise(() => {}));
+    mockGetUnreadCount.mockImplementation(() => new Promise(() => {}));
+    act(() => {
+      void result.current.refresh();
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    expect(result.current.notifications).toEqual([]);
+    expect(result.current.unreadCount).toBe(0);
   });
 
   // この再取得が消えると「押したのに変わらない」状態に戻るため契約として固定する。

@@ -22,6 +22,12 @@ const files = globSync(
   { cwd: root, exclude: REACT_COMPILER_IGNORES },
 ).sort();
 
+// 範囲の書き方やフォルダの構成が変わって 1 件も当たらないと、何も調べずに通ってしまう。
+if (files.length === 0) {
+  console.error('React Compiler: 範囲に当てはまるファイルがありません。react-compiler-scope.js の指定を確かめてください。');
+  process.exit(1);
+}
+
 /** コンパイラが部品・hook を諦めた知らせ（成功・対象外・診断は数えない）。 */
 const BAILOUTS = new Set(['CompileError', 'PipelineError']);
 

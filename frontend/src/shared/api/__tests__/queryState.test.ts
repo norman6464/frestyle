@@ -63,6 +63,15 @@ describe('queryShownState', () => {
     });
   });
 
+  it.each([403, 404])('%d のあと取り直している間も、捨てた結果は出さずに読み込み中にする', (status) => {
+    expect(queryShownState(result({ data: ['a'], isError: true, isFetching: true, error: httpError(status) }))).toEqual({
+      data: undefined,
+      loading: true,
+      failed: false,
+      lostAccess: true,
+    });
+  });
+
   it('宛先がそろっていなければ何も出さない', () => {
     expect(queryShownState(result({ data: ['a'], isPending: true }), false)).toEqual({
       data: undefined,
