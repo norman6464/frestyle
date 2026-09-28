@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AdminWorkspaceMember, GrantRole } from '@/entities/workspace';
 import { Button, ConfirmModal, EmptyNotice, ErrorNotice, Loading } from '@/shared/ui';
-import { KbAdminOnlyNotice, useKbWorkspaceAdminOutlet } from '@/widgets/kb-sidebar';
+import { KbAdminOnlyNotice, useKbWorkspaceAdminOutlet } from '@/widgets/kb-frame';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useKbAdminMembers } from '../model/useKbAdminMembers';

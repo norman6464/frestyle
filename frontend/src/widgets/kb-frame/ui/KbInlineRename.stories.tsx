@@ -13,7 +13,7 @@ import KbInlineRename from './KbInlineRename';
  * 空の題名にはできない（サーバーも弾く）。変えずに確定したときは、何も投げずに閉じるだけ。
  */
 const meta = {
-  title: 'widgets/kb-sidebar/KbInlineRename',
+  title: 'widgets/kb-frame/KbInlineRename',
   component: KbInlineRename,
   parameters: { layout: 'padded' },
   args: { initialTitle: '設計メモ', onCommit: fn(async () => {}), onCancel: fn() },

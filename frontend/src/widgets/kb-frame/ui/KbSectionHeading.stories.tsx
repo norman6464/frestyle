@@ -9,7 +9,7 @@ import KbSectionHeading from './KbSectionHeading';
  * 節が続くところには上に線を引き、どこからが別の区分かを示す。
  */
 const meta = {
-  title: 'widgets/kb-sidebar/KbSectionHeading',
+  title: 'widgets/kb-frame/KbSectionHeading',
   component: KbSectionHeading,
   parameters: { layout: 'centered' },
   args: { onAdd: fn(), addLabel: 'スペースを追加' },

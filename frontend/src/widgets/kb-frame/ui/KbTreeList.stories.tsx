@@ -15,7 +15,7 @@ import KbTreeList from './KbTreeList';
  * 字下げの数値は見た目のためだけに残してある。
  */
 const meta = {
-  title: 'widgets/kb-sidebar/KbTreeList',
+  title: 'widgets/kb-frame/KbTreeList',
   component: KbTreeList,
   parameters: { layout: 'padded' },
   decorators: [

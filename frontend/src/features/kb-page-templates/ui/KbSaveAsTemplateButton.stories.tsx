@@ -29,7 +29,7 @@ function conflictError(): AxiosError {
  * どちらの失敗でもフォームは閉じない（入力を保つ）。
  */
 const meta = {
-  title: 'pages/kb/KbSaveAsTemplateButton',
+  title: 'features/kb-page-templates/KbSaveAsTemplateButton',
   component: KbSaveAsTemplateButton,
   parameters: { layout: 'padded' },
   args: { workspaceSlug: 'w-3f2a9c', pageId: 'p-1', spaceId: 's-1' },

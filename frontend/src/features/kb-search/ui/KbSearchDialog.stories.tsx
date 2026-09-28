@@ -17,7 +17,7 @@ import KbSearchDialog from './KbSearchDialog';
  * 世代番号で捨てている。
  */
 const meta = {
-  title: 'widgets/kb-sidebar/KbSearchDialog',
+  title: 'features/kb-search/KbSearchDialog',
   component: KbSearchDialog,
   parameters: { layout: 'fullscreen' },
   args: { workspaceSlug: 'w-3f2a9c', onClose: fn() },

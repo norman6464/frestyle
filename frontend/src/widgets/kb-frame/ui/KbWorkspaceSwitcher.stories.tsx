@@ -16,7 +16,7 @@ import type { Workspace } from '@/entities/workspace';
  * ワークスペース単位の入口（メンバーと招待・追加）もここに集める。削除はここには置かない。
  */
 const meta = {
-  title: 'widgets/kb-sidebar/KbWorkspaceSwitcher',
+  title: 'widgets/kb-frame/KbWorkspaceSwitcher',
   component: KbWorkspaceSwitcher,
   parameters: { layout: 'padded' },
   args: { onSelect: fn(), onCreate: fn(async () => {}) },

@@ -20,9 +20,8 @@ const LOAD_FAILED =
  * useKbPageTemplates はスペース 1 つぶんのテンプレート一覧（そのスペース専用 +
  * ワークスペース全体、両方込み）の読み取り・削除・「テンプレートから新しいページを作る」を持つ。
  *
- * サイドバーの「雛形から作る」と、本文の /template コマンドの両方から使われる想定
- * （widgets/kb-sidebar 側に置くのは、pages/kb からは import できても widgets からは
- * pages を import できない — FSD の依存方向のため）。
+ * サイドバー（widgets/kb-frame）の「雛形から作る」と、本文（pages/kb）の /template コマンドの
+ * 両方から使う。2 か所から使う操作なので features に置く。
  *
  * **一覧の取得は open（ピッカーが開いているか）ゲート付き**。一覧は共有の問い合わせ
  * （kbSpaceTemplatesQuery）から読むので、ホームの作成の窓と同じ一覧を使い、閉じて開き直しても

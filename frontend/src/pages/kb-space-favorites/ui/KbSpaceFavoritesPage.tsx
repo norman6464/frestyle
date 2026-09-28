@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { KbSpaceHeading, useKbSpaceOutlet } from '@/widgets/kb-sidebar';
+import { KbSpaceHeading, useKbSpaceOutlet } from '@/widgets/kb-frame';
 import { Loading, fsIcon, EmptyState } from '@/shared/ui';
 import { KbPageGlyph } from '@/entities/kb';
 import { useKbFavorites } from '../model/useKbFavorites';

@@ -6,8 +6,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
 import KbPage from '../KbPage';
-import { KbFrameContext } from '@/widgets/kb-sidebar';
-import { KbFrameLocationContext } from '@/widgets/kb-sidebar/model/kbFrameLocation';
+import { KbFrameContext } from '@/widgets/kb-frame';
+import { KbFrameLocationContext } from '@/widgets/kb-frame/model/kbFrameLocation';
 import { emitKbTreeEvent } from '@/entities/kb';
 import type { CommentAnchor, CommentBadgeCounts, EditorCommand } from '@/shared/ui/RichTextEditor';
 

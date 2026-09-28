@@ -9,7 +9,7 @@ import KbRowActions from './KbRowActions';
  * 文字色を継いでしまい、項目が全部青くなる。
  */
 const meta = {
-  title: 'widgets/kb-sidebar/KbRowActions',
+  title: 'widgets/kb-frame/KbRowActions',
   component: KbRowActions,
   parameters: { layout: 'centered' },
   args: {

@@ -19,7 +19,7 @@ import KbPageRow from './KbPageRow';
  * ページは aria-current が表す — どちらも標準の意味で、別の約束をしない。
  */
 const meta = {
-  title: 'widgets/kb-sidebar/KbPageRow',
+  title: 'widgets/kb-frame/KbPageRow',
   component: KbPageRow,
   parameters: { layout: 'padded' },
   decorators: [

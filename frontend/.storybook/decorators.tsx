@@ -10,7 +10,7 @@ import { authReducer } from '@/entities/user';
 import { ToastProvider } from '@/app/providers/ToastProvider';
 import ToastContainer from '@/app/providers/ToastContainer';
 import apiClient from '@/shared/api/axios';
-import { KbFrameLayout, KbSpaceLayout, KbWorkspaceAdminLayout } from '@/widgets/kb-sidebar';
+import { KbFrameLayout, KbSpaceLayout, KbWorkspaceAdminLayout } from '@/widgets/kb-frame';
 
 /*
  * story を単体で描くための「まわりの装置」。

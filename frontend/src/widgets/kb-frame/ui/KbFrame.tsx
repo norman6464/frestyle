@@ -11,7 +11,7 @@ import { KbFrameContext, type KbFrameValue } from '../model/kbFrameContext';
 import KbContextBar from './KbContextBar';
 import KbPagePanelHeading from './KbPagePanelHeading';
 import KbTreeList from './KbTreeList';
-import KbSearchDialog from './KbSearchDialog';
+import { KbSearchDialog } from '@/features/kb-search';
 
 export interface KbFrameProps {
   /** URL が指しているワークスペース。未指定なら所属の先頭を開く。 */
