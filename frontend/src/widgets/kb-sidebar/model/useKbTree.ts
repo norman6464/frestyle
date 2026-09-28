@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { reflectWrite } from '@/shared/api/queryCache';
 import {
   NOTE_NEW_PAGE_TITLE,
@@ -59,17 +60,13 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   const queryClient = useQueryClient();
 
   // 所属ワークスペースの一覧。管理の画面・ホームなどと同じ問い合わせを使い、1 回だけ取る。
-  // 失敗したあと取り直している間は「読み込み中」に戻す（再試行を押したら失敗の表示を下げる）。
-  // 失敗を出すのは一覧が 1 度も取れていないときだけ。持っている一覧は、裏の取り直しが失敗しても
-  // 出し続ける（失敗の表示で隠さない）。
+  // 読み込み中・失敗の出し方は queryShownState（一覧が 1 度も取れていないときだけ出す。取り直しが
+  // 403・404 なら持っている一覧も出さない）。
   const workspacesResult = useQuery(kbWorkspacesQuery());
-  const workspaces = workspacesResult.data ?? NO_WORKSPACES;
-  const workspacesLoading =
-    workspacesResult.data === undefined && (workspacesResult.isPending || workspacesResult.isFetching);
-  const workspacesError =
-    workspacesResult.data === undefined && workspacesResult.isError && !workspacesResult.isFetching
-      ? 'ワークスペースを読み込めませんでした'
-      : null;
+  const workspacesView = queryShownState(workspacesResult);
+  const workspaces = workspacesView.data ?? NO_WORKSPACES;
+  const workspacesLoading = workspacesView.loading;
+  const workspacesError = workspacesView.failed ? 'ワークスペースを読み込めませんでした' : null;
 
   // 選んだワークスペース（URL か切り替え）。選んでいなければ所属の先頭を開く。所属が 0 件なら選ばない。
   const [chosenSlug, setChosenSlug] = useState<string | null>(workspaceSlug ?? null);
@@ -99,13 +96,10 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   // 「今いるスペース」の決定そのものには関わらない — それは呼び出し側が spaceId で渡す）。
   // ワークスペースごとの鍵で持つので、切り替えたら前の一覧は出ず、読み込み中になる。
   const spacesResult = useQuery({ ...kbSpacesQuery(activeSlug ?? ''), enabled: activeSlug !== null });
-  const spaces = spacesResult.data ?? NO_SPACES;
-  const spacesLoading =
-    activeSlug !== null && spacesResult.data === undefined && (spacesResult.isPending || spacesResult.isFetching);
-  const spacesError =
-    spacesResult.data === undefined && spacesResult.isError && !spacesResult.isFetching
-      ? 'スペースを読み込めませんでした'
-      : null;
+  const spacesView = queryShownState(spacesResult, activeSlug !== null);
+  const spaces = spacesView.data ?? NO_SPACES;
+  const spacesLoading = spacesView.loading;
+  const spacesError = spacesView.failed ? 'スペースを読み込めませんでした' : null;
 
   const [expandedPageIds, setExpandedPageIds] = useState<ReadonlySet<string>>(new Set());
   // アーカイブ済みを見ているか。現役とアーカイブ済みは鍵の違う別の木なので、切り替えても
@@ -118,9 +112,10 @@ export function useKbTree(options: UseKnowledgeBaseTreeOptions) {
   // 読み込み中と失敗を出すのは、木が 1 度も取れていないときだけ。
   const hasTreeScope = activeSlug !== null && spaceId !== '';
   const treeResult = useQuery({ ...kbPageTreeQuery(activeSlug ?? '', spaceId, archivedMode), enabled: hasTreeScope });
-  const tree = treeResult.data ?? null;
-  const treeLoading = hasTreeScope && tree === null && (treeResult.isPending || treeResult.isFetching);
-  const treeError = tree === null && treeResult.isError && !treeResult.isFetching;
+  const treeView = queryShownState(treeResult, hasTreeScope);
+  const tree = treeView.data ?? null;
+  const treeLoading = treeView.loading;
+  const treeError = treeView.failed;
   // 呼び出し側（KbFrame）が読む形。描くたびに作り直すと、木を使う控えがすべて外れる。
   const spaceState = useMemo<KbSpaceState>(
     () => ({ loading: treeLoading, error: treeError ? 'ページを読み込めませんでした' : null, tree }),

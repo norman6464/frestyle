@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import {
   KbRepository,
   kbGrantablePrincipalsQuery,
@@ -74,8 +75,10 @@ export function useKbShare(workspaceSlug: string | undefined, pageId: string | u
     shownPageKey.current = pageKey;
   }, [pageKey]);
 
-  const grants = grantsResult.data;
-  const principals = principalsResult.data;
+  const grantsView = queryShownState(grantsResult, hasTarget);
+  const principalsView = queryShownState(principalsResult, hasTarget);
+  const grants = grantsView.data;
+  const principals = principalsView.data;
   const joined = useMemo(() => {
     if (grants === undefined || principals === undefined) return null;
     const granted = new Set(grants.map((grant) => grant.principalId));
@@ -86,15 +89,8 @@ export function useKbShare(workspaceSlug: string | undefined, pageId: string | u
   }, [grants, principals]);
 
   // 2 本のどちらかがまだ 1 度も取れていない間だけ、読み込み中・失敗を出す。
-  const missing = (result: typeof grantsResult | typeof principalsResult) => result.data === undefined;
-  const loading =
-    hasTarget &&
-    ((missing(grantsResult) && (grantsResult.isPending || grantsResult.isFetching)) ||
-      (missing(principalsResult) && (principalsResult.isPending || principalsResult.isFetching)));
-  const loadFailed =
-    hasTarget &&
-    ((missing(grantsResult) && grantsResult.isError && !grantsResult.isFetching) ||
-      (missing(principalsResult) && principalsResult.isError && !principalsResult.isFetching));
+  const loading = grantsView.loading || principalsView.loading;
+  const loadFailed = grantsView.failed || principalsView.failed;
 
   /**
    * write は書き込みを 1 回行い、成功したかを返す。成功したら書いたページの付与の一覧を

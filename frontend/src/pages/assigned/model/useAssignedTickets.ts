@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useQueries, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { kbKeys, kbWorkspacesQuery, type KbWorkspace } from '@/entities/kb';
 import { assignedTicketsQuery, type AssignedTicket } from '@/entities/ticket';
 
@@ -17,11 +18,11 @@ const LOAD_FAILED = '担当の一覧を取得できませんでした。';
 
 /** ワークスペースごとの結果を、まとめた取り具合と全部のチケットにする（結果が同じなら同じ物を返す）。 */
 function combineAssigned(results: UseQueryResult<AssignedTicket[]>[]) {
-  const settledMissing = (r: UseQueryResult<AssignedTicket[]>) => r.data === undefined && r.isError && !r.isFetching;
+  const views = results.map((result) => queryShownState(result));
   return {
-    waiting: results.some((r) => r.data === undefined && !settledMissing(r)),
-    failed: results.some(settledMissing),
-    tickets: results.flatMap((r) => r.data ?? []),
+    waiting: views.some((view) => view.loading),
+    failed: views.some((view) => view.failed),
+    tickets: views.flatMap((view) => view.data ?? []),
   };
 }
 
@@ -66,7 +67,7 @@ function groupByStatus(tickets: AssignedTicket[]): AssignedGroup[] {
  */
 export function useAssignedTickets() {
   const queryClient = useQueryClient();
-  const workspaces = useQuery(kbWorkspacesQuery());
+  const workspaces = queryShownState(useQuery(kbWorkspacesQuery()));
   const list = workspaces.data ?? NO_WORKSPACES;
   const { waiting, failed, tickets } = useQueries({
     queries: list.map((workspace) => assignedTicketsQuery(workspace.slug)),
@@ -74,9 +75,8 @@ export function useAssignedTickets() {
   });
   const groups = useMemo(() => groupByStatus(tickets), [tickets]);
 
-  const workspacesFailed = workspaces.data === undefined && workspaces.isError && !workspaces.isFetching;
-  const loading = !workspacesFailed && (workspaces.data === undefined || waiting);
-  const error = workspacesFailed || failed ? LOAD_FAILED : null;
+  const loading = !workspaces.failed && (workspaces.data === undefined || waiting);
+  const error = workspaces.failed || failed ? LOAD_FAILED : null;
 
   // 読めなかった一覧だけを取り直す（読めている一覧まで取り直して待たせない）。
   const reload = useCallback(async () => {

@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useQueries, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { queryShownState } from '@/shared/api/queryState';
 import { sprintKeys, sprintTicketIdsQuery } from '@/entities/sprint';
 
 const NO_TICKET_IDS: Record<string, string[]> = {};
@@ -25,8 +26,9 @@ export function useSprintTickets(workspaceSlug: string | undefined, sprintIds: s
       const bySprint: Record<string, string[]> = {};
       let failed = false;
       results.forEach((result, i) => {
-        if (result.data !== undefined) bySprint[ids[i]] = result.data;
-        else if (result.isError && !result.isFetching) failed = true;
+        const view = queryShownState(result);
+        if (view.data !== undefined) bySprint[ids[i]] = view.data;
+        else if (view.failed) failed = true;
       });
       return { bySprint: ids.length === 0 ? NO_TICKET_IDS : bySprint, failed };
     },
