@@ -134,3 +134,33 @@ export const 設定ではスプリントの名前を決めて作る: Story = {
     });
   },
 };
+
+/**
+ * 一覧の面からタブで移ってきたとき（面は別の部品なので枠ごと作り直される）。広い画面では押した
+ * タブにフォーカスが残る。
+ */
+export const タブから移るとタブにフォーカスが残る: Story = {
+  decorators: [route, withApi(baseApi())],
+  parameters: { routerState: { fromBacklogTab: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const tab = await canvas.findByRole('link', { name: '設定' });
+    await waitFor(async () => {
+      await expect(tab).toHaveFocus();
+    });
+  },
+};
+
+/** 狭い画面では今いる面のタブを畳んでいるので、フォーカスは面の見出しへ移る（先頭へ戻さない）。 */
+export const 狭い画面ではタブから移ると見出しにフォーカス: Story = {
+  decorators: [route, withApi(baseApi())],
+  parameters: { routerState: { fromBacklogTab: true } },
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const heading = await canvas.findByRole('heading', { level: 1, name: '設定' });
+    await waitFor(async () => {
+      await expect(heading).toHaveFocus();
+    });
+  },
+};

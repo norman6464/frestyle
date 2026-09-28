@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import type { Project } from '@/entities/project';
 import type { BacklogView } from '../model/backlogView';
 import { projectInitials } from '../lib/projectInitials';
@@ -50,6 +50,8 @@ export interface BacklogFrameProps {
  */
 export default function BacklogFrame({ view, workspaceSlug, project, headerExtra, aside, inert, children }: BacklogFrameProps) {
   const heading = HEADING[view];
+  // タブから面を移ったとき、今いるタブが畳まれていればここへフォーカスを移す（BacklogTabs）。
+  const headingRef = useRef<HTMLHeadingElement>(null);
   return (
     <div className="flex h-full overflow-hidden">
       {/*
@@ -73,13 +75,17 @@ export default function BacklogFrame({ view, workspaceSlug, project, headerExtra
               <span aria-hidden="true" className="hidden text-[var(--color-text-faint)] sm:inline">/</span>
               <BacklogProjectSwitcher workspaceSlug={workspaceSlug} project={project} />
             </div>
-            <BacklogTabs projectId={project.id} current={view} />
+            <BacklogTabs projectId={project.id} current={view} fallbackFocusRef={headingRef} />
           </div>
 
           <p className="mt-3 font-mono text-xs font-medium uppercase tracking-[0.14em] text-brand-700 sm:mt-4" aria-hidden="true">
             {heading.eyebrow}
           </p>
-          <h1 className="mt-1 text-3xl font-bold leading-tight tracking-tight text-[var(--color-text-primary)] sm:text-4xl">
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="mt-1 text-3xl font-bold leading-tight tracking-tight text-[var(--color-text-primary)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 sm:text-4xl"
+          >
             {heading.title}
           </h1>
           {/* 一文は狭い画面では出さない（ST12）。見出しで面は分かり、縦の場所は一覧に回す。 */}
