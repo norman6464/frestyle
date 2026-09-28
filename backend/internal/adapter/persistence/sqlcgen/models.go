@@ -130,6 +130,7 @@ type Page struct {
 	Icon               *json.RawMessage
 	Cover              *json.RawMessage
 	LastEditedByUserID sql.NullInt64
+	ContentRevision    int64
 	Visibility         string
 }
 
@@ -187,6 +188,7 @@ type PageSuggestion struct {
 	WorkspaceID      uuid.UUID
 	PageID           uuid.UUID
 	BaseSeq          sql.NullInt64
+	BaseRevision     sql.NullInt64
 	Doc              json.RawMessage
 	Status           string
 	AuthorUserID     int64

@@ -43,6 +43,10 @@ func toDomainPageSuggestion(row sqlcgen.PageSuggestion) domain.PageSuggestion {
 		seq := row.BaseSeq.Int64
 		s.BaseSeq = &seq
 	}
+	if row.BaseRevision.Valid {
+		revision := row.BaseRevision.Int64
+		s.BaseRevision = &revision
+	}
 	if row.ResolvedAt.Valid {
 		resolvedAt := row.ResolvedAt.Time
 		s.ResolvedAt = &resolvedAt
@@ -75,11 +79,16 @@ func (r *pageSuggestionRepository) Create(ctx context.Context, s *domain.PageSug
 	if s.BaseSeq != nil {
 		baseSeq = sql.NullInt64{Int64: *s.BaseSeq, Valid: true}
 	}
+	var baseRevision sql.NullInt64
+	if s.BaseRevision != nil {
+		baseRevision = sql.NullInt64{Int64: *s.BaseRevision, Valid: true}
+	}
 	row, err := r.queries(ctx).InsertPageSuggestion(ctx, sqlcgen.InsertPageSuggestionParams{
 		ID:           id,
 		WorkspaceID:  wsID,
 		PageID:       pgID,
 		BaseSeq:      baseSeq,
+		BaseRevision: baseRevision,
 		Doc:          json.RawMessage(s.Doc),
 		AuthorUserID: authorID,
 	})

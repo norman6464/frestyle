@@ -25,7 +25,7 @@ func Test_提案作成_AuthorUserIDが0なら拒否(t *testing.T) {
 	kbRepo := &mockKnowledgeBaseRepo{}
 	versionRepo := &mockPageVersionRepo{}
 	suggestions := &mockPageSuggestionRepo{}
-	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions)
+	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.CreateSuggestionInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: kbSuggestionDoc, AuthorUserID: 0,
@@ -42,7 +42,7 @@ func Test_提案作成_アーカイブ済みページは拒否(t *testing.T) {
 	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).Return(kbArchivedPage(kbPage, kbSpace, nil), nil)
 	versionRepo := &mockPageVersionRepo{}
 	suggestions := &mockPageSuggestionRepo{}
-	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions)
+	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.CreateSuggestionInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: kbSuggestionDoc, AuthorUserID: kbEditorUserID,
@@ -68,7 +68,7 @@ func Test_提案作成_投稿者あたりの上限に達していれば拒否(t 
 	versionRepo := &mockPageVersionRepo{}
 	suggestions := &mockPageSuggestionRepo{}
 	suggestions.On("CountOpenByAuthor", mock.Anything, kbWS, kbPage, kbEditorUserID).Return(20, nil)
-	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions)
+	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.CreateSuggestionInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: kbSuggestionDoc, AuthorUserID: kbEditorUserID,
@@ -88,7 +88,7 @@ func Test_提案作成_ページ全体の上限に達していれば拒否(t *te
 	suggestions := &mockPageSuggestionRepo{}
 	suggestions.On("CountOpenByAuthor", mock.Anything, kbWS, kbPage, kbEditorUserID).Return(0, nil)
 	suggestions.On("CountOpen", mock.Anything, kbWS, kbPage).Return(100, nil)
-	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions)
+	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.CreateSuggestionInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: kbSuggestionDoc, AuthorUserID: kbEditorUserID,
@@ -106,7 +106,7 @@ func Test_提案作成_不正なdocは保存せず拒否する(t *testing.T) {
 	versionRepo := &mockPageVersionRepo{}
 	suggestions := &mockPageSuggestionRepo{}
 	suggestionCountStub(suggestions)
-	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions)
+	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.CreateSuggestionInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: `{invalid`, AuthorUserID: kbEditorUserID,
@@ -123,16 +123,21 @@ func Test_提案作成_版が無ければBaseSeqはnil(t *testing.T) {
 	kbRepo := &mockKnowledgeBaseRepo{}
 	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).Return(kbActivePage(kbPage, kbSpace, nil), nil)
 	versionRepo := &mockPageVersionRepo{}
+	versionRepo.On("LockPage", mock.Anything, kbWS, kbPage).Return(nil)
 	versionRepo.On("GetLatestVersion", mock.Anything, kbWS, kbPage).Return(nil, nil)
 	suggestions := &mockPageSuggestionRepo{}
 	suggestionCountStub(suggestions)
 	var created *domain.PageSuggestion
 	suggestions.On("Create", mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) { created = args.Get(1).(*domain.PageSuggestion) }).Return(nil)
-	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions)
+	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.CreateSuggestionInput{
-		WorkspaceID: kbWS, PageID: kbPage, Doc: kbSuggestionDoc, AuthorUserID: kbEditorUserID,
+		WorkspaceID:  kbWS,
+		PageID:       kbPage,
+		BaseRevision: 0,
+		Doc:          kbSuggestionDoc,
+		AuthorUserID: kbEditorUserID,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, created)
@@ -143,21 +148,40 @@ func Test_提案作成_版が無ければBaseSeqはnil(t *testing.T) {
 // seq を BaseSeq として保存することを固定する。
 func Test_提案作成_最新版のseqをBaseSeqにする(t *testing.T) {
 	kbRepo := &mockKnowledgeBaseRepo{}
-	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).Return(kbActivePage(kbPage, kbSpace, nil), nil)
+	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).
+		Return(kbActivePage(kbPage, kbSpace, nil), nil)
+
 	versionRepo := &mockPageVersionRepo{}
+	versionRepo.On("LockPage", mock.Anything, kbWS, kbPage).Return(nil)
 	versionRepo.On("GetLatestVersion", mock.Anything, kbWS, kbPage).
 		Return(&domain.PageVersion{PageID: kbPage, Seq: 5}, nil)
+
 	suggestions := &mockPageSuggestionRepo{}
 	suggestionCountStub(suggestions)
+
 	var created *domain.PageSuggestion
 	suggestions.On("Create", mock.Anything, mock.Anything).
-		Run(func(args mock.Arguments) { created = args.Get(1).(*domain.PageSuggestion) }).Return(nil)
-	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions)
+		Run(func(args mock.Arguments) {
+			created = args.Get(1).(*domain.PageSuggestion)
+		}).
+		Return(nil)
+
+	uc := kb.NewCreateSuggestionUseCase(
+		kbRepo,
+		versionRepo,
+		suggestions,
+		&fakeTxManager{},
+	)
 
 	_, err := uc.Execute(context.Background(), kb.CreateSuggestionInput{
-		WorkspaceID: kbWS, PageID: kbPage, Doc: kbSuggestionDoc, AuthorUserID: kbEditorUserID,
+		WorkspaceID:  kbWS,
+		PageID:       kbPage,
+		BaseRevision: 0,
+		Doc:          kbSuggestionDoc,
+		AuthorUserID: kbEditorUserID,
 	})
 	require.NoError(t, err)
+
 	require.NotNil(t, created)
 	require.NotNil(t, created.BaseSeq)
 	assert.Equal(t, int64(5), *created.BaseSeq)
@@ -170,19 +194,24 @@ func Test_提案作成_正規化後のdocを保存する(t *testing.T) {
 	kbRepo := &mockKnowledgeBaseRepo{}
 	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).Return(kbActivePage(kbPage, kbSpace, nil), nil)
 	versionRepo := &mockPageVersionRepo{}
+	versionRepo.On("LockPage", mock.Anything, kbWS, kbPage).Return(nil)
 	versionRepo.On("GetLatestVersion", mock.Anything, kbWS, kbPage).Return(nil, nil)
 	suggestions := &mockPageSuggestionRepo{}
 	suggestionCountStub(suggestions)
 	var created *domain.PageSuggestion
 	suggestions.On("Create", mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) { created = args.Get(1).(*domain.PageSuggestion) }).Return(nil)
-	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions)
+	uc := kb.NewCreateSuggestionUseCase(kbRepo, versionRepo, suggestions, &fakeTxManager{})
 
 	docWithTitle := `{"type":"doc","content":[{"type":"paragraph","content":[
 		{"type":"pageRef","attrs":{"pageId":"` + kbPage + `","title":"読み手ごとの派生値"}}
 	]}]}`
 	_, err := uc.Execute(context.Background(), kb.CreateSuggestionInput{
-		WorkspaceID: kbWS, PageID: kbPage, Doc: docWithTitle, AuthorUserID: kbEditorUserID,
+		WorkspaceID:  kbWS,
+		PageID:       kbPage,
+		BaseRevision: 0,
+		Doc:          docWithTitle,
+		AuthorUserID: kbEditorUserID,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, created)
@@ -228,13 +257,20 @@ func Test_提案一覧_Limitの上限は200(t *testing.T) {
 	suggestions.AssertCalled(t, "ListOpen", mock.Anything, kbWS, kbPage, 200)
 }
 
-// kbOpenSuggestionForAccept は base_seq=1 で open な提案 1 件を用意する。versionRepo の
-// GetLatestVersion がこれと同じ seq=1 を返す限り、staleness の判定には引っかからない。
+// kbOpenSuggestionForAccept は採用テスト用の open な提案を1件用意する。
+// BaseRevision=0 は kbActivePage の ContentRevision のゼロ値と一致させる。
 func kbOpenSuggestionForAccept() *domain.PageSuggestion {
 	baseSeq := int64(1)
+	baseRevision := int64(0)
+
 	return &domain.PageSuggestion{
-		ID: "s1", WorkspaceID: kbWS, PageID: kbPage, Doc: kbSuggestionDoc,
-		Status: domain.PageSuggestionStatusOpen, BaseSeq: &baseSeq,
+		ID:           "s1",
+		WorkspaceID:  kbWS,
+		PageID:       kbPage,
+		Doc:          kbSuggestionDoc,
+		Status:       domain.PageSuggestionStatusOpen,
+		BaseSeq:      &baseSeq,
+		BaseRevision: &baseRevision,
 	}
 }
 
@@ -251,7 +287,7 @@ func Test_提案採用_ForceVersionは必ずtrue(t *testing.T) {
 		Return(&domain.PageSnapshot{PageID: kbPage, Doc: kbSuggestionDoc}, nil)
 
 	versionRepo := &mockPageVersionRepo{}
-	versionRepo.On("GetLatestVersion", mock.Anything, kbWS, kbPage).Return(&domain.PageVersion{PageID: kbPage, Seq: 1}, nil)
+	versionRepo.On("LockPage", mock.Anything, kbWS, kbPage).Return(nil)
 	var gotForce bool
 	versionRepo.On("CreateVersionIfDue", mock.Anything, kbWS, kbPage, mock.Anything, kbEditorUserID, mock.Anything, mock.Anything).
 		Run(func(args mock.Arguments) { gotForce = args.Bool(6) }).
@@ -265,7 +301,7 @@ func Test_提案採用_ForceVersionは必ずtrue(t *testing.T) {
 
 	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
 	tx := &fakeTxManager{}
-	uc := kb.NewAcceptPageSuggestionUseCase(suggestions, versionRepo, replaceUC, tx)
+	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, tx)
 
 	got, err := uc.Execute(context.Background(), kb.AcceptSuggestionInput{
 		WorkspaceID: kbWS, PageID: kbPage, SuggestionID: "s1", ResolverUserID: kbEditorUserID,
@@ -281,55 +317,59 @@ func Test_提案採用_ForceVersionは必ずtrue(t *testing.T) {
 // ErrPageSuggestionAlreadyResolved を返すことを固定する。
 func Test_提案採用_既に解決済みなら本文を書き換えない(t *testing.T) {
 	kbRepo := &mockKnowledgeBaseRepo{}
+	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).
+		Return(kbActivePage(kbPage, kbSpace, nil), nil)
 	versionRepo := &mockPageVersionRepo{}
+	versionRepo.On("LockPage", mock.Anything, kbWS, kbPage).Return(nil)
 	suggestions := &mockPageSuggestionRepo{}
 	already := &domain.PageSuggestion{ID: "s1", WorkspaceID: kbWS, PageID: kbPage, Status: domain.PageSuggestionStatusRejected}
 	suggestions.On("Get", mock.Anything, kbWS, kbPage, "s1").Return(already, nil)
 	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
-	uc := kb.NewAcceptPageSuggestionUseCase(suggestions, versionRepo, replaceUC, &fakeTxManager{})
+	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.AcceptSuggestionInput{
 		WorkspaceID: kbWS, PageID: kbPage, SuggestionID: "s1", ResolverUserID: kbEditorUserID,
 	})
 	require.ErrorIs(t, err, domain.ErrPageSuggestionAlreadyResolved)
 	suggestions.AssertNotCalled(t, "Resolve", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	versionRepo.AssertNotCalled(t, "GetLatestVersion", mock.Anything, mock.Anything, mock.Anything)
-	kbRepo.AssertNotCalled(t, "FindPage", mock.Anything, mock.Anything, mock.Anything)
 }
 
-// Test_提案採用_提案作成後にページが編集済みなら拒否 は、BaseSeq が指す版より後に
-// そのページの版が進んでいるとき（提案作成後に誰かが本文を保存した）、ErrPageSuggestionStale
-// を返して Resolve にも本文書き換えにも触れないことを固定する
-// （採用が後の編集を黙って巻き戻すのを防ぐ）。
+// Test_提案採用_提案作成後にページが編集済みなら拒否 は、提案作成時の BaseRevision と
+// 現在の ContentRevision がずれているとき、ErrPageSuggestionStale を返して
+// Resolve にも本文書き換えにも触れないことを固定する。
 func Test_提案採用_提案作成後にページが編集済みなら拒否(t *testing.T) {
 	kbRepo := &mockKnowledgeBaseRepo{}
 	versionRepo := &mockPageVersionRepo{}
-	versionRepo.On("GetLatestVersion", mock.Anything, kbWS, kbPage).Return(&domain.PageVersion{PageID: kbPage, Seq: 2}, nil)
+	page := kbActivePage(kbPage, kbSpace, nil)
+	page.ContentRevision = 1
+	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).Return(page, nil)
+	versionRepo.On("LockPage", mock.Anything, kbWS, kbPage).Return(nil)
 	suggestions := &mockPageSuggestionRepo{}
 	suggestions.On("Get", mock.Anything, kbWS, kbPage, "s1").Return(kbOpenSuggestionForAccept(), nil)
 	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
-	uc := kb.NewAcceptPageSuggestionUseCase(suggestions, versionRepo, replaceUC, &fakeTxManager{})
+	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.AcceptSuggestionInput{
 		WorkspaceID: kbWS, PageID: kbPage, SuggestionID: "s1", ResolverUserID: kbEditorUserID,
 	})
 	require.ErrorIs(t, err, domain.ErrPageSuggestionStale)
 	suggestions.AssertNotCalled(t, "Resolve", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	kbRepo.AssertNotCalled(t, "FindPage", mock.Anything, mock.Anything, mock.Anything)
 }
 
-// Test_提案採用_版が無かった提案の後にページができていれば拒否 は、提案した時点で版が
-// 1つも無かった（BaseSeq=nil）のに、以後の編集で版ができていれば、それも「提案作成後の編集」
-// として ErrPageSuggestionStale で拒否することを固定する。
-func Test_提案採用_版が無かった提案の後にページができていれば拒否(t *testing.T) {
+// Test_提案採用_BaseRevisionが不明なら拒否 は、既存提案など BaseRevision が不明な場合に
+// 安全側で ErrPageSuggestionStale として拒否し、本文を書き換えないことを固定する。
+func Test_提案採用_BaseRevisionが不明なら拒否(t *testing.T) {
 	versionRepo := &mockPageVersionRepo{}
-	versionRepo.On("GetLatestVersion", mock.Anything, kbWS, kbPage).Return(&domain.PageVersion{PageID: kbPage, Seq: 1}, nil)
+	versionRepo.On("LockPage", mock.Anything, kbWS, kbPage).Return(nil)
+	noBaseRevision := kbOpenSuggestionForAccept()
+	noBaseRevision.BaseRevision = nil
 	suggestions := &mockPageSuggestionRepo{}
-	noBaseSeq := &domain.PageSuggestion{ID: "s1", WorkspaceID: kbWS, PageID: kbPage, Doc: kbSuggestionDoc, Status: domain.PageSuggestionStatusOpen}
-	suggestions.On("Get", mock.Anything, kbWS, kbPage, "s1").Return(noBaseSeq, nil)
+	suggestions.On("Get", mock.Anything, kbWS, kbPage, "s1").Return(noBaseRevision, nil)
 	kbRepo := &mockKnowledgeBaseRepo{}
+	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).
+		Return(kbActivePage(kbPage, kbSpace, nil), nil)
 	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
-	uc := kb.NewAcceptPageSuggestionUseCase(suggestions, versionRepo, replaceUC, &fakeTxManager{})
+	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.AcceptSuggestionInput{
 		WorkspaceID: kbWS, PageID: kbPage, SuggestionID: "s1", ResolverUserID: kbEditorUserID,
@@ -343,20 +383,22 @@ func Test_提案採用_版が無かった提案の後にページができてい
 // ReplacePageBlocksUseCase.Execute（＝ kbRepo）に一切触れないことを固定する。
 func Test_提案採用_Resolveが失敗すれば本文を書き換えない(t *testing.T) {
 	kbRepo := &mockKnowledgeBaseRepo{}
+	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).
+		Return(kbActivePage(kbPage, kbSpace, nil), nil)
 	versionRepo := &mockPageVersionRepo{}
-	versionRepo.On("GetLatestVersion", mock.Anything, kbWS, kbPage).Return(&domain.PageVersion{PageID: kbPage, Seq: 1}, nil)
+	versionRepo.On("LockPage", mock.Anything, kbWS, kbPage).Return(nil)
 	suggestions := &mockPageSuggestionRepo{}
 	suggestions.On("Get", mock.Anything, kbWS, kbPage, "s1").Return(kbOpenSuggestionForAccept(), nil)
 	suggestions.On("Resolve", mock.Anything, kbWS, kbPage, "s1", domain.PageSuggestionStatusAccepted, kbEditorUserID, mock.Anything).
 		Return(nil, domain.ErrPageSuggestionAlreadyResolved)
 	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
-	uc := kb.NewAcceptPageSuggestionUseCase(suggestions, versionRepo, replaceUC, &fakeTxManager{})
+	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.AcceptSuggestionInput{
 		WorkspaceID: kbWS, PageID: kbPage, SuggestionID: "s1", ResolverUserID: kbEditorUserID,
 	})
 	require.ErrorIs(t, err, domain.ErrPageSuggestionAlreadyResolved)
-	kbRepo.AssertNotCalled(t, "FindPage", mock.Anything, mock.Anything, mock.Anything)
+	kbRepo.AssertNumberOfCalls(t, "FindPage", 1)
 }
 
 // Test_提案採用_本文書き換えが失敗すればエラーを返す は、replaceBlocks.Execute の失敗が
@@ -364,8 +406,13 @@ func Test_提案採用_Resolveが失敗すれば本文を書き換えない(t *t
 // ロールバック自体は結合テスト側が確認する）。
 func Test_提案採用_本文書き換えが失敗すればエラーを返す(t *testing.T) {
 	kbRepo := &mockKnowledgeBaseRepo{}
-	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).Return(nil, kb.ErrPageArchived)
+	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).
+		Return(kbActivePage(kbPage, kbSpace, nil), nil).Once()
+
+	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).
+		Return(nil, kb.ErrPageArchived).Once()
 	versionRepo := &mockPageVersionRepo{}
+	versionRepo.On("LockPage", mock.Anything, kbWS, kbPage).Return(nil)
 	versionRepo.On("GetLatestVersion", mock.Anything, kbWS, kbPage).Return(&domain.PageVersion{PageID: kbPage, Seq: 1}, nil)
 	suggestions := &mockPageSuggestionRepo{}
 	suggestions.On("Get", mock.Anything, kbWS, kbPage, "s1").Return(kbOpenSuggestionForAccept(), nil)
@@ -373,7 +420,7 @@ func Test_提案採用_本文書き換えが失敗すればエラーを返す(t 
 	suggestions.On("Resolve", mock.Anything, kbWS, kbPage, "s1", domain.PageSuggestionStatusAccepted, kbEditorUserID, mock.Anything).
 		Return(resolved, nil)
 	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
-	uc := kb.NewAcceptPageSuggestionUseCase(suggestions, versionRepo, replaceUC, &fakeTxManager{})
+	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.AcceptSuggestionInput{
 		WorkspaceID: kbWS, PageID: kbPage, SuggestionID: "s1", ResolverUserID: kbEditorUserID,

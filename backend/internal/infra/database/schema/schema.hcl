@@ -717,6 +717,12 @@ table "pages" {
     null = true
     type = bigint
   }
+  # 本文のリビジョン。本文保存のたびに 1 増やし、提案の鮮度判定に使う。
+column "content_revision" {
+  null    = false
+  type    = bigint
+  default = 0
+}
   # visibility はバイラインの公開範囲バッジの元。'public' と 'space' はいまの閲覧可否
   # （grants の解決）を一切変えない — 表示だけが違う。'private' だけが唯一の例外で、
   # 作成者以外は既存の付与（grants・共有リンク含む）を問わず一切見せない
@@ -1561,6 +1567,11 @@ table "page_suggestions" {
   # ページへの提案」を表す（複合 FK は列のどちらかが NULL なら不問になる — page_templates の
   # space_id と同じ理屈）。
   column "base_seq" {
+    null = true
+    type = bigint
+  }
+  # 提案作成時点の本文リビジョン。NULL は既存提案など基準revisionが不明な状態を表す。
+  column "base_revision" {
     null = true
     type = bigint
   }

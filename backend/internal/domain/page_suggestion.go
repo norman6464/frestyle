@@ -39,6 +39,9 @@ type PageSuggestion struct {
 	// BaseSeq は提案した時点のそのページの最新版（page_versions.seq）。版が 1 つも無いページへの
 	// 提案は nil のまま。
 	BaseSeq *int64 `json:"baseSeq,omitempty"`
+	// BaseRevision は提案作成時点の本文リビジョン。
+	// nil は既存提案など、基準revisionが不明な状態を表す。
+	BaseRevision *int64 `json:"baseRevision,omitempty"`
 	// Doc は提案後の本文全体（ProseMirror doc）。API へは handler の response 型で
 	// json.RawMessage に変換して出す（domain.PageVersion.Doc と同じ方針）。
 	Doc    string               `json:"-"`

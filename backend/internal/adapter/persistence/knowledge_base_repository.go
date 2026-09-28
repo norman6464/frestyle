@@ -151,6 +151,7 @@ func toDomainPage(row sqlcgen.Page) domain.Page {
 		CreatedByUserID: uint64(row.CreatedByUserID),
 		CreatedAt:       row.CreatedAt,
 		UpdatedAt:       row.UpdatedAt,
+		ContentRevision: row.ContentRevision,
 		Visibility:      domain.PageVisibility(row.Visibility),
 	}
 	if row.ParentID.Valid {

@@ -153,6 +153,7 @@ type kbPageResponse struct {
 	ArchivedAt      *time.Time `json:"archivedAt,omitempty"`
 	CreatedAt       time.Time  `json:"createdAt"`
 	UpdatedAt       time.Time  `json:"updatedAt"`
+	ContentRevision int64      `json:"contentRevision"`
 	// Icon はページの顔（絵文字のみ）。未設定は省く（cover は 1b まで返さない — API 契約参照）。
 	Icon *kbPageIconResponse `json:"icon,omitempty"`
 	// LastEditedByUserID は最終編集者。まだ誰も本文を保存していなければ省く。
@@ -179,6 +180,7 @@ func toKbPageResponse(p *domain.Page) kbPageResponse {
 		ArchivedAt:         p.ArchivedAt,
 		CreatedAt:          p.CreatedAt,
 		UpdatedAt:          p.UpdatedAt,
+		ContentRevision:    p.ContentRevision,
 		LastEditedByUserID: p.LastEditedByUserID,
 		Visibility:         string(p.Visibility),
 	}

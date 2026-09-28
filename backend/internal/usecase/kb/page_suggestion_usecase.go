@@ -30,17 +30,27 @@ type CreateSuggestionUseCase struct {
 	kbRepo      repository.KnowledgeBaseRepository
 	versionRepo repository.PageVersionRepository
 	suggestions repository.PageSuggestionRepository
+	txManager   repository.TxManager
 }
 
 func NewCreateSuggestionUseCase(
-	kbRepo repository.KnowledgeBaseRepository, versionRepo repository.PageVersionRepository, suggestions repository.PageSuggestionRepository,
+	kbRepo repository.KnowledgeBaseRepository,
+	versionRepo repository.PageVersionRepository,
+	suggestions repository.PageSuggestionRepository,
+	txManager repository.TxManager,
 ) *CreateSuggestionUseCase {
-	return &CreateSuggestionUseCase{kbRepo: kbRepo, versionRepo: versionRepo, suggestions: suggestions}
+	return &CreateSuggestionUseCase{
+		kbRepo:      kbRepo,
+		versionRepo: versionRepo,
+		suggestions: suggestions,
+		txManager:   txManager,
+	}
 }
 
 type CreateSuggestionInput struct {
-	WorkspaceID string
-	PageID      string
+	WorkspaceID  string
+	PageID       string
+	BaseRevision int64
 	// Doc は提案後の本文全体（ProseMirror doc の JSON 文字列）。
 	Doc          string
 	AuthorUserID uint64
@@ -88,27 +98,49 @@ func (u *CreateSuggestionUseCase) Execute(ctx context.Context, in CreateSuggesti
 	if err != nil {
 		return nil, err
 	}
+	var suggestion *domain.PageSuggestion
 
-	// 提案時点の最新版を BaseSeq にする。版が 1 つも無ければ nil のまま
-	// （フロント側は差分表示をこの版が無い前提で「本文なし」として扱う）。
-	var baseSeq *int64
-	latest, err := u.versionRepo.GetLatestVersion(ctx, in.WorkspaceID, in.PageID)
+	err = u.txManager.DoInTx(ctx, func(ctx context.Context) error {
+		if err := u.versionRepo.LockPage(ctx, in.WorkspaceID, in.PageID); err != nil {
+			return err
+		}
+
+		page, err := u.kbRepo.FindPage(ctx, in.WorkspaceID, in.PageID)
+		if err != nil {
+			return err
+		}
+
+		if page.ArchivedAt != nil {
+			return ErrPageArchived
+		}
+
+		if page.ContentRevision != in.BaseRevision {
+			return domain.ErrPageSuggestionStale
+		}
+
+		var baseSeq *int64
+		latest, err := u.versionRepo.GetLatestVersion(ctx, in.WorkspaceID, in.PageID)
+		if err != nil {
+			return err
+		}
+		if latest != nil {
+			seq := latest.Seq
+			baseSeq = &seq
+		}
+
+		baseRevision := in.BaseRevision
+		suggestion = &domain.PageSuggestion{
+			WorkspaceID:  in.WorkspaceID,
+			PageID:       in.PageID,
+			BaseSeq:      baseSeq,
+			BaseRevision: &baseRevision,
+			Doc:          normalized,
+			AuthorUserID: in.AuthorUserID,
+		}
+
+		return u.suggestions.Create(ctx, suggestion)
+	})
 	if err != nil {
-		return nil, err
-	}
-	if latest != nil {
-		seq := latest.Seq
-		baseSeq = &seq
-	}
-
-	suggestion := &domain.PageSuggestion{
-		WorkspaceID:  in.WorkspaceID,
-		PageID:       in.PageID,
-		BaseSeq:      baseSeq,
-		Doc:          normalized,
-		AuthorUserID: in.AuthorUserID,
-	}
-	if err := u.suggestions.Create(ctx, suggestion); err != nil {
 		return nil, err
 	}
 	return suggestion, nil
@@ -157,6 +189,7 @@ func (u *ListOpenPageSuggestionsUseCase) Execute(ctx context.Context, in ListOpe
 // 提案の解決（Resolve）と本文の書き換えは 1 つのトランザクションに入れる。片方だけ成功すると
 // 「提案は accepted なのに本文は古いまま」という中間状態が残るため、両方ロールバックする。
 type AcceptPageSuggestionUseCase struct {
+	kbRepo        repository.KnowledgeBaseRepository
 	suggestions   repository.PageSuggestionRepository
 	versionRepo   repository.PageVersionRepository
 	replaceBlocks *ReplacePageBlocksUseCase
@@ -164,11 +197,18 @@ type AcceptPageSuggestionUseCase struct {
 }
 
 func NewAcceptPageSuggestionUseCase(
-	suggestions repository.PageSuggestionRepository, versionRepo repository.PageVersionRepository,
-	replaceBlocks *ReplacePageBlocksUseCase, txManager repository.TxManager,
+	kbRepo repository.KnowledgeBaseRepository,
+	suggestions repository.PageSuggestionRepository,
+	versionRepo repository.PageVersionRepository,
+	replaceBlocks *ReplacePageBlocksUseCase,
+	txManager repository.TxManager,
 ) *AcceptPageSuggestionUseCase {
 	return &AcceptPageSuggestionUseCase{
-		suggestions: suggestions, versionRepo: versionRepo, replaceBlocks: replaceBlocks, txManager: txManager,
+		kbRepo:        kbRepo,
+		suggestions:   suggestions,
+		versionRepo:   versionRepo,
+		replaceBlocks: replaceBlocks,
+		txManager:     txManager,
 	}
 }
 
@@ -179,20 +219,27 @@ type AcceptSuggestionInput struct {
 	ResolverUserID uint64
 }
 
-// suggestionIsStale は、提案した時点の版（baseSeq）より後にそのページが編集されたかを判定する。
-// 差分は baseSeq の版を基準に計算されており以後の編集を知らないため、ずれていればそのまま
-// 採用すると後の編集を黙って本文ごと上書きしてしまう。採用者に一度突き返すための判定。
-func suggestionIsStale(baseSeq *int64, latest *domain.PageVersion) bool {
-	if baseSeq == nil {
-		// 提案時点で版が無かった。以後に版ができていれば提案作成後の編集を意味する。
-		return latest != nil
-	}
-	return latest == nil || latest.Seq != *baseSeq
+// suggestionIsStale は、提案作成時の本文リビジョンと現在の本文リビジョンが
+// 一致しているかを判定する。基準 revision が不明な既存提案も安全側で stale とする。
+func suggestionIsStale(baseRevision *int64, contentRevision int64) bool {
+	return baseRevision == nil || *baseRevision != contentRevision
 }
 
 func (u *AcceptPageSuggestionUseCase) Execute(ctx context.Context, in AcceptSuggestionInput) (*domain.PageSuggestion, error) {
 	var resolved *domain.PageSuggestion
 	err := u.txManager.DoInTx(ctx, func(ctx context.Context) error {
+		if err := u.versionRepo.LockPage(ctx, in.WorkspaceID, in.PageID); err != nil {
+			return err
+		}
+
+		page, err := u.kbRepo.FindPage(ctx, in.WorkspaceID, in.PageID)
+		if err != nil {
+			return err
+		}
+		if page.ArchivedAt != nil {
+			return ErrPageArchived
+		}
+
 		s, err := u.suggestions.Get(ctx, in.WorkspaceID, in.PageID, in.SuggestionID)
 		if err != nil {
 			return err
@@ -200,11 +247,7 @@ func (u *AcceptPageSuggestionUseCase) Execute(ctx context.Context, in AcceptSugg
 		if s.Status != domain.PageSuggestionStatusOpen {
 			return domain.ErrPageSuggestionAlreadyResolved
 		}
-		latest, err := u.versionRepo.GetLatestVersion(ctx, in.WorkspaceID, in.PageID)
-		if err != nil {
-			return err
-		}
-		if suggestionIsStale(s.BaseSeq, latest) {
+		if suggestionIsStale(s.BaseRevision, page.ContentRevision) {
 			return domain.ErrPageSuggestionStale
 		}
 		resolvedSuggestion, err := u.suggestions.Resolve(

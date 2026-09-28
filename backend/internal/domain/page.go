@@ -32,8 +32,10 @@ type Page struct {
 	Cover *PageCover `json:"cover,omitempty"`
 	// LastEditedByUserID は最終編集者。NULL は「作成後まだ誰も本文を保存していない」。
 	// 本文の保存経路（ReplacePageBlocksUseCase）だけが書く。
-	LastEditedByUserID *uint64        `json:"lastEditedByUserId,omitempty"`
-	Visibility         PageVisibility `json:"visibility"`
+	LastEditedByUserID *uint64 `json:"lastEditedByUserId,omitempty"`
+	// ContentRevision は本文保存のたびに増えるリビジョン。提案の鮮度判定に使う。
+	ContentRevision int64          `json:"contentRevision"`
+	Visibility      PageVisibility `json:"visibility"`
 }
 
 // PageIconType はページアイコンの種類。いまのところ絵文字だけを許す

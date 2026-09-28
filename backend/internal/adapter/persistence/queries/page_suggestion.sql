@@ -4,9 +4,10 @@
 -- 提案を 1 件作成する。id は Go 側（kbNewID）が UUIDv7 で採番して渡す
 -- （page_templates の InsertPageTemplate と同じ流儀）。base_seq はまだ版が無いページへの
 -- 提案なら NULL（sqlc.narg）。
-INSERT INTO page_suggestions (id, workspace_id, page_id, base_seq, doc, author_user_id)
+-- base_revision は既存提案など基準revisionが不明な場合は NULL。
+INSERT INTO page_suggestions (id, workspace_id, page_id, base_seq, base_revision, doc, author_user_id)
 VALUES (
-  sqlc.arg(id), sqlc.arg(workspace_id), sqlc.arg(page_id), sqlc.narg(base_seq),
+  sqlc.arg(id), sqlc.arg(workspace_id), sqlc.arg(page_id), sqlc.narg(base_seq), sqlc.narg(base_revision),
   sqlc.arg(doc), sqlc.arg(author_user_id)
 )
 RETURNING *;
