@@ -1,8 +1,11 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import KbWorkspaceAdminLayout from '../KbWorkspaceAdminLayout';
 import { useKbWorkspaceAdminOutlet } from '../../model/kbWorkspaceAdminOutlet';
+import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
+import { kbKeys } from '@/entities/kb/api/kbQueries';
+import { subscribeKbTreeEvents } from '@/entities/kb/model/kbTreeEvents';
 
 const hoisted = vi.hoisted(() => ({
   useWorkspaceList: vi.fn(),
@@ -11,8 +14,8 @@ const hoisted = vi.hoisted(() => ({
   deleteWorkspace: vi.fn(),
 }));
 
-vi.mock('@/entities/kb', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/kb')>();
+vi.mock('@/entities/workspace', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/entities/workspace')>();
   return { ...actual, useWorkspaceList: hoisted.useWorkspaceList };
 });
 
@@ -36,11 +39,18 @@ function list(over: Record<string, unknown>) {
 }
 
 function Child() {
-  const { workspaceSlug, workspace } = useKbWorkspaceAdminOutlet();
-  return <p>{`中身: ${workspaceSlug} / ${workspace.name}`}</p>;
+  const { workspaceSlug, workspace, deleteWorkspace } = useKbWorkspaceAdminOutlet();
+  return (
+    <>
+      <p>{`中身: ${workspaceSlug} / ${workspace.name}`}</p>
+      <button type="button" onClick={() => void deleteWorkspace(workspaceSlug)}>
+        消す
+      </button>
+    </>
+  );
 }
 
-function renderAt(path: string) {
+function renderAt(path: string, client = createTestQueryClient()) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
@@ -50,6 +60,7 @@ function renderAt(path: string) {
         </Route>
       </Routes>
     </MemoryRouter>,
+    { wrapper: queryWrapper(client) },
   );
 }
 
@@ -101,5 +112,24 @@ describe('KbWorkspaceAdminLayout', () => {
     expect(screen.queryByRole('heading', { name: 'この画面は admin だけが開けます' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
     expect(hoisted.retry).toHaveBeenCalledOnce();
+  });
+
+  it('子の画面がワークスペースを消すと、ナレッジに固有の後始末（最近のページ・開いているページへの合図）もする', async () => {
+    hoisted.deleteWorkspace.mockResolvedValue(undefined);
+    hoisted.useWorkspaceList.mockReturnValue(list({ workspaces: [acme] }));
+    const client = createTestQueryClient();
+    client.setQueryData(kbKeys.recentPages(), []);
+    const listener = vi.fn();
+    const unsubscribe = subscribeKbTreeEvents(listener);
+    renderAt('/kb/acme/members', client);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '消す' }));
+    });
+
+    expect(hoisted.deleteWorkspace).toHaveBeenCalledWith('acme');
+    expect(client.getQueryState(kbKeys.recentPages())?.isInvalidated).toBe(true);
+    expect(listener).toHaveBeenCalledWith({ type: 'workspace-deleted', workspaceSlug: 'acme' });
+    unsubscribe();
   });
 });

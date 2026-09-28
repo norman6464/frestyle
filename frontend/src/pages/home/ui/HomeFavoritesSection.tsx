@@ -1,7 +1,8 @@
 import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { kbSpacesQuery, type KbFavoritePage, type KbSpace, type KbWorkspace } from '@/entities/kb';
+import { kbSpacesQuery, type KbFavoritePage, type KbSpace } from '@/entities/kb';
+import type { Workspace } from '@/entities/workspace';
 import { KbSearchDialog } from '@/widgets/kb-sidebar';
 import { EmptyNotice, ErrorNotice, FieldSelect, FsIcon, SkeletonRows } from '@/shared/ui';
 import { homeRowLink, homeTextLink } from '../lib/homeStyles';
@@ -10,7 +11,7 @@ import type { HomeResource } from '../model/homeResource';
 const NO_SPACES: KbSpace[] = [];
 
 export interface HomeFavoritesSectionProps {
-  workspaces: HomeResource<KbWorkspace[]>;
+  workspaces: HomeResource<Workspace[]>;
   /** お気に入りを出しているワークスペース（最後に選んだもの。無ければ所属の先頭）。 */
   workspaceSlug: string | null;
   onSelectWorkspace: (slug: string) => void;

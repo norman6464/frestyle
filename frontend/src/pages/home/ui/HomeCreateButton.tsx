@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import type { KbWorkspace } from '@/entities/kb';
+import type { Workspace } from '@/entities/workspace';
 import { Button, FsIcon } from '@/shared/ui';
 import HomeCreateDialog from './HomeCreateDialog';
 
 export interface HomeCreateButtonProps {
-  workspaces: KbWorkspace[];
+  workspaces: Workspace[];
   /** 初めに選んでおくワークスペース（ホームのお気に入りで選んでいるもの）。 */
   initialWorkspaceSlug: string | null;
   wide: boolean;

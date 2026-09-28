@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { KbAdminWorkspaceMember, KbGrantRole } from '@/entities/kb';
+import type { AdminWorkspaceMember, GrantRole } from '@/entities/workspace';
 import { Button, ConfirmModal, EmptyNotice, ErrorNotice, Loading } from '@/shared/ui';
 import { KbAdminOnlyNotice, useKbWorkspaceAdminOutlet } from '@/widgets/kb-sidebar';
 import { getApiError } from '@/shared/lib/classifyApiError';
@@ -54,9 +54,9 @@ export default function KbMembersPage() {
   const [deletePending, setDeletePending] = useState(false);
   const { members, loading, error, busyUserId, retry, changeRole, suspend, restore, remove } =
     useKbAdminMembers(workspaceSlug);
-  const [removing, setRemoving] = useState<KbAdminWorkspaceMember | null>(null);
+  const [removing, setRemoving] = useState<AdminWorkspaceMember | null>(null);
   // 停止と「役割なし」は、相手がすぐに使えなくなる操作なので確認を挟む。
-  const [confirming, setConfirming] = useState<{ kind: 'suspend' | 'revokeRole'; member: KbAdminWorkspaceMember } | null>(null);
+  const [confirming, setConfirming] = useState<{ kind: 'suspend' | 'revokeRole'; member: AdminWorkspaceMember } | null>(null);
 
   const workspaceName = workspace.name;
 
@@ -130,7 +130,7 @@ export default function KbMembersPage() {
                   member={member}
                   isSelf={member.userId === currentUserId}
                   busy={busyUserId === member.userId}
-                  onChangeRole={(role: KbGrantRole | null) => {
+                  onChangeRole={(role: GrantRole | null) => {
                     if (role === null) {
                       setConfirming({ kind: 'revokeRole', member });
                       return;

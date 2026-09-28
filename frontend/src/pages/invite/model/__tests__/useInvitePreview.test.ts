@@ -1,14 +1,14 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { KbRepository } from '@/entities/kb';
+import { WorkspaceRepository } from '@/entities/workspace';
 import { useInvitePreview } from '../useInvitePreview';
 
-vi.mock('@/entities/kb', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/entities/kb')>();
-  return { ...actual, KbRepository: { ...actual.KbRepository, previewInvitation: vi.fn() } };
+vi.mock('@/entities/workspace', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/entities/workspace')>();
+  return { ...actual, WorkspaceRepository: { ...actual.WorkspaceRepository, previewInvitation: vi.fn() } };
 });
 
-const preview = vi.mocked(KbRepository.previewInvitation);
+const preview = vi.mocked(WorkspaceRepository.previewInvitation);
 
 beforeEach(() => {
   vi.clearAllMocks();

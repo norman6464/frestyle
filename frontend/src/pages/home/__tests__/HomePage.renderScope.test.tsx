@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom';
 import HomePage from '../ui/HomePage';
 import KbRepository from '@/entities/kb/api/kbRepository';
+import WorkspaceRepository from '@/entities/workspace/api/workspaceRepository';
 import TicketRepository from '@/entities/ticket/api/ticketRepository';
 import { NotificationRepository } from '@/entities/notification/api/notificationRepository';
 import ProfileRepository from '@/entities/user/api/profileRepository';
@@ -50,7 +51,7 @@ const workspace = { slug: 'team-a', name: '開発チーム', createdAt: '', canM
 describe('HomePage の描き直しの範囲', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', createMockStorage());
-    vi.spyOn(KbRepository, 'fetchWorkspaces').mockResolvedValue([workspace]);
+    vi.spyOn(WorkspaceRepository, 'fetchWorkspaces').mockResolvedValue([workspace]);
     vi.spyOn(KbRepository, 'fetchRecentPages').mockResolvedValue([]);
     vi.spyOn(KbRepository, 'fetchFavorites').mockResolvedValue([]);
     vi.spyOn(KbRepository, 'fetchSpaces').mockResolvedValue([]);

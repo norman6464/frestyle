@@ -1,10 +1,10 @@
 import { useId } from 'react';
-import { kbRoleLabel, type KbInvitation } from '@/entities/kb';
+import { grantRoleLabel, type Invitation } from '@/entities/workspace';
 import { Button, FsIcon } from '@/shared/ui';
 import { formatInvitationDateTime, formatInvitationDeadline } from '../lib/invitationDate';
 
 export interface InvitationCardProps {
-  invitation: KbInvitation;
+  invitation: Invitation;
   /** いま参加を送っている。 */
   accepting: boolean;
   /** いまほかの招待への操作が飛んでいる（この招待は押せない）。 */
@@ -37,7 +37,7 @@ export default function InvitationCard({
   onRefresh,
 }: InvitationCardProps) {
   const headingId = useId();
-  const role = kbRoleLabel(invitation.role);
+  const role = grantRoleLabel(invitation.role);
   const deadline = formatInvitationDeadline(invitation.expiresAt);
 
   return (

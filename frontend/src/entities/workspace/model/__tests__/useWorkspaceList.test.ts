@@ -1,9 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useWorkspaceList } from '../useWorkspaceList';
-import { subscribeKbTreeEvents } from '../kbTreeEvents';
 import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
-import { kbKeys } from '../../api/kbQueries';
+import { kbKeys } from '@/entities/kb/api/kbQueries';
 import { ticketKeys } from '@/entities/ticket/api/ticketQueries';
 
 const hoisted = vi.hoisted(() => ({
@@ -12,7 +11,7 @@ const hoisted = vi.hoisted(() => ({
   deleteWorkspace: vi.fn(),
 }));
 
-vi.mock('../../api/kbRepository', () => ({
+vi.mock('../../api/workspaceRepository', () => ({
   default: {
     fetchWorkspaces: hoisted.fetchWorkspaces,
     createWorkspace: hoisted.createWorkspace,
@@ -143,22 +142,6 @@ describe('useWorkspaceList', () => {
     expect(client.getQueryData(ticketKeys.labels('a'))).toBeUndefined();
     expect(client.getQueryData(ticketKeys.statuses('a', 'p-1'))).toBeUndefined();
     expect(client.getQueryData(ticketKeys.labels('b'))).toBeDefined();
-  });
-
-  it('消すと workspace-deleted を知らせる（開いているページの画面が一覧へ戻るため）', async () => {
-    hoisted.deleteWorkspace.mockResolvedValue(undefined);
-    const { result } = renderHook(() => useWorkspaceList(), { wrapper: queryWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    const listener = vi.fn();
-    const unsubscribe = subscribeKbTreeEvents(listener);
-
-    await act(async () => {
-      await result.current.deleteWorkspace('a');
-    });
-
-    expect(listener).toHaveBeenCalledWith({ type: 'workspace-deleted', workspaceSlug: 'a' });
-    unsubscribe();
   });
 
   it('一覧を持っているうちの取り直しに失敗しても、持っている一覧を出し続ける', async () => {

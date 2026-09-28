@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useEffectEvent } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { kbKeys, kbWorkspacesQuery, type KbWorkspace } from '@/entities/kb';
+import { workspacesQuery, type Workspace, workspaceKeys } from '@/entities/workspace';
 import { projectListQuery, type Project } from '@/entities/project';
 import type { AcrossListsResolution } from '@/shared/lib/acrossLists';
 import { locateBacklogProject, resolveEntryProject, type ProjectListState } from './resolveBacklogProject';
@@ -26,7 +26,7 @@ const EMPTY: BacklogProjectState = {
   error: null,
 };
 
-const NO_WORKSPACES: KbWorkspace[] = [];
+const NO_WORKSPACES: Workspace[] = [];
 const LOAD_ERROR = 'バックログを読み込めませんでした。';
 
 /**
@@ -42,7 +42,7 @@ const LOAD_ERROR = 'バックログを読み込めませんでした。';
  */
 export function useBacklogProject(projectId: string | undefined, onResolvedEntryProjectId: (id: string) => void) {
   const queryClient = useQueryClient();
-  const workspaces = useQuery(kbWorkspacesQuery());
+  const workspaces = useQuery(workspacesQuery());
   const ordered = workspaces.data ?? NO_WORKSPACES;
   const lists = useQueries({ queries: ordered.map((w) => projectListQuery(w.slug)) });
   const states: ProjectListState[] = ordered.map((w, i) => ({
@@ -77,7 +77,7 @@ export function useBacklogProject(projectId: string | undefined, onResolvedEntry
   // 読めなかった一覧だけを取り直す（読めている一覧まで取り直して待たせない）。
   const retry = useCallback(() => {
     void queryClient.refetchQueries({
-      queryKey: kbKeys.workspaces(),
+      queryKey: workspaceKeys.all(),
       type: 'active',
       predicate: (query) => query.state.status === 'error',
     });

@@ -4,7 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Dialog } from '@base-ui/react/dialog';
 import { Tabs } from '@base-ui/react/tabs';
 import { refreshTicketDerived } from '@/features/ticket-cache';
-import { KbRepository, refreshKbPageTrees, type KbWorkspace } from '@/entities/kb';
+import { KbRepository, refreshKbPageTrees } from '@/entities/kb';
+import type { Workspace } from '@/entities/workspace';
 import { TicketRepository } from '@/entities/ticket';
 import { Button, FsIcon } from '@/shared/ui';
 import { createFailureMessage } from '../lib/createFailure';
@@ -21,7 +22,7 @@ const FIELD_CLASS =
 const LABEL_CLASS = 'text-sm font-medium text-[var(--color-text-secondary)]';
 
 export interface HomeCreateDialogProps {
-  workspaces: KbWorkspace[];
+  workspaces: Workspace[];
   /** 初めに選んでおくワークスペース（ホームのお気に入りで選んでいるもの）。 */
   initialWorkspaceSlug: string | null;
   onClose: () => void;
@@ -159,7 +160,7 @@ function WorkspaceField({
   disabled,
 }: {
   id: string;
-  workspaces: KbWorkspace[];
+  workspaces: Workspace[];
   value: string;
   onChange: (slug: string) => void;
   disabled: boolean;
@@ -228,7 +229,7 @@ function TitleField({
 }
 
 interface PageFormProps {
-  workspaces: KbWorkspace[];
+  workspaces: Workspace[];
   initialWorkspaceSlug: string | null;
   /** 送信を始めた（true）・失敗で終えた（false）ことを親へ知らせる。成功したら画面が移るので戻さない。 */
   onPendingChange: (pending: boolean) => void;
@@ -399,7 +400,7 @@ function PageForm({ workspaces, initialWorkspaceSlug, onPendingChange }: PageFor
 }
 
 interface TicketFormProps {
-  workspaces: KbWorkspace[];
+  workspaces: Workspace[];
   initialWorkspaceSlug: string | null;
   /** 送信を始めた（true）・失敗で終えた（false）ことを親へ知らせる。成功したら画面が移るので戻さない。 */
   onPendingChange: (pending: boolean) => void;

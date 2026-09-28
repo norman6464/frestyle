@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createTestQueryClient } from '@/test/queryClient';
 import { kbKeys } from '@/entities/kb/api/kbQueries';
+import { workspaceKeys } from '@/entities/workspace/api/workspaceQueries';
 import { resolveEntryPageId } from '../resolveEntryPage';
 
 const hoisted = vi.hoisted(() => ({
@@ -13,10 +14,12 @@ const hoisted = vi.hoisted(() => ({
 // 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
 vi.mock('@/entities/kb/api/kbRepository', () => ({
   default: {
-    fetchWorkspaces: hoisted.fetchWorkspaces,
     fetchSpaces: hoisted.fetchSpaces,
     fetchPageTree: hoisted.fetchPageTree,
   },
+}));
+vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
+  default: { fetchWorkspaces: hoisted.fetchWorkspaces },
 }));
 
 vi.mock('@/entities/kb', async (importOriginal) => {
@@ -100,7 +103,7 @@ describe('resolveEntryPageId', () => {
 
   it('左の列が取ってあるワークスペースとスペースの一覧は取り直さない', async () => {
     const client = createTestQueryClient();
-    client.setQueryData(kbKeys.workspaces(), [{ slug: 'acme', name: '', createdAt: '', canManage: true }]);
+    client.setQueryData(workspaceKeys.all(), [{ slug: 'acme', name: '', createdAt: '', canManage: true }]);
     client.setQueryData(kbKeys.spaces('acme'), [
       { id: 'space-1', key: 's', name: '', visibility: 'workspace' as const, createdAt: '' },
     ]);

@@ -1,22 +1,22 @@
 import { useId, useRef, useState, type FormEvent, type SyntheticEvent } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import {
-  KB_ROLE_DESCRIPTION,
-  KB_ROLE_LABEL,
-  KB_ROLES_STRONGEST_FIRST,
+  GRANT_ROLE_DESCRIPTION,
+  GRANT_ROLE_LABEL,
+  GRANT_ROLES_STRONGEST_FIRST,
   buildInviteUrl,
-  type KbGrantRole,
-  type KbInviteByEmailInput,
-  type KbIssuedInvitation,
-} from '@/entities/kb';
+  type GrantRole,
+  type InviteByEmailInput,
+  type IssuedInvitation,
+} from '@/entities/workspace';
 import { Button, FsIcon, FormFieldError } from '@/shared/ui';
 import { useCopyToClipboard } from '@/shared/lib/hooks/useCopyToClipboard';
 import { inviteFailure } from '../lib/invitationMessages';
 
 // 選択肢は「呼び名 — できること」。呼び名と説明は entities の 1 か所から引く。
-const ROLE_OPTIONS: { value: KbGrantRole; label: string }[] = KB_ROLES_STRONGEST_FIRST.map((role) => ({
+const ROLE_OPTIONS: { value: GrantRole; label: string }[] = GRANT_ROLES_STRONGEST_FIRST.map((role) => ({
   value: role,
-  label: `${KB_ROLE_LABEL[role]} — ${KB_ROLE_DESCRIPTION[role]}`,
+  label: `${GRANT_ROLE_LABEL[role]} — ${GRANT_ROLE_DESCRIPTION[role]}`,
 }));
 
 export interface KbInviteDialogProps {
@@ -25,9 +25,9 @@ export interface KbInviteDialogProps {
    * 再送の結果を見せるために開くとき、その応答を渡す。入力欄を飛ばしてリンクの表示から始まる。
    * null / undefined なら入力欄から。
    */
-  issued?: KbIssuedInvitation | null;
+  issued?: IssuedInvitation | null;
   /** 発行する。**失敗は投げてくる**（このダイアログの中で文言にする）。 */
-  onInvite: (input: KbInviteByEmailInput) => Promise<KbIssuedInvitation>;
+  onInvite: (input: InviteByEmailInput) => Promise<IssuedInvitation>;
   /** 一覧の更新を伴わない失敗（404 等）を外へ知らせたいときに使う。 */
   onFailureToast: (text: string) => void;
   onClose: () => void;
@@ -49,11 +49,11 @@ export default function KbInviteDialog({ isOpen, issued: issuedProp, onInvite, o
   const emailRef = useRef<HTMLInputElement>(null);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<KbGrantRole>('editor');
+  const [role, setRole] = useState<GrantRole>('editor');
   const [submitting, setSubmitting] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [issued, setIssued] = useState<KbIssuedInvitation | null>(isOpen ? (issuedProp ?? null) : null);
+  const [issued, setIssued] = useState<IssuedInvitation | null>(isOpen ? (issuedProp ?? null) : null);
   const { copiedId, copyToClipboard } = useCopyToClipboard();
 
   // 開くたびに白紙から（再送で開いたときは、その結果のリンクから）。effect で戻すと前の中身の
@@ -235,7 +235,7 @@ export default function KbInviteDialog({ isOpen, issued: issuedProp, onInvite, o
                   id="kb-invite-role"
                   value={role}
                   disabled={submitting}
-                  onChange={(e) => setRole(e.target.value as KbGrantRole)}
+                  onChange={(e) => setRole(e.target.value as GrantRole)}
                   className={FIELD_CLASS}
                 >
                   {ROLE_OPTIONS.map((opt) => (

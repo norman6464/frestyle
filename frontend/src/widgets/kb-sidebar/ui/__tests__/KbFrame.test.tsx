@@ -5,8 +5,9 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-rou
 import KbFrame from '../KbFrame';
 import type { KbPageRowProps } from '../KbPageRow';
 import type { KbRowActionsProps } from '../KbRowActions';
-import { subscribeKbTreeEvents, useWorkspaceList } from '@/entities/kb';
-import type { KbMySpace, KbPage, KbPageTree, KbSpace, KbWorkspace } from '@/entities/kb';
+import { subscribeKbTreeEvents } from '@/entities/kb';
+import { useWorkspaceList, workspaceKeys, type Workspace } from '@/entities/workspace';
+import type { KbMySpace, KbPage, KbPageTree, KbSpace } from '@/entities/kb';
 import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 import { kbKeys } from '@/entities/kb/api/kbQueries';
 import { refreshKbPageTrees, reflectKbPageInTrees } from '@/entities/kb/model/kbPageTreeCache';
@@ -73,7 +74,6 @@ vi.mock('@/shared/lib/hooks/useToast', () => ({
 // ——中から本体を読む——は本物の取得を呼んでしまう）。
 vi.mock('@/entities/kb/api/kbRepository', () => ({
   default: {
-    fetchWorkspaces: hoisted.fetchWorkspaces,
     fetchSpaces: hoisted.fetchSpaces,
     fetchMySpaces: hoisted.fetchMySpaces,
     fetchPageTree: hoisted.fetchPageTree,
@@ -83,11 +83,16 @@ vi.mock('@/entities/kb/api/kbRepository', () => ({
     archivePage: hoisted.archivePage,
     unarchivePage: hoisted.unarchivePage,
     movePage: hoisted.movePage,
-    createWorkspace: hoisted.createWorkspace,
-    deleteWorkspace: hoisted.deleteWorkspace,
     createSpace: hoisted.createSpace,
     renameSpace: hoisted.renameSpace,
     searchPages: hoisted.searchPages,
+  },
+}));
+vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
+  default: {
+    fetchWorkspaces: hoisted.fetchWorkspaces,
+    createWorkspace: hoisted.createWorkspace,
+    deleteWorkspace: hoisted.deleteWorkspace,
   },
 }));
 
@@ -104,7 +109,7 @@ vi.mock('@/entities/kb', async () => {
   };
 });
 
-function workspace(slug: string, name = slug, canManage = true): KbWorkspace {
+function workspace(slug: string, name = slug, canManage = true): Workspace {
   return { slug, name, createdAt: '2026-08-01T00:00:00Z', canManage };
 }
 
@@ -464,7 +469,7 @@ describe('KbFrame', () => {
     hoisted.fetchWorkspaces.mockRejectedValueOnce(new Error('boom'));
     hoisted.fetchSpaces.mockRejectedValueOnce(new Error('boom'));
     await act(async () => {
-      await client.refetchQueries({ queryKey: kbKeys.workspaces() });
+      await client.refetchQueries({ queryKey: workspaceKeys.all() });
     });
     await waitFor(() => expect(client.getQueryState(kbKeys.spaces('acme'))?.status).toBe('error'));
     await act(async () => {

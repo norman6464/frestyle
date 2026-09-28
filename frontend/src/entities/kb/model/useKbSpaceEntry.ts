@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useEffectEvent } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { kbKeys, kbMySpacesQuery, kbWorkspacesQuery } from '../api/kbQueries';
-import type { KbMySpace, KbWorkspace } from './types';
+import { workspacesQuery, type Workspace } from '@/entities/workspace/@x/kb';
+import { kbMySpacesQuery } from '../api/kbQueries';
+import type { KbMySpace } from './types';
 import {
   locateKbSpace,
   orderWorkspaces,
@@ -31,7 +32,7 @@ const EMPTY: KbSpaceEntryState = {
   error: null,
 };
 
-const NO_WORKSPACES: KbWorkspace[] = [];
+const NO_WORKSPACES: Workspace[] = [];
 const LOAD_ERROR = 'スペースを読み込めませんでした。';
 
 /**
@@ -56,7 +57,7 @@ export function useKbSpaceEntry(
   preferredWorkspaceSlug?: string,
 ) {
   const queryClient = useQueryClient();
-  const workspaces = useQuery(kbWorkspacesQuery());
+  const workspaces = useQuery(workspacesQuery());
   const ordered = orderWorkspaces(workspaces.data ?? NO_WORKSPACES, spaceId ? undefined : preferredWorkspaceSlug);
   const lists = useQueries({ queries: ordered.map((w) => kbMySpacesQuery(w.slug)) });
   const states: MySpacesState[] = ordered.map((w, i) => ({
@@ -88,10 +89,11 @@ export function useKbSpaceEntry(
     if (entrySpaceId) resolveEntry(entrySpaceId);
   }, [entrySpaceId]);
 
-  // 読めなかった一覧だけを取り直す（読めている一覧まで取り直して待たせない）。
+  // 読めなかった一覧だけを取り直す（読めている一覧まで取り直して待たせない）。所属の一覧の鍵は
+  // 鍵の根なので、ワークスペースごとのスペースの一覧もこの鍵の下に入る。
   const retry = useCallback(() => {
     void queryClient.refetchQueries({
-      queryKey: kbKeys.workspaces(),
+      queryKey: workspacesQuery().queryKey,
       type: 'active',
       predicate: (query) => query.state.status === 'error',
     });

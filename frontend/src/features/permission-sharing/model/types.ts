@@ -1,4 +1,4 @@
-import type { KbGrantRole } from '@/entities/kb';
+import type { GrantRole } from '@/entities/workspace';
 
 /**
  * 付与で与える役割。backend の domain.GrantRole と対応する 4 つ。
@@ -6,7 +6,7 @@ import type { KbGrantRole } from '@/entities/kb';
  * ナレッジ側の型を再輸出しているのは、**同じものが 2 つあると必ずずれる**ため。
  * 役割が増えたときに片方だけ増える、という壊れ方を型で防ぐ。
  */
-export type ShareRole = KbGrantRole;
+export type ShareRole = GrantRole;
 
 /** 一覧に並ぶ 1 行（張った権限と、その相手の表示名を突き合わせたもの）。 */
 export interface ShareRow {

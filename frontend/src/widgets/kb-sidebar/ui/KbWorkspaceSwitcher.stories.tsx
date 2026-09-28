@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import KbWorkspaceSwitcher from './KbWorkspaceSwitcher';
-import type { KbWorkspace } from '@/entities/kb';
+import type { Workspace } from '@/entities/workspace';
 
 /**
  * ナレッジの文脈バーの先頭にある、ワークスペースの切り替え（設計ボード ST03 の「FreStyle ▾」）。
@@ -33,7 +33,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const workspaces: KbWorkspace[] = [
+const workspaces: Workspace[] = [
   { slug: 'w-3f2a9c', name: '開発チーム', createdAt: '2026-01-01T00:00:00Z', canManage: true, canCreateTickets: true },
   { slug: 'w-88ab21', name: '営業部', createdAt: '2026-02-01T00:00:00Z', canManage: false, canCreateTickets: false },
   { slug: 'w-10cc45', name: '個人メモ', createdAt: '2026-03-01T00:00:00Z', canManage: true, canCreateTickets: true },

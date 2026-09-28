@@ -1,5 +1,5 @@
 import { KbSpaceHeading, useKbSpaceOutlet } from '@/widgets/kb-sidebar';
-import { kbRoleLabel } from '@/entities/kb';
+import { grantRoleLabel } from '@/entities/workspace';
 
 /**
  * KbSpaceOverviewPage はスペースの「概要」画面（段14）。
@@ -20,7 +20,7 @@ export default function KbSpaceOverviewPage() {
           {/* 画面の行き来（すべてのページ・お気に入り・メンバー）は左の列と文脈バーが持つ。
               ここに同じ入口を並べ直さない。 */}
           <p className="mt-8 border-t border-surface-3 pt-4 text-sm text-[var(--color-text-tertiary)]">
-            このスペースでの自分の役割: {kbRoleLabel(space.role)}
+            このスペースでの自分の役割: {grantRoleLabel(space.role)}
           </p>
         </div>
       </div>

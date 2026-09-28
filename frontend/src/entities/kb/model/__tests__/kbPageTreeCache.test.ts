@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createTestQueryClient } from '@/test/queryClient';
 import { kbKeys } from '../../api/kbQueries';
-import { refreshKbPageTrees, reflectKbPageInTrees } from '../kbPageTreeCache';
+import { forgetKbWorkspace, refreshKbPageTrees, reflectKbPageInTrees } from '../kbPageTreeCache';
+import { subscribeKbTreeEvents } from '../kbTreeEvents';
 
 const page = { id: 'p-1', spaceId: 's-1', title: '新しい題名', createdByUserId: 1, createdAt: '', updatedAt: '' };
 
@@ -36,5 +37,19 @@ describe('reflectKbPageInTrees', () => {
     expect(client.getQueryState(kbKeys.favorites('acme'))?.isInvalidated).toBe(true);
     expect(client.getQueryState(kbKeys.recentPages())?.isInvalidated).toBe(true);
     expect(client.getQueryState(kbKeys.favorites('other'))?.isInvalidated).toBe(false);
+  });
+});
+
+describe('forgetKbWorkspace', () => {
+  it('ワークスペースをまたぐ最近のページを古くし、開いているページの画面へ消えたことを知らせる', () => {
+    const client = seeded();
+    const listener = vi.fn();
+    const unsubscribe = subscribeKbTreeEvents(listener);
+
+    forgetKbWorkspace(client, 'acme');
+
+    expect(client.getQueryState(kbKeys.recentPages())?.isInvalidated).toBe(true);
+    expect(listener).toHaveBeenCalledWith({ type: 'workspace-deleted', workspaceSlug: 'acme' });
+    unsubscribe();
   });
 });

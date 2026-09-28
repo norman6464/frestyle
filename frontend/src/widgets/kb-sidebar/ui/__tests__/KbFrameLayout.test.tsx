@@ -36,11 +36,13 @@ vi.mock('@/shared/lib/hooks/useToast', () => ({
 // 取得の本体を偽物にする（公開口の KbRepository だけを替えると、共有の問い合わせは本物を呼ぶ）。
 vi.mock('@/entities/kb/api/kbRepository', () => ({
   default: {
-    fetchWorkspaces: hoisted.fetchWorkspaces,
     fetchSpaces: hoisted.fetchSpaces,
     fetchMySpaces: hoisted.fetchMySpaces,
     fetchPageTree: hoisted.fetchPageTree,
   },
+}));
+vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
+  default: { fetchWorkspaces: hoisted.fetchWorkspaces },
 }));
 
 function page(id: string, title: string): KbPage {

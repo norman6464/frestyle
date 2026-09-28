@@ -1,8 +1,8 @@
-import type { KbInvitationStatus } from '@/entities/kb';
+import type { InvitationStatus } from '@/entities/workspace';
 import { getApiError } from '@/shared/lib/classifyApiError';
 
 /** 状態の表示名。 */
-export const INVITATION_STATUS_LABEL: Record<KbInvitationStatus, string> = {
+export const INVITATION_STATUS_LABEL: Record<InvitationStatus, string> = {
   pending: '承諾待ち',
   expired: '期限切れ',
   accepted: '承諾済み',
@@ -11,7 +11,7 @@ export const INVITATION_STATUS_LABEL: Record<KbInvitationStatus, string> = {
 };
 
 /** 状態のバッジの見た目。色は「結果」を表すので brand（押せる）とは分ける。 */
-export const INVITATION_STATUS_CLASS: Record<KbInvitationStatus, string> = {
+export const INVITATION_STATUS_CLASS: Record<InvitationStatus, string> = {
   pending: 'bg-brand-50 text-brand-700',
   expired: 'bg-warning-soft text-warning',
   accepted: 'bg-success-soft text-success',

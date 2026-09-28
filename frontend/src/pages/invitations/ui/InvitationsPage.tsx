@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { kbRoleLabel, type KbInvitation } from '@/entities/kb';
+import { grantRoleLabel, type Invitation } from '@/entities/workspace';
 import { useEmailVerification } from '@/features/auth';
 import { Button, ConfirmModal, FsIcon } from '@/shared/ui';
 import { getApiError } from '@/shared/lib/classifyApiError';
@@ -51,7 +51,7 @@ export default function InvitationsPage() {
   const verification = useEmailVerification();
   const [joined, setJoined] = useState<{ workspaceName: string; workspaceSlug: string; roleLabel: string } | null>(null);
   const [failures, setFailures] = useState<Record<string, { title: string; description: string }>>({});
-  const [declining, setDeclining] = useState<KbInvitation | null>(null);
+  const [declining, setDeclining] = useState<Invitation | null>(null);
   const [declinePending, setDeclinePending] = useState(false);
   const [notice, setNotice] = useState('');
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -70,7 +70,7 @@ export default function InvitationsPage() {
     void retry();
   };
 
-  const acceptInvitation = async (invitation: KbInvitation) => {
+  const acceptInvitation = async (invitation: Invitation) => {
     setFailure(invitation.id, null);
     setNotice('');
     try {
@@ -78,7 +78,7 @@ export default function InvitationsPage() {
       setJoined({
         workspaceName: invitation.workspaceName,
         workspaceSlug: accepted.workspaceSlug,
-        roleLabel: kbRoleLabel(invitation.role),
+        roleLabel: grantRoleLabel(invitation.role),
       });
     } catch (cause) {
       setFailure(invitation.id, actionFailure(cause, '参加'));

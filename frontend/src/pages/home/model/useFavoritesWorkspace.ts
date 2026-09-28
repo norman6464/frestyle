@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { KbWorkspace } from '@/entities/kb';
+import type { Workspace } from '@/entities/workspace';
 import { useCurrentUserId } from '@/entities/user';
 
 const storageKey = (userId: number) => `frestyle.home.favoritesWorkspace.${userId}`;
@@ -27,7 +27,7 @@ function remember(userId: number, slug: string) {
  * 覚える鍵はアカウントごとに分ける（同じ端末で別のアカウントに切り替えたとき、前の人の選択を
  * 引き継がない）。自分の ID が分からない間は覚えた値を使わない。
  */
-export function useFavoritesWorkspace(workspaces: KbWorkspace[]): [string | null, (slug: string) => void] {
+export function useFavoritesWorkspace(workspaces: Workspace[]): [string | null, (slug: string) => void] {
   const userId = useCurrentUserId();
   // 端末に覚えた値は、自分の ID が決まるたびに読む（effect で読むと、読む前の値で 1 回描く）。
   const remembered = useMemo(() => (userId === null ? null : readRemembered(userId)), [userId]);

@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { getLastVisitedPageId, kbPageTreeQuery, kbSpacesQuery, kbWorkspacesQuery } from '@/entities/kb';
+import { getLastVisitedPageId, kbPageTreeQuery, kbSpacesQuery } from '@/entities/kb';
+import { workspacesQuery } from '@/entities/workspace';
 
 /**
  * resolveEntryPageId は素の /kb(ページ ID 無し)で最初に開くページの ID を決める。
@@ -36,7 +37,7 @@ export async function resolveEntryPageId(
 
   const workspaces = workspaceSlug
     ? [{ slug: workspaceSlug }]
-    : await queryClient.fetchQuery(kbWorkspacesQuery());
+    : await queryClient.fetchQuery(workspacesQuery());
 
   for (const workspace of workspaces) {
     const spaces = await queryClient.fetchQuery(kbSpacesQuery(workspace.slug));

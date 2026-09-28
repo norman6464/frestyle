@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useQueries, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { queryShownState } from '@/shared/api/queryState';
-import { kbKeys, kbWorkspacesQuery, type KbWorkspace } from '@/entities/kb';
+import { workspacesQuery, type Workspace, workspaceKeys } from '@/entities/workspace';
 import { assignedTicketsQuery, type AssignedTicket } from '@/entities/ticket';
 
 export interface AssignedGroup {
@@ -13,7 +13,7 @@ export interface AssignedGroup {
   tickets: AssignedTicket[];
 }
 
-const NO_WORKSPACES: KbWorkspace[] = [];
+const NO_WORKSPACES: Workspace[] = [];
 const LOAD_FAILED = '担当の一覧を取得できませんでした。';
 
 /** ワークスペースごとの結果を、まとめた取り具合と全部のチケットにする（結果が同じなら同じ物を返す）。 */
@@ -67,7 +67,7 @@ function groupByStatus(tickets: AssignedTicket[]): AssignedGroup[] {
  */
 export function useAssignedTickets() {
   const queryClient = useQueryClient();
-  const workspaces = queryShownState(useQuery(kbWorkspacesQuery()));
+  const workspaces = queryShownState(useQuery(workspacesQuery()));
   const list = workspaces.data ?? NO_WORKSPACES;
   const { waiting, failed, tickets } = useQueries({
     queries: list.map((workspace) => assignedTicketsQuery(workspace.slug)),
@@ -81,7 +81,7 @@ export function useAssignedTickets() {
   // 読めなかった一覧だけを取り直す（読めている一覧まで取り直して待たせない）。
   const reload = useCallback(async () => {
     await queryClient.refetchQueries({
-      queryKey: kbKeys.workspaces(),
+      queryKey: workspaceKeys.all(),
       type: 'active',
       predicate: (query) => query.state.status === 'error',
     });

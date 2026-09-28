@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { NameCreateForm, FsIcon } from '@/shared/ui';
 import { useDismissOnOutside } from '@/shared/lib/hooks/useDismissOnOutside';
-import type { KbWorkspace } from '@/entities/kb';
+import type { Workspace } from '@/entities/workspace';
 
 export interface KbWorkspaceSwitcherProps {
-  workspaces: KbWorkspace[];
+  workspaces: Workspace[];
   activeSlug: string | null;
   onSelect: (slug: string) => void;
   /** ワークスペースを作る。**失敗は投げてくる**（フォームが入力を保つ）。 */

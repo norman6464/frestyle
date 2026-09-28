@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
-import { workspaceScope, workspacesKey } from '@/shared/api/queryKeys';
+import { workspaceScope } from '@/shared/api/queryKeys';
 import KbRepository from './kbRepository';
 import type { KbGrantablePrincipal } from '../model/types';
 
@@ -10,10 +10,6 @@ import type { KbGrantablePrincipal } from '../model/types';
  * ワークスペースの中のものは、鍵の根（shared/api/queryKeys.ts）の workspaceScope(slug) の下に置く。
  */
 export const kbKeys = {
-  /** 所属ワークスペースの一覧。取り直させると、ワークスペースの中のものもすべて古くなる。 */
-  workspaces: () => workspacesKey,
-  /** 1 つのワークスペースの中のものすべて（ナレッジ・チケットとも）。 */
-  workspace: (workspaceSlug: string) => workspaceScope(workspaceSlug),
   /** ワークスペースのスペースの一覧（見られるもの全件）。 */
   spaces: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'spaces'] as const,
   /** ワークスペースのうち、自分が役割を持つスペースの一覧（役割つき）。 */
@@ -61,30 +57,14 @@ export const kbKeys = {
   search: (workspaceSlug: string, needle: string) => [...workspaceScope(workspaceSlug), 'search', needle] as const,
   /** お気に入りのページ（スペースのお気に入りの画面・ホームが共有する）。 */
   favorites: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'favorites'] as const,
-  /** ワークスペースの人（名指しの候補・表示名の解決）。 */
-  members: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'members'] as const,
-  /** 管理の画面のメンバー（役割・停止の状態つき）。 */
-  adminMembers: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'admin-members'] as const,
   /** スペースのメンバー。 */
   spaceMembers: (workspaceSlug: string, spaceId: string) =>
     [...workspaceScope(workspaceSlug), 'space', spaceId, 'members'] as const,
-  /** ワークスペースから出している招待。 */
-  invitations: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'invitations'] as const,
   /** 最近開いたページ（ワークスペースをまたぐ）。 */
   recentPages: () => ['recent-pages'] as const,
-  /** 自分宛ての招待（ワークスペースをまたぐ）。 */
-  myInvitations: () => ['my-invitations'] as const,
   /** ワークスペースで権限を張れる相手（最初のページで代表させたもの。kbWorkspacePrincipalsQuery）。 */
   workspacePrincipals: (workspaceSlug: string) => [...workspaceScope(workspaceSlug), 'workspace-principals'] as const,
 };
-
-/** 所属ワークスペースの一覧。ヘッダー・左の列・管理の画面・ホーム・入口の解決が共有する。 */
-export function kbWorkspacesQuery() {
-  return queryOptions({
-    queryKey: kbKeys.workspaces(),
-    queryFn: () => KbRepository.fetchWorkspaces(),
-  });
-}
 
 /** ワークスペースのスペースの一覧。 */
 export function kbSpacesQuery(workspaceSlug: string) {
@@ -198,35 +178,11 @@ export function kbFavoritesQuery(workspaceSlug: string) {
   });
 }
 
-/** ワークスペースの人。チケットの発言の名指し・担当の表示名が共有する。 */
-export function kbMembersQuery(workspaceSlug: string) {
-  return queryOptions({
-    queryKey: kbKeys.members(workspaceSlug),
-    queryFn: () => KbRepository.fetchMembers(workspaceSlug),
-  });
-}
-
-/** 管理の画面のメンバー（役割・停止の状態つき）。 */
-export function kbAdminMembersQuery(workspaceSlug: string) {
-  return queryOptions({
-    queryKey: kbKeys.adminMembers(workspaceSlug),
-    queryFn: () => KbRepository.fetchAdminMembers(workspaceSlug),
-  });
-}
-
 /** スペースのメンバー。 */
 export function kbSpaceMembersQuery(workspaceSlug: string, spaceId: string) {
   return queryOptions({
     queryKey: kbKeys.spaceMembers(workspaceSlug, spaceId),
     queryFn: () => KbRepository.fetchSpaceMembers(workspaceSlug, spaceId),
-  });
-}
-
-/** ワークスペースから出している招待。 */
-export function kbInvitationsQuery(workspaceSlug: string) {
-  return queryOptions({
-    queryKey: kbKeys.invitations(workspaceSlug),
-    queryFn: () => KbRepository.fetchInvitations(workspaceSlug),
   });
 }
 
@@ -239,14 +195,6 @@ export function kbRecentPagesQuery() {
     queryKey: kbKeys.recentPages(),
     queryFn: ({ signal }) => KbRepository.fetchRecentPages(signal),
     staleTime: 0,
-  });
-}
-
-/** 自分宛ての招待。 */
-export function kbMyInvitationsQuery() {
-  return queryOptions({
-    queryKey: kbKeys.myInvitations(),
-    queryFn: () => KbRepository.fetchMyInvitations(),
   });
 }
 

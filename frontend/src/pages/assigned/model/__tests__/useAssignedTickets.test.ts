@@ -13,7 +13,7 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 // 取得の本体を偽物にする（公開口だけを替えると、共有の問い合わせは本物を呼ぶ）。
-vi.mock('@/entities/kb/api/kbRepository', () => ({
+vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
   default: { fetchWorkspaces: hoisted.fetchWorkspaces },
 }));
 vi.mock('@/entities/ticket/api/ticketRepository', () => ({

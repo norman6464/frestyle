@@ -10,10 +10,10 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock('../../api/kbRepository', () => ({
-  default: {
-    fetchWorkspaces: hoisted.fetchWorkspaces,
-    fetchMySpaces: hoisted.fetchMySpaces,
-  },
+  default: { fetchMySpaces: hoisted.fetchMySpaces },
+}));
+vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
+  default: { fetchWorkspaces: hoisted.fetchWorkspaces },
 }));
 
 const WS_A = { slug: 'a', name: 'A', createdAt: '', canManage: true };

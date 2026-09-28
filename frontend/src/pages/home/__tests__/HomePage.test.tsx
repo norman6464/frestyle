@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import HomePage from '../ui/HomePage';
 import KbRepository from '@/entities/kb/api/kbRepository';
+import WorkspaceRepository from '@/entities/workspace/api/workspaceRepository';
 import TicketRepository from '@/entities/ticket/api/ticketRepository';
 import { NotificationRepository } from '@/entities/notification/api/notificationRepository';
 import ProfileRepository from '@/entities/user/api/profileRepository';
@@ -50,7 +51,7 @@ function renderHome() {
 describe('HomePage', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', createMockStorage());
-    vi.spyOn(KbRepository, 'fetchWorkspaces').mockResolvedValue([workspace]);
+    vi.spyOn(WorkspaceRepository, 'fetchWorkspaces').mockResolvedValue([workspace]);
     vi.spyOn(KbRepository, 'fetchRecentPages').mockResolvedValue([]);
     vi.spyOn(KbRepository, 'fetchFavorites').mockResolvedValue([]);
     vi.spyOn(TicketRepository, 'fetchMyAssignedTickets').mockResolvedValue([]);
@@ -65,7 +66,7 @@ describe('HomePage', () => {
   });
 
   it('どこにも所属していなければ初回ホームを出し、始め方の入口を置く', async () => {
-    vi.mocked(KbRepository.fetchWorkspaces).mockResolvedValue([]);
+    vi.mocked(WorkspaceRepository.fetchWorkspaces).mockResolvedValue([]);
     renderHome();
 
     expect(await screen.findByRole('heading', { level: 1, name: 'FreStyle へようこそ。' })).toBeInTheDocument();
@@ -109,7 +110,7 @@ describe('HomePage', () => {
   });
 
   it('お気に入りのワークスペースを切り替えた直後に、前のワークスペースのお気に入りを出さない', async () => {
-    vi.mocked(KbRepository.fetchWorkspaces).mockResolvedValue([workspace, { ...workspace, slug: 'team-b', name: '営業チーム' }]);
+    vi.mocked(WorkspaceRepository.fetchWorkspaces).mockResolvedValue([workspace, { ...workspace, slug: 'team-b', name: '営業チーム' }]);
     vi.mocked(KbRepository.fetchFavorites).mockImplementation((slug) =>
       slug === 'team-a'
         ? Promise.resolve([{ pageId: 'fav-a', title: 'A のお気に入り', spaceId: 's', spaceName: '開発ノート', createdAt: '' }])

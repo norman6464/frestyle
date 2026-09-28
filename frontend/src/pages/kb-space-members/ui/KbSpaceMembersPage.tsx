@@ -1,6 +1,6 @@
 import { KbSpaceHeading, useKbSpaceOutlet } from '@/widgets/kb-sidebar';
 import { Loading, fsIcon, Avatar, EmptyState } from '@/shared/ui';
-import { kbRoleLabel } from '@/entities/kb';
+import { grantRoleLabel } from '@/entities/workspace';
 import { useKbSpaceMembers } from '../model/useKbSpaceMembers';
 
 const VIA_LABEL: Record<string, string> = {
@@ -63,7 +63,7 @@ function MembersList({ workspaceSlug, spaceId }: { workspaceSlug: string; spaceI
               </div>
             </div>
             <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-[var(--color-text-tertiary)]">
-              {kbRoleLabel(member.role)}
+              {grantRoleLabel(member.role)}
             </span>
           </li>
         ))}

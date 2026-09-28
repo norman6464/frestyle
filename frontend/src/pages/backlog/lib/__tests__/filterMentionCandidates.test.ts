@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { filterMentionCandidates } from '../filterMentionCandidates';
-import type { KbWorkspaceMember } from '@/entities/kb';
+import type { WorkspaceMember } from '@/entities/workspace';
 
-function member(over: Partial<KbWorkspaceMember> & { userId: number }): KbWorkspaceMember {
+function member(over: Partial<WorkspaceMember> & { userId: number }): WorkspaceMember {
   return { principalId: `p-${over.userId}`, name: '', ...over };
 }
 

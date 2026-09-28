@@ -2,16 +2,16 @@ import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryShownState } from '@/shared/api/queryState';
 import {
-  KbRepository,
-  kbInvitationsQuery,
-  kbKeys,
-  type KbInvitation,
-  type KbInviteByEmailInput,
-  type KbIssuedInvitation,
-} from '@/entities/kb';
+  workspaceInvitationsQuery,
+  type Invitation,
+  type InviteByEmailInput,
+  type IssuedInvitation,
+  WorkspaceRepository,
+  workspaceKeys,
+} from '@/entities/workspace';
 
 export interface KbInvitationsState {
-  invitations: KbInvitation[];
+  invitations: Invitation[];
   loading: boolean;
   /** 失敗の理由。'forbidden' は admin でない（メンバー一覧と同じ判定なので画面ごと出し分ける）。 */
   error: 'forbidden' | 'unknown' | null;
@@ -19,12 +19,12 @@ export interface KbInvitationsState {
   busyId: string | null;
 }
 
-const NO_INVITATIONS: KbInvitation[] = [];
+const NO_INVITATIONS: Invitation[] = [];
 
 /**
  * useKbInvitations は招待の画面の一覧取得と、発行・再送・取消をまとめる。
  *
- * 一覧は共有の問い合わせ（kbInvitationsQuery）から読む。書き込みはどれも**成功した後に一覧を
+ * 一覧は共有の問い合わせ（workspaceInvitationsQuery）から読む。書き込みはどれも**成功した後に一覧を
  * 丸ごと取り直す**（取り直しを待ってから返す。useKbAdminMembers と同じ）。発行は同じ宛先の未決を
  * 再送に変える（新しい行にならない）ので、差分をこちらで組み立てるより取り直す方が確実。
  * 発行・再送は応答の token（この 1 回しか返らない）をそのまま返す — 画面がリンクにして相手へ渡す。
@@ -32,7 +32,7 @@ const NO_INVITATIONS: KbInvitation[] = [];
 export function useKbInvitations(workspaceSlug: string | undefined) {
   const queryClient = useQueryClient();
   const active = workspaceSlug !== undefined;
-  const result = useQuery({ ...kbInvitationsQuery(workspaceSlug ?? ''), enabled: active });
+  const result = useQuery({ ...workspaceInvitationsQuery(workspaceSlug ?? ''), enabled: active });
   // 取り直しが 403・404 になったら（admin でなくなった）、持っている一覧も出さずに forbidden にする。
   const { data, loading, failed, lostAccess } = queryShownState(result, active);
   // 処理中の招待は、どのワークスペースで押したかと組で持つ（移った先の行を閉じない）。
@@ -51,7 +51,7 @@ export function useKbInvitations(workspaceSlug: string | undefined) {
       setBusy({ workspaceSlug: slug, id: busyId });
       const runAndRefresh = async () => {
         const written = await run(slug);
-        await queryClient.invalidateQueries({ queryKey: kbKeys.invitations(slug) });
+        await queryClient.invalidateQueries({ queryKey: workspaceKeys.invitations(slug) });
         return written;
       };
       return runAndRefresh().finally(() =>
@@ -62,20 +62,20 @@ export function useKbInvitations(workspaceSlug: string | undefined) {
   );
 
   const invite = useCallback(
-    (input: KbInviteByEmailInput): Promise<KbIssuedInvitation> =>
-      mutate(null, (slug) => KbRepository.inviteByEmail(slug, input)),
+    (input: InviteByEmailInput): Promise<IssuedInvitation> =>
+      mutate(null, (slug) => WorkspaceRepository.inviteByEmail(slug, input)),
     [mutate],
   );
 
   const resend = useCallback(
-    (invitationId: string): Promise<KbIssuedInvitation> =>
-      mutate(invitationId, (slug) => KbRepository.resendInvitation(slug, invitationId)),
+    (invitationId: string): Promise<IssuedInvitation> =>
+      mutate(invitationId, (slug) => WorkspaceRepository.resendInvitation(slug, invitationId)),
     [mutate],
   );
 
   const revoke = useCallback(
     (invitationId: string): Promise<void> =>
-      mutate(invitationId, (slug) => KbRepository.revokeInvitation(slug, invitationId)),
+      mutate(invitationId, (slug) => WorkspaceRepository.revokeInvitation(slug, invitationId)),
     [mutate],
   );
 

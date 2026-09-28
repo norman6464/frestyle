@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { reflectWriteAll } from '@/shared/api/queryCache';
 import { kbKeys } from '../api/kbQueries';
+import { emitKbTreeEvent } from './kbTreeEvents';
 import { replaceKbPageInTree } from '../lib/tree';
 import type { KbPage, KbPageTree } from './types';
 
@@ -38,4 +39,14 @@ export function reflectKbPageInTrees(queryClient: QueryClient, workspaceSlug: st
     const pages = replaceKbPageInTree(tree.pages, page);
     return pages === tree.pages ? tree : { ...tree, pages };
   });
+}
+
+/**
+ * forgetKbWorkspace はワークスペースを消したあとの、ナレッジに固有の後始末。ワークスペースの中の
+ * 控えは消す側（entities/workspace の useWorkspaceList）が鍵ごと消すので、ここではワークスペースを
+ * またぐ「最近のページ」を取り直させ、開いているページの画面へ消えたことを知らせる（移り先を決める）。
+ */
+export function forgetKbWorkspace(queryClient: QueryClient, workspaceSlug: string): void {
+  void queryClient.invalidateQueries({ queryKey: kbKeys.recentPages() });
+  emitKbTreeEvent({ type: 'workspace-deleted', workspaceSlug });
 }

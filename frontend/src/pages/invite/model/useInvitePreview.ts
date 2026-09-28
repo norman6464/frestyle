@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { KbRepository, readInviteToken, type KbInvitationPreview } from '@/entities/kb';
+import { readInviteToken, type InvitationPreview, WorkspaceRepository } from '@/entities/workspace';
 import { hasAuthHint } from '@/shared/lib/authHint';
 
 export type InvitePreviewState =
   | { status: 'loading' }
-  | { status: 'pending'; preview: KbInvitationPreview }
+  | { status: 'pending'; preview: InvitationPreview }
   /** 無い・期限切れ・結果済み。理由は返らない（トークンを持っているだけの相手に教えない）。 */
   | { status: 'unavailable' }
   /** 通信が切れた等。招待が無いのではなく、確かめられていない状態。retry で同じトークンを引き直せる。 */
@@ -34,7 +34,7 @@ export function useInvitePreview() {
     }
     const request = ++seq.current;
     setState({ status: 'loading' });
-    KbRepository.previewInvitation(current)
+    WorkspaceRepository.previewInvitation(current)
       .then((preview) => {
         if (seq.current !== request) return;
         setState(preview.status === 'pending' ? { status: 'pending', preview } : { status: 'unavailable' });

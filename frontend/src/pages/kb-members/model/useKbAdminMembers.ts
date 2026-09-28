@@ -3,15 +3,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryShownState } from '@/shared/api/queryState';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import {
-  KbRepository,
-  kbAdminMembersQuery,
-  kbKeys,
-  type KbAdminWorkspaceMember,
-  type KbGrantRole,
-} from '@/entities/kb';
+  adminWorkspaceMembersQuery,
+  type AdminWorkspaceMember,
+  type GrantRole,
+  WorkspaceRepository,
+  workspaceKeys,
+} from '@/entities/workspace';
 
 export interface KbAdminMembersState {
-  members: KbAdminWorkspaceMember[];
+  members: AdminWorkspaceMember[];
   loading: boolean;
   /** 失敗の理由。null なら失敗していない。'forbidden' は admin でない（画面ごと出し分ける）。 */
   error: 'forbidden' | 'unknown' | null;
@@ -19,13 +19,13 @@ export interface KbAdminMembersState {
   busyUserId: number | null;
 }
 
-const NO_MEMBERS: KbAdminWorkspaceMember[] = [];
+const NO_MEMBERS: AdminWorkspaceMember[] = [];
 
 /**
  * useKbAdminMembers はメンバー管理画面（段 7）の一覧取得と、役割変更・停止・復帰・削除の
  * 書き込みをまとめる。
  *
- * 一覧は共有の問い合わせ（kbAdminMembersQuery）から読む。ワークスペースごとの鍵なので、別の
+ * 一覧は共有の問い合わせ（adminWorkspaceMembersQuery）から読む。ワークスペースごとの鍵なので、別の
  * ワークスペースの管理画面へ移ったら前の一覧は出ない。
  *
  * 書き込みはすべて**楽観更新をせず、成功した後に一覧を丸ごと取り直す**（取り直しを待ってから返す）。
@@ -37,7 +37,7 @@ const NO_MEMBERS: KbAdminWorkspaceMember[] = [];
 export function useKbAdminMembers(workspaceSlug: string | undefined) {
   const queryClient = useQueryClient();
   const active = workspaceSlug !== undefined;
-  const result = useQuery({ ...kbAdminMembersQuery(workspaceSlug ?? ''), enabled: active });
+  const result = useQuery({ ...adminWorkspaceMembersQuery(workspaceSlug ?? ''), enabled: active });
   // 取り直しが 403 になったら（admin でなくなった）、持っている一覧も出さずに forbidden にする。
   const { data, loading, failed } = queryShownState(result, active);
   // 処理中の相手は、どのワークスペースで押したかと組で持つ（移った先の行を閉じない）。
@@ -56,8 +56,8 @@ export function useKbAdminMembers(workspaceSlug: string | undefined) {
       setBusy({ workspaceSlug: slug, userId });
       const runAndRefresh = async () => {
         await run(slug);
-        void queryClient.invalidateQueries({ queryKey: kbKeys.members(slug) });
-        await queryClient.invalidateQueries({ queryKey: kbKeys.adminMembers(slug) });
+        void queryClient.invalidateQueries({ queryKey: workspaceKeys.members(slug) });
+        await queryClient.invalidateQueries({ queryKey: workspaceKeys.adminMembers(slug) });
       };
       await runAndRefresh().finally(() =>
         setBusy((prev) => (prev?.workspaceSlug === slug && prev.userId === userId ? null : prev)),
@@ -67,27 +67,27 @@ export function useKbAdminMembers(workspaceSlug: string | undefined) {
   );
 
   const changeRole = useCallback(
-    (principalId: string, userId: number, role: KbGrantRole | null) =>
+    (principalId: string, userId: number, role: GrantRole | null) =>
       mutate(userId, (slug) =>
         role === null
-          ? KbRepository.revokeWorkspaceRole(slug, principalId)
-          : KbRepository.grantWorkspaceRole(slug, principalId, role),
+          ? WorkspaceRepository.revokeWorkspaceRole(slug, principalId)
+          : WorkspaceRepository.grantWorkspaceRole(slug, principalId, role),
       ),
     [mutate],
   );
 
   const suspend = useCallback(
-    (userId: number) => mutate(userId, (slug) => KbRepository.suspendMember(slug, userId)),
+    (userId: number) => mutate(userId, (slug) => WorkspaceRepository.suspendMember(slug, userId)),
     [mutate],
   );
 
   const restore = useCallback(
-    (userId: number) => mutate(userId, (slug) => KbRepository.restoreMember(slug, userId)),
+    (userId: number) => mutate(userId, (slug) => WorkspaceRepository.restoreMember(slug, userId)),
     [mutate],
   );
 
   const remove = useCallback(
-    (userId: number) => mutate(userId, (slug) => KbRepository.removeMember(slug, userId)),
+    (userId: number) => mutate(userId, (slug) => WorkspaceRepository.removeMember(slug, userId)),
     [mutate],
   );
 
