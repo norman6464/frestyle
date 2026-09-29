@@ -6,11 +6,13 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/ci-backend-go.yml'
+      - '.github/scripts/*pull-with-mirror.sh'
   pull_request:
     branches: [main]
     paths:
       - 'backend/**'
       - '.github/workflows/ci-backend-go.yml'
+      - '.github/scripts/*pull-with-mirror.sh'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -132,12 +134,16 @@ jobs:
       - name: go mod download
         run: go mod download
 
+      - name: イメージの取り直しのスクリプトが正しく切り替えることを確かめる
+        run: "${{ github.workspace }}/.github/scripts/test-pull-with-mirror.sh"
+
       - name: Start PostgreSQL (docker compose)
+        # イメージの取り元（ECR Public）は、ログインしない利用者の転送量の上限に当たることがある。
+        # 取れなければ同じイメージをミラーから取る（pull-with-mirror.sh）。取るイメージは compose の
+        # 定義から読むので、名前はここに書かない。取ってあるイメージは up が取り直さない。
         run: |
-          for i in 1 2 3; do
-            docker compose -f docker-compose.integration.yml pull --quiet && break
-            echo "image pull failed (attempt $i/3), retrying in 10s..."
-            sleep 10
+          for image in $(docker compose -f docker-compose.integration.yml config --images); do
+            "${{ github.workspace }}/.github/scripts/pull-with-mirror.sh" "$image"
           done
           docker compose -f docker-compose.integration.yml up -d --wait
 
