@@ -76,6 +76,7 @@ type stubProfileUserRepo struct {
 	updatedName   string
 	updateCalled  bool
 	foundUserName string
+	findErr       error
 }
 
 func (s *stubProfileUserRepo) UpdateName(_ context.Context, _ uint64, name string) error {
@@ -85,6 +86,9 @@ func (s *stubProfileUserRepo) UpdateName(_ context.Context, _ uint64, name strin
 }
 
 func (s *stubProfileUserRepo) FindByID(_ context.Context, id uint64) (*domain.User, error) {
+	if s.findErr != nil {
+		return nil, s.findErr
+	}
 	return &domain.User{ID: id, Name: s.foundUserName}, nil
 }
 
@@ -127,11 +131,10 @@ func doProfileUpdate(t *testing.T, body string) (*httptest.ResponseRecorder, *st
 	users := &stubProfileUserRepo{foundUserName: "既存の名前"}
 	profiles := &stubProfileRepo{}
 	h := NewProfileHandler(
-		profile.NewGetProfileUseCase(profiles),
-		profile.NewUpdateProfileUseCase(profiles),
+		profile.NewGetProfileUseCase(profiles, users),
+		profile.NewUpdateProfileUseCase(profiles, users),
 		profile.NewUpdateStatusUseCase(profiles),
 		profile.NewListMyIdentitiesUseCase(stubIdentityRepo{}),
-		users,
 	)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -141,6 +144,58 @@ func doProfileUpdate(t *testing.T, body string) (*httptest.ResponseRecorder, *st
 	c.Request.Header.Set("Content-Type", "application/json")
 	h.Update(c)
 	return w, users, profiles
+}
+
+func Test_プロフィール取得_User取得失敗時は200を返さない(t *testing.T) {
+	users := &stubProfileUserRepo{
+		findErr: errors.New("find user failed"),
+	}
+	profiles := &stubProfileRepo{}
+
+	h := NewProfileHandler(
+		profile.NewGetProfileUseCase(profiles, users),
+		profile.NewUpdateProfileUseCase(profiles, users),
+		profile.NewUpdateStatusUseCase(profiles),
+		profile.NewListMyIdentitiesUseCase(stubIdentityRepo{}),
+	)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set(middleware.ContextKeyCurrentUserID, uint64(7))
+	c.Params = gin.Params{{Key: "userId", Value: "me"}}
+	c.Request = httptest.NewRequest("GET", "/profile/me", nil)
+
+	h.Get(c)
+
+	if w.Code != 400 {
+		t.Fatalf("FindByID失敗時は200を返さないはず: status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func Test_ステータス更新_User取得失敗時は200を返さない(t *testing.T) {
+	users := &stubProfileUserRepo{
+		findErr: errors.New("find user failed"),
+	}
+	profiles := &stubProfileRepo{}
+
+	h := NewProfileHandler(
+		profile.NewGetProfileUseCase(profiles, users),
+		profile.NewUpdateProfileUseCase(profiles, users),
+		profile.NewUpdateStatusUseCase(profiles),
+		profile.NewListMyIdentitiesUseCase(stubIdentityRepo{}),
+	)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set(middleware.ContextKeyCurrentUserID, uint64(7))
+	c.Request = httptest.NewRequest("PUT", "/me/status", strings.NewReader(`{}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	h.UpdateStatus(c)
+
+	if w.Code != 400 {
+		t.Fatalf("FindByID失敗時は200を返さないはず: status=%d body=%s", w.Code, w.Body.String())
+	}
 }
 
 func Test_プロフィール更新_displayNameキーで氏名がUpdateNameに渡る(t *testing.T) {

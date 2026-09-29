@@ -16,11 +16,10 @@ func registerProfileRoutes(g *gin.RouterGroup, deps *routeDeps) {
 	profileRepo := persistence.NewProfileRepository(deps.db)
 	identityRepo := persistence.NewUserOidcIdentityRepository(deps.db)
 	profileHandler := NewProfileHandler(
-		profile.NewGetProfileUseCase(profileRepo),
-		profile.NewUpdateProfileUseCase(profileRepo),
+		profile.NewGetProfileUseCase(profileRepo, deps.userRepo),
+		profile.NewUpdateProfileUseCase(profileRepo, deps.userRepo),
 		profile.NewUpdateStatusUseCase(profileRepo),
 		profile.NewListMyIdentitiesUseCase(identityRepo),
-		deps.userRepo,
 	)
 	// :userId は数字 / "me" の両方を受ける。/update はフロント互換の別 path。
 	g.GET("/profile/:userId", profileHandler.Get)

@@ -9,52 +9,111 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 )
 
-// GetProfileUseCase は指定 user のプロフィールを返す。
+// GetProfileUseCase は指定 user のプロフィール表示情報を返す。
 type GetProfileUseCase struct {
 	profiles repository.ProfileRepository
+	users    repository.UserRepository
 }
 
-func NewGetProfileUseCase(p repository.ProfileRepository) *GetProfileUseCase {
-	return &GetProfileUseCase{profiles: p}
+func NewGetProfileUseCase(
+	profiles repository.ProfileRepository,
+	users repository.UserRepository,
+) *GetProfileUseCase {
+	return &GetProfileUseCase{
+		profiles: profiles,
+		users:    users,
+	}
 }
 
-func (u *GetProfileUseCase) Execute(ctx context.Context, userID uint64) (*domain.Profile, error) {
+func (u *GetProfileUseCase) Execute(ctx context.Context, userID uint64) (*domain.ProfileView, error) {
 	if userID == 0 {
 		return nil, errors.New("userID is required")
 	}
-	return u.profiles.FindByUserID(ctx, userID)
+	p, err := u.profiles.FindByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := u.users.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return composeProfileView(userID, p, user), nil
 }
 
-// UpdateProfileUseCase はプロフィールの任意フィールドを upsert する。
+func composeProfileView(userID uint64, p *domain.Profile, user *domain.User) *domain.ProfileView {
+	view := &domain.ProfileView{
+		UserID: userID,
+	}
+
+	if p != nil {
+		view.Bio = p.Bio
+		view.AvatarURL = p.AvatarURL
+		view.StatusText = p.StatusText
+		view.StatusEmoji = p.StatusEmoji
+		view.StatusExpiresAt = p.StatusExpiresAt
+		view.UpdatedAt = p.UpdatedAt
+	}
+
+	if user != nil {
+		view.Name = user.Name
+		view.Email = user.Email
+	}
+
+	return view
+}
+
+// UpdateProfileUseCase は氏名とプロフィールを更新し、プロフィール表示情報を返す。
 type UpdateProfileUseCase struct {
 	profiles repository.ProfileRepository
+	users    repository.UserRepository
 }
 
-func NewUpdateProfileUseCase(p repository.ProfileRepository) *UpdateProfileUseCase {
-	return &UpdateProfileUseCase{profiles: p}
+func NewUpdateProfileUseCase(
+	profiles repository.ProfileRepository,
+	users repository.UserRepository,
+) *UpdateProfileUseCase {
+	return &UpdateProfileUseCase{
+		profiles: profiles,
+		users:    users,
+	}
 }
 
 type UpdateProfileInput struct {
 	UserID     uint64
 	Bio        string
+	Name       string
 	AvatarURL  string
 	StatusText string
 }
 
-func (u *UpdateProfileUseCase) Execute(ctx context.Context, in UpdateProfileInput) (*domain.Profile, error) {
-	if in.UserID == 0 {
+func (u *UpdateProfileUseCase) Execute(ctx context.Context, input UpdateProfileInput) (*domain.ProfileView, error) {
+	if input.UserID == 0 {
 		return nil, errors.New("userID is required")
 	}
+	if input.Name != "" {
+		if err := u.users.UpdateName(ctx, input.UserID, input.Name); err != nil {
+			return nil, err
+		}
+	}
 	p := &domain.Profile{
-		UserID:     in.UserID,
-		Bio:        in.Bio,
-		AvatarURL:  in.AvatarURL,
-		StatusText: in.StatusText,
+		UserID:     input.UserID,
+		Bio:        input.Bio,
+		AvatarURL:  input.AvatarURL,
+		StatusText: input.StatusText,
 	}
 	if err := u.profiles.Upsert(ctx, p); err != nil {
 		return nil, err
 	}
-	return p, nil
+	updatedProfile, err := u.profiles.FindByUserID(ctx, input.UserID)
+	if err != nil {
+		return nil, err
+	}
+	user, err := u.users.FindByID(ctx, input.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return composeProfileView(input.UserID, updatedProfile, user), nil
 }
 
 // UpdateStatusInput は PUT /me/status の入力（段 14）。絵文字・テキスト・失効時刻だけを

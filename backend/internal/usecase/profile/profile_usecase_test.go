@@ -2,10 +2,12 @@ package profile
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/norman6464/frestyle/backend/internal/domain"
+	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 )
 
 type stubProfileRepo struct {
@@ -33,23 +35,90 @@ func (s *stubProfileRepo) UpdateStatus(_ context.Context, userID uint64, emoji, 
 	return s.p, nil
 }
 
+type stubUserRepo struct {
+	repository.UserRepository
+	user         *domain.User
+	findErr      error
+	updateErr    error
+	updatedName  string
+	updateCalled bool
+}
+
+func (s *stubUserRepo) FindByID(_ context.Context, _ uint64) (*domain.User, error) {
+	return s.user, s.findErr
+}
+
+func (s *stubUserRepo) UpdateName(_ context.Context, _ uint64, name string) error {
+	s.updateCalled = true
+	s.updatedName = name
+	return s.updateErr
+}
+
 func Test_プロフィール取得_ユーザーIDが必須(t *testing.T) {
-	uc := NewGetProfileUseCase(&stubProfileRepo{})
+	uc := NewGetProfileUseCase(&stubProfileRepo{}, &stubUserRepo{})
 	if _, err := uc.Execute(context.Background(), 0); err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func Test_プロフィール取得_見つからなければnil(t *testing.T) {
-	uc := NewGetProfileUseCase(&stubProfileRepo{p: nil})
+func Test_プロフィール取得_profile未作成でもユーザー情報を返す(t *testing.T) {
+	users := &stubUserRepo{
+		user: &domain.User{
+			ID:    1,
+			Name:  "テストユーザー",
+			Email: "test@example.com",
+		},
+	}
+	uc := NewGetProfileUseCase(&stubProfileRepo{p: nil}, users)
+
 	got, err := uc.Execute(context.Background(), 1)
-	if err != nil || got != nil {
-		t.Fatalf("expected (nil,nil), got (%v,%v)", got, err)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got == nil {
+		t.Fatal("ProfileView should not be nil")
+	}
+	if got.Name != "テストユーザー" || got.Email != "test@example.com" {
+		t.Fatalf("unexpected ProfileView: %+v", got)
+	}
+}
+
+func Test_プロフィール取得_User取得失敗ならエラーを返す(t *testing.T) {
+	wantErr := errors.New("find user failed")
+
+	uc := NewGetProfileUseCase(
+		&stubProfileRepo{p: &domain.Profile{UserID: 1}},
+		&stubUserRepo{findErr: wantErr},
+	)
+
+	_, err := uc.Execute(context.Background(), 1)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected %v, got %v", wantErr, err)
+	}
+}
+
+func Test_プロフィール更新_UpdateName成功後にUpsert失敗ならエラーを返す(t *testing.T) {
+	wantErr := errors.New("upsert failed")
+	users := &stubUserRepo{}
+	profiles := &stubProfileRepo{err: wantErr}
+
+	uc := NewUpdateProfileUseCase(profiles, users)
+
+	_, err := uc.Execute(context.Background(), UpdateProfileInput{
+		UserID: 1,
+		Name:   "テストユーザー",
+	})
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected %v, got %v", wantErr, err)
+	}
+	if !users.updateCalled {
+		t.Fatal("UpdateName should be called")
 	}
 }
 
 func Test_プロフィール更新_ユーザーIDが必須(t *testing.T) {
-	uc := NewUpdateProfileUseCase(&stubProfileRepo{})
+	uc := NewUpdateProfileUseCase(&stubProfileRepo{}, &stubUserRepo{})
 	if _, err := uc.Execute(context.Background(), UpdateProfileInput{}); err == nil {
 		t.Fatal("expected error")
 	}
@@ -57,7 +126,7 @@ func Test_プロフィール更新_ユーザーIDが必須(t *testing.T) {
 
 func Test_プロフィール更新_永続化する(t *testing.T) {
 	repo := &stubProfileRepo{}
-	uc := NewUpdateProfileUseCase(repo)
+	uc := NewUpdateProfileUseCase(repo, &stubUserRepo{})
 	got, err := uc.Execute(context.Background(), UpdateProfileInput{UserID: 1, Bio: "hi"})
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -70,7 +139,7 @@ func Test_プロフィール更新_永続化する(t *testing.T) {
 // StatusText の入力が status_text へ書かれること。
 func Test_プロフィール更新_status_textに書き込む(t *testing.T) {
 	repo := &stubProfileRepo{}
-	uc := NewUpdateProfileUseCase(repo)
+	uc := NewUpdateProfileUseCase(repo, &stubUserRepo{})
 	if _, err := uc.Execute(context.Background(), UpdateProfileInput{UserID: 1, StatusText: "元気です"}); err != nil {
 		t.Fatalf("err: %v", err)
 	}
