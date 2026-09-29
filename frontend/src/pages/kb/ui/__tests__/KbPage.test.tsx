@@ -972,8 +972,8 @@ describe('KbPage のコメント', () => {
     const toggle = await screen.findByRole('button', { name: 'コメント' });
 
     fireEvent.click(toggle);
-    await waitFor(() => expect(hoisted.listCommentThreads).toHaveBeenCalled());
-    expect(screen.getAllByText('まだコメントはありません。').length).toBeGreaterThan(0);
+    // 取得の結果が画面に届くのは次の刻み。呼ばれたことではなく、描かれたことを待つ。
+    expect((await screen.findAllByText('まだコメントはありません。')).length).toBeGreaterThan(0);
 
     fireEvent.click(toggle);
     await waitFor(() =>
@@ -986,7 +986,8 @@ describe('KbPage のコメント', () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: 'コメント' }));
-    await waitFor(() => expect(hoisted.listCommentThreads).toHaveBeenCalled());
+    // 一覧が描かれてから確かめる（読み込み中は作成フォームを出さないので、その間に見ると何も確かめていない）。
+    await screen.findAllByText('まだコメントはありません。');
 
     expect(screen.queryAllByPlaceholderText('コメントを書く…').length).toBe(0);
   });
@@ -1269,10 +1270,11 @@ describe('KbPage の履歴', () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: '履歴' }));
-    await waitFor(() => expect(hoisted.listPageVersions).toHaveBeenCalled());
+    // 版の一覧が描かれてから確かめる（読み込み中に見ると何も確かめていない）。
+    const firstVersion = (await screen.findAllByRole('button', { name: /初版/ }))[0];
     expect(screen.queryByRole('button', { name: '版を残す' })).not.toBeInTheDocument();
 
-    fireEvent.click((await screen.findAllByRole('button', { name: /初版/ }))[0]);
+    fireEvent.click(firstVersion);
     await waitFor(() => expect(hoisted.editorProps.current?.editable).toBe(false));
     // プレビューの帯が出てから、戻すボタンが無いことを確かめる（帯が出る前だと何も確かめていない）。
     expect(await screen.findByRole('button', { name: '現在の版に戻る' })).toBeInTheDocument();
@@ -1303,6 +1305,8 @@ describe('KbPage の逆リンク（このページを参照しているページ
     await screen.findByTestId('editor');
 
     await waitFor(() => expect(hoisted.listBacklinks).toHaveBeenCalled());
+    // 0 件だと何も描かないので、取得が落ち着いてから確かめる（届く前に見ると何も確かめていない）。
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0));
     expect(screen.queryByText(/このページを参照しているページ/)).not.toBeInTheDocument();
   });
 
