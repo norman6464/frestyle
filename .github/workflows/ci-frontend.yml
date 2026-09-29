@@ -109,6 +109,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 
+      # ふだんの knip は入口にテストを含めるので、テストと見本だけが使うファイルも「使われている」と
+      # 数えて見つけられない（撤去した機能の部品が残っていた）。本番の入口（index.html → src/app/index.tsx）
+      # からたどり、たどり着かない本番のファイルがあれば落とす。対象は knip.json の project の `!` 付き。
+      - name: 本番のコードからたどれないファイルが無いことを確かめる（knip --production）
+        run: pnpm run knip:production
+
   vitest-unit:
     name: Vitest unit
     runs-on: ubuntu-latest

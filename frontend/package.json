@@ -21,6 +21,7 @@
     "e2e:install": "playwright install --with-deps chromium",
     "tailwind:init": "tailwindcss init -p",
     "knip": "knip",
+    "knip:production": "knip --production --include files",
     "md2doc": "tsx scripts/md2doc.mjs",
     "size": "pnpm run build && node scripts/check-initial-load.mjs",
     "storybook": "storybook dev -p 6006",

@@ -4,7 +4,7 @@
     "src/**/*.{test,spec}.{ts,tsx}",
     "e2e/**/*.{ts,tsx}"
   ],
-  "project": ["src/**/*.{ts,tsx}"],
+  "project": ["src/**/*.{ts,tsx}!", "!src/test/**!", "!src/**/__fixtures__/**!"],
   "ignore": ["src/generated/**"],
   "ignoreDependencies": ["@stryker-mutator/api"],
   "rules": {
