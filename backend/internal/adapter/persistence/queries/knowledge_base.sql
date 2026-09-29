@@ -254,8 +254,11 @@ RETURNING *;
 -- archived_at IS NULL も見るのは、呼び出し側の FindPage によるアーカイブ確認から
 -- ここまでの間に別トランザクションがアーカイブを commit する競合を塞ぐため。
 -- 該当 0 行なら既存の ErrPageNotFound 経路で保存トランザクション全体を中止する。
+-- 本文保存のたびに content_revision も 1 増やし、提案の鮮度判定に使う。
 UPDATE pages
-SET last_edited_by_user_id = sqlc.arg(user_id)::bigint, updated_at = now()
+SET last_edited_by_user_id = sqlc.arg(user_id)::bigint,
+    content_revision = content_revision + 1,
+    updated_at = now()
 WHERE workspace_id = sqlc.arg(workspace_id) AND id = sqlc.arg(id) AND archived_at IS NULL;
 
 -- name: SetPagePosition :execrows

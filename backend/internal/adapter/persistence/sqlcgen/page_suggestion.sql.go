@@ -52,7 +52,7 @@ func (q *Queries) CountOpenPageSuggestionsByAuthor(ctx context.Context, arg Coun
 }
 
 const getPageSuggestion = `-- name: GetPageSuggestion :one
-SELECT id, workspace_id, page_id, base_seq, doc, status, author_user_id, created_at, resolved_at, resolved_by_user_id FROM page_suggestions
+SELECT id, workspace_id, page_id, base_seq, base_revision, doc, status, author_user_id, created_at, resolved_at, resolved_by_user_id FROM page_suggestions
 WHERE workspace_id = $1 AND page_id = $2 AND id = $3
 `
 
@@ -72,6 +72,7 @@ func (q *Queries) GetPageSuggestion(ctx context.Context, arg GetPageSuggestionPa
 		&i.WorkspaceID,
 		&i.PageID,
 		&i.BaseSeq,
+		&i.BaseRevision,
 		&i.Doc,
 		&i.Status,
 		&i.AuthorUserID,
@@ -84,12 +85,12 @@ func (q *Queries) GetPageSuggestion(ctx context.Context, arg GetPageSuggestionPa
 
 const insertPageSuggestion = `-- name: InsertPageSuggestion :one
 
-INSERT INTO page_suggestions (id, workspace_id, page_id, base_seq, doc, author_user_id)
+INSERT INTO page_suggestions (id, workspace_id, page_id, base_seq, base_revision, doc, author_user_id)
 VALUES (
-  $1, $2, $3, $4,
-  $5, $6
+  $1, $2, $3, $4, $5,
+  $6, $7
 )
-RETURNING id, workspace_id, page_id, base_seq, doc, status, author_user_id, created_at, resolved_at, resolved_by_user_id
+RETURNING id, workspace_id, page_id, base_seq, base_revision, doc, status, author_user_id, created_at, resolved_at, resolved_by_user_id
 `
 
 type InsertPageSuggestionParams struct {
@@ -97,6 +98,7 @@ type InsertPageSuggestionParams struct {
 	WorkspaceID  uuid.UUID
 	PageID       uuid.UUID
 	BaseSeq      sql.NullInt64
+	BaseRevision sql.NullInt64
 	Doc          json.RawMessage
 	AuthorUserID int64
 }
@@ -105,12 +107,14 @@ type InsertPageSuggestionParams struct {
 // 提案を 1 件作成する。id は Go 側（kbNewID）が UUIDv7 で採番して渡す
 // （page_templates の InsertPageTemplate と同じ流儀）。base_seq はまだ版が無いページへの
 // 提案なら NULL（sqlc.narg）。
+// base_revision は既存提案など基準revisionが不明な場合は NULL。
 func (q *Queries) InsertPageSuggestion(ctx context.Context, arg InsertPageSuggestionParams) (PageSuggestion, error) {
 	row := q.db.QueryRowContext(ctx, insertPageSuggestion,
 		arg.ID,
 		arg.WorkspaceID,
 		arg.PageID,
 		arg.BaseSeq,
+		arg.BaseRevision,
 		arg.Doc,
 		arg.AuthorUserID,
 	)
@@ -120,6 +124,7 @@ func (q *Queries) InsertPageSuggestion(ctx context.Context, arg InsertPageSugges
 		&i.WorkspaceID,
 		&i.PageID,
 		&i.BaseSeq,
+		&i.BaseRevision,
 		&i.Doc,
 		&i.Status,
 		&i.AuthorUserID,
@@ -131,7 +136,7 @@ func (q *Queries) InsertPageSuggestion(ctx context.Context, arg InsertPageSugges
 }
 
 const listOpenPageSuggestions = `-- name: ListOpenPageSuggestions :many
-SELECT id, workspace_id, page_id, base_seq, doc, status, author_user_id, created_at, resolved_at, resolved_by_user_id FROM page_suggestions
+SELECT id, workspace_id, page_id, base_seq, base_revision, doc, status, author_user_id, created_at, resolved_at, resolved_by_user_id FROM page_suggestions
 WHERE workspace_id = $1 AND page_id = $2 AND status = 'open'
 ORDER BY created_at
 LIMIT $3
@@ -160,6 +165,7 @@ func (q *Queries) ListOpenPageSuggestions(ctx context.Context, arg ListOpenPageS
 			&i.WorkspaceID,
 			&i.PageID,
 			&i.BaseSeq,
+			&i.BaseRevision,
 			&i.Doc,
 			&i.Status,
 			&i.AuthorUserID,
@@ -185,7 +191,7 @@ UPDATE page_suggestions
 SET status = $1, resolved_at = $2, resolved_by_user_id = $3,
     base_seq = NULL
 WHERE workspace_id = $4 AND page_id = $5 AND id = $6 AND status = 'open'
-RETURNING id, workspace_id, page_id, base_seq, doc, status, author_user_id, created_at, resolved_at, resolved_by_user_id
+RETURNING id, workspace_id, page_id, base_seq, base_revision, doc, status, author_user_id, created_at, resolved_at, resolved_by_user_id
 `
 
 type ResolvePageSuggestionParams struct {
@@ -221,6 +227,7 @@ func (q *Queries) ResolvePageSuggestion(ctx context.Context, arg ResolvePageSugg
 		&i.WorkspaceID,
 		&i.PageID,
 		&i.BaseSeq,
+		&i.BaseRevision,
 		&i.Doc,
 		&i.Status,
 		&i.AuthorUserID,

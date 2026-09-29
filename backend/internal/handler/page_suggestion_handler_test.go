@@ -31,13 +31,13 @@ var kbCommenterPerm = domain.PagePermission{CanView: true, CanComment: true}
 func Test_提案API_作成にはCanCommentが要る(t *testing.T) {
 	t.Run("閲覧のみでは403", func(t *testing.T) {
 		f := newKbFixture(kbCanView, kbUserID)
-		w := f.do(t, http.MethodPost, kbSuggestionsPath, `{"doc":`+kbValidDoc+`}`)
+		w := f.do(t, http.MethodPost, kbSuggestionsPath, `{"baseRevision":0,"doc":`+kbValidDoc+`}`)
 		assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
 	})
 
 	t.Run("コメントできれば201", func(t *testing.T) {
 		f := newKbFixture(kbCommenterPerm, kbUserID)
-		w := f.do(t, http.MethodPost, kbSuggestionsPath, `{"doc":`+kbValidDoc+`}`)
+		w := f.do(t, http.MethodPost, kbSuggestionsPath, `{"baseRevision":0,"doc":`+kbValidDoc+`}`)
 		require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
 		var got kbPageSuggestionResponse
@@ -55,7 +55,7 @@ func Test_提案API_作成にはCanCommentが要る(t *testing.T) {
 // middleware.KnowledgeBaseWorkspace の段で 404 に落ちることを固定する。
 func Test_提案API_作成は非所属なら404(t *testing.T) {
 	f := newKbFixture(kbCommenterPerm, kbOutsiderUserID)
-	w := f.do(t, http.MethodPost, kbSuggestionsPath, `{"doc":`+kbValidDoc+`}`)
+	w := f.do(t, http.MethodPost, kbSuggestionsPath, `{"baseRevision":0,"doc":`+kbValidDoc+`}`)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.JSONEq(t, `{"error":"not_found"}`, w.Body.String())
 }
@@ -64,7 +64,7 @@ func Test_提案API_作成は非所属なら404(t *testing.T) {
 // invalid_document 応答に落ちることを固定する。
 func Test_提案API_作成で不正なdocは400(t *testing.T) {
 	f := newKbFixture(kbCommenterPerm, kbUserID)
-	w := f.do(t, http.MethodPost, kbSuggestionsPath, `{"doc":{"type":"paragraph"}}`)
+	w := f.do(t, http.MethodPost, kbSuggestionsPath, `{"baseRevision":0,"doc":{"type":"paragraph"}}`)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.JSONEq(t, `{"error":"invalid_document"}`, w.Body.String())
 }
@@ -77,7 +77,7 @@ func Test_提案API_作成でbaseSeqとbaseDocが版を指す(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, v)
 
-	w := f.do(t, http.MethodPost, kbSuggestionsPath, `{"doc":`+kbValidDoc+`}`)
+	w := f.do(t, http.MethodPost, kbSuggestionsPath, `{"baseRevision":0,"doc":`+kbValidDoc+`}`)
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
 
 	var got kbPageSuggestionResponse
@@ -135,7 +135,14 @@ func Test_提案API_採用にはCanEditが要る(t *testing.T) {
 	t.Run("編集できれば200で本文へ反映される", func(t *testing.T) {
 		f := newKbFixture(kbCanEdit, kbUserID)
 		const suggestedDoc = `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"採用後の本文"}]}]}`
-		seeded := &domain.PageSuggestion{WorkspaceID: kbWorkspaceID, PageID: kbChildPageID, Doc: suggestedDoc, AuthorUserID: 99}
+		baseRevision := int64(0)
+		seeded := &domain.PageSuggestion{
+			WorkspaceID:  kbWorkspaceID,
+			PageID:       kbChildPageID,
+			BaseRevision: &baseRevision,
+			Doc:          suggestedDoc,
+			AuthorUserID: 99,
+		}
 		require.NoError(t, f.suggestions.Create(context.Background(), seeded))
 
 		w := f.do(t, http.MethodPost, kbSuggestionAccept(seeded.ID), "")
@@ -200,7 +207,14 @@ func Test_提案API_採用で存在しない提案は404(t *testing.T) {
 // 応答を固定する（同時に 2 人が採用・却下を叩いても片方しか成功しない）。
 func Test_提案API_既に解決済みの提案への操作は409(t *testing.T) {
 	f := newKbFixture(kbCanEdit, kbUserID)
-	seeded := &domain.PageSuggestion{WorkspaceID: kbWorkspaceID, PageID: kbChildPageID, Doc: kbValidDoc, AuthorUserID: 1}
+	baseRevision := int64(0)
+	seeded := &domain.PageSuggestion{
+		WorkspaceID:  kbWorkspaceID,
+		PageID:       kbChildPageID,
+		BaseRevision: &baseRevision,
+		Doc:          kbValidDoc,
+		AuthorUserID: 1,
+	}
 	require.NoError(t, f.suggestions.Create(context.Background(), seeded))
 
 	first := f.do(t, http.MethodPost, kbSuggestionAccept(seeded.ID), "")

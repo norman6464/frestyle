@@ -210,9 +210,9 @@ func registerKnowledgeBaseRoutesWith(
 	// 揃わなくなるため）。
 	sgh := NewPageSuggestionHandler(
 		kb.NewCheckPagePermissionUseCase(permissions),
-		kb.NewCreateSuggestionUseCase(pages, versions, suggestions),
+		kb.NewCreateSuggestionUseCase(pages, versions, suggestions, txManager),
 		kb.NewListOpenPageSuggestionsUseCase(suggestions),
-		kb.NewAcceptPageSuggestionUseCase(suggestions, versions, replaceBlocks, txManager),
+		kb.NewAcceptPageSuggestionUseCase(pages, suggestions, versions, replaceBlocks, txManager),
 		kb.NewRejectPageSuggestionUseCase(suggestions),
 		kb.NewGetPageVersionUseCase(versions),
 		user.NewLookupUserDisplayUseCase(users),

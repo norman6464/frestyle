@@ -91,7 +91,8 @@ func (h *PageSuggestionHandler) toResponse(
 // kbCreateSuggestionRequest は提案作成の入力。doc の中身の検証は
 // kb.CreateSuggestionUseCase（ReplacePageBlocksUseCase と同じ検証パイプライン）が行う。
 type kbCreateSuggestionRequest struct {
-	Doc json.RawMessage `json:"doc" binding:"required"`
+	BaseRevision *int64          `json:"baseRevision" binding:"required"`
+	Doc          json.RawMessage `json:"doc" binding:"required"`
 }
 
 // Create は commenter が保存した本文を提案として積む（CanComment が要る）。
@@ -113,6 +114,7 @@ func (h *PageSuggestionHandler) Create(c *gin.Context) {
 	out, err := h.create.Execute(c.Request.Context(), kb.CreateSuggestionInput{
 		WorkspaceID:  scope.workspaceID,
 		PageID:       pageID,
+		BaseRevision: *req.BaseRevision,
 		Doc:          string(req.Doc),
 		AuthorUserID: scope.userID,
 	})
