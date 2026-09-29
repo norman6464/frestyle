@@ -1,7 +1,7 @@
 /*
  * highlight.js の Atom One Light テーマ（IDE ライト風）を import。
- * rehype-highlight が `<span class="hljs-keyword">` 等にトークンを分けるが、対応する CSS が
- * 無いと色付けされない。 GitHub Light は配色が地味（文字列 #032f62 がほぼ黒に見える等）で
+ * 本文エディタのコードブロック（lowlight）が `<span class="hljs-keyword">` 等にトークンを分けるが、
+ * 対応する CSS が無いと色付けされない。 GitHub Light は配色が地味（文字列 #032f62 がほぼ黒に見える等）で
  * 「赤しか無い」印象になり、 Atom One Dark はダーク背景になってしまうため、 ライト背景のまま
  * キーワード(紫) / 型(橙) / 関数(青) / 文字列(緑) / 数値 がはっきり色分けされる Atom One Light を
  * 採用する（IDE のライトテーマ相当）。
@@ -409,74 +409,6 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-}
-
-/*
- * AI チャットの「考え中...」インジケータ用アニメーション。
- * favicon (3 つの青い三角) を呼吸のように拡大縮小 + フェードさせて「処理中」を可視化する。
- * scale 0.85 ↔ 1.25 / opacity 0.25 ↔ 1 とコントラストを大きめに付け、 視認しやすい呼吸感に。
- */
-@keyframes thinking-pulse {
-  0%, 100% {
-    transform: scale(0.85);
-    opacity: 0.25;
-  }
-  50% {
-    transform: scale(1.25);
-    opacity: 1;
-  }
-}
-
-.animate-thinking {
-  animation: thinking-pulse 1.6s ease-in-out infinite;
-  transform-origin: center;
-}
-
-/*
- * AI チャットのストリーミング表示: 新しく現れた句読点チャンクを 1 回だけフェードイン
- * (Gemini 実物仕様に変更)。
- * rehypeFadeSegments が本文を句読点チャンクの <span class="fade-seg"> に包み、mount 時に
- * このアニメが 1 回再生される。既表示のチャンクは React が DOM を再利用するため再生し直されない。
- * 放出リズムは useSmoothReveal(適応ペーシング)が制御する。
- *
- * 値は Gemini web の実測(配信バンドル + getAnimations 計測)に合わせる:
- *   opacity 0→1 のみ / 400ms / ease-out / fill forwards / 1 回。blur や translate は使わない
- *   (実物に存在しない。inline のまま高さも変えないのでスクロール追従も乱さない)。
- * prefers-reduced-motion: reduce では実質即時表示(animationend は残すため 0 でなく 0.01ms)。
- */
-@keyframes fade-seg-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.fade-seg {
-  animation: fade-seg-in 400ms ease-out both;
-}
-
-/*
- * 画面外で mount したチャンクはフェードを保留し、スクロールで見えた瞬間に再生する
- * (useFadeOnVisible が data-fade を付け外しする)。
- * 保留が付くのは画面外の要素だけなので、見えている本文が隠れることはない。
- */
-.fade-seg[data-fade='defer'] {
-  animation: none;
-  opacity: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fade-seg {
-    animation-duration: 0.01ms;
-  }
-
-  /* 動きを減らす設定では保留もしない（スクロールしても即座に読める状態を優先）。 */
-  .fade-seg[data-fade='defer'] {
-    animation: none;
-    opacity: 1;
   }
 }
 
