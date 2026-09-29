@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Ticket, TicketStatus, TicketType } from '@/entities/ticket';
 import type { SprintState } from '@/entities/sprint';
 import { EmptyState, Loading, FsIllustration } from '@/shared/ui';
@@ -115,6 +115,16 @@ export default function BacklogList({
   // 測り直せるよう callback ref で受ける。
   const [containerRef, narrow] = useContainerNarrowerThan<HTMLDivElement>(BACKLOG_TABLE_MIN_WIDTH);
   const layout: BacklogRowLayout = narrow === true ? 'card' : 'table';
+  // 一覧の取得・作成で groups が変わっても、スプリントの選択肢が同じなら各行へ
+  // 同じ配列を渡す。毎回 filter/map すると memo の行をすべて描き直してしまう。
+  const sprintOptionsKey = JSON.stringify(groups.filter((group) => group.kind === 'sprint').map(({ id, name }) => [id, name]));
+  const { sprintOptions, otherSprintsById } = useMemo(() => {
+    const options = (JSON.parse(sprintOptionsKey) as [string, string][]).map(([id, name]) => ({ id, name }));
+    return {
+      sprintOptions: options,
+      otherSprintsById: new Map(options.map(({ id }) => [id, options.filter((sprint) => sprint.id !== id)])),
+    };
+  }, [sprintOptionsKey]);
 
   if (error) {
     return (
@@ -152,8 +162,6 @@ export default function BacklogList({
   const showTotal = filtered && totalCount !== null && totalCount !== total;
   // 並び替えの「…」はアーカイブでは出さない（アーカイブ済みの並びに意味は無い）。
   const canReorder = !archived;
-  const sprintGroups = groups.filter((g) => g.kind === 'sprint');
-
   return (
     <div ref={containerRef} className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -174,9 +182,7 @@ export default function BacklogList({
 
           {groups.map((group) => {
             // 入れ先に選べるスプリント（いま入っている段は除く）。段の中では同じ配列でよい。
-            const otherSprints = sprintGroups
-              .filter((g) => g.id !== group.id)
-              .map((g) => ({ id: g.id, name: g.name }));
+            const otherSprints = otherSprintsById.get(group.id) ?? sprintOptions;
             return (
               <BacklogGroup
                 key={group.id}

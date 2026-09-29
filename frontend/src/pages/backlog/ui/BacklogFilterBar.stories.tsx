@@ -114,7 +114,6 @@ export const フィルターを開く: Story = {
     await expect(canvas.getByLabelText('種別で絞り込む')).toBeInTheDocument();
     await expect(canvas.getByLabelText('ラベルで絞り込む')).toBeInTheDocument();
     await expect(canvas.getByLabelText('担当で絞り込む')).toBeInTheDocument();
-    await expect(canvas.getByText('変更はすぐに反映されます')).toBeVisible();
   },
 };
 

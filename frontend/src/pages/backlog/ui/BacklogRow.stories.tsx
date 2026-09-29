@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import BacklogRow from './BacklogRow';
 import type { Ticket, TicketStatus, TicketType } from '@/entities/ticket';
 
@@ -80,15 +81,23 @@ const meta = {
     status: devStatus,
     statuses: allStatuses,
     assigneeName: '',
-    selected: false,
     busy: false,
     canEdit: true,
+    canReorder: true,
     indented: false,
     // 期限超過の判定に使う「今日」。story は日付に依存しないよう固定する。
     today: '2026-09-22',
     layout: 'table',
-    onOpen: fn(),
+    isFirst: false,
+    isLast: false,
+    inSprint: false,
+    otherSprints: [],
     onChangeStatus: fn(),
+    onMoveUp: fn(),
+    onMoveDown: fn(),
+    onMoveLast: fn(),
+    onMoveToSprint: fn(),
+    onRemoveFromSprint: fn(),
   },
   decorators: [
     // 行は表の中に置く（role="row" は table の子）。幅は story ごとに parameters.rowWidth で変える
@@ -97,6 +106,14 @@ const meta = {
       <div role="table" className="border border-surface-3" style={{ width: (parameters.rowWidth as number | undefined) ?? 860 }}>
         <Story />
       </div>
+    ),
+    (Story) => (
+      <MemoryRouter initialEntries={['/backlog/p-1']}>
+        <Routes>
+          <Route path="/backlog/:projectId" element={<Story />} />
+          <Route path="/tickets/:id" element={<p>チケット詳細へ移動</p>} />
+        </Routes>
+      </MemoryRouter>
     ),
   ],
 } satisfies Meta<typeof BacklogRow>;
@@ -204,12 +221,12 @@ export const 優先度と状態の見え方: Story = {
  * 別の操作なので開かない。
  */
 export const 行のどこを押しても開く: Story = {
-  play: async ({ canvasElement, args }) => {
-    const row = canvasElement.querySelector<HTMLElement>('[data-ticket-row="t-1"]');
-    await expect(row).not.toBeNull();
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('row')).toBeInTheDocument();
     // 担当の升（押せる物ではない所）を押す。
-    await userEvent.click(within(canvasElement).getByText('未割当'));
-    await expect(args.onOpen).toHaveBeenCalledWith(baseTicket.id);
+    await userEvent.click(canvas.getByText('未割当'));
+    await expect(await canvas.findByText('チケット詳細へ移動')).toBeVisible();
   },
 };
 
@@ -224,21 +241,20 @@ export const カード: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Takuma')).toBeVisible();
     await expect(canvas.getByText('9/24')).toBeVisible();
-    // 詳細をひらく は狭い画面の選択中にだけ出る。
+    // 題名のリンクが独立したチケット画面への入口になる。
+    await expect(canvas.getByRole('link', { name: baseTicket.title })).toHaveAttribute('href', '/tickets/t-1');
     await expect(canvas.queryByRole('button', { name: /詳細をひらく/ })).toBeNull();
   },
 };
 
-/** 狭い画面で選んだカードには「詳細をひらく →」（ST12）。選んだだけでは全画面を開かない。 */
-export const カードで選択中なら詳細をひらける: Story = {
-  args: { layout: 'card', selected: true, onOpenDetail: fn() },
+/** 狭い画面でも題名のリンクから独立したチケット画面を開ける。 */
+export const カードの題名から票を開ける: Story = {
+  args: { layout: 'card' },
   parameters: { rowWidth: 360 },
-  play: async ({ canvasElement, args }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('選択中')).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: /詳細をひらく/ }));
-    await expect(args.onOpenDetail).toHaveBeenCalledWith(baseTicket.id);
-    await expect(args.onOpen).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole('link', { name: baseTicket.title }));
+    await expect(await canvas.findByText('チケット詳細へ移動')).toBeVisible();
   },
 };
 
@@ -250,7 +266,7 @@ export const 状態を変えても行は開かない: Story = {
     await userEvent.click(canvas.getByLabelText(`${baseTicket.title} の状態`));
     await userEvent.click(await within(document.body).findByRole('option', { name: 'リリース' }));
     await expect(args.onChangeStatus).toHaveBeenCalledWith(baseTicket.id, 'st-5');
-    await expect(args.onOpen).not.toHaveBeenCalled();
+    await expect(canvas.queryByText('チケット詳細へ移動')).toBeNull();
   },
 };
 
