@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import KbCommentThreadCard from './KbCommentThreadCard';
 import type { KbCommentThread } from '@/entities/kb';
 
@@ -122,6 +122,10 @@ export const 返信欄を閉じる: Story = {
     await expect(args.onReply).not.toHaveBeenCalled();
 
     await userEvent.click(canvas.getByRole('button', { name: '返信' }));
+    // Escape は欄が受ける。欄にフォーカスが来てから押す。
+    await waitFor(async () => {
+      await expect(canvas.getByPlaceholderText('返信を書く…')).toHaveFocus();
+    });
     await userEvent.keyboard('{Escape}');
     await expect(canvas.queryByPlaceholderText('返信を書く…')).not.toBeInTheDocument();
   },

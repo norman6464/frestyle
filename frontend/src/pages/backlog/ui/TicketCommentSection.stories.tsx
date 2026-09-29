@@ -390,7 +390,15 @@ export const 番号付きで書いて送ると番号付きで出る: Story = {
     await userEvent.click(box);
 
     await userEvent.click(canvas.getByRole('button', { name: '番号付き' }));
+    // 欄を開いたときのフォーカスは遅れて本文へ移る。本文にフォーカスがあるのを待ってから打ち、
+    // 文字が入ったのを確かめてから送る（合間に打つと文字が入らず、空の行だけが送られる）。
+    await waitFor(async () => {
+      await expect(box).toHaveFocus();
+    });
     await userEvent.keyboard('手順');
+    await waitFor(async () => {
+      await expect(box).toHaveTextContent('手順');
+    });
     await userEvent.click(canvas.getByRole('button', { name: '保存' }));
 
     await waitFor(async () => {
