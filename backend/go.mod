@@ -6,11 +6,15 @@ require (
 	cloud.google.com/go/compute/metadata v0.9.0
 	cloud.google.com/go/iam v1.13.0
 	cloud.google.com/go/storage v1.67.1
+	code.dny.dev/ssrf v0.3.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.5
 	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.75.0
 	github.com/gin-gonic/gin v1.12.0
+	github.com/go-resty/resty/v2 v2.17.2
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
+	github.com/jellydator/ttlcache/v3 v3.4.1
+	github.com/otiai10/opengraph/v2 v2.2.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.55.0
 	google.golang.org/api v0.287.1

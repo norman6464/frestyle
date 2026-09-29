@@ -74,7 +74,7 @@ func NewRouter(db *sql.DB, cfg *config.Config, verifier *oidc.Verifier, mailer r
 	registerProfileRoutes(authed, deps)
 	registerRichTextImageRoutes(authed, deps)
 	registerSocialRoutes(authed, deps)
-	registerEmbedRoutes(authed)
+	registerLinkPreviewRoutes(authed)
 	registerKnowledgeBaseRoutes(authed, deps)
 	registerProjectRoutes(authed, deps)
 	registerSprintRoutes(authed, deps)
