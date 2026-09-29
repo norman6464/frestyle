@@ -11,8 +11,6 @@ import (
 
 func role(r domain.GrantRole) *domain.GrantRole { return &r }
 
-func capability(c domain.Capability) *domain.Capability { return &c }
-
 // rank は届いた役割の強さ。届いていなければ 0（何もできない）。
 func rank(r *domain.GrantRole) int {
 	if r == nil {
@@ -23,11 +21,10 @@ func rank(r *domain.GrantRole) int {
 
 func Test_実効権限_届いた役割どおりに決まる(t *testing.T) {
 	cases := []struct {
-		name      string
-		facts     domain.PagePermissionFacts
-		canView   bool
-		canEdit   bool
-		canManage bool
+		name    string
+		facts   domain.PagePermissionFacts
+		canView bool
+		canEdit bool
 	}{
 		{name: "付与が無ければ何もできない", facts: domain.PagePermissionFacts{Member: true}},
 		{
@@ -46,9 +43,9 @@ func Test_実効権限_届いた役割どおりに決まる(t *testing.T) {
 			canView: true, canEdit: true,
 		},
 		{
-			name:    "admin は閲覧と編集に加えて権限も変えられる",
+			name:    "admin は閲覧と編集",
 			facts:   domain.PagePermissionFacts{Member: true, Role: role(domain.GrantRoleAdmin)},
-			canView: true, canEdit: true, canManage: true,
+			canView: true, canEdit: true,
 		},
 		{
 			name:  "未知の役割は届いていないのと同じ",
@@ -60,7 +57,6 @@ func Test_実効権限_届いた役割どおりに決まる(t *testing.T) {
 			got := domain.ResolvePagePermission(tc.facts)
 			assert.Equal(t, tc.canView, got.CanView, "閲覧")
 			assert.Equal(t, tc.canEdit, got.CanEdit, "編集")
-			assert.Equal(t, tc.canManage, got.CanManage, "権限の変更")
 		})
 	}
 }
@@ -69,12 +65,12 @@ func Test_実効権限_届いた役割どおりに決まる(t *testing.T) {
 // 説明できない。
 //
 // **この不変条件は、いまの入力では破りようがない。** 役割の並び（GrantRole.Rank）では
-// editor 以上が必ず viewer 以上で、共有リンクも edit のリンクは view を含む。だから
+// editor 以上が必ず viewer 以上になる。だから
 // ResolvePagePermission の `canView &&` を外しても答えは変わらず、**このテストは
 // その掛け合わせを守っていない**（変異が生き残ることを確認済み）。守れるのは
 // 「編集できる入力では閲覧もできる」という結果の側だけで、それをここで固定する。
 //
-// 掛け合わせ自体は、役割や共有リンクの種類を増やしたときに崩れないための保険として
+// 掛け合わせ自体は、役割の種類を増やしたときに崩れないための保険として
 // 実装に残してある（そのとき初めてこのテストが破れる側に回る）。
 func Test_実効権限_編集できるなら閲覧もできる(t *testing.T) {
 	roles := append([]domain.GrantRole{}, domain.ValidGrantRoles...)
@@ -87,31 +83,6 @@ func Test_実効権限_編集できるなら閲覧もできる(t *testing.T) {
 			}
 		})
 	}
-
-	// 共有リンク経由も同じ（編集のリンクは閲覧もできる）。
-	editLink := domain.ResolvePagePermission(domain.PagePermissionFacts{
-		ShareLinkCapability: capability(domain.CapabilityEdit),
-	})
-	assert.True(t, editLink.CanEdit)
-	assert.True(t, editLink.CanView)
-}
-
-// 共有リンクは広げる方向にしか働かない。ログインしていない相手に「見せる」を足すだけで、
-// 役割は持たないので権限そのものは変えられない。
-func Test_実効権限_共有リンクは既定をリンク自身から得る(t *testing.T) {
-	viewLink := domain.ResolvePagePermission(domain.PagePermissionFacts{
-		ShareLinkCapability: capability(domain.CapabilityView),
-	})
-	assert.True(t, viewLink.CanView)
-	assert.False(t, viewLink.CanEdit, "閲覧のリンクでは編集できない")
-	assert.False(t, viewLink.CanManage, "リンクは役割を持たない")
-
-	editLink := domain.ResolvePagePermission(domain.PagePermissionFacts{
-		ShareLinkCapability: capability(domain.CapabilityEdit),
-	})
-	assert.True(t, editLink.CanView)
-	assert.True(t, editLink.CanEdit)
-	assert.False(t, editLink.CanManage, "編集のリンクでも権限は変えられない")
 }
 
 // 所属していない相手には役割が 1 つも届かない（役割は principals の kind='user' の行から
@@ -122,9 +93,6 @@ func Test_実効権限_共有リンクは既定をリンク自身から得る(t 
 // 主体を辿るので、所属していなければ役割はそもそも届かない — つまり
 // {Member: false, Role: editor} は本番では作れない事実。それをあえて渡すのは、
 // 集め方を変えたときに規則が開かないことを固定するため。
-//
-// 共有リンクの来訪者は所属を持たない（Member は false）が、そちらはリンク自身の
-// ケイパビリティで決まるので別扱いになる。それも一緒に見る。
 func Test_実効権限_所属していなければ役割が届いていても何もできない(t *testing.T) {
 	for _, r := range []domain.GrantRole{
 		domain.GrantRoleAdmin, domain.GrantRoleEditor,
@@ -134,7 +102,7 @@ func Test_実効権限_所属していなければ役割が届いていても何
 			got := domain.ResolvePagePermission(domain.PagePermissionFacts{Member: false, Role: role(r)})
 			assert.False(t, got.CanView, "所属していないのに閲覧できる")
 			assert.False(t, got.CanEdit, "所属していないのに編集できる")
-			assert.False(t, got.CanManage, "所属していないのに権限を変えられる")
+			assert.False(t, got.CanComment, "所属していないのにコメントできる")
 		})
 	}
 
@@ -142,14 +110,7 @@ func Test_実効権限_所属していなければ役割が届いていても何
 	member := domain.ResolvePagePermission(
 		domain.PagePermissionFacts{Member: true, Role: role(domain.GrantRoleAdmin)},
 	)
-	assert.True(t, member.CanManage, "所属していれば admin は権限を変えられる")
-
-	// 共有リンクの来訪者は所属しないが、リンク自身の既定で閲覧できる。
-	visitor := domain.ResolvePagePermission(domain.PagePermissionFacts{
-		Member: false, ShareLinkCapability: capability(domain.CapabilityView),
-	})
-	assert.True(t, visitor.CanView, "リンクの来訪者は所属していなくても読める")
-	assert.False(t, visitor.CanManage, "ただし役割は持たない")
+	assert.True(t, member.CanEdit, "所属していれば admin は編集できる")
 }
 
 // 一覧（役割の列しか集めない経路）と 1 ページ解決が食い違わないことを、
@@ -189,7 +150,6 @@ func Test_ページ権限_visibilityがprivateなら作成者以外には一切�
 			})
 			assert.False(t, got.CanView, "作成者以外なのに閲覧できる")
 			assert.False(t, got.CanEdit, "作成者以外なのに編集できる")
-			assert.False(t, got.CanManage, "作成者以外なのに権限を変えられる")
 			assert.False(t, got.CanComment, "作成者以外なのにコメントできる")
 			assert.False(t, domain.ResolvePageView(r, domain.PageVisibilityPrivate, false),
 				"一覧側でも作成者以外なのに閲覧できる")
@@ -207,17 +167,6 @@ func Test_ページ権限_visibilityがprivateなら作成者以外には一切�
 		})
 	}
 
-	// 共有リンク経由（役割を持たず、ログインしていないので IsOwner は常に false）でも
-	// private なページには一切入れない。共有リンクが「広げる方向にしか働かない」という
-	// 既存の性質を private が上書きすることを固定する。
-	t.Run("共有リンク経由でも作成者以外には見せない", func(t *testing.T) {
-		editCap := domain.CapabilityEdit
-		got := domain.ResolvePagePermission(domain.PagePermissionFacts{
-			ShareLinkCapability: &editCap, Visibility: domain.PageVisibilityPrivate, IsOwner: false,
-		})
-		assert.False(t, got.CanView, "共有リンク経由なのに private なページが見える")
-	})
-
 	// 'public' / 'space' / ゼロ値は、閲覧可否に何の影響も与えない（表示上の区別でしかない）。
 	t.Run("private以外は閲覧可否を一切変えない", func(t *testing.T) {
 		for _, v := range []domain.PageVisibility{
@@ -234,17 +183,16 @@ func Test_ページ権限_visibilityがprivateなら作成者以外には一切�
 	})
 }
 
-// 経路に付与を足しても役割は弱くならない、という合成規則の性質を固定する。
+// 付与を足しても役割は弱くならない、という合成規則の性質を固定する。
 //
 // **これは domain の合成（StrongestGrantRole）についての主張で、本番のページ経路の
-// 証明ではない。** ページ 1 枚 / 一覧の役割は SQL 側が `GREATEST(...)` で畳んだ強さを
-// persistence が `GrantRoleByRank` で戻して作るので、この関数を通らない。
-// SQL 側が同じ性質を持つことは結合テスト
-// （TestKnowledgeBasePageGrantAPI_祖先に付与を足すと子孫も強くなる_Integration）が確かめる。
+// 証明ではない。** ページ 1 枚 / 一覧の役割は SQL 側が max で畳んだ強さを persistence が
+// `GrantRoleByRank` で戻して作るので、この関数を通らない。SQL 側が同じ性質を持つことは
+// 結合テスト（ワークスペースとスペースの 2 段を合わせる経路）が確かめる。
 //
 // ここで固定するのは「規則の側は単調である」こと。SQL とこの規則の両方が単調でなければ、
-// 「親は編集できるが子は編集できない」が起きないとは言えない。
-func Test_ページ権限_経路に付与を足しても役割は弱くならない(t *testing.T) {
+// 「ワークスペースで編集できるのに、スペースの付与を足したら編集できなくなる」が起きないとは言えない。
+func Test_役割_付与を足しても弱くならない(t *testing.T) {
 	pool := []domain.GrantRole{
 		domain.GrantRoleAdmin,
 		domain.GrantRoleEditor,
@@ -271,19 +219,16 @@ func Test_ページ権限_経路に付与を足しても役割は弱くならな
 
 			descendantRole := domain.StrongestGrantRole(descendant)
 			assert.GreaterOrEqual(t, rank(descendantRole), rank(ancestorRole),
-				"祖先 %v に %s を足したら弱くなった", ancestor, added)
+				"%v に %s を足したら弱くなった", ancestor, added)
 
 			got := domain.ResolvePagePermission(
 				domain.PagePermissionFacts{Member: true, Role: descendantRole},
 			)
 			if ancestorPerm.CanView {
-				assert.True(t, got.CanView, "祖先 %v で閲覧できたのに子孫で閲覧できない", ancestor)
+				assert.True(t, got.CanView, "%v で閲覧できたのに足したら閲覧できない", ancestor)
 			}
 			if ancestorPerm.CanEdit {
-				assert.True(t, got.CanEdit, "祖先 %v で編集できたのに子孫で編集できない", ancestor)
-			}
-			if ancestorPerm.CanManage {
-				assert.True(t, got.CanManage, "祖先 %v で権限を変えられたのに子孫で変えられない", ancestor)
+				assert.True(t, got.CanEdit, "%v で編集できたのに足したら編集できない", ancestor)
 			}
 		}
 	}
@@ -330,11 +275,6 @@ func Test_権限モデルの値の検証(t *testing.T) {
 	}
 	assert.False(t, domain.GrantRole("owner").Valid())
 
-	for _, c := range domain.ValidCapabilities {
-		assert.True(t, c.Valid(), string(c))
-	}
-	assert.False(t, domain.Capability("comment").Valid())
-
 	for _, v := range []domain.PageVisibility{
 		domain.PageVisibilityPublic, domain.PageVisibilitySpace, domain.PageVisibilityPrivate,
 	} {
@@ -344,37 +284,7 @@ func Test_権限モデルの値の検証(t *testing.T) {
 	assert.False(t, domain.ValidPageVisibility(domain.PageVisibility("")))
 }
 
-func Test_ページ権限_管理は役割だけで決まる(t *testing.T) {
-	t.Run("admin が届いていれば管理できる", func(t *testing.T) {
-		got := domain.ResolvePagePermission(domain.PagePermissionFacts{
-			Member: true, Role: role(domain.GrantRoleAdmin),
-		})
-		assert.True(t, got.CanManage)
-	})
-
-	t.Run("editor では管理できない", func(t *testing.T) {
-		got := domain.ResolvePagePermission(domain.PagePermissionFacts{
-			Member: true, Role: role(domain.GrantRoleEditor),
-		})
-		assert.False(t, got.CanManage)
-		assert.True(t, got.CanEdit, "編集はできる")
-	})
-
-	t.Run("共有リンクの来訪者は管理できない", func(t *testing.T) {
-		// リンクは役割を持たない（Role が nil）ので、編集のリンクでも管理には届かない。
-		got := domain.ResolvePagePermission(domain.PagePermissionFacts{
-			ShareLinkCapability: capability(domain.CapabilityEdit),
-		})
-		assert.True(t, got.CanEdit)
-		assert.False(t, got.CanManage)
-	})
-
-	t.Run("役割が無ければ管理できない", func(t *testing.T) {
-		assert.False(t, domain.ResolvePagePermission(domain.PagePermissionFacts{Member: true}).CanManage)
-	})
-}
-
-// コメントできるかは commenter 以上の役割 + 共有リンク経由ではないこと、で決まる
+// コメントできるかは commenter 以上の役割で決まる
 // （役割は必ず閲覧も含むので canView との掛け合わせは結果を変えないが、canEdit と同じ
 // 防御的な書き方を踏襲している）。
 func Test_ページ権限_コメントできるか(t *testing.T) {
@@ -395,29 +305,4 @@ func Test_ページ権限_コメントできるか(t *testing.T) {
 			assert.Equal(t, tc.want, got.CanComment)
 		})
 	}
-
-	t.Run("共有リンク経由は役割に関わらずコメントできない", func(t *testing.T) {
-		for _, cap := range domain.ValidCapabilities {
-			c := cap
-			got := domain.ResolvePagePermission(domain.PagePermissionFacts{ShareLinkCapability: &c})
-			assert.False(t, got.CanComment, "capability=%s", c)
-		}
-	})
-
-	// ResolvePagePermission 自身のコメント（付与の口は主体の実在しか確かめず種類を見ないので、
-	// リンクの主体へ admin 相当の役割が実際に張れる）が挙げる、まさにその状態を作って確かめる。
-	// 上の「共有リンク経由は…」のケースは Role が常に nil なので、
-	// `f.Role != nil` の判定だけで既に false になり、`f.ShareLinkCapability == nil` の
-	// 判定が本当に効いているかはそれだけでは分からない（無くても通ってしまう）。
-	// ここは Role と ShareLinkCapability を **両方** 立てて、その判定が実際に効いていることを
-	// 固定する（CanManage も同じ形の防御を持つ・同じ理由でここに書ける）。
-	t.Run("共有リンクの主体にadmin役割が届いていてもコメントできない", func(t *testing.T) {
-		admin := domain.GrantRoleAdmin
-		editCap := domain.CapabilityEdit
-		got := domain.ResolvePagePermission(domain.PagePermissionFacts{
-			Role: &admin, ShareLinkCapability: &editCap,
-		})
-		assert.False(t, got.CanComment)
-		assert.False(t, got.CanManage, "同じ理由でCanManageも道連れで確かめる")
-	})
 }

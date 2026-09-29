@@ -91,7 +91,7 @@ export default function TicketStatusAdmin({ statuses, onCreate, onSetInitial, on
           {statuses.map((status) => (
             <tr key={status.id} className="border-b border-surface-3">
               <td className="py-1.5">
-                <TicketStatusPill name={status.name} color={status.color} category={status.category} />
+                <TicketStatusPill name={status.name} category={status.category} />
               </td>
               <td className="py-1.5 text-[var(--color-text-muted)]">{CATEGORY_LABEL[status.category]}</td>
               <td className="py-1.5">

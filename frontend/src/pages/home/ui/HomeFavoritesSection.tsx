@@ -5,7 +5,7 @@ import { kbSpacesQuery, type KbFavoritePage, type KbSpace } from '@/entities/kb'
 import type { Workspace } from '@/entities/workspace';
 import { KbSearchDialog } from '@/features/kb-search';
 import { EmptyNotice, ErrorNotice, FieldSelect, FsIcon, SkeletonRows } from '@/shared/ui';
-import { homeRowLink, homeTextLink } from '../lib/homeStyles';
+import { homeHeading, homeMeta, homeRowLink, homeRowTitle, homeTextLink } from '../lib/homeStyles';
 import type { HomeResource } from '../model/homeResource';
 
 const NO_SPACES: KbSpace[] = [];
@@ -26,6 +26,8 @@ export interface HomeFavoritesSectionProps {
  * - ワークスペースを切り替えると、お気に入りとページ検索の範囲だけが変わる（履歴と担当は横断のまま）
  * - 「お気に入り一覧をひらく」でこの場で残りを広げる（別のワークスペースへは移さない）
  * - 「〇〇 のページを検索」は選んだワークスペースの題名・本文検索（上部の「移動先を検索」とは別）
+ *
+ * 行は密に、広い幅では 2 列に並べる（自分の担当と同じ作り）。
  */
 export default function HomeFavoritesSection({
   workspaces,
@@ -53,7 +55,7 @@ export default function HomeFavoritesSection({
   return (
     <section aria-labelledby="home-favorites-heading" className="min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="home-favorites-heading" className="text-xl font-bold text-[var(--color-text-primary)]">
+        <h2 id="home-favorites-heading" className={homeHeading}>
           お気に入り
         </h2>
         {workspaces.status === 'ready' && workspaceSlug && (
@@ -66,7 +68,6 @@ export default function HomeFavoritesSection({
           />
         )}
       </div>
-      <p className="mt-2 text-sm text-[var(--color-text-muted)]">このワークスペースに保存したページ</p>
 
       {workspaces.status === 'error' && (
         <div className="mt-4">
@@ -89,20 +90,16 @@ export default function HomeFavoritesSection({
             </div>
           )}
           {favorites.status === 'ready' && shown.length > 0 && (
-            <ul id={listId} aria-label="お気に入りのページ" className="mt-2 divide-y divide-surface-3 border-b border-surface-3">
+            <ul id={listId} aria-label="お気に入りのページ" className="mt-2.5 grid gap-x-[18px] border-t border-surface-3 sm:grid-cols-2">
               {shown.map((page) => (
-                <li key={page.pageId}>
+                <li key={page.pageId} className="border-b border-surface-3">
                   <Link to={`/kb/${encodeURIComponent(page.pageId)}`} className={homeRowLink}>
-                    <FsIcon name="star" className="h-6 w-6 shrink-0 text-brand-600" />
+                    <FsIcon name="star" className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
                     <span className="min-w-0 flex-1">
-                      <span className="block font-semibold text-[var(--color-text-primary)] [overflow-wrap:anywhere] group-hover:text-brand-700">
-                        {page.title || '無題'}
-                      </span>
-                      <span className="mt-1 block text-sm text-[var(--color-text-muted)] [overflow-wrap:anywhere]">
-                        {page.spaceName}
-                      </span>
+                      <span className={homeRowTitle}>{page.title || '無題'}</span>
+                      <span className={`mt-0.5 block ${homeMeta} [overflow-wrap:anywhere]`}>{page.spaceName}</span>
                     </span>
-                    <FsIcon name="arrow-up-right" className="h-5 w-5 shrink-0 text-[var(--color-text-muted)]" />
+                    <FsIcon name="arrow-up-right" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
                   </Link>
                 </li>
               ))}
@@ -110,7 +107,7 @@ export default function HomeFavoritesSection({
           )}
 
           {current && (
-            <div className="mt-4 flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mt-3 flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between">
               {canExpand ? (
                 <button
                   type="button"

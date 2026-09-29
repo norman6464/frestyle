@@ -104,7 +104,6 @@ func TestInvitationRepository_Integration(t *testing.T) {
 		assert.Equal(t, 1, inv.SendCount)
 		assert.True(t, inv.Open(time.Now()))
 		assert.Nil(t, inv.SpaceID)
-		assert.Nil(t, inv.PageID)
 
 		detail, err := f.invitations.FindDetailByTokenHash(ctx, tokenHashOf("tok-1"))
 		require.NoError(t, err)

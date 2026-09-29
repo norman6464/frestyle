@@ -110,6 +110,23 @@ export const コマンドパレットを開く: Story = {
   },
 };
 
+/**
+ * 本文の器の輪は、キーボードで来たときだけ出す。器を押して焦点が乗ったときは「押して来た」印が付き、
+ * そのあと矢印キーや Esc を使っても輪を出さない（画面いっぱいが青く縁取られない）。Tab を押すと印が消える。
+ */
+export const 本文の器の輪はキーボードで来たときだけ: Story = {
+  play: async ({ canvasElement }) => {
+    const main = canvasElement.querySelector('#main-content') as HTMLElement;
+    // スクロールする領域なので、Tab で止まれるままにする（矢印キーで動かすため）。
+    await expect(main).toHaveAttribute('tabindex', '0');
+    await userEvent.click(main);
+    await expect(main).toHaveFocus();
+    await expect(main).toHaveAttribute('data-focus-from', 'pointer');
+    await userEvent.keyboard('{Tab}');
+    await expect(main).not.toHaveAttribute('data-focus-from');
+  },
+};
+
 /** 下へスクロールすると「上に戻る」が右下に出る。 */
 export const 上に戻るが出る: Story = {
   play: async ({ canvasElement }) => {

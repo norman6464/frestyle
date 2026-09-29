@@ -23,7 +23,7 @@ WHERE u.id = $1 AND u.status <> 'deactivated';
 -- GetUserByID と違い status を絞らない。コメントや変更履歴は投稿者が退会・停止した
 -- 後も表示できる必要があるため（消えたことにして応答ごと空にすると、過去の記録が
 -- 誰の発言だったか分からなくなる）。「今選べる相手か」の判定は
--- ListGrantablePrincipals / ListWorkspaceMembers が別に持つ。
+-- ListWorkspaceMembers が別に持つ。
 SELECT u.id, u.name,
        COALESCE(p.avatar_url, '') AS avatar_url,
        COALESCE(p.status_emoji, '') AS status_emoji,

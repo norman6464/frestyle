@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -123,13 +122,13 @@ func newKbFixture(fallback domain.PagePermission, uid uint64) kbFixture {
 	notifications := newKbFakeNotifications()
 	mailer := &kbFakeMailer{}
 	registerKnowledgeBaseRoutesWith(
-		g, pages, perms, perms, provisioner, users, comments, versions, views, favorites, templates, suggestions, tickets, fakeTxManager{}, presigner, tickets,
+		g, pages, perms, provisioner, users, comments, versions, views, favorites, templates, suggestions, tickets, fakeTxManager{}, presigner, tickets,
 		invitations, notifications, mailer, "http://localhost:5173",
 	)
-	// 認証不要のルート（共有リンクの検証・招待の案内）は current user を注入しない group に張る。
+	// 認証不要のルート（招待の案内）は current user を注入しない group に張る。
 	// 本番の NewRouter と同じく認証 middleware の外側なので、ここでも外側に置かないと
 	// 「未認証でも通ること」を検証できない。
-	registerKnowledgeBasePublicRoutesWith(r.Group("/api/v2"), pages, perms, perms, invitations)
+	registerKnowledgeBasePublicRoutesWith(r.Group("/api/v2"), invitations)
 	return kbFixture{
 		pages: pages, perms: perms, provisioner: provisioner, users: users,
 		comments: comments, versions: versions, views: views, favorites: favorites,
@@ -448,7 +447,6 @@ func Test_ナレッジAPI_登録済みルートは全て認可テストの対象
 	for _, e := range kbVersionEndpoints {
 		covered[e.method+" "+kbRoutePattern(e.path)] = true
 	}
-	covered[http.MethodPost+" "+kbShareLinkVerifyPath] = true
 
 	f := newKbFixture(kbCanEdit, kbUserID)
 	registered := map[string]bool{}
@@ -1837,22 +1835,6 @@ func Test_ナレッジアーカイブ_repositoryの失敗は500(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
-func Test_ナレッジ移動_スペース全員宛ての付与が失効する移動は409(t *testing.T) {
-	f := newKbFixture(kbCanEdit, kbUserID)
-	// 移動先スペース以外の「そのスペースの全員」宛てページ付与がサブツリーに残っている状態を
-	// repository が同一トランザクションで検出して中止する経路。move handler は NewSpaceID を
-	// 渡さないので、別スペースのページを親に指定するだけでここへ来る。
-	f.pages.moveErr = repository.ErrPageMoveVoidsSpaceGrant
-
-	w := f.do(t, http.MethodPost,
-		"/api/v2/kb/workspaces/"+kbWorkspaceSlug+"/pages/"+kbChildPageID+"/move",
-		`{"parentId":"`+kbDestPageID+`"}`)
-
-	assert.Equal(t, http.StatusConflict, w.Code,
-		"権限設定と両立しないという業務上の衝突であって、DB 障害ではない")
-	assert.JSONEq(t, `{"error":"space_grant_voided"}`, w.Body.String())
-}
-
 func Test_ナレッジアーカイブ_配下に編集できないページがあれば何もせず403(t *testing.T) {
 	// 子を直接 rename すれば 403 になる相手が、親のアーカイブ経由なら書き換えられる
 	// （見えない子まで巻き込む）状態を塞ぐ。
@@ -1974,78 +1956,9 @@ func Test_ナレッジ取得_本文が未保存でも空のdocを返す(t *testi
 // ここから下は「どの段に張った付与が、どこまで届くか」を API 越しに見る。
 // 打ち消す層は無く、届いた中で最も強い役割がそのページの実効になる。
 
-// kbGetStatus はページ取得の HTTP ステータス（見えれば 200、見えなければ 404）。
-func kbGetStatus(t *testing.T, f kbFixture, pageID string) int {
-	t.Helper()
-	return f.do(t, http.MethodGet, "/api/v2/kb/workspaces/"+kbWorkspaceSlug+"/pages/"+pageID, "").Code
-}
-
-// kbTreeIDs はツリー取得に現れるページ ID を親子まとめて返す。
-func kbTreeIDs(t *testing.T, f kbFixture) []string {
-	t.Helper()
-	w := f.do(t, http.MethodGet, kbFill(kbTreePath, kbWorkspaceSlug, ""), "")
-	require.Equal(t, http.StatusOK, w.Code)
-	var body kbPageTreeRootResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	tree := body.Pages
-	ids := make([]string, 0, 4)
-	var walk func(nodes []kbPageTreeResponse)
-	walk = func(nodes []kbPageTreeResponse) {
-		for _, n := range nodes {
-			ids = append(ids, n.Page.ID)
-			walk(n.Children)
-		}
-	}
-	walk(tree)
-	return ids
-}
-
-// ページ付与は張った段から子孫へ降りる。スペースの役割が 1 つも届いていない相手でも、
-// 子に付与を張ればその子と子孫だけが開く。1 ページの解決と一覧が同じ事実を通ることも
-// ここで見る（片方だけ別の畳み方をすると「開けるのに一覧に出ない」ずれが生まれる）。
-func Test_ナレッジ権限_ページ付与は張った段から子孫へ届く(t *testing.T) {
-	f := newKbFixture(kbNoPerm, kbUserID)
-	const grandchildID = "0198a000-0000-7000-8000-000000000007"
-	childID := kbChildPageID
-	f.pages.addPage(domain.Page{
-		ID: grandchildID, WorkspaceID: kbWorkspaceID, SpaceID: kbSpaceID, ParentID: &childID,
-		Position: "a1a", Title: "grandchild", CreatedByUserID: kbUserID,
-	})
-	me := f.perms.userPrincipal(kbWorkspaceID, kbUserID)
-	require.NotNil(t, me)
-	_, err := f.perms.UpsertPageGrant(
-		context.Background(), kbWorkspaceID, kbChildPageID, me.ID, domain.GrantRoleEditor,
-	)
-	require.NoError(t, err)
-
-	assert.Equal(t, http.StatusNotFound, kbGetStatus(t, f, kbRootPageID),
-		"付与を張った段より上には届かない")
-	assert.Equal(t, http.StatusOK, kbGetStatus(t, f, kbChildPageID))
-	assert.Equal(t, http.StatusOK, kbGetStatus(t, f, grandchildID), "子孫にも降りる")
-	assert.Empty(t, kbTreeIDs(t, f),
-		"開ける child も、届いていない root の配下なのでツリーには出ない（解決と一覧で畳み方が食い違わない）")
-}
-
-// 付与は足し合わせて最も強い役割になるだけで、下るほど強くはならない。
-// 根に viewer を張っても、その配下で書けるようにはならない。
-func Test_ナレッジ権限_祖先へのviewer付与は子孫でも閲覧どまり(t *testing.T) {
-	f := newKbFixture(kbNoPerm, kbUserID)
-	me := f.perms.userPrincipal(kbWorkspaceID, kbUserID)
-	require.NotNil(t, me)
-	_, err := f.perms.UpsertPageGrant(
-		context.Background(), kbWorkspaceID, kbRootPageID, me.ID, domain.GrantRoleViewer,
-	)
-	require.NoError(t, err)
-
-	assert.Equal(t, http.StatusOK, kbGetStatus(t, f, kbChildPageID), "根に張った viewer は子にも届く")
-	w := f.do(t, http.MethodPatch,
-		"/api/v2/kb/workspaces/"+kbWorkspaceSlug+"/pages/"+kbChildPageID, `{"title":"改訂"}`)
-	assert.Equal(t, http.StatusForbidden, w.Code, "viewer のままなので子でも書き込めない")
-}
-
 func Test_ナレッジ移動_配下に編集できないページがあれば何も書き換えず403(t *testing.T) {
-	// 移動はサブツリーごと動くので、子孫の祖先の並びが変わる ＝ そこから継承される
-	// 権限が変わる。操作者から見えない子孫の権限が、本人の知らないうちに書き換わる状態を塞ぐ。
+	// 移動はサブツリーごと動くので、スペースをまたげば子孫の権限も変わる。操作者から
+	// 見えない子孫の権限が、本人の知らないうちに書き換わる状態を塞ぐ。
 	// アーカイブと同じ判定に揃えてある（片方だけ緩いと、結局そちらから同じ結果を作れる）。
 	//
 	// 親より弱い子は本番では起こらない。fake でだけ作れる形をわざと作って、

@@ -1,10 +1,9 @@
 package domain
 
-// Capability はページに対してできることの単位。share_links が使う。
+// Capability はページに対してできることの単位（閲覧 / 編集）。実効権限の Allows が受け取る。
 //
-// コメント（SpaceRole.CanComment）はここには入れない。コメント機能そのものが段 4 で、
-// 共有リンクに渡す既定としてまだ意味を持たないため。必要になった時点で値を 1 つ足す
-// （DB 側の CHECK と ValidCapabilities の両方を同時に増やすこと）。
+// コメント（GrantRole.CanComment）はここには入れない。コメントできるかは役割の写像で決まり、
+// ケイパビリティとして外から渡す場面が無いため。保存する値ではないので、検証用の一覧も持たない。
 type Capability string
 
 const (
@@ -14,16 +13,3 @@ const (
 	// （ResolvePagePermission が edit に view を含める）。
 	CapabilityEdit Capability = "edit"
 )
-
-// ValidCapabilities は保存を許すケイパビリティの一覧。
-var ValidCapabilities = []Capability{CapabilityView, CapabilityEdit}
-
-// Valid は既知のケイパビリティかを返す（保存前の検証に使う）。
-func (c Capability) Valid() bool {
-	for _, v := range ValidCapabilities {
-		if v == c {
-			return true
-		}
-	}
-	return false
-}

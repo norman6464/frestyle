@@ -55,17 +55,19 @@ describe('BacklogQuickFilters', () => {
     expect(onChange).toHaveBeenLastCalledWith(null);
   });
 
-  it('期限切れが 1 件以上のときだけ赤で出す', () => {
+  it('期限切れが 1 件以上のときだけ太字で出し、色は付けない', () => {
     const { unmount } = render(
       <BacklogQuickFilters counts={{ ...counts, overdue: 2 }} value={null} filtered={false} onChange={vi.fn()} />,
     );
     // 同じ数字が他のタブにも出ることがあるので、期限切れのボタンの中で探す。
-    expect(within(screen.getByRole('button', { name: /期限切れ/ })).getByText('2')).toHaveClass('text-danger-ink');
-    expect(within(screen.getByRole('button', { name: /未割り当て/ })).getByText('2')).not.toHaveClass('text-danger-ink');
+    const overdueCount = within(screen.getByRole('button', { name: /期限切れ/ })).getByText('2');
+    expect(overdueCount).toHaveClass('font-semibold');
+    expect(overdueCount).not.toHaveClass('text-danger-ink');
+    expect(within(screen.getByRole('button', { name: /未割り当て/ })).getByText('2')).not.toHaveClass('font-semibold');
     unmount();
 
     render(<BacklogQuickFilters counts={{ ...counts, overdue: 0 }} value={null} filtered={false} onChange={vi.fn()} />);
-    expect(within(screen.getByRole('button', { name: /期限切れ/ })).getByText('0')).not.toHaveClass('text-danger-ink');
+    expect(within(screen.getByRole('button', { name: /期限切れ/ })).getByText('0')).not.toHaveClass('font-semibold');
   });
 
   it('件数がまだ取れていなければ数字を出さず、タブだけ出す', () => {

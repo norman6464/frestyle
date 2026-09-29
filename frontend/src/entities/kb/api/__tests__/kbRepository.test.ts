@@ -289,7 +289,6 @@ describe('KbRepository', () => {
           page,
           doc: null,
           canEdit: true,
-          canManage: false,
           workspaceCanEdit: true,
           ancestors: null,
           canComment: true,

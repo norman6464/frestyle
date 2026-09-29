@@ -42,8 +42,7 @@ export interface KbIcon {
 /**
  * 「最終編集者」の参照 1 件。
  *
- * name は表示名で、**引けなければ空文字**（backend が行を落とさずそう返す。
- * KbGrantablePrincipal と同じ約束）。
+ * name は表示名で、**引けなければ空文字**（backend が行を落とさずそう返す）。
  */
 export interface KbEditorRef {
   userId: number;
@@ -148,13 +147,6 @@ export interface KbResolvedPage {
   page: KbPage;
   doc: unknown;
   canEdit: boolean;
-  /**
-   * このページの権限を変えられるか（共有ボタンを出すかの判定に使う）。
-   *
-   * ナレッジは付与（grant）だけで解決する木で、打ち消す層を持たない。したがって
-   * canEdit を弱める例外も無く、canManage は上位から届く権限をそのまま見る値になる。
-   */
-  canManage: boolean;
   /**
    * このページではなく**ワークスペース全体**への書き込み資格。雛形の作成・削除は
    * ワークスペース全体の編集者(editor)以上で判定するため、こちらで出し分ける。
@@ -269,37 +261,9 @@ export interface KbRecentPage {
 }
 
 /**
- * ページ自身に張られた既定の役割 1 件。
- *
- * **「このページを見られる人」ではない。** 返るのはこの段で足した行だけで、
- * ワークスペース / スペース / 祖先のページから届いている相手は含まれない。
- * 空でも「誰も見られない」ではなく「この段では何も足していない」の意味になる。
- */
-export interface KbPageGrant {
-  pageId: string;
-  principalId: string;
-  role: GrantRole;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * 権限を張れる相手 1 件。
- *
- * name は表示名で、**引けなかった場合は空文字**（backend が行を落とさずそう返す）。
- * 画面もそれに合わせて行を消さない — 消すと、その相手に張った権限が一覧に出たまま
- * 選べなくなる。
- */
-export interface KbGrantablePrincipal {
-  id: string;
-  kind: 'user' | 'group' | 'space_all';
-  name: string;
-}
-
-/**
  * コメントの投稿者・解決者などの参照 1 件。
  *
- * name は表示名で、**引けなければ空文字**（KbEditorRef / KbGrantablePrincipal と同じ約束）。
+ * name は表示名で、**引けなければ空文字**（KbEditorRef と同じ約束）。
  */
 export interface KbCommentAuthorRef {
   userId: number;

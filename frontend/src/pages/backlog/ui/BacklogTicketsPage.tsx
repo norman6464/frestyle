@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ConfirmModal, EmptyState, ErrorNotice, FsIllustration, Loading } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
-import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
 import { useStableCallback } from '@/shared/lib/hooks/useStableCallback';
 import { getApiError } from '@/shared/lib/classifyApiError';
-import { TicketRepository, formatTicketKey, type TicketSavedFilter } from '@/entities/ticket';
+import { TicketRepository, type TicketSavedFilter } from '@/entities/ticket';
 import type { SprintState } from '@/entities/sprint';
 import { useTicketList } from '../model/useTicketList';
 import { useTicketMasters } from '../model/useTicketMasters';
@@ -18,20 +18,15 @@ import BacklogList, { BACKLOG_GROUP_ID, type BacklogGroupModel } from './Backlog
 import BacklogFrame from './BacklogFrame';
 import { useSprints } from '../model/useSprints';
 import { useSprintTickets } from '../model/useSprintTickets';
-import TicketDetailPanel from './TicketDetailPanel';
 import { formatPeriodShort } from '../lib/dueDate';
 import { sprintConfirmText } from '../lib/sprintConfirm';
 import { nextSprintName } from '../lib/nextSprintName';
+import { ticketLinkState } from '../lib/ticketLinkState';
 import { useBacklogFilterCounts } from '../model/useBacklogFilterCounts';
 import { useSavedFilters } from '../model/useSavedFilters';
-import { useBacklogReorder } from '../model/useBacklogReorder';
 import { useWriteOutcomes } from '../model/useWriteOutcomes';
 import { savedFilterErrorMessage } from '../lib/savedFilterError';
-import { focusTicketRow } from '../lib/focusTicketRow';
-import BacklogSelectionBand from './BacklogSelectionBand';
 import SaveFilterControl from './SaveFilterControl';
-import TicketDetailPane from './TicketDetailPane';
-import TicketDetailSheet from './TicketDetailSheet';
 
 export interface BacklogTicketsPageProps {
   /** アーカイブの面か。経路が決める（/backlog/:projectId は現役、/archive はアーカイブ）。 */
@@ -47,11 +42,13 @@ export interface BacklogTicketsPageProps {
 export default function BacklogTicketsPage({ archived = false }: BacklogTicketsPageProps) {
   const { workspaceSlug, project } = useBacklogOutlet();
   const { showToast } = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // 面・アーカイブの切り替え・選択中のチケットは URL に持つ。チケットを開いて戻ったときに
-  // 絞り込みと選択が残るようにするため（useBacklogUrlState）。
+  // 面・アーカイブの切り替えと絞り込みは URL に持つ。チケットを開いて戻ったときに絞り込みが
+  // 残るようにするため（useBacklogUrlState）。開いたチケットそのものは選ばず、独立した票
+  // （/tickets/:id）へ直接移る —— 一覧の上に重ねる面は持たない。
   const {
-    selectedId,
     statusId,
     typeId,
     labelId,
@@ -63,7 +60,6 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
     assignee,
     filtered,
     quickFilter,
-    selectTicket,
     setStatusId,
     setTypeId,
     setLabelId,
@@ -75,16 +71,6 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
     clearFilters,
     reset,
   } = useBacklogUrlState();
-  // 狭い画面では、選ぶ（帯が出る）と開く（全画面の詳細）を別の操作にする（設計ボード ST12・ST13）。
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-  // 並び替えの結果（「1 つ上へ動かしました」）。選択中の帯に出し、読み上げにも通知する。
-  const [moveMessage, setMoveMessage] = useState<string | null>(null);
-  // 広い画面（詳細を右の列に出す）か、狭い画面（一覧の下の帯と全画面の詳細）か。
-  // どちらか片方しか描かない —— 同じ詳細を 2 か所に描くと取得も下書きも二重に動く。
-  const wide = !useMediaQuery('(max-width: 767px)');
-  // 行を押して開いたチケット。そのときだけ詳細の見出しへフォーカスを移す（URL から選択付きで
-  // 開いた直後にフォーカスを奪わない）。
-  const [focusDetailFor, setFocusDetailFor] = useState<string | null>(null);
   // 保存した絞り込みへの操作（保存・改名・削除）の結果。操作した場所（タブの並びの下）に出す。
   const [filterMessage, setFilterMessage] = useState<string | null>(null);
   // 保存した絞り込みの削除は確認を挟む（消すと同じ条件を組み直すしかない）。
@@ -176,29 +162,13 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
     if (shownProject.current !== null && shownProject.current !== id) {
       reset();
       setFilterMessage(null);
-      setMobileDetailOpen(false);
-      setMoveMessage(null);
     }
     shownProject.current = id;
   }, [project.id, reset]);
 
   const enabled = !masters.loading && !masters.error && masters.statuses.length > 0;
-  const selectedTicket = selectedId ? list.tickets.find((t) => t.id === selectedId) ?? null : null;
-  const parentTicket = selectedTicket?.parentId
-    ? list.tickets.find((t) => t.id === selectedTicket.parentId)
-    : undefined;
-  const selectedKey = selectedTicket ? formatTicketKey(project.key, selectedTicket.number) : null;
 
-  // 並び替えは「選んだ行が入っている段の中」で行う。段をまたぐ移動は別の操作（スプリントへ
-  // 入れる／から出す）。どちらも選択中の帯から。
-  const reorder = useBacklogReorder(groups, selectedTicket?.id ?? null, {
-    onMove: list.move,
-    // 段の中の順はスプリントの中身（ID の並び）で決まる。moveTicket がその中身を取り直し終える
-    // まで待つので、並べ替えが終わった時点で段の中の順も変わっている。
-    onMoveInSprint: sprints.moveTicket,
-  });
-
-  // 一覧の行で状態を変えた結果（行ごと）。
+  // 一覧の行で状態や並びを変えた結果（行ごと。PX04）。
   const rowOutcomes = useWriteOutcomes<string>();
 
   /** 結果が分からない失敗のあとの「最新を確認」。一覧・件数・状態と種別の選択肢を取り直す。 */
@@ -207,12 +177,6 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
     masters.refresh();
     counts.refresh();
     saved.refresh();
-  };
-
-  /** 並び替えの結果を帯に出す。失敗は知らせて、一覧は動かさない。 */
-  const announceMove = (action: Promise<unknown>, doneMessage: string, failMessage: string) => {
-    setMoveMessage(null);
-    void action.then(() => setMoveMessage(doneMessage)).catch(() => showToast('error', failMessage));
   };
 
   const handleEnable = async () => {
@@ -229,22 +193,14 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
     setEnabling(false);
   };
 
-  const handleSelect = (ticketId: string) => {
-    selectTicket(ticketId);
-    setFocusDetailFor(ticketId);
-    setMoveMessage(null);
-  };
-
-  // 一覧の行へ渡す関数。行は memo なので、いつも同じ関数を全行へ渡す。中で使う値（URL の選択・
-  // 一覧の書き込み・取り直し）は操作のたびに作り直されるので、useCallback ではなく
-  // useStableCallback で「同じ入れ物・中身は最新」にする。JSX の中で作ると条件分岐ごと作り直され、
-  // 1 行の変化で全行を描き直す。
-  const handleRowOpen = useStableCallback((ticketId: string) => handleSelect(ticketId));
+  // 一覧の行へ渡す関数。行は memo なので、いつも同じ関数を全行へ渡す。中で使う値（一覧の書き込み・
+  // 取り直し）は操作のたびに作り直されるので、useCallback ではなく useStableCallback で
+  // 「同じ入れ物・中身は最新」にする。JSX の中で作ると条件分岐ごと作り直され、1 行の変化で
+  // 全行を描き直す。
   const handleRowVerify = useStableCallback(() => refreshAll());
-  const handleOpenDetail = useStableCallback(() => setMobileDetailOpen(true));
-  const handleCreateRow = useStableCallback((title: string) =>
-    list.createTicket({ title }).then((t) => handleSelect(t.id)),
-  );
+  const handleCreateRow = useStableCallback(async (title: string) => {
+    await list.createTicket({ title });
+  });
   // 行の状態変更の結果は、その行のすぐ下に出す（PX04。トーストだけにしない）。
   const handleChangeRowStatus = useStableCallback((ticketId: string, nextStatusId: string) => {
     const name = masters.statuses.find((st) => st.id === nextStatusId)?.name ?? '選んだ状態';
@@ -256,27 +212,76 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
     });
   });
 
-  /** 狭い画面の全画面の詳細から一覧へ戻る。選択は残し、開いた行へフォーカスを戻す。 */
-  const backToList = () => {
-    setMobileDetailOpen(false);
-    if (selectedId) focusTicketRow(selectedId);
-  };
+  /** チケットが入っている段（並び替えは同じ段の中だけ）。 */
+  const groupOf = (ticketId: string) => groups.find((g) => g.tickets.some((t) => t.id === ticketId));
+  /** 同じ段の中で 1 つ動かす。段の種類（バックログ／スプリント）で呼ぶ口が違う。 */
+  const moveWithinGroup = (ticketId: string, group: BacklogGroupModel, anchorId: string, after: boolean) =>
+    group.kind === 'sprint' ? sprints.moveTicket(ticketId, anchorId, after) : list.move(ticketId, { anchorTicketId: anchorId, anchorAfter: after });
 
-  /**
-   * 選択を外して詳細を閉じる（選択解除・Escape）。閉じたら起点の行へフォーカスを戻す
-   * （設計ボード ST14 の 04）。狭い画面の「一覧へ」は別の操作 —— 選択は残る。
-   */
-  const closeDetail = () => {
-    const id = selectedId;
-    selectTicket(null);
-    setMobileDetailOpen(false);
-    setMoveMessage(null);
-    if (id) focusTicketRow(id);
-  };
+  const handleMoveUp = useStableCallback((ticketId: string) => {
+    const group = groupOf(ticketId);
+    const index = group?.tickets.findIndex((t) => t.id === ticketId) ?? -1;
+    if (!group || index <= 0) return;
+    void rowOutcomes.run(ticketId, () => moveWithinGroup(ticketId, group, group.tickets[index - 1].id, false), {
+      saving: '1 つ上へ動かしています…',
+      saved: '1 つ上へ動かしました',
+      fallback: '並び替えできませんでした。',
+    });
+  });
 
+  const handleMoveDown = useStableCallback((ticketId: string) => {
+    const group = groupOf(ticketId);
+    const index = group?.tickets.findIndex((t) => t.id === ticketId) ?? -1;
+    if (!group || index < 0 || index >= group.tickets.length - 1) return;
+    void rowOutcomes.run(ticketId, () => moveWithinGroup(ticketId, group, group.tickets[index + 1].id, true), {
+      saving: '1 つ下へ動かしています…',
+      saved: '1 つ下へ動かしました',
+      fallback: '並び替えできませんでした。',
+    });
+  });
+
+  const handleMoveLast = useStableCallback((ticketId: string) => {
+    const group = groupOf(ticketId);
+    const index = group?.tickets.findIndex((t) => t.id === ticketId) ?? -1;
+    if (!group || index < 0 || index >= group.tickets.length - 1) return;
+    void rowOutcomes.run(
+      ticketId,
+      // バックログの「末尾へ」はアンカー無しの移動（末尾へ足す）。スプリントは末尾の 1 件を
+      // アンカーにして after で入れる（口の形がそもそも違う）。
+      () =>
+        group.kind === 'sprint'
+          ? sprints.moveTicket(ticketId, group.tickets[group.tickets.length - 1].id, true)
+          : list.move(ticketId, {}),
+      { saving: '末尾へ動かしています…', saved: '末尾へ動かしました', fallback: '並び替えできませんでした。' },
+    );
+  });
+
+  const handleMoveToSprint = useStableCallback((ticketId: string, sprintId: string) => {
+    const name = openSprints.find((s) => s.id === sprintId)?.name ?? 'スプリント';
+    // どの段に出すかはスプリントの中身で決まる。入れたら取り直さないと、入れたのに
+    // バックログの段に残って見える（スプリント一覧の件数だけが変わる）。
+    void rowOutcomes.run(ticketId, () => sprints.addTicket(sprintId, ticketId).then(() => reloadSprintTickets()), {
+      saving: `「${name}」へ入れています…`,
+      saved: `「${name}」へ入れました`,
+      fallback: 'スプリントへ入れられませんでした。',
+    });
+  });
+
+  const handleRemoveFromSprint = useStableCallback((ticketId: string) => {
+    void rowOutcomes.run(ticketId, () => sprints.removeTicket(ticketId).then(() => reloadSprintTickets()), {
+      saving: 'スプリントから出しています…',
+      saved: 'スプリントから出しました',
+      fallback: 'スプリントから出せませんでした。',
+    });
+  });
+
+  /** 「課題をつくる」。作ったら独立した票（/tickets/:id）へ移り、その場で書き込める。 */
   const handleCreateBlank = () =>
     void withToastOnFailure(
-      () => list.createTicket({ title: '無題のチケット' }).then((t) => handleSelect(t.id)),
+      () =>
+        list
+          .createTicket({ title: '無題のチケット' })
+          .then((created) => navigate(`/tickets/${created.id}`, { state: ticketLinkState(location) })),
       'チケットを作成できませんでした。',
     );
 
@@ -371,87 +376,11 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
       });
   };
 
-  /**
-   * 選択中の帯（ST14 の 01）。広い画面では詳細の上、狭い画面では一覧の下。中身は同じで、
-   * 狭い画面だけ「選択した課題をひらく」が付く。
-   */
-  const selectionBand = (variant: 'header' | 'bottom') =>
-    selectedTicket && selectedKey ? (
-      <BacklogSelectionBand
-        variant={variant}
-        selectedKey={selectedKey}
-        groupName={reorder.ownerGroup?.name ?? null}
-        isFirst={reorder.isFirst}
-        isLast={reorder.isLast}
-        canReorder={!archived}
-        onMoveUp={() => announceMove(reorder.moveUp(), `${selectedKey} を 1 つ上へ動かしました`, '並び替えできませんでした。')}
-        onMoveDown={() => announceMove(reorder.moveDown(), `${selectedKey} を 1 つ下へ動かしました`, '並び替えできませんでした。')}
-        onMoveLast={() => announceMove(reorder.moveLast(), `${selectedKey} を末尾へ動かしました`, '並び替えできませんでした。')}
-        sprints={reorder.otherSprints}
-        onMoveToSprint={(sprintId) =>
-          announceMove(
-            // どの段に出すかはスプリントの中身で決まる。入れたら取り直さないと、入れたのに
-            // バックログの段に残って見える（スプリント一覧の件数だけが変わる）。
-            sprints.addTicket(sprintId, selectedTicket.id).then(() => reloadSprintTickets()),
-            `${selectedKey} を${reorder.otherSprints.find((s) => s.id === sprintId)?.name ?? 'スプリント'}へ入れました`,
-            'スプリントへ入れられませんでした。',
-          )
-        }
-        onRemoveFromSprint={
-          reorder.ownerGroup?.kind === 'sprint'
-            ? () =>
-                announceMove(
-                  sprints.removeTicket(selectedTicket.id).then(() => reloadSprintTickets()),
-                  `${selectedKey} をスプリントから出しました`,
-                  'スプリントから出せませんでした。',
-                )
-            : undefined
-        }
-        onDeselect={closeDetail}
-        onOpenDetail={variant === 'bottom' ? () => setMobileDetailOpen(true) : undefined}
-        message={moveMessage}
-      />
-    ) : null;
-
-  /** 詳細の中身。広い画面の列と狭い画面の全画面のどちらか片方にだけ差し込む。 */
-  const detailPanel = selectedTicket ? (
-    <TicketDetailPanel
-      key={selectedTicket.id}
-      ticket={selectedTicket}
-      projectKey={project.key}
-      workspaceSlug={workspaceSlug}
-      statuses={masters.statuses}
-      types={masters.types}
-      parentTicket={parentTicket}
-      canEdit
-      busy={list.busyId === selectedTicket.id}
-      allLabels={labels.labels}
-      onUpdate={(ticketId, input) => list.updateTicket(ticketId, input)}
-      // 状態・担当・ラベル・親の結果はパネルが項目のすぐ下に出す（PX04）。ここは失敗を投げ返すだけ。
-      onChangeStatus={(statusId) => list.changeStatus(selectedTicket.id, { statusId })}
-      onAssign={(principalId) => list.assign(selectedTicket.id, principalId)}
-      onUnassign={() => list.unassign(selectedTicket.id)}
-      onArchive={() =>
-        withToastOnFailure(() => list.archiveTicket(selectedTicket.id), 'アーカイブできませんでした。').then(closeDetail)
-      }
-      onRestore={() =>
-        withToastOnFailure(() => list.restoreTicket(selectedTicket.id), '現役に戻せませんでした。').then(closeDetail)
-      }
-      onToggleLabel={(label, attached) =>
-        attached ? list.removeLabel(selectedTicket.id, label.id) : list.addLabel(selectedTicket.id, label)
-      }
-      onCreateLabel={(name, color) => labels.createLabel({ name, color })}
-      onChangeParent={(parentId) => list.changeParent(selectedTicket.id, parentId)}
-      onRefresh={refreshAll}
-    />
-  ) : null;
-
   return (
     <BacklogFrame
       view={archived ? 'archive' : 'backlog'}
       workspaceSlug={workspaceSlug}
       project={project}
-      inert={!wide && mobileDetailOpen}
       headerExtra={
         archived ? null : (
           <>
@@ -467,7 +396,7 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
             )}
 
             {enabled && (
-              <div className="mt-3">
+              <div className="mt-4">
                 <BacklogQuickFilters
                   counts={counts.counts}
                   countsFailed={counts.failed}
@@ -501,27 +430,6 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
       }
       aside={
         <>
-          {/*
-            詳細は画面幅で出し分ける。広い画面は右の列（ST10）、狭い画面は全画面の 1 列（ST13）。
-            全画面へは本文の身元（キー・種別）のリンクから開く。帯に同じ行き先の矢印を置くと
-            入口が 2 つになるので持たない。帯に残すのは選択を解く操作と並び替えだけ。
-          */}
-          {selectedTicket && wide && (
-            <TicketDetailPane
-              key={selectedTicket.id}
-              band={selectionBand('header')}
-              onClose={closeDetail}
-              autoFocus={focusDetailFor === selectedTicket.id}
-            >
-              {detailPanel}
-            </TicketDetailPane>
-          )}
-          {selectedTicket && !wide && (
-            <TicketDetailSheet open={mobileDetailOpen} label={`選択中 ${selectedKey ?? ''}`} onBack={backToList}>
-              {detailPanel}
-            </TicketDetailSheet>
-          )}
-
           {deletingFilter && (
             <ConfirmModal
               isOpen
@@ -607,7 +515,7 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
                   className="mx-4 mt-3 rounded-md border border-surface-3 bg-surface-2 px-3"
                 />
               )}
-              {/* 一覧は残りの高さを使い、狭い画面の選択中の帯はその下に常に見える位置に置く。 */}
+              {/* 一覧は残りの高さを使う。 */}
               <div className="min-h-0 flex-1">
                 <BacklogList
                   filtered={filtered}
@@ -620,14 +528,15 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
                   error={list.error}
                   archived={archived}
                   canEdit
-                  selectedId={selectedId}
                   busyId={list.busyId}
                   nameOf={nameOf}
-                  onSelect={handleRowOpen}
-                  // 狭い画面だけ、選択中のカードに「詳細をひらく」を出す（広い画面は右に開いている）。
-                  onOpenDetail={wide ? undefined : handleOpenDetail}
                   onCreate={handleCreateRow}
                   onChangeStatus={handleChangeRowStatus}
+                  onMoveUp={handleMoveUp}
+                  onMoveDown={handleMoveDown}
+                  onMoveLast={handleMoveLast}
+                  onMoveToSprint={handleMoveToSprint}
+                  onRemoveFromSprint={handleRemoveFromSprint}
                   outcomeOf={rowOutcomes.outcomeOf}
                   onVerify={handleRowVerify}
                   renderGroupAction={(group) =>
@@ -642,7 +551,7 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
                           }
                           void handleChangeSprintState(group.id, group.sprintState);
                         }}
-                        className="rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] transition-colors duration-fast hover:bg-surface-2 disabled:opacity-50"
+                        className="rounded-md border border-surface-3 bg-surface-1 px-3 py-1.5 text-[13px] font-medium text-[var(--color-text-secondary)] transition-colors duration-fast hover:bg-surface-2 disabled:opacity-50"
                       >
                         {group.sprintState === 'active' ? 'スプリントを完了' : 'スプリントを開始'}
                       </button>
@@ -650,7 +559,7 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
                       <button
                         type="button"
                         onClick={() => void handleCreateSprint()}
-                        className="rounded-md border border-surface-3 bg-surface-1 px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] transition-colors duration-fast hover:bg-surface-2"
+                        className="rounded-md border border-surface-3 bg-surface-1 px-3 py-1.5 text-[13px] font-medium text-[var(--color-text-secondary)] transition-colors duration-fast hover:bg-surface-2"
                       >
                         スプリントを作成
                       </button>
@@ -662,8 +571,6 @@ export default function BacklogTicketsPage({ archived = false }: BacklogTicketsP
                   onRetry={list.refresh}
                 />
               </div>
-              {/* 狭い画面の選択中の帯（設計ボード ST12）。一覧の下に出て、開く・並び替え・選択解除を持つ。 */}
-              {!wide && selectedTicket && selectionBand('bottom')}
             </div>
           ))}
       </div>

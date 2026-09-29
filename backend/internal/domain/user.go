@@ -42,7 +42,7 @@ func (u User) IsActive() bool { return u.Status == UserStatusActive }
 //
 // 過去の記録（コメント・変更履歴）は投稿者が退会・停止した後も表示できる必要があるため、
 // これ自体は現在のアカウント状態で絞り込まない。「今選べる相手か」の判定は
-// ListGrantablePrincipals / ListWorkspaceMembers が別に持つ。
+// ListWorkspaceMembers が別に持つ。
 type UserDisplay struct {
 	UserID uint64 `json:"userId"`
 	Name   string `json:"name"`

@@ -52,7 +52,7 @@ RETURNING *;
 -- name: DeleteWorkspace :execrows
 -- ワークスペースを消す。**そこに所属している人がいるものは消さない**（WHERE で弾く）。
 --
--- 配下（spaces / pages / blocks / page_paths / principals / grants / 共有リンク /
+-- 配下（spaces / pages / blocks / page_paths / principals / grants /
 -- workspace_members）はすべて workspaces への FK が ON DELETE CASCADE で連なっているので、
 -- この 1 文で消える。
 --

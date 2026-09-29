@@ -30,8 +30,7 @@ export interface KbCommentsPanelProps {
  * KbCommentsPanel はコメントパネルの中身。未解決を先に、解決済みを後に並べる。
  *
  * 状態は受け取るだけで、自分では取りに行かない（取得は useKbComments が持つ）。
- * SharePanel と同じ流儀 — こうしておくと、読み込み中・空・失敗の見た目を story に
- * そのまま並べられる。
+ * こうしておくと、読み込み中・空・失敗の見た目を story にそのまま並べられる。
  */
 export default function KbCommentsPanel({
   threads,

@@ -34,7 +34,7 @@ func (r *invitationRepository) queries(ctx context.Context) *sqlcgen.Queries {
 }
 
 // runInTx は 1 つのトランザクションを開き、その中でだけ有効な Queries を fn に渡す。
-// 外側の DoInTx が開いたトランザクションがあれば相乗りする（shareLinkRepository.runInTx と同じ）。
+// 外側の DoInTx が開いたトランザクションがあれば相乗りする。
 func (r *invitationRepository) runInTx(ctx context.Context, fn func(qtx *sqlcgen.Queries) error) error {
 	if tx, ok := getTx(ctx); ok {
 		return fn(sqlcgen.New(tx))
@@ -74,7 +74,6 @@ func toDomainInvitation(row sqlcgen.Invitation) domain.Invitation {
 		WorkspaceID:      row.WorkspaceID.String(),
 		Scope:            domain.InvitationScope(row.Scope),
 		SpaceID:          nullUUIDPtr(row.SpaceID),
-		PageID:           nullUUIDPtr(row.PageID),
 		Role:             domain.GrantRole(row.Role),
 		Email:            row.Email,
 		InviteeName:      row.InviteeName,
@@ -123,15 +122,13 @@ func invitationTargetNotFound(scope domain.InvitationScope) error {
 	switch scope {
 	case domain.InvitationScopeSpace:
 		return repository.ErrSpaceNotFound
-	case domain.InvitationScopePage:
-		return repository.ErrPageNotFound
 	default:
 		return repository.ErrWorkspaceNotFound
 	}
 }
 
 // invitationWriteError は招待の書き込みで起きた FK 違反を「誰が無いのか」に翻訳する。
-// invitations は場所（workspace / space / page）と人（*_by_user_id、送信履歴の sent_by）の
+// invitations は場所（workspace / space）と人（*_by_user_id、送信履歴の sent_by）の
 // 両方へ FK を持つので、制約名を見ないとどちらの入力の誤りか区別できない。
 func invitationWriteError(err error, scope domain.InvitationScope) error {
 	name, ok := foreignKeyViolationConstraint(err)
@@ -165,8 +162,7 @@ func (r *invitationRepository) Upsert(ctx context.Context, in repository.Invitat
 		return nil, repository.ErrWorkspaceNotFound
 	}
 	spaceID, sok := optionalKbID(in.SpaceID)
-	pageID, pok := optionalKbID(in.PageID)
-	if !sok || !pok {
+	if !sok {
 		return nil, invitationTargetNotFound(in.Scope)
 	}
 	// invited_by_user_id / last_sent_by_user_id は bigint。範囲外の実行者では 1 行も書けないので
@@ -188,7 +184,6 @@ func (r *invitationRepository) Upsert(ctx context.Context, in repository.Invitat
 			WorkspaceID: wsID,
 			Scope:       string(in.Scope),
 			SpaceID:     spaceID,
-			PageID:      pageID,
 			Role:        string(in.Role),
 			Email:       in.Email,
 			InviteeName: in.InviteeName,
@@ -389,7 +384,7 @@ func (r *invitationRepository) Accept(ctx context.Context, invitationID string, 
 		if !inv.Open(time.Now()) {
 			return repository.ErrInvitationNotOpen
 		}
-		// ゲスト（スペース宛・ページ宛）の付与はまだ無い。所属だけ作って付与が無い、という
+		// ゲスト（スペース宛）の付与はまだ無い。所属だけ作って付与が無い、という
 		// 中途半端な状態を作らないよう、書き込みに入る前に断る。
 		if inv.Scope != domain.InvitationScopeWorkspace {
 			return repository.ErrInvitationScopeUnsupported

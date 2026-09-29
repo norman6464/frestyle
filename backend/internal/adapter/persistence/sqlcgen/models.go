@@ -55,7 +55,6 @@ type Invitation struct {
 	WorkspaceID      uuid.UUID
 	Scope            string
 	SpaceID          uuid.NullUUID
-	PageID           uuid.NullUUID
 	Role             string
 	Email            string
 	InviteeName      string
@@ -139,15 +138,6 @@ type PageFavorite struct {
 	WorkspaceID uuid.UUID
 	PageID      uuid.UUID
 	CreatedAt   time.Time
-}
-
-type PageGrant struct {
-	WorkspaceID uuid.UUID
-	PageID      uuid.UUID
-	PrincipalID uuid.UUID
-	Role        string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
 }
 
 type PageLabel struct {
@@ -237,7 +227,6 @@ type Principal struct {
 	Kind        string
 	UserID      sql.NullInt64
 	SpaceID     uuid.NullUUID
-	PageID      uuid.NullUUID
 	Name        string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -282,22 +271,6 @@ type ProjectVersion struct {
 	ArchivedAt  sql.NullTime
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
-}
-
-type ShareLink struct {
-	ID              uuid.UUID
-	WorkspaceID     uuid.UUID
-	PageID          uuid.UUID
-	PrincipalID     uuid.UUID
-	PrincipalKind   sql.NullString
-	Capability      string
-	TokenHash       []byte
-	PasswordHash    sql.NullString
-	ExpiresAt       sql.NullTime
-	RevokedAt       sql.NullTime
-	CreatedByUserID int64
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
 }
 
 type Space struct {

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { formatTicketKey, type MyAssignedTicket } from '@/entities/ticket';
 import { EmptyNotice, ErrorNotice, FsIcon, SkeletonRows } from '@/shared/ui';
 import { formatDueDate } from '../lib/homeDates';
-import { homeTextLink } from '../lib/homeStyles';
+import { homeHeading, homeMeta, homeRowTitle, homeTextLink } from '../lib/homeStyles';
 import type { HomeResource } from '../model/homeResource';
 
 export interface HomeAssignedSectionProps {
@@ -13,7 +13,7 @@ export interface HomeAssignedSectionProps {
   today: string;
 }
 
-/** 状態の枠ごとの札の色。色だけに意味を任せず、札には状態の名前を書く。 */
+/** 状態の札の色。色だけに意味を任せず、札には状態の名前を書く。 */
 function statusPillClass(category: string): string {
   if (category === 'in_progress') return 'bg-brand-50 text-brand-800';
   return 'bg-surface-2 text-[var(--color-text-secondary)]';
@@ -23,6 +23,9 @@ function statusPillClass(category: string): string {
  * 自分の担当（全ワークスペース横断・未完了・期限の近い順）。どの行も同じ重みで、件名・キー・
  * ワークスペース / プロジェクト・状態・期限を見比べられるようにする。先頭を大きくしない
  * （期限が近いことは「重要」や「おすすめ」と同じではない）。並びはサーバーが決めた順のまま。
+ *
+ * 行は密に、広い幅では 2 列に並べる（報道系サイトの一覧の作り）。題名は通常の太さで、
+ * キー・場所・期限は 12px の補足。行の間は 1px の線。
  */
 export default function HomeAssignedSection({ assigned, wide, today }: HomeAssignedSectionProps) {
   const shown = assigned.data.slice(0, wide ? 3 : 2);
@@ -30,14 +33,13 @@ export default function HomeAssignedSection({ assigned, wide, today }: HomeAssig
   return (
     <section aria-labelledby="home-assigned-heading" className="min-w-0">
       <div className="flex items-center justify-between gap-3">
-        <h2 id="home-assigned-heading" className="text-xl font-bold text-[var(--color-text-primary)]">
+        <h2 id="home-assigned-heading" className={homeHeading}>
           自分の担当
         </h2>
         <Link to="/assigned" className={homeTextLink}>
           一覧へ <FsIcon name="chevron-right" className="h-4 w-4" />
         </Link>
       </div>
-      <p className="text-sm text-[var(--color-text-muted)]">全ワークスペース・未完了・期限順</p>
 
       {assigned.status === 'loading' && <SkeletonRows label="自分の担当を読み込んでいます" rows={wide ? 3 : 2} className="py-4" />}
       {assigned.status === 'error' && (
@@ -53,44 +55,39 @@ export default function HomeAssignedSection({ assigned, wide, today }: HomeAssig
         </div>
       )}
       {assigned.status === 'ready' && shown.length > 0 && (
-        <>
-          <ul aria-label="自分の担当" className="mt-2 divide-y divide-surface-3 border-b border-surface-3">
-            {shown.map((ticket) => {
-              const overdue = ticket.dueDate !== null && ticket.dueDate < today;
-              return (
-                <li key={ticket.id}>
-                  <Link
-                    to={`/tickets/${encodeURIComponent(ticket.id)}`}
-                    state={{ from: '/' }}
-                    className="group block rounded-lg py-5 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600"
-                  >
-                    <span className="flex items-baseline justify-between gap-3 text-sm text-[var(--color-text-muted)]">
-                      <span className="font-mono">{formatTicketKey(ticket.projectKey, ticket.number)}</span>
-                      {ticket.dueDate ? (
-                        <span className={overdue ? 'font-semibold text-danger-ink' : undefined}>
-                          期限 <time dateTime={ticket.dueDate}>{formatDueDate(ticket.dueDate)}</time>
-                          {overdue && '（過ぎています）'}
-                        </span>
-                      ) : (
-                        <span>期限なし</span>
-                      )}
-                    </span>
-                    <span className="mt-2 block text-lg font-bold leading-snug text-[var(--color-text-primary)] [overflow-wrap:anywhere] group-hover:underline underline-offset-4">
-                      {ticket.title}
-                    </span>
-                    <span className="mt-2 block text-sm text-[var(--color-text-muted)] [overflow-wrap:anywhere]">
-                      {ticket.workspaceName} / {ticket.projectName}
-                    </span>
-                    <span className={`mt-3 inline-flex rounded-md px-2 py-1 text-sm ${statusPillClass(ticket.statusCategory)}`}>
+        <ul aria-label="自分の担当" className="mt-2.5 grid gap-x-[18px] border-t border-surface-3 sm:grid-cols-2">
+          {shown.map((ticket) => {
+            const overdue = ticket.dueDate !== null && ticket.dueDate < today;
+            return (
+              <li key={ticket.id} className="border-b border-surface-3">
+                <Link
+                  to={`/tickets/${encodeURIComponent(ticket.id)}`}
+                  state={{ from: '/' }}
+                  className="group block py-3 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-600"
+                >
+                  <span className={`flex items-baseline justify-between gap-3 ${homeMeta}`}>
+                    <span className="font-mono">{formatTicketKey(ticket.projectKey, ticket.number)}</span>
+                    {ticket.dueDate ? (
+                      <span className={overdue ? 'font-semibold text-danger-ink' : undefined}>
+                        期限 <time dateTime={ticket.dueDate}>{formatDueDate(ticket.dueDate)}</time>
+                        {overdue && '（過ぎています）'}
+                      </span>
+                    ) : (
+                      <span>期限なし</span>
+                    )}
+                  </span>
+                  <span className={`mt-1 ${homeRowTitle}`}>{ticket.title}</span>
+                  <span className={`mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 ${homeMeta}`}>
+                    <span className="[overflow-wrap:anywhere]">{ticket.workspaceName} / {ticket.projectName}</span>
+                    <span className={`inline-flex px-1.5 py-0.5 text-xs leading-4 ${statusPillClass(ticket.statusCategory)}`}>
                       {ticket.statusName}
                     </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="mt-3 text-sm text-[var(--color-text-muted)]">{shown.length}件を表示</p>
-        </>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </section>
   );

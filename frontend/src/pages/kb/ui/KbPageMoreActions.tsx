@@ -31,7 +31,7 @@ export default function KbPageMoreActions({ children }: KbPageMoreActionsProps) 
         aria-expanded={open}
         aria-label="その他の操作"
         title="その他の操作"
-        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11"
       >
         <FsIcon name="more" className="h-4 w-4" />
       </button>

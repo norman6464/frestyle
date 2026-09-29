@@ -40,7 +40,7 @@ export default function TicketChildrenList({ tickets, loading, error, projectKey
             >
               <TicketKeyBadge projectKey={projectKey} number={child.number} />
               <span className="min-w-0 flex-1 truncate text-[var(--color-text-primary)]">{child.title}</span>
-              {status && <TicketStatusPill name={status.name} color={status.color} category={status.category} />}
+              {status && <TicketStatusPill name={status.name} category={status.category} />}
             </Link>
           </li>
         );

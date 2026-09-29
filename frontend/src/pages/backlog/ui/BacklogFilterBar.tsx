@@ -150,7 +150,7 @@ export default function BacklogFilterBar({
   const selectClass = 'w-full rounded-lg border-surface-3 bg-surface-1 font-normal';
 
   return (
-    <div role="group" aria-label="チケットの絞り込み" className="border-b border-surface-3 px-4 pb-3 pt-3 sm:px-6">
+    <div role="group" aria-label="チケットの絞り込み" className="border-b border-surface-3 px-4 py-4 sm:px-6">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[9rem] flex-1 sm:min-w-[12rem]">
           <FsIcon name="search"
@@ -173,7 +173,8 @@ export default function BacklogFilterBar({
           aria-controls={panelId}
           className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3.5 text-sm font-medium transition-colors duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
             detailCount > 0
-              ? 'border-brand-200 bg-action-soft text-brand-800 hover:bg-brand-100'
+              ? // 条件が付いている間は枠を濃くして示す（色は付けない。バックログの画面では色を混ぜない）。
+                'border-[var(--color-text-primary)] bg-surface-1 text-[var(--color-text-primary)] hover:bg-surface-2'
               : 'border-surface-3 bg-surface-1 text-[var(--color-text-secondary)] hover:bg-surface-2'
           }`}
         >
@@ -201,51 +202,48 @@ export default function BacklogFilterBar({
       */}
       <div id={panelId} hidden={!open} className={open ? 'mt-3 rounded-lg border border-surface-3 bg-surface-2/60 p-3 sm:p-4' : undefined}>
         {open && (
-          <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <span className="mb-1 block text-xs text-[var(--color-text-muted)]">状態</span>
-                <FieldSelect
-                  label="状態で絞り込む"
-                  value={statusId ?? ''}
-                  onChange={(value) => onChangeStatusId(value || null)}
-                  options={[{ value: '', label: 'すべて' }, ...statuses.map((s) => ({ value: s.id, label: s.name }))]}
-                  className={selectClass}
-                />
-              </div>
-              <div>
-                <span className="mb-1 block text-xs text-[var(--color-text-muted)]">種別</span>
-                <FieldSelect
-                  label="種別で絞り込む"
-                  value={typeId ?? ''}
-                  onChange={(value) => onChangeTypeId(value || null)}
-                  options={[{ value: '', label: 'すべて' }, ...types.map((t) => ({ value: t.id, label: t.name }))]}
-                  className={selectClass}
-                />
-              </div>
-              <div>
-                <span className="mb-1 block text-xs text-[var(--color-text-muted)]">ラベル</span>
-                <FieldSelect
-                  label="ラベルで絞り込む"
-                  value={labelId ?? ''}
-                  onChange={(value) => onChangeLabelId(value || null)}
-                  options={[{ value: '', label: 'すべて' }, ...labels.map((l) => ({ value: l.id, label: l.name }))]}
-                  className={selectClass}
-                />
-              </div>
-              <div>
-                <span className="mb-1 block text-xs text-[var(--color-text-muted)]">担当</span>
-                <FieldSelect
-                  label="担当で絞り込む"
-                  value={assigneeValue(assignee)}
-                  onChange={(value) => onChangeAssignee(assigneeFromValue(value))}
-                  options={assigneeOptions}
-                  className={selectClass}
-                />
-              </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <span className="mb-1 block text-xs text-[var(--color-text-muted)]">状態</span>
+              <FieldSelect
+                label="状態で絞り込む"
+                value={statusId ?? ''}
+                onChange={(value) => onChangeStatusId(value || null)}
+                options={[{ value: '', label: 'すべて' }, ...statuses.map((s) => ({ value: s.id, label: s.name }))]}
+                className={selectClass}
+              />
             </div>
-            <p className="mt-2 text-xs text-[var(--color-text-muted)]">変更はすぐに反映されます</p>
-          </>
+            <div>
+              <span className="mb-1 block text-xs text-[var(--color-text-muted)]">種別</span>
+              <FieldSelect
+                label="種別で絞り込む"
+                value={typeId ?? ''}
+                onChange={(value) => onChangeTypeId(value || null)}
+                options={[{ value: '', label: 'すべて' }, ...types.map((t) => ({ value: t.id, label: t.name }))]}
+                className={selectClass}
+              />
+            </div>
+            <div>
+              <span className="mb-1 block text-xs text-[var(--color-text-muted)]">ラベル</span>
+              <FieldSelect
+                label="ラベルで絞り込む"
+                value={labelId ?? ''}
+                onChange={(value) => onChangeLabelId(value || null)}
+                options={[{ value: '', label: 'すべて' }, ...labels.map((l) => ({ value: l.id, label: l.name }))]}
+                className={selectClass}
+              />
+            </div>
+            <div>
+              <span className="mb-1 block text-xs text-[var(--color-text-muted)]">担当</span>
+              <FieldSelect
+                label="担当で絞り込む"
+                value={assigneeValue(assignee)}
+                onChange={(value) => onChangeAssignee(assigneeFromValue(value))}
+                options={assigneeOptions}
+                className={selectClass}
+              />
+            </div>
+          </div>
         )}
       </div>
 
@@ -257,7 +255,7 @@ export default function BacklogFilterBar({
               type="button"
               onClick={chip.onRemove}
               aria-label={`${chip.label} の絞り込みを解除`}
-              className="inline-flex min-h-9 items-center gap-1 whitespace-nowrap rounded-md bg-action-soft px-2.5 text-xs font-medium text-brand-800 transition-colors duration-fast hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+              className="inline-flex min-h-9 items-center gap-1 whitespace-nowrap rounded-md border border-surface-3 bg-surface-1 px-2.5 text-[13px] font-medium text-[var(--color-text-primary)] transition-colors duration-fast hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
             >
               <span className="max-w-[16rem] truncate">{chip.label}</span>
               <FsIcon name="x" className="h-3.5 w-3.5 shrink-0" />
@@ -269,7 +267,7 @@ export default function BacklogFilterBar({
               setQueryInput('');
               onClearFilters();
             }}
-            className="ml-auto min-h-9 rounded-md px-2 text-xs text-[var(--color-text-muted)] underline underline-offset-4 hover:bg-surface-2 hover:text-[var(--color-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+            className="ml-auto min-h-9 rounded-md px-2 text-[13px] text-[var(--color-text-muted)] underline underline-offset-4 hover:bg-surface-2 hover:text-[var(--color-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
             すべて解除
           </button>

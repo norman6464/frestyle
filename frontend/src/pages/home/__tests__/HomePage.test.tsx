@@ -55,7 +55,6 @@ describe('HomePage', () => {
     vi.spyOn(KbRepository, 'fetchRecentPages').mockResolvedValue([]);
     vi.spyOn(KbRepository, 'fetchFavorites').mockResolvedValue([]);
     vi.spyOn(TicketRepository, 'fetchMyAssignedTickets').mockResolvedValue([]);
-    vi.spyOn(TicketRepository, 'fetchPageTicketReferences').mockResolvedValue([]);
     vi.spyOn(NotificationRepository, 'getUnreadCount').mockResolvedValue(0);
     vi.spyOn(ProfileRepository, 'fetchProfile').mockRejectedValue(new Error('no profile'));
   });
@@ -86,7 +85,6 @@ describe('HomePage', () => {
     renderHome();
 
     const card = await screen.findByRole('article', { name: '設計メモ' });
-    expect(within(card).getByText('開発チーム / 開発ノート')).toBeInTheDocument();
     expect(within(card).getByRole('link', { name: /続きをひらく/ })).toHaveAttribute('href', '/kb/page-1');
 
     // 狭い画面は合計 2 件（カード + 1 行）。「履歴」で残りを広げる。
@@ -97,16 +95,6 @@ describe('HomePage', () => {
     fireEvent.click(toggle);
     expect(within(rows).getAllByRole('listitem')).toHaveLength(2);
     expect(fetchPage).not.toHaveBeenCalled();
-  });
-
-  it('参照チケットは最新のページ 1 件分だけ取り、0 件なら節ごと出さない', async () => {
-    vi.mocked(KbRepository.fetchRecentPages).mockResolvedValue([recentPage, { ...recentPage, pageId: 'page-2' }]);
-    renderHome();
-
-    await screen.findByRole('article', { name: '設計メモ' });
-    expect(TicketRepository.fetchPageTicketReferences).toHaveBeenCalledTimes(1);
-    expect(TicketRepository.fetchPageTicketReferences).toHaveBeenCalledWith('team-a', 'page-1', 2, expect.anything());
-    expect(screen.queryByText('このページを参照しているチケット')).not.toBeInTheDocument();
   });
 
   it('お気に入りのワークスペースを切り替えた直後に、前のワークスペースのお気に入りを出さない', async () => {
@@ -177,6 +165,5 @@ describe('HomePage', () => {
     expect(within(first).getByText('APP-24')).toBeInTheDocument();
     expect(within(first).getByText('開発チーム / FreStyle')).toBeInTheDocument();
     expect(within(second).getByText('期限なし')).toBeInTheDocument();
-    expect(screen.getByText('2件を表示')).toBeInTheDocument();
   });
 });

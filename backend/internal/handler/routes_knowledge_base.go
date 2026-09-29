@@ -8,7 +8,6 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/adapter/persistence"
 	"github.com/norman6464/frestyle/backend/internal/handler/middleware"
 	infraGCS "github.com/norman6464/frestyle/backend/internal/infra/gcs"
-	"github.com/norman6464/frestyle/backend/internal/infra/ratelimit"
 	"github.com/norman6464/frestyle/backend/internal/usecase/comment"
 	"github.com/norman6464/frestyle/backend/internal/usecase/kb"
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
@@ -16,16 +15,14 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/usecase/user"
 )
 
-// 共有リンクの検証・招待の発行・ワークスペース/スペース作成・本文解釈系エンドポイントに
-// 掛けるレート上限。共有リンクの検証は総当たりの速度を、招待の発行はユーザーを鍵に宛先の
-// 連打（1 日の上限は usecase 側が別に持つ）を、ワークスペース作成はユーザーを鍵に slug の
+// 招待の発行・ワークスペース/スペース作成・本文解釈系エンドポイントに掛けるレート上限。
+// 招待の発行はユーザーを鍵に宛先の連打（1 日の上限は usecase 側が別に持つ）を、
+// ワークスペース作成はユーザーを鍵に slug の
 // 先取り連打を、本文解釈系（保存・提案・雛形作成）は 0.8 秒ごとの自動保存が詰まらない
 // 水準を保ちつつ抑える。
 const (
-	kbShareLinkVerifyPerMinute = 10
-	kbShareLinkVerifyBurst     = 5
-	kbInviteByEmailPerMinute   = 10
-	kbInviteByEmailBurst       = 5
+	kbInviteByEmailPerMinute = 10
+	kbInviteByEmailBurst     = 5
 	// 招待の案内（プレビュー）は未認証なので IP 単位。トークンは 256 bit で当てられず、案内に
 	// 秘密は無いので、素直な大量アクセスを薄める層だけでよい。
 	kbInvitationPreviewPerMinute = 20
@@ -48,7 +45,6 @@ func registerKnowledgeBaseRoutes(g *gin.RouterGroup, deps *routeDeps) {
 		g,
 		persistence.NewKnowledgeBaseRepository(deps.db),
 		persistence.NewKnowledgeBasePermissionRepository(deps.db),
-		persistence.NewShareLinkRepository(deps.db),
 		persistence.NewWorkspaceProvisioner(deps.db),
 		persistence.NewUserRepository(deps.db),
 		persistence.NewCommentRepository(deps.db),
@@ -87,17 +83,10 @@ func newKbImagePresignerOrFallback(deps *routeDeps) repository.KbImagePresigner 
 
 // registerKnowledgeBasePublicRoutes は認証不要のナレッジエンドポイントを登録する。
 //
-// ここに置いてよいのは「ログインしていない相手が使う」ものだけ。共有リンクの検証（認可は
-// トークンと任意のパスワードそのものが担う）と、招待 URL の案内（承諾はできず、見せるのは
-// 宛先本人向けの案内だけ）の 2 本。
+// ここに置いてよいのは「ログインしていない相手が使う」ものだけ。いまは招待 URL の案内
+// （承諾はできず、見せるのは宛先本人向けの案内だけ）の 1 本。ページ単位の共有リンクは持たない。
 func registerKnowledgeBasePublicRoutes(g *gin.RouterGroup, deps *routeDeps) {
-	registerKnowledgeBasePublicRoutesWith(
-		g,
-		persistence.NewKnowledgeBaseRepository(deps.db),
-		persistence.NewKnowledgeBasePermissionRepository(deps.db),
-		persistence.NewShareLinkRepository(deps.db),
-		persistence.NewInvitationRepository(deps.db),
-	)
+	registerKnowledgeBasePublicRoutesWith(g, persistence.NewInvitationRepository(deps.db))
 }
 
 // registerKnowledgeBaseRoutesWith は repository を受け取ってルートと middleware を組み立てる。
@@ -107,7 +96,6 @@ func registerKnowledgeBaseRoutesWith(
 	g *gin.RouterGroup,
 	pages repository.KnowledgeBaseRepository,
 	permissions repository.KnowledgeBasePermissionRepository,
-	shareLinks repository.ShareLinkRepository,
 	provisioner repository.WorkspaceProvisioner,
 	users repository.UserRepository,
 	comments repository.CommentRepository,
@@ -244,7 +232,6 @@ func registerKnowledgeBaseRoutesWith(
 	gate := newKbPermissionGate(
 		kb.NewCheckWorkspacePermissionUseCase(permissions),
 		kb.NewCheckSpacePermissionUseCase(permissions),
-		kb.NewCheckPagePermissionUseCase(permissions),
 	)
 	canRemoveAdmin := kb.NewCanRemoveWorkspaceAdminUseCase(permissions)
 
@@ -254,10 +241,6 @@ func registerKnowledgeBaseRoutesWith(
 		kb.NewRevokeWorkspaceRoleUseCase(permissions),
 		kb.NewGrantSpaceRoleUseCase(permissions),
 		kb.NewRevokeSpaceRoleUseCase(permissions),
-		kb.NewGrantPageRoleUseCase(permissions),
-		kb.NewRevokePageRoleUseCase(permissions),
-		kb.NewListPageGrantsUseCase(permissions),
-		kb.NewListGrantablePrincipalsUseCase(permissions),
 		canRemoveAdmin,
 	)
 
@@ -270,19 +253,6 @@ func registerKnowledgeBaseRoutesWith(
 		kb.NewEnsureSpaceEveryonePrincipalUseCase(permissions),
 		canRemoveAdmin,
 		user.NewSetUserActiveUseCase(users, permissions, txManager),
-	)
-
-	// この group には検証（Verify）を登録しないので、渡す limiter は使われない。
-	// それでも組み立てるのは、handler の組み立て方をここと公開 group で揃えるため
-	// （片方だけ nil を渡す形にすると、うっかり検証を認証済み側へ生やしたときに
-	// 上限が無いまま動く）。
-	sh := NewKnowledgeBaseShareLinkHandler(
-		gate,
-		kb.NewIssueShareLinkUseCase(shareLinks),
-		kb.NewRevokeShareLinkUseCase(shareLinks),
-		kb.NewListPageShareLinksUseCase(shareLinks),
-		kb.NewVerifyShareLinkUseCase(shareLinks),
-		ratelimit.New(kbShareLinkVerifyPerMinute, kbShareLinkVerifyBurst),
 	)
 
 	// 自分の最近見たページ（段2）。ワークスペースをまたぐため slug の middleware は通さない。
@@ -420,13 +390,7 @@ func registerKnowledgeBaseRoutesWith(
 	kbGroup.DELETE("/kb/workspaces/:workspaceSlug/grants/:principalId", gh.RevokeWorkspaceRole)
 	kbGroup.PUT("/kb/workspaces/:workspaceSlug/spaces/:spaceId/grants/:principalId", gh.GrantSpaceRole)
 	kbGroup.DELETE("/kb/workspaces/:workspaceSlug/spaces/:spaceId/grants/:principalId", gh.RevokeSpaceRole)
-	// ページ単位の grant（既定の 3 段目）。このページとその子孫に効く。
-	// 一覧が返すのはこの段で足した行だけで、上の段や祖先から届いている相手は含まない。
-	kbGroup.GET("/kb/workspaces/:workspaceSlug/pages/:pageId/grants", gh.ListPageGrants)
-	kbGroup.PUT("/kb/workspaces/:workspaceSlug/pages/:pageId/grants/:principalId", gh.GrantPageRole)
-	kbGroup.DELETE("/kb/workspaces/:workspaceSlug/pages/:pageId/grants/:principalId", gh.RevokePageRole)
-	// 権限を張れる相手（画面の相手選び）。認可はページ単位で、返る中身はワークスペース全体。
-	kbGroup.GET("/kb/workspaces/:workspaceSlug/pages/:pageId/principals", gh.ListGrantablePrincipals)
+	// ページ単位の grant と共有リンクは持たない（ページ単位の共有をやめたため）。
 
 	// 人をワークスペースへ招く入口は email 宛の招待だけ（users.id を受ける口は無い —
 	// 「実在する id なら 204」で他人の実在を探れる走査器になるため）。招待しただけでは
@@ -450,48 +414,10 @@ func registerKnowledgeBaseRoutesWith(
 	kbGroup.PUT("/kb/workspaces/:workspaceSlug/groups/:groupPrincipalId/members/:userId", mh.AddGroupMember)
 	kbGroup.DELETE("/kb/workspaces/:workspaceSlug/groups/:groupPrincipalId/members/:userId", mh.RemoveGroupMember)
 	kbGroup.PUT("/kb/workspaces/:workspaceSlug/spaces/:spaceId/principals/everyone", mh.EnsureSpaceEveryone)
-
-	// 共有リンク（発行・一覧・失効）。発行と失効は「誰が見られるか」を変える操作。
-	// 検証だけは未認証なので registerKnowledgeBasePublicRoutesWith 側に置く。
-	kbGroup.GET("/kb/workspaces/:workspaceSlug/pages/:pageId/share-links", sh.ListShareLinks)
-	kbGroup.POST("/kb/workspaces/:workspaceSlug/pages/:pageId/share-links", sh.IssueShareLink)
-	kbGroup.DELETE("/kb/workspaces/:workspaceSlug/pages/:pageId/share-links/:shareLinkId", sh.RevokeShareLink)
 }
 
-// registerKnowledgeBasePublicRoutesWith は認証不要のルートを組み立てる。
-//
-// 共有リンクの検証は、認可をトークンそのものが担う唯一の経路。ログインしていない相手が
-// 使うので middleware.KnowledgeBaseWorkspace（slug と所属からテナントを確定させる）を
-// 通せず、ワークスペースはトークンから引いたリンクの側が持っている。
-//
-// トークンは 256 bit の乱数だが、パスワード付きリンクのパスワードは人が選ぶ短い値なので、
-// 試行回数に上限をかける。鍵は IP ではなく**リンクそのもの**で、IP を変えても頭打ちになる
-// （kbShareLinkAttemptKey の doc に理由がある）。IP 単位の上限も重ねるが、あれは
-// 攻撃者が鍵を変えられるので、単独では総当たりの歯止めにならない。
-func registerKnowledgeBasePublicRoutesWith(
-	g *gin.RouterGroup,
-	pages repository.KnowledgeBaseRepository,
-	permissions repository.KnowledgeBasePermissionRepository,
-	shareLinks repository.ShareLinkRepository,
-	invitations repository.InvitationRepository,
-) {
-	sh := NewKnowledgeBaseShareLinkHandler(
-		newKbPermissionGate(
-			kb.NewCheckWorkspacePermissionUseCase(permissions),
-			kb.NewCheckSpacePermissionUseCase(permissions),
-			kb.NewCheckPagePermissionUseCase(permissions),
-		),
-		kb.NewIssueShareLinkUseCase(shareLinks),
-		kb.NewRevokeShareLinkUseCase(shareLinks),
-		kb.NewListPageShareLinksUseCase(shareLinks),
-		kb.NewVerifyShareLinkUseCase(shareLinks),
-		ratelimit.New(kbShareLinkVerifyPerMinute, kbShareLinkVerifyBurst),
-	)
-	// 上限は 2 段。**本命は handler 側のリンク 1 本あたりの上限**で、こちらの IP 単位は
-	// 素直な大量アクセスを薄めるだけの層（XFF を詐称すれば鍵が変わるので、これだけでは
-	// パスワードの総当たりを止められない）。詳細は kbShareLinkAttemptKey の doc。
-	g.POST("/kb/share-links/verify", middleware.RateLimitPerMinute(20, 10), sh.VerifyShareLink)
-
+// registerKnowledgeBasePublicRoutesWith は認証不要のルートを組み立てる（招待 URL の案内だけ）。
+func registerKnowledgeBasePublicRoutesWith(g *gin.RouterGroup, invitations repository.InvitationRepository) {
 	// 招待 URL を開いた人への案内。承諾はここではできない（宛先の email で確認済みのアカウントで
 	// ログインしてから /kb/invitations/:invitationId/accept）。
 	ph := NewKnowledgeBaseInvitationPreviewHandler(kb.NewPreviewInvitationUseCase(invitations))

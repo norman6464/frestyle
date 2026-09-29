@@ -105,7 +105,7 @@ func (r GrantRole) CanComment() bool { return r.Rank() >= GrantRoleCommenter.Ran
 // CanEdit は既定でページを編集できる役割かを返す。
 func (r GrantRole) CanEdit() bool { return r.Rank() >= GrantRoleEditor.Rank() }
 
-// CanManage は権限そのもの（grant / 共有リンク）を変えられる役割かを返す。
+// CanManage は権限そのもの（grant）を変えられる役割かを返す。
 func (r GrantRole) CanManage() bool { return r.Rank() >= GrantRoleAdmin.Rank() }
 
 // WorkspaceGrant はワークスペース全体での既定の権限。配下の全スペースに効く。
@@ -113,19 +113,6 @@ func (r GrantRole) CanManage() bool { return r.Rank() >= GrantRoleAdmin.Rank() }
 // 張ることになり漏れるため、入れ物の階層（workspace ⊃ space）に合わせ既定も 2 段で持つ。
 type WorkspaceGrant struct {
 	WorkspaceID string    `json:"workspaceId"`
-	PrincipalID string    `json:"principalId"`
-	Role        GrantRole `json:"role"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-}
-
-// PageGrant はページ以下での既定の権限。workspace / space に続く 3 段目で、経路をさかのぼって
-// 効き、最も強いものが実効になる（合成は他の 2 段と同じ）。
-type PageGrant struct {
-	// WorkspaceID はテナント境界。principal との複合 FK に使う。
-	WorkspaceID string `json:"workspaceId"`
-	// PageID は対象ページ。この付与はこのページとその子孫に効く。
-	PageID      string    `json:"pageId"`
 	PrincipalID string    `json:"principalId"`
 	Role        GrantRole `json:"role"`
 	CreatedAt   time.Time `json:"createdAt"`

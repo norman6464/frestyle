@@ -29,7 +29,7 @@ const (
 // 権限モデル（principals 以下）も含める。principals は users を親に持つが、
 // users はここで消さない（ほかの結合テストと共有するため。principals 側だけ空にすれば足りる）。
 var kbTables = []string{
-	"share_links", "page_grants", "space_grants", "workspace_grants",
+	"space_grants", "workspace_grants",
 	"principal_members", "principals",
 	// page_search / page_links は blocks / pages への CASCADE FK を
 	// 持つため、blocks・pages を TRUNCATE ... CASCADE すれば自動的に一緒に空になるが、

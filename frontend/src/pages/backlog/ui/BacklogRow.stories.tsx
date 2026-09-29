@@ -147,13 +147,14 @@ export const 期限は列に出しラベルは出さない: Story = {
   },
 };
 
-/** 期限を過ぎていて未完了なら、日付を赤く太くし、読み上げには「期限超過」を添える。 */
+/** 期限を過ぎていて未完了なら、日付を太くして印を添え（色は付けない）、読み上げには「期限超過」を添える。 */
 export const 期限超過: Story = {
   args: { ticket: { ...baseTicket, dueDate: '2026-09-21' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const [due] = canvas.getAllByText('9/21');
-    await expect(due).toHaveClass('text-danger-ink');
+    await expect(due).toHaveClass('font-semibold');
+    await expect(due).not.toHaveClass('text-danger-ink');
     await expect(canvas.getAllByText('（期限超過）').length).toBeGreaterThan(0);
   },
 };
@@ -164,7 +165,7 @@ export const 完了なら期限超過にしない: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const [due] = canvas.getAllByText('9/21');
-    await expect(due).not.toHaveClass('text-danger-ink');
+    await expect(due).not.toHaveClass('font-semibold');
     await expect(canvas.queryByText('（期限超過）')).toBeNull();
   },
 };
@@ -253,9 +254,13 @@ export const 状態を変えても行は開かない: Story = {
   },
 };
 
-/** 種別は行の先頭に色付きの角丸で出る（見本と同じ）。名前は読み上げに残す。 */
-export const 種別は先頭の印: Story = {
+/** 種別は色の印ではなく名前で、キーの下に出る。読み上げには「種別:」を添える。 */
+export const 種別は名前で出す: Story = {
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByLabelText('種別: 開発タスク')).toBeInTheDocument();
+    const canvas = within(canvasElement);
+    const typeName = canvas.getByText('開発タスク');
+    await expect(typeName).toBeVisible();
+    await expect(typeName.textContent).toBe('種別: 開発タスク');
+    await expect(canvas.queryByRole('img', { name: /種別/ })).toBeNull();
   },
 };

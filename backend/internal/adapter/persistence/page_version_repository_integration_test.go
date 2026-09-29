@@ -24,7 +24,7 @@ import (
 // （commentTables と同じ役割分担）。子から先に並べる。
 var pageVersionTables = []string{
 	"page_suggestions", "page_versions",
-	"share_links", "page_grants", "space_grants", "workspace_grants",
+	"space_grants", "workspace_grants",
 	"principal_members", "principals",
 	"blocks", "page_paths", "page_snapshots", "pages", "spaces", "workspaces",
 }

@@ -72,7 +72,7 @@ export const 積み重なる: Story = {
     <Stage
       items={[
         { type: 'success', message: 'ページを保存しました' },
-        { type: 'info', message: '共有リンクをコピーしました' },
+        { type: 'info', message: 'リンクをコピーしました' },
         { type: 'error', message: '保存できませんでした' },
       ]}
     />

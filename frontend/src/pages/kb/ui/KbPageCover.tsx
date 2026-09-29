@@ -16,7 +16,8 @@ export default function KbPageCover({ cover }: KbPageCoverProps) {
   if (!cover) return null;
 
   return (
-    <div className="mb-4 aspect-[4/1] w-full overflow-hidden rounded-lg bg-surface-2">
+    // 記事面の画像と同じく角を丸めない（本文の中の画像も rte-article で角を落としている）。
+    <div className="mb-6 aspect-[4/1] w-full overflow-hidden bg-surface-2">
       <img src={cover.url} alt="" className="h-full w-full object-cover" />
     </div>
   );

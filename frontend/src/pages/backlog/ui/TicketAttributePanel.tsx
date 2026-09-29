@@ -203,7 +203,7 @@ export default function TicketAttributePanel({
               className={ATTRIBUTE_SELECT_CLASS}
             />
           ) : (
-            <span className={ticket.priority === 1 ? 'font-semibold text-brand-800' : undefined}>
+            <span className={ticket.priority === 1 ? 'font-semibold text-[var(--color-text-primary)]' : undefined}>
               {PRIORITY_LABEL[ticket.priority]}
             </span>
           )}
@@ -398,7 +398,7 @@ export default function TicketAttributePanel({
             </Field>
 
             <Field label="Sprint">
-              {/* 入れる・外すはバックログの並べ替えバーが持つ（どのスプリントへ送るかは
+              {/* 入れる・外すはバックログ一覧の行の「…」が持つ（どのスプリントへ送るかは
                   一覧の文脈で決める操作）。ここは今どこに入っているかを読むだけ。 */}
               {sprint ? <span>{sprint.name}</span> : <Muted>未所属</Muted>}
             </Field>
@@ -409,9 +409,6 @@ export default function TicketAttributePanel({
               {reporterName ? <span>{reporterName}</span> : <Muted>不明なユーザー</Muted>}
             </Field>
           </dl>
-          <p className="mt-3 text-xs text-[var(--color-text-muted)]">
-            スプリントへの出し入れは、バックログで行を選んだときの選択中の帯から
-          </p>
         </Collapsible.Panel>
       </Collapsible.Root>
     </div>

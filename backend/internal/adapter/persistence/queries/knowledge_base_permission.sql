@@ -1,5 +1,5 @@
 -- ナレッジの権限モデル（principals / principal_members / workspace_grants /
--- space_grants / page_grants / share_links）のクエリ。
+-- space_grants）のクエリ。ページ単位の付与と共有リンクは持たない。
 --
 -- 作法（knowledge_base.sql と同じ）:
 --   - すべての SELECT / UPDATE / DELETE の WHERE に workspace_id を含める。
@@ -17,8 +17,8 @@
 
 -- name: InsertPrincipal :one
 -- 主体の作成。使う列は kind で決まり、DB の CHECK が「その kind のときだけ非 NULL」を強制する。
-INSERT INTO principals (id, workspace_id, kind, user_id, space_id, page_id, name)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO principals (id, workspace_id, kind, user_id, space_id, name)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetPrincipal :one
@@ -56,8 +56,8 @@ SELECT EXISTS (
 -- ためのもの。
 --
 -- users を突き合わせるのは、退会・停止したユーザーへメンション通知を送らないため
--- （principal 行はユーザーの退会・停止だけでは消えない。段 5・ListGrantablePrincipals の
--- コメント参照）。
+-- （principal 行はユーザーの退会・停止だけでは消えない。SoftDelete / UpdateActive は users しか
+-- 触らないため）。
 --
 -- user_id 群は json 配列 1 個のパラメータで渡す（comment.sql の ListCommentsByThreadIDs と
 -- 同じ作法。database/sql モードの sqlc では = ANY(...) が pq.Array() 依存を持ち込む）。
@@ -167,81 +167,18 @@ SELECT * FROM space_grants
 WHERE workspace_id = $1 AND space_id = $2
 ORDER BY principal_id;
 
--- name: ListGrantablePrincipals :many
--- 権限を張れる相手の一覧（画面の相手選びに使う）。
---
--- 表示名の正本はそれぞれ別の表にある。principals.name が埋まるのは group だけで、
--- ユーザー名は users、スペース名は spaces が持つ（principals へ写すと二重管理になる）。
--- アイコン・状態メッセージは profiles が持つ（人でない主体には無い）。画面には
--- 名前・アイコンが要るので、ここで 1 回だけ突き合わせる。
---
--- share_link は除く。あれは「リンクを踏んだ来訪者」を表す主体で、リンクを発行したときに
--- 自動で作られる。人が選んで役割を与える相手ではない（与えても意味を持たない）。
---
--- 人（kind='user'）は、アカウントが有効（users.status = 'active'）で、かつ所属も有効
--- （workspace_members.status = 'active'）なものだけを返す。principal 行はユーザーの
--- 退会・停止だけでは消えないため（SoftDelete / UpdateActive は users しか触らない）、
--- ここで絞らないと停止・退会したユーザーが名前つきで共有候補に出続け、その人に
--- 配られた権限も生きたまま残ってしまう。workspace_members の JOIN は「principal(kind=user)
--- がある ⟺ workspace_members が active」という段 2 の不変条件への防御的な二重チェック
--- （不変条件が何かの理由で崩れても、ここでは必ず絞られる）。
--- 人でない主体（group / space_all）はこの絞り込みの対象外。
---
--- 並びは kind → 名前 → id。名前が空でも順序が決まるように id まで入れる
--- （ユーザーが消えた直後など、名前が引けない行が混ざり得る）。
---
--- 名前を組み立ててから CTE の外で並べ替える。JOIN したままの ORDER BY name は
--- principals.name と users.name のどちらを指すのか決まらず、sqlc が曖昧だと断る。
-WITH grantable AS (
-    SELECT p.id, p.kind,
-           CASE p.kind
-               WHEN 'group' THEN p.name
-               WHEN 'user' THEN COALESCE(u.name, '')
-               WHEN 'space_all' THEN COALESCE(s.name, '')
-               ELSE ''
-           END AS name,
-           CASE p.kind WHEN 'user' THEN COALESCE(pr.avatar_url, '') ELSE '' END AS avatar_url,
-           -- 一言ステータスは絵文字・テキスト・失効時刻を事実のまま返し、結合と失効判定は
-           -- Go 側（domain.ComposeStatusDisplay）に集める（段 14。他のクエリでも同じ形）。
-           CASE p.kind WHEN 'user' THEN COALESCE(pr.status_emoji, '') ELSE '' END AS status_emoji,
-           CASE p.kind WHEN 'user' THEN COALESCE(pr.status_text, '') ELSE '' END AS status_text,
-           -- LEFT JOIN の条件が kind='user' 前提なので、kind が違えば pr 自体が NULL になり
-           -- CASE を書かなくても自然に NULL になる（avatar_url / status_emoji はテキストなので
-           -- COALESCE で空文字に寄せているが、timestamptz には「空」に相当する値が無いため
-           -- NULL のまま returns する）。
-           pr.status_expires_at AS status_expires_at
-    FROM principals p
-    LEFT JOIN users u
-           ON p.kind = 'user' AND u.id = p.user_id
-    LEFT JOIN profiles pr
-           ON p.kind = 'user' AND pr.user_id = p.user_id
-    LEFT JOIN spaces s
-           ON p.kind = 'space_all' AND s.workspace_id = p.workspace_id AND s.id = p.space_id
-    LEFT JOIN workspace_members wm
-           ON p.kind = 'user' AND wm.workspace_id = p.workspace_id AND wm.user_id = p.user_id
-    WHERE p.workspace_id = sqlc.arg(workspace_id)
-      AND p.kind <> 'share_link'
-      AND (p.kind <> 'user' OR (u.status = 'active' AND wm.status = 'active'))
-)
-SELECT id, kind, name, avatar_url, status_emoji, status_text, status_expires_at FROM grantable
-ORDER BY kind, name, id;
-
 -- name: ListWorkspaceMembers :many
 -- ワークスペースに属する人の一覧（担当の表示名・アイコンと、発言での名指しの候補に使う）。
 --
--- ListGrantablePrincipals とは別に持つ。あちらは「権限を張る相手」を選ぶための一覧で、
--- グループやスペース全員も含み、閲覧にページの管理権限が要る。既定の役割は編集者なので、
--- あちらを名前解決に流用すると管理者以外では 403 になり、担当の名前が出ない・
--- 名指しの候補が空になる。こちらは所属を確かめる middleware を通っていれば読める。
+-- 所属を確かめる middleware を通っていれば読める（管理権限は要らない）。
 --
--- 人でない主体（グループ / スペース全員 / 共有リンク）は user_id を持たないので、
+-- 人でない主体（グループ / スペース全員）は user_id を持たないので、
 -- users との内部結合だけで落ちる。kind の条件はそれでも重ねて書く — 名前が引けない人を
 -- 残したくなって外部結合へ緩めた瞬間に、人でない主体が黙って混ざるため。
 --
 -- 停止・退会したユーザー（users.status <> 'active'）と、所属自体が今は有効でない行
 -- （workspace_members.status <> 'active'。principal 行はユーザーの退会・停止・所属の
--- 変化だけでは自動では消えない）は落とす（名指しても届かず、担当にも選べない。
--- ListGrantablePrincipals と同じ判断基準に揃える — 段 5）。
+-- 変化だけでは自動では消えない）は落とす（名指しても届かず、担当にも選べない — 段 5）。
 -- 並びは表示名 → id。名前が空の行が混ざっても順序が決まるように id まで入れる。
 SELECT p.id AS principal_id, u.id AS user_id, u.name,
        COALESCE(pr.avatar_url, '') AS avatar_url,
@@ -285,85 +222,6 @@ WHERE p.workspace_id = sqlc.arg(workspace_id)
   AND wm.status = 'active'
 ORDER BY u.name, u.id;
 
--- name: UpsertPageGrant :one
--- ページでの既定の役割の付与（同じ主体には 1 行だけ）。
---
--- 3 段目の既定で、このページとその子孫に効く。合成は他の 2 段と同じ「最も強いものを採る」
--- なので、ここに弱い役割を張っても上位で得た強い役割は下がらない。**弱める手段はどの層にも
--- 無い**ので、狭めたい内容は private のスペースへ置く。
-INSERT INTO page_grants (workspace_id, page_id, principal_id, "role")
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (workspace_id, page_id, principal_id)
-DO UPDATE SET "role" = EXCLUDED."role", updated_at = now()
-RETURNING *;
-
--- name: DeletePageGrant :execrows
--- ページでの既定の役割の剥奪。
-DELETE FROM page_grants
-WHERE workspace_id = $1 AND page_id = $2 AND principal_id = $3;
-
--- name: ListPageGrants :many
--- そのページ自身に張られた grant の一覧（祖先から降りてくる分は含まない）。
--- ListPageRestrictions と同じ見方で、返るのは「この段で足したもの」だけ。
-SELECT * FROM page_grants
-WHERE workspace_id = $1 AND page_id = $2
-ORDER BY principal_id;
-
--- name: SubtreeHasForeignSpaceAllGrant :one
--- 移動するサブツリー（自分自身 + 子孫）に「移動先スペース以外のスペース全員」宛ての
--- ページ付与があるか。KnowledgeBaseRepository.MovePage が同じトランザクションで使う。
---
--- space_all の主体は「そのスペースの全員」を表すため、スペースをまたぐ移動で行だけが残り
--- 評価されなくなる（権限解決は対象ページが今いるスペースの space_all しか主体に取らない）。
--- 行は権限設定画面に見えているのに実効は違う、という追跡困難なずれになる。
--- 倒れる向きは常に「狭まる側」だが、見えている行が効かないこと自体が説明できないので、
--- 移動そのものを止める。
-SELECT EXISTS (
-    SELECT 1
-    FROM page_paths pp
-    JOIN page_grants g
-      ON g.workspace_id = pp.workspace_id AND g.page_id = pp.page_id
-    JOIN principals pr
-      ON pr.workspace_id = g.workspace_id AND pr.id = g.principal_id
-    WHERE pp.workspace_id = sqlc.arg(workspace_id)
-      AND pp.ancestor_id = sqlc.arg(page_id)
-      AND pr.kind = 'space_all'
-      AND pr.space_id IS DISTINCT FROM sqlc.arg(new_space_id)::uuid
-) AS found;
-
--- name: InsertShareLink :one
--- 共有リンクの発行。principal（kind='share_link'）は同じトランザクションで先に作る。
-INSERT INTO share_links (
-    id, workspace_id, page_id, principal_id, capability,
-    token_hash, password_hash, expires_at, created_by_user_id
-)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING *;
-
--- name: RevokeShareLink :execrows
--- 共有リンクの失効。行は消さず revoked_at を立てる（誰がいつ止めたかを追えるように）。
--- 既に失効しているものは触らない（最初に止めた時刻を保つ）。
-UPDATE share_links
-SET revoked_at = now(), updated_at = now()
-WHERE workspace_id = $1 AND id = $2 AND revoked_at IS NULL;
-
--- name: GetShareLinkByTokenHash :one
--- トークン（の SHA-256）から共有リンクを引く。期限・失効・パスワードの判定は呼び出し側で行う
--- （「トークンが違う」と「期限切れ」を同じ経路で扱うと、どちらなのかを利用者に返せない）。
-SELECT * FROM share_links
-WHERE token_hash = $1;
-
--- name: GetShareLink :one
--- 共有リンクを 1 件取得（失効操作の対象確認用）。
-SELECT * FROM share_links
-WHERE workspace_id = $1 AND id = $2;
-
--- name: ListPageShareLinks :many
--- そのページに発行された共有リンクの一覧（失効済みも含む）。
-SELECT * FROM share_links
-WHERE workspace_id = $1 AND page_id = $2
-ORDER BY created_at DESC;
-
 -- name: ListSpacePageViewFacts :many
 -- スペース配下のページ全件と、それぞれの「閲覧の事実」を 1 回のクエリで返す。
 -- archived で現役／アーカイブ済みを切り替える（既定の一覧は現役）。
@@ -377,7 +235,8 @@ ORDER BY created_at DESC;
 -- ページごとに権限クエリを投げる（N+1）ことは避ける。ツリー表示は 1 スペースで
 -- 数百〜数千ページを一度に扱うため、1 ページ 1 往復では表示のたびにその回数だけ往復する。
 --
--- 集めるのは ResolvePagePermissionFacts と同じ事実（届いた中で最も強い役割）。
+-- 集めるのは ResolvePagePermissionFacts と同じ事実（ワークスペースとスペースの 2 段で届いた中で
+-- 最も強い役割）。
 -- 1 ページの解決と一覧で違う畳み方をすると「開くと見えるのに一覧に出ない」ずれになる。
 WITH me AS (
     SELECT p.id
@@ -404,32 +263,13 @@ mine AS (
           AND sv1.visibility = 'workspace'
       )
       AND EXISTS (SELECT 1 FROM me)
-),
--- 各ページについて、経路上（自分と祖先）のページ付与の最大値。ページごとに値が変わるので
--- スペース単位の既定のように 1 行へ畳めない。1 回のクエリで集めて LEFT JOIN する
--- （ページごとに引き直すと行数ぶんの集約になる）。
--- 「最も近い段」は見ない — 付与に降格は無く、近い付与が遠い付与を弱めることはないため。
-page_grant_rank AS (
-    SELECT pp.page_id,
-           max(CASE pg."role"
-                 WHEN 'admin' THEN 4 WHEN 'editor' THEN 3
-                 WHEN 'commenter' THEN 2 WHEN 'viewer' THEN 1 ELSE 0 END) AS rank
-    FROM page_paths pp
-    JOIN pages tp ON tp.workspace_id = pp.workspace_id AND tp.id = pp.page_id
-    JOIN page_grants pg
-      ON pg.workspace_id = pp.workspace_id AND pg.page_id = pp.ancestor_id
-    WHERE pp.workspace_id = sqlc.arg(workspace_id)
-      AND tp.space_id = sqlc.arg(space_id)
-      AND (sqlc.arg(archived)::boolean) = (tp.archived_at IS NOT NULL)
-      AND pg.principal_id IN (SELECT id FROM mine)
-    GROUP BY pp.page_id
 )
 SELECT
     p.*,
     -- 既定の役割の強さ。意味と 0 の扱いは ResolvePagePermissionFacts と同じ。
     -- 所属（is_member）は返さない。役割が 1 つも無ければ強さ 0 で「何もできない」に
     -- なるため閲覧の判定には要らず、使われない事実を返すと編集可否にも答えられる顔をする。
-    GREATEST(COALESCE((
+    COALESCE((
         SELECT max(CASE g."role"
                      WHEN 'admin' THEN 4 WHEN 'editor' THEN 3
                      WHEN 'commenter' THEN 2 WHEN 'viewer' THEN 1 ELSE 0 END)
@@ -448,11 +288,10 @@ SELECT
              WHERE sg.workspace_id = sqlc.arg(workspace_id) AND sg.space_id = sqlc.arg(space_id)
                AND sg.principal_id IN (SELECT id FROM mine)
         ) g
-    ), 0), COALESCE(pgr.rank, 0))::integer AS grant_rank,
+    ), 0)::integer AS grant_rank,
     -- 親がアーカイブ済みか（親を持たない行は false）。
     (par.archived_at IS NOT NULL)::boolean AS parent_archived
 FROM pages p
-LEFT JOIN page_grant_rank pgr ON pgr.page_id = p.id
 -- 親がアーカイブ済みかは**事実**として返すだけで、ここでは何の判断にも使わない。
 -- 「復帰できるか」の規則は UnarchivePageUseCase が持つ（親がアーカイブ中なら断る）。
 LEFT JOIN pages par ON par.workspace_id = p.workspace_id AND par.id = p.parent_id
@@ -508,9 +347,8 @@ ORDER BY w.slug;
 -- max(rank) を SQL 側で計算すると「最も強いものを採る」という規則が DB へ写り、
 -- ページ 1 枚の解決と食い違ったときにどちらが正か決められなくなる。
 --
--- ページ付与（page_grants）はここでは一切見ない。この結果を「そのスペースのあるページを
--- 編集してよいか」に使ってはいけない（祖先のページ付与を見ていないため必ず狭い側へ倒れる）。
--- 呼び出し側は対象がまだ存在しない操作にだけ使う。
+-- この結果を「そのスペースのあるページを編集してよいか」に使ってはいけない（ページの公開範囲
+-- 'private' の例外はページ 1 枚の事実にしか無い）。呼び出し側は対象がまだ存在しない操作にだけ使う。
 --
 -- mine（自分に効く主体）の作り方は ResolvePagePermissionFacts と同じ:
 -- 自分自身 + 所属グループ + そのスペースの「全員」。グループの入れ子は DB 側で
@@ -758,29 +596,6 @@ sgrank AS (
     WHERE sg.workspace_id = sqlc.arg(workspace_id)
       AND (sg.principal_id IN (SELECT id FROM mine) OR sg.principal_id = sap2.id)
     GROUP BY sg.space_id
-),
--- ページ付与は経路（自分と祖先）を辿るので page_id ごとに値が変わる。
--- 「最も近い段」は見ない — 付与に降格は無く、近い付与が遠い付与を弱めることはないため。
---
--- この経路の mine は「自分と所属グループ」だけで、スペース全員（space_all）は space_allp が
--- 別に持つ。両方を見ないと、全員宛ての付与が 1 ページの解決では効くのにここでは効かず、
--- 「開けるのに検索に出ない」ずれになる。
---
--- 候補（cand）に絞ってから集計する。ワークスペース全体の経路を集めると、候補が数件でも
--- 全ページ分の JOIN を回すことになる。
-pgrank AS (
-    SELECT pp.page_id,
-           max(CASE pgt."role"
-                 WHEN 'admin' THEN 4 WHEN 'editor' THEN 3
-                 WHEN 'commenter' THEN 2 WHEN 'viewer' THEN 1 ELSE 0 END) AS v
-    FROM page_paths pp
-    JOIN cand c ON c.id = pp.page_id
-    JOIN page_grants pgt
-      ON pgt.workspace_id = pp.workspace_id AND pgt.page_id = pp.ancestor_id
-    LEFT JOIN space_allp sap3 ON sap3.space_id = c.space_id
-    WHERE pp.workspace_id = sqlc.arg(workspace_id)
-      AND (pgt.principal_id IN (SELECT id FROM mine) OR pgt.principal_id = sap3.id)
-    GROUP BY pp.page_id
 )
 SELECT
     cnd.*,
@@ -788,8 +603,7 @@ SELECT
     -- private のスペースはスペース単位の強さ（sgrank）だけで決まる。
     GREATEST(
       CASE WHEN spvis.visibility = 'workspace' THEN (SELECT v FROM wsrank) ELSE 0 END,
-      COALESCE(sr.v, 0),
-      COALESCE(pgr.v, 0)
+      COALESCE(sr.v, 0)
     )::integer AS grant_rank,
     -- 本文一致の抜粋を Go 側（usecase）で計算するための材料。page_search がまだ無ければ
     -- 空文字（NULL ではなく COALESCE で text に倒す — driver が NULL を string へ Scan
@@ -799,7 +613,6 @@ FROM cand cnd
 -- pages → spaces は複合 FK があるので必ず 1 行に当たる。
 JOIN spaces spvis ON spvis.workspace_id = sqlc.arg(workspace_id) AND spvis.id = cnd.space_id
 LEFT JOIN sgrank sr ON sr.space_id = cnd.space_id
-LEFT JOIN pgrank pgr ON pgr.page_id = cnd.id
 LEFT JOIN page_search ps ON ps.page_id = cnd.id
 ORDER BY cnd.title, cnd.id;
 
@@ -877,33 +690,16 @@ sgrank AS (
     WHERE sg.workspace_id = sqlc.arg(workspace_id)
       AND (sg.principal_id IN (SELECT id FROM mine) OR sg.principal_id = sap2.id)
     GROUP BY sg.space_id
-),
--- ページ付与。候補に絞ってから経路を辿る（意味は検索側と同じ）。
-pgrank AS (
-    SELECT pp.page_id,
-           max(CASE pgt."role"
-                 WHEN 'admin' THEN 4 WHEN 'editor' THEN 3
-                 WHEN 'commenter' THEN 2 WHEN 'viewer' THEN 1 ELSE 0 END) AS v
-    FROM page_paths pp
-    JOIN cand c ON c.id = pp.page_id
-    JOIN page_grants pgt
-      ON pgt.workspace_id = pp.workspace_id AND pgt.page_id = pp.ancestor_id
-    LEFT JOIN space_allp sap3 ON sap3.space_id = c.space_id
-    WHERE pp.workspace_id = sqlc.arg(workspace_id)
-      AND (pgt.principal_id IN (SELECT id FROM mine) OR pgt.principal_id = sap3.id)
-    GROUP BY pp.page_id
 )
 SELECT
     cnd.*,
     GREATEST(
       CASE WHEN spvis.visibility = 'workspace' THEN (SELECT v FROM wsrank) ELSE 0 END,
-      COALESCE(sr.v, 0),
-      COALESCE(pgr.v, 0)
+      COALESCE(sr.v, 0)
     )::integer AS grant_rank
 FROM cand cnd
 JOIN spaces spvis ON spvis.workspace_id = sqlc.arg(workspace_id) AND spvis.id = cnd.space_id
 LEFT JOIN sgrank sr ON sr.space_id = cnd.space_id
-LEFT JOIN pgrank pgr ON pgr.page_id = cnd.id
 ORDER BY cnd.title, cnd.id;
 
 -- name: ListPageTicketLinkSourcePageViewFacts :many
@@ -967,33 +763,16 @@ sgrank AS (
     WHERE sg.workspace_id = sqlc.arg(workspace_id)
       AND (sg.principal_id IN (SELECT id FROM mine) OR sg.principal_id = sap2.id)
     GROUP BY sg.space_id
-),
--- ページ付与。候補に絞ってから経路を辿る（意味は検索側と同じ）。
-pgrank AS (
-    SELECT pp.page_id,
-           max(CASE pgt."role"
-                 WHEN 'admin' THEN 4 WHEN 'editor' THEN 3
-                 WHEN 'commenter' THEN 2 WHEN 'viewer' THEN 1 ELSE 0 END) AS v
-    FROM page_paths pp
-    JOIN cand c ON c.id = pp.page_id
-    JOIN page_grants pgt
-      ON pgt.workspace_id = pp.workspace_id AND pgt.page_id = pp.ancestor_id
-    LEFT JOIN space_allp sap3 ON sap3.space_id = c.space_id
-    WHERE pp.workspace_id = sqlc.arg(workspace_id)
-      AND (pgt.principal_id IN (SELECT id FROM mine) OR pgt.principal_id = sap3.id)
-    GROUP BY pp.page_id
 )
 SELECT
     cnd.*,
     GREATEST(
       CASE WHEN spvis.visibility = 'workspace' THEN (SELECT v FROM wsrank) ELSE 0 END,
-      COALESCE(sr.v, 0),
-      COALESCE(pgr.v, 0)
+      COALESCE(sr.v, 0)
     )::integer AS grant_rank
 FROM cand cnd
 JOIN spaces spvis ON spvis.workspace_id = sqlc.arg(workspace_id) AND spvis.id = cnd.space_id
 LEFT JOIN sgrank sr ON sr.space_id = cnd.space_id
-LEFT JOIN pgrank pgr ON pgr.page_id = cnd.id
 ORDER BY cnd.title, cnd.id;
 
 -- name: ListWorkspacePageViewFactsByIDs :many
@@ -1066,31 +845,14 @@ sgrank AS (
     WHERE sg.workspace_id = sqlc.arg(workspace_id)
       AND (sg.principal_id IN (SELECT id FROM mine) OR sg.principal_id = sap2.id)
     GROUP BY sg.space_id
-),
--- ページ付与。候補に絞ってから経路を辿る（意味は検索側と同じ）。
-pgrank AS (
-    SELECT pp.page_id,
-           max(CASE pgt."role"
-                 WHEN 'admin' THEN 4 WHEN 'editor' THEN 3
-                 WHEN 'commenter' THEN 2 WHEN 'viewer' THEN 1 ELSE 0 END) AS v
-    FROM page_paths pp
-    JOIN cand c ON c.id = pp.page_id
-    JOIN page_grants pgt
-      ON pgt.workspace_id = pp.workspace_id AND pgt.page_id = pp.ancestor_id
-    LEFT JOIN space_allp sap3 ON sap3.space_id = c.space_id
-    WHERE pp.workspace_id = sqlc.arg(workspace_id)
-      AND (pgt.principal_id IN (SELECT id FROM mine) OR pgt.principal_id = sap3.id)
-    GROUP BY pp.page_id
 )
 SELECT
     cnd.*,
     GREATEST(
       CASE WHEN spvis.visibility = 'workspace' THEN (SELECT v FROM wsrank) ELSE 0 END,
-      COALESCE(sr.v, 0),
-      COALESCE(pgr.v, 0)
+      COALESCE(sr.v, 0)
     )::integer AS grant_rank
 FROM cand cnd
 JOIN spaces spvis ON spvis.workspace_id = sqlc.arg(workspace_id) AND spvis.id = cnd.space_id
 LEFT JOIN sgrank sr ON sr.space_id = cnd.space_id
-LEFT JOIN pgrank pgr ON pgr.page_id = cnd.id
 ORDER BY cnd.title, cnd.id;

@@ -148,7 +148,7 @@ type GetUserDisplayByIDRow struct {
 // GetUserByID と違い status を絞らない。コメントや変更履歴は投稿者が退会・停止した
 // 後も表示できる必要があるため（消えたことにして応答ごと空にすると、過去の記録が
 // 誰の発言だったか分からなくなる）。「今選べる相手か」の判定は
-// ListGrantablePrincipals / ListWorkspaceMembers が別に持つ。
+// ListWorkspaceMembers が別に持つ。
 func (q *Queries) GetUserDisplayByID(ctx context.Context, id int64) (GetUserDisplayByIDRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserDisplayByID, id)
 	var i GetUserDisplayByIDRow

@@ -44,24 +44,6 @@ func Test_レートリミッタ_時間経過で回復(t *testing.T) {
 	}
 }
 
-func Test_レートリミッタ_Forgetでバケツごと消える(t *testing.T) {
-	// 存在しない対象の鍵を残さないための口。消したあとは満タンから始まる。
-	l := New(60, 1)
-	if !l.Allow("gone") {
-		t.Fatal("first request should pass")
-	}
-	if l.Allow("gone") {
-		t.Fatal("second request should be denied before Forget")
-	}
-	l.Forget("gone")
-	if !l.Allow("gone") {
-		t.Fatal("bucket should start full again after Forget")
-	}
-	if got := len(l.buckets); got != 1 {
-		t.Fatalf("Forget 後に残るバケツは Allow で作り直した 1 つだけのはず: %d", got)
-	}
-}
-
 func Test_レートリミッタ_バケツ数に上限がある(t *testing.T) {
 	// 鍵を無尽蔵に変えられる経路（例: 詐称した IP・毎回変わるトークン）でも、
 	// 表そのものの大きさに歯止めが掛かることを固定する。maxBuckets はテストから直接

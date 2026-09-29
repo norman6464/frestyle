@@ -81,7 +81,7 @@ export default function TicketTypeAdmin({ types, onCreate, onSetDefault, onArchi
           {types.map((type) => (
             <tr key={type.id} className="border-b border-surface-3">
               <td className="py-1.5 font-semibold">
-                {/* 一覧の行の先頭と同じ印で見せる（色を選んだ結果が読めるかをここで確かめられる）。 */}
+                {/* 選んだ色の見本。一覧の行では色を混ぜないので、種別は名前だけで出る（色が見えるのはここだけ）。 */}
                 <span className="inline-flex items-center gap-1.5">
                   <TicketTypeGlyph type={type} />
                   {type.name}

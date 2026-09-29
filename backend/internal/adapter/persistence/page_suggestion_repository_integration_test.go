@@ -20,7 +20,7 @@ import (
 // （pageVersionTables と同じ役割分担）。
 var pageSuggestionTables = []string{
 	"page_suggestions", "page_versions",
-	"share_links", "page_grants", "space_grants", "workspace_grants",
+	"space_grants", "workspace_grants",
 	"principal_members", "principals",
 	"blocks", "page_paths", "page_snapshots", "pages", "spaces", "workspaces",
 }

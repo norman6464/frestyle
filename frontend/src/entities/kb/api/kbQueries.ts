@@ -1,7 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 import { workspaceScope } from '@/shared/api/queryKeys';
 import KbRepository from './kbRepository';
-import type { KbGrantablePrincipal } from '../model/types';
 
 /**
  * ナレッジの鍵。作成・改名・削除の応答が新しい値そのものなら setQueryData で差し替え、
@@ -44,12 +43,6 @@ export const kbKeys = {
   /** 未処理の提案。 */
   suggestions: (workspaceSlug: string, pageId: string) =>
     [...workspaceScope(workspaceSlug), 'page', pageId, 'suggestions'] as const,
-  /** このページ自身に張った権限（主体は ID だけ）。 */
-  pageGrants: (workspaceSlug: string, pageId: string) =>
-    [...workspaceScope(workspaceSlug), 'page', pageId, 'grants'] as const,
-  /** このページに権限を張れる相手（表示名つき）。 */
-  grantablePrincipals: (workspaceSlug: string, pageId: string) =>
-    [...workspaceScope(workspaceSlug), 'page', pageId, 'grantable-principals'] as const,
   /**
    * テンプレートの一覧すべて。ワークスペース全体のテンプレートはどのスペースの一覧にも出るので、
    * 作った・消したらこの鍵でまとめて直す。
@@ -150,22 +143,6 @@ export function kbSuggestionsQuery(workspaceSlug: string, pageId: string) {
   return queryOptions({
     queryKey: kbKeys.suggestions(workspaceSlug, pageId),
     queryFn: () => KbRepository.listOpenSuggestions(workspaceSlug, pageId),
-  });
-}
-
-/** このページ自身に張った権限（主体は ID だけ）。 */
-export function kbPageGrantsQuery(workspaceSlug: string, pageId: string) {
-  return queryOptions({
-    queryKey: kbKeys.pageGrants(workspaceSlug, pageId),
-    queryFn: () => KbRepository.listPageGrants(workspaceSlug, pageId),
-  });
-}
-
-/** このページに権限を張れる相手（表示名つき）。共有のパネルと、チケットの担当の名前引きが使う。 */
-export function kbGrantablePrincipalsQuery(workspaceSlug: string, pageId: string) {
-  return queryOptions({
-    queryKey: kbKeys.grantablePrincipals(workspaceSlug, pageId),
-    queryFn: () => KbRepository.listGrantablePrincipals(workspaceSlug, pageId),
   });
 }
 

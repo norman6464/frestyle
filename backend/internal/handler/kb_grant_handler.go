@@ -17,10 +17,6 @@ type KnowledgeBaseGrantHandler struct {
 	revokeWorkspaceRole *kb.RevokeWorkspaceRoleUseCase
 	grantSpaceRole      *kb.GrantSpaceRoleUseCase
 	revokeSpaceRole     *kb.RevokeSpaceRoleUseCase
-	grantPageRole       *kb.GrantPageRoleUseCase
-	revokePageRole      *kb.RevokePageRoleUseCase
-	listPageGrants      *kb.ListPageGrantsUseCase
-	listPrincipals      *kb.ListGrantablePrincipalsUseCase
 	canRemoveAdmin      *kb.CanRemoveWorkspaceAdminUseCase
 }
 
@@ -30,10 +26,6 @@ func NewKnowledgeBaseGrantHandler(
 	revokeWorkspaceRole *kb.RevokeWorkspaceRoleUseCase,
 	grantSpaceRole *kb.GrantSpaceRoleUseCase,
 	revokeSpaceRole *kb.RevokeSpaceRoleUseCase,
-	grantPageRole *kb.GrantPageRoleUseCase,
-	revokePageRole *kb.RevokePageRoleUseCase,
-	listPageGrants *kb.ListPageGrantsUseCase,
-	listPrincipals *kb.ListGrantablePrincipalsUseCase,
 	canRemoveAdmin *kb.CanRemoveWorkspaceAdminUseCase,
 ) *KnowledgeBaseGrantHandler {
 	return &KnowledgeBaseGrantHandler{
@@ -42,10 +34,6 @@ func NewKnowledgeBaseGrantHandler(
 		revokeWorkspaceRole: revokeWorkspaceRole,
 		grantSpaceRole:      grantSpaceRole,
 		revokeSpaceRole:     revokeSpaceRole,
-		grantPageRole:       grantPageRole,
-		revokePageRole:      revokePageRole,
-		listPageGrants:      listPageGrants,
-		listPrincipals:      listPrincipals,
 		canRemoveAdmin:      canRemoveAdmin,
 	}
 }
@@ -80,25 +68,6 @@ type kbSpaceGrantResponse struct {
 func toKbSpaceGrantResponse(g *domain.SpaceGrant) kbSpaceGrantResponse {
 	return kbSpaceGrantResponse{
 		SpaceID:     g.SpaceID,
-		PrincipalID: g.PrincipalID,
-		Role:        string(g.Role),
-		CreatedAt:   g.CreatedAt,
-		UpdatedAt:   g.UpdatedAt,
-	}
-}
-
-// kbPageGrantResponse はページの既定の役割 1 件の返却形。
-type kbPageGrantResponse struct {
-	PageID      string    `json:"pageId"      example:"0198a000-0000-7000-8000-000000000003"`
-	PrincipalID string    `json:"principalId" example:"0198a000-0000-7000-8000-00000000000a"`
-	Role        string    `json:"role"        example:"editor"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-}
-
-func toKbPageGrantResponse(g *domain.PageGrant) kbPageGrantResponse {
-	return kbPageGrantResponse{
-		PageID:      g.PageID,
 		PrincipalID: g.PrincipalID,
 		Role:        string(g.Role),
 		CreatedAt:   g.CreatedAt,
@@ -256,114 +225,4 @@ func (h *KnowledgeBaseGrantHandler) RevokeSpaceRole(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
-}
-
-// GrantPageRole はページでの既定の役割を主体に与える。
-func (h *KnowledgeBaseGrantHandler) GrantPageRole(c *gin.Context) {
-	scope, ok := kbScope(c)
-	if !ok {
-		return
-	}
-	pageID := c.Param("pageId")
-	if !h.requirePageAdmin(c, scope, pageID) {
-		return
-	}
-	limitKnowledgeBaseBody(c)
-	var req kbGrantRoleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_request"})
-		return
-	}
-	// 「最後の admin」の検査はここでも行わない（RevokeSpaceRole と同じ理由 — ワークスペース
-	// admin は配下の全ページに届き続ける）。
-	grant, err := h.grantPageRole.Execute(c.Request.Context(), kb.GrantPageRoleInput{
-		WorkspaceID: scope.workspaceID,
-		PageID:      pageID,
-		PrincipalID: c.Param("principalId"),
-		Role:        domain.GrantRole(req.Role),
-	})
-	if err != nil {
-		respondKbPermissionOperationErr(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, toKbPageGrantResponse(grant))
-}
-
-// RevokePageRole はページでの既定の役割を剥がす（冪等）。
-func (h *KnowledgeBaseGrantHandler) RevokePageRole(c *gin.Context) {
-	scope, ok := kbScope(c)
-	if !ok {
-		return
-	}
-	pageID := c.Param("pageId")
-	if !h.requirePageAdmin(c, scope, pageID) {
-		return
-	}
-	if err := h.revokePageRole.Execute(c.Request.Context(), kb.RevokePageRoleInput{
-		WorkspaceID: scope.workspaceID,
-		PageID:      pageID,
-		PrincipalID: c.Param("principalId"),
-	}); err != nil {
-		respondKbPermissionOperationErr(c, err)
-		return
-	}
-	c.Status(http.StatusNoContent)
-}
-
-// ListPageGrants はそのページ自身に張られた既定の役割の一覧を返す。
-func (h *KnowledgeBaseGrantHandler) ListPageGrants(c *gin.Context) {
-	scope, ok := kbScope(c)
-	if !ok {
-		return
-	}
-	pageID := c.Param("pageId")
-	if !h.requirePageAdmin(c, scope, pageID) {
-		return
-	}
-	grants, err := h.listPageGrants.Execute(c.Request.Context(), kb.ListPageGrantsInput{
-		WorkspaceID: scope.workspaceID,
-		PageID:      pageID,
-	})
-	if err != nil {
-		respondKbPermissionOperationErr(c, err)
-		return
-	}
-	out := make([]kbPageGrantResponse, 0, len(grants))
-	for i := range grants {
-		out = append(out, toKbPageGrantResponse(&grants[i]))
-	}
-	c.JSON(http.StatusOK, out)
-}
-
-// kbGrantablePrincipalResponse は権限を張れる相手 1 件の返却形。
-type kbGrantablePrincipalResponse struct {
-	ID   string `json:"id"   example:"0198a000-0000-7000-8000-00000000000a"`
-	Kind string `json:"kind" example:"user"`
-	// Name は表示名。引けなかった場合は空文字（行は落とさない）。
-	Name string `json:"name" example:"田中 太郎"`
-}
-
-// ListGrantablePrincipals はそのページに権限を張れる相手を表示名つきで返す。
-func (h *KnowledgeBaseGrantHandler) ListGrantablePrincipals(c *gin.Context) {
-	scope, ok := kbScope(c)
-	if !ok {
-		return
-	}
-	// 認可をページ単位で掛けるのは、ワークスペース admin に絞るとページに admin を
-	// 張られた人が相手を選べなくなる（権限はあるのに画面が使えない）ため。
-	if !h.requirePageAdmin(c, scope, c.Param("pageId")) {
-		return
-	}
-	principals, err := h.listPrincipals.Execute(c.Request.Context(), kb.ListGrantablePrincipalsInput{
-		WorkspaceID: scope.workspaceID,
-	})
-	if err != nil {
-		respondKbPermissionOperationErr(c, err)
-		return
-	}
-	out := make([]kbGrantablePrincipalResponse, 0, len(principals))
-	for _, p := range principals {
-		out = append(out, kbGrantablePrincipalResponse{ID: p.ID, Kind: string(p.Kind), Name: p.Name})
-	}
-	c.JSON(http.StatusOK, out)
 }

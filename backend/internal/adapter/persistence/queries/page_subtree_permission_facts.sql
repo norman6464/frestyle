@@ -16,11 +16,9 @@
 -- サブツリーは必ず 1 つのスペースに収まる（スペースをまたぐ移動はサブツリーの space_id を
 -- まとめて付け替える）ので、space_grants と space_all の主体は根のスペースで引けば足りる。
 --
--- ページごとに値が変わるのは経路上のページ付与だけなので、closure を辿るのは
--- page_grant_rank の 1 本で済む。呼ぶのはアーカイブ / 復帰の 1 回だけで、閲覧経路には足さない。
---
--- visibility / created_by_user_id はサブツリーの各ページで違い得るので（対象ページと同じ
--- スペースの visibility とは別に）ページごとに引く。
+-- 付与はワークスペースとスペースの 2 段だけなので、役割の強さはサブツリー全体で同じ値になる。
+-- ページごとに違い得るのは visibility / created_by_user_id だけで（対象ページと同じスペースの
+-- visibility とは別に）、それをページごとに引く。呼ぶのはアーカイブ / 復帰の 1 回だけ。
 WITH spt_target AS (
     -- visibility の意味は ResolvePagePermissionFacts の rpf_target と同じ。
     SELECT spt_pg.space_id, spt_sp.visibility AS space_visibility
@@ -74,29 +72,12 @@ spt_grants AS (
          WHERE spt_sg.workspace_id = sqlc.arg(workspace_id) AND spt_sg.space_id = spt_t3.space_id
            AND spt_sg.principal_id IN (SELECT id FROM spt_mine)
     ) spt_g
-),
--- ページ付与だけは畳めない。サブツリーの中でも「祖先のどこに張られているか」で
--- ページごとに値が変わるため、page_id ごとに集めて下の SELECT へ LEFT JOIN する。
--- 「最も近い段」は見ない — 付与に降格は無く、近い付与が遠い付与を弱めることはないため。
-spt_page_grant_rank AS (
-    SELECT spt_pp2.page_id,
-           max(CASE spt_pg3."role"
-                 WHEN 'admin' THEN 4 WHEN 'editor' THEN 3
-                 WHEN 'commenter' THEN 2 WHEN 'viewer' THEN 1 ELSE 0 END) AS rank
-    FROM page_paths spt_pp2
-    JOIN spt_subtree spt_st ON spt_st.page_id = spt_pp2.page_id
-    JOIN page_grants spt_pg3
-      ON spt_pg3.workspace_id = spt_pp2.workspace_id AND spt_pg3.page_id = spt_pp2.ancestor_id
-    WHERE spt_pp2.workspace_id = sqlc.arg(workspace_id)
-      AND spt_pg3.principal_id IN (SELECT id FROM spt_mine)
-    GROUP BY spt_pp2.page_id
 )
 SELECT
     spt_final.page_id,
     EXISTS (SELECT 1 FROM spt_me) AS is_member,
     spt_final.page_visibility,
     (spt_final.created_by_user_id = sqlc.arg(user_id)::bigint) AS is_owner,
-    GREATEST(COALESCE((SELECT spt_grants.grant_rank FROM spt_grants), 0), COALESCE(spt_pgr.rank, 0))::integer AS grant_rank
+    COALESCE((SELECT spt_grants.grant_rank FROM spt_grants), 0)::integer AS grant_rank
 FROM spt_subtree spt_final
-LEFT JOIN spt_page_grant_rank spt_pgr ON spt_pgr.page_id = spt_final.page_id
 ORDER BY spt_final.page_id;

@@ -16,7 +16,6 @@ export type BacklogAssigneeFilter =
   | { kind: 'principal'; id: string };
 
 export interface BacklogUrlPatch {
-  selectedId?: string | null;
   statusId?: string | null;
   typeId?: string | null;
   labelId?: string | null;
@@ -42,26 +41,27 @@ const CONDITION_KEYS = [
 ] as const satisfies readonly (keyof BacklogUrlPatch)[];
 
 /**
- * useBacklogUrlState は一覧の文脈（どのチケットを選んだか・絞り込み）を URL の問い合わせに載せる。
+ * useBacklogUrlState は一覧の文脈（絞り込み）を URL の問い合わせに載せる。
  *
  * どの面かは**経路が持つ**（/backlog/:projectId・/settings・/archive）。面は戻る・進む・
  * リンク共有の単位なので、問い合わせの飾りではなく経路そのものに出す。
  *
- * 画面の中に閉じた状態にすると、チケットを開いて戻ってきたときに絞り込みも選択も消える。
- * 戻る先が「現役の先頭」に固定されると、朝に何十件も捌く動きが成立しない。
+ * 画面の中に閉じた状態にすると、チケットを開いて戻ってきたときに絞り込みが消える。
+ * 戻る先が「現役の先頭」に固定されると、朝に何十件も捌く動きが成立しない。チケットそのものは
+ * 独立した票（/tickets/:id）へ移るだけなので、ここでは選ばない（開いた票の「戻る」が
+ * このページの URL をそのまま持って戻る。ticketReturnPath / ticketLinkState 参照）。
  *
  * 利用者が保存した絞り込みを選ぶと、その条件をすべて URL に書き出したうえで `filter=<id>` も
  * 載せる（どのタブを押した状態かを示すため）。条件は URL が正で、保存した絞り込みは
  * 「URL にまとめて書き込む手段」にすぎない —— 条件のどれかを手で変えれば `filter` は外れ、
  * タブの押された表示も消える（保存したものと違う条件を、同じ名前の下で見せない）。
  *
- * 履歴は汚さない（`replace`）。面の切り替えや行の選択で戻る操作の回数が増えると、
+ * 履歴は汚さない（`replace`）。面の切り替えや絞り込みの変更で戻る操作の回数が増えると、
  * 「戻る」でバックログから出るのに何度も押すことになるため。
  */
 export function useBacklogUrlState() {
   const [params, setParams] = useSearchParams();
 
-  const selectedId = params.get('ticket');
   const statusId = params.get('statusId');
   const typeId = params.get('typeId');
   const labelId = params.get('labelId');
@@ -77,10 +77,6 @@ export function useBacklogUrlState() {
       setParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          if (patch.selectedId !== undefined) {
-            if (patch.selectedId) next.set('ticket', patch.selectedId);
-            else next.delete('ticket');
-          }
           if (patch.statusId !== undefined) {
             if (patch.statusId) next.set('statusId', patch.statusId);
             else next.delete('statusId');
@@ -146,7 +142,6 @@ export function useBacklogUrlState() {
     [setParams],
   );
 
-  const selectTicket = useCallback((value: string | null) => update({ selectedId: value }), [update]);
   const setStatusId = useCallback((value: string | null) => update({ statusId: value }), [update]);
   const setTypeId = useCallback((value: string | null) => update({ typeId: value }), [update]);
   const setLabelId = useCallback((value: string | null) => update({ labelId: value }), [update]);
@@ -244,7 +239,6 @@ export function useBacklogUrlState() {
   const reset = useCallback(
     () =>
       update({
-        selectedId: null,
         statusId: null,
         typeId: null,
         labelId: null,
@@ -259,7 +253,6 @@ export function useBacklogUrlState() {
   );
 
   return {
-    selectedId,
     statusId,
     typeId,
     labelId,
@@ -271,7 +264,6 @@ export function useBacklogUrlState() {
     savedFilterId,
     assignee,
     filtered,
-    selectTicket,
     setStatusId,
     setTypeId,
     setLabelId,

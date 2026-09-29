@@ -4,7 +4,6 @@ package persistence_test
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"math"
 	"testing"
@@ -66,7 +65,7 @@ func setupDecoy(ctx context.Context, t *testing.T, sqlDB *sql.DB) decoyFixture {
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		// principals / share_links は users への FK が ON DELETE CASCADE なので
+		// principals は users への FK が ON DELETE CASCADE なので
 		// この 1 行を消せば派生も消える。membership_events（段 6）は記録 FK（RESTRICT）
 		// なので、先にこのユーザーを指す行だけ消しておく必要がある。users は kbTables に
 		// 含まれず TruncateAll では消えないため、負の id をテストの外へ残さない。
@@ -249,24 +248,6 @@ func Test_範囲外のユーザーIDが巻き戻って別人の権限になら�
 		// のに成功を返さないこと（実在し得ないユーザーなので not found と同じ扱い）。
 		require.Error(t, err)
 		assert.ErrorIs(t, err, repository.ErrUserNotFound)
-	})
-
-	t.Run("共有リンクの発行は成功を返さない", func(t *testing.T) {
-		f := setupDecoy(ctx, t, sqlDB)
-		hash := sha256.Sum256([]byte("token-" + newID()))
-
-		_, err := f.shareLinks.Create(ctx, repository.ShareLinkWrite{
-			WorkspaceID: f.ws, PageID: f.pageID, Capability: domain.CapabilityView,
-			TokenHash: hash[:], CreatedByUserID: wrappedUserID(),
-		})
-
-		// 巻き戻るとおとりが FK を満たしてしまい、発行者が別人のリンクが実際に残る。
-		require.Error(t, err)
-		var n int
-		require.NoError(t, sqlDB.QueryRow(
-			`SELECT count(*) FROM share_links WHERE workspace_id = $1`, f.ws,
-		).Scan(&n))
-		assert.Zero(t, n, "1 行も書かれていないこと")
 	})
 
 	t.Run("ページ作成は成功を返さない", func(t *testing.T) {

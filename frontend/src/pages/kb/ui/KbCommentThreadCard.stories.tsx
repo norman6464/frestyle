@@ -8,7 +8,7 @@ import type { KbCommentThread } from '@/entities/kb';
  *
  * 読むことは誰でもできるが、書く（返信）・解決する・再開するのは canComment が true の
  * 人だけ。false の人には返信欄も解決/再開ボタンも出さない — 押しても 403 が返るだけの
- * ボタンは、権限が無いことすら伝えない（SharePanel の共有ボタンと同じ理由）。
+ * ボタンは、権限が無いことすら伝えない。
  */
 const meta = {
   title: 'pages/kb/KbCommentThreadCard',
