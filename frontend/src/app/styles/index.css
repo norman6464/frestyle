@@ -112,7 +112,7 @@
   --tw-prose-pre-code: #383a42;
   --tw-prose-pre-border: var(--color-surface-3);
   /* 箇条書きの点・番号は typography の既定だと灰色で、本文から浮いて見える。
-     本文と同じ色に揃える（ナレッジ / 教材 / AI チャットの prose 全部に効く）。 */
+     本文と同じ色に揃える（prose を使う表示すべてに効く）。 */
   --tw-prose-bullets: var(--color-text-primary);
   --tw-prose-counters: var(--color-text-primary);
 }
@@ -133,110 +133,6 @@
   font-size: inherit;
 }
 /*
- * コース教材の本文タイポグラフィ。
- * prose-sm のプリセットは行間・段落間が詰まって「読み物」に向かないため、
- * 教材専用スコープ(.course-prose)だけ本文 16px・行間 2.0 のゆったりした
- * 余白に上書きする。ナレッジ / AI チャットの prose には影響しない。
- */
-.prose.course-prose {
-  font-size: 1rem;
-  line-height: 2;
-}
-.prose.course-prose p {
-  margin-top: 1.4em;
-  margin-bottom: 1.4em;
-}
-/* 大見出しは章内の話題の切り替わり。前に大きく空け、下線でセクション境界を示す
-   (色はニュートラルな枠色 = surface-3。モノクロ最小主義のトーンを崩さない)。 */
-.prose.course-prose h2 {
-  margin-top: 3.2em;
-  margin-bottom: 1.2em;
-  padding-bottom: 0.6em;
-  border-bottom: 1px solid var(--color-surface-3);
-  line-height: 1.4;
-}
-.prose.course-prose h3 {
-  margin-top: 2.4em;
-  margin-bottom: 1em;
-  line-height: 1.5;
-}
-.prose.course-prose > :first-child {
-  margin-top: 0;
-}
-.prose.course-prose ul,
-.prose.course-prose ol {
-  margin-top: 1.4em;
-  margin-bottom: 1.4em;
-}
-.prose.course-prose li {
-  margin-top: 0.6em;
-  margin-bottom: 0.6em;
-}
-.prose.course-prose pre {
-  /* コース本文(16px)より少し小さめのコードサイズ。行間は本文ほど広げない。 */
-  font-size: 0.875rem;
-  line-height: 1.7;
-  margin-top: 1.8em;
-  margin-bottom: 1.8em;
-}
-/*
- * コース教材の tiptap 表示（.course-doc = RichTextEditor の外枠に付与）。
- * ナレッジ用の prose スケール（h1 36px / h2 24px）では、教材の長い見出し
- * （ファイルパス入り等・45 文字超が 73 見出し）が折り返して巨大に見えるため、
- * 旧 Markdown 表示（course-prose）と同等の読み物タイポグラフィに抑える。
- * ナレッジ / AI チャットの表示には影響しない。
- */
-.course-doc .rte-content {
-  font-size: 1rem;
-  line-height: 2;
-}
-.course-doc .rte-content .ProseMirror h1 {
-  font-size: 1.5rem;
-  line-height: 1.4;
-  margin-top: 3.2em;
-  margin-bottom: 1em;
-}
-.course-doc .rte-content .ProseMirror h2 {
-  font-size: 1.25rem;
-  line-height: 1.4;
-  margin-top: 2.6em;
-  margin-bottom: 1em;
-  padding-bottom: 0.6em;
-  border-bottom: 1px solid var(--color-surface-3);
-}
-.course-doc .rte-content .ProseMirror h3 {
-  font-size: 1.125rem;
-  line-height: 1.5;
-  margin-top: 2em;
-  margin-bottom: 0.9em;
-}
-.course-doc .rte-content .ProseMirror > :first-child {
-  margin-top: 0;
-}
-.course-doc .rte-content .ProseMirror p {
-  margin-top: 1.4em;
-  margin-bottom: 1.4em;
-}
-.course-doc .rte-content .ProseMirror li {
-  margin-top: 0.6em;
-  margin-bottom: 0.6em;
-}
-.course-doc .rte-content .ProseMirror pre {
-  /* コース本文(16px)より少し小さめのコードサイズ。行間は本文ほど広げない。 */
-  font-size: 0.875rem;
-  line-height: 1.7;
-}
-
-.prose.course-prose img,
-.prose.course-prose table {
-  margin-top: 2em;
-  margin-bottom: 2em;
-}
-.prose.course-prose blockquote {
-  margin-top: 1.8em;
-  margin-bottom: 1.8em;
-}
-/*
  * @tailwindcss/typography は inline code (`<code>`) の前後に ::before / ::after で
  * バッククォート (`) を装飾として自動挿入する。 これがテーブルセル内などで
  * 「`GET`」のように リテラルなバッククォートとして見えてしまうので打ち消す。
@@ -251,8 +147,6 @@
  *
  * カラー設計（白ボディ + 白カード + border/影。旧灰青統一の方針を撤回）:
  *   - body は白 (#FFFFFF)。カードは border 1px + 影で白 body から浮かせる
- *   - 教材コース閲覧 (/courses/:id) も白 (--color-reading-surface = #FFFFFF)。
- *     旧灰青は tiptap 表示への切替でナレッジと同じ白に統一した
  *   - サイドバー / ヘッダーは白 (--color-nav) + border 1px で境界を表現
  *   - hover / active は色相を持たない暖色グレー (#F5F5F4 / #EAEAE9) で控えめに
  *   - アクセント色は使用箇所を絞り、視覚ノイズを排除する
@@ -349,9 +243,6 @@
   --color-surface-1: var(--fs-raised);
   --color-surface-2: var(--fs-soft);
   --color-surface-3: var(--fs-border);
-  /* 教材コース閲覧 (/courses/:id) の読み物背景。tiptap 表示への切替に合わせ、ナレッジと同じ白へ
-     統一した。変数はコース閲覧ページ専用。 */
-  --color-reading-surface: #FFFFFF;
   /* サイドバー / ヘッダーは body と同じ白で、border 1px のみで境界を表現する */
   --color-nav: #FFFFFF;
   /* nav 上の hover / active 状態。色相を持たないニュートラル寄り暖色グレーで
@@ -363,7 +254,7 @@
   --color-nav-selected: #dbeafe;
   --color-nav-selected-text: #1e40af;
   --color-nav-selected-rule: #2563eb;
-  /* ヘッダーの高さ。SecondaryPanel 側のオフセット（ホバー検知ゾーン・浮きパネル）もこれを基準にする。 */
+  /* ヘッダーの高さ。ヘッダーの下から始まる固定の面（狭い画面の詳細など）の上端がこれを読む。 */
   --app-header-h: 56px;
   /* 狭い画面の下部ナビの高さ（safe-area は含まない）。本文の下余白と「上に戻る」の位置がこれを読む。 */
   --app-bottom-nav-h: 56px;
@@ -409,34 +300,6 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-}
-
-/*
- * サイドバー（SecondaryPanel）を一時表示 → 固定表示へ切り替えたときの入場アニメーション。
- * 固定表示は通常の flex 子として幅を占有するため、幅や position を動かすと本文の再
- * レイアウトも同時に動いてジャンプして見える。opacity + transform(translateX) だけを
- * 動かせばレイアウトを乱さずに「滑り込んで馴染む」見え方になる。一時表示のオーバーレイ
- * 自体の出現（SecondaryPanel.tsx の transition-all duration-base ease-out）と歩調を揃える。
- */
-@keyframes panel-pin-in {
-  from {
-    opacity: 0;
-    transform: translateX(-12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.animate-panel-pin {
-  animation: panel-pin-in 200ms ease-out both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-panel-pin {
-    animation-duration: 0.01ms;
   }
 }
 
