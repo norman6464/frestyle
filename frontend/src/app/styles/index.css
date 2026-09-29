@@ -254,8 +254,9 @@
   --color-nav-selected: #dbeafe;
   --color-nav-selected-text: #1e40af;
   --color-nav-selected-rule: #2563eb;
-  /* ヘッダーの高さ。ヘッダーの下から始まる固定の面（狭い画面の詳細など）の上端がこれを読む。 */
-  --app-header-h: 56px;
+  /* ヘッダーの高さ（狭い画面。広い画面は 52px）。帯は低くして本文の面積を削らない。
+     ヘッダーの下から始まる固定の面（狭い画面の詳細など）の上端がこれを読む。 */
+  --app-header-h: 48px;
   /* 狭い画面の下部ナビの高さ（safe-area は含まない）。本文の下余白と「上に戻る」の位置がこれを読む。 */
   --app-bottom-nav-h: 56px;
   --color-text-primary: var(--fs-text-strong);

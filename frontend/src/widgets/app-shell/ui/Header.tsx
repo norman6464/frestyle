@@ -13,10 +13,19 @@ interface HeaderProps {
   onOpenSearch: () => void;
 }
 
+const focusRing = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600';
+
 /**
  * Header — 上部固定の帯。常時表示（本文には重ねない・自動的には隠れない）。設計ボード ST02・ST03。
  *
  * 左: ロゴと主な行き先（ホーム・担当・ナレッジ・バックログ）／ 右: 検索・通知ベル・アカウント。
+ *
+ * 帯は低く（48px、広い画面で 52px）、部品は密に並べる —— 報道系サイトの帯の作り。本文の面積を
+ * 削らず、帯であることは高さではなく文字の強弱で分からせる：ロゴは太字、行き先は通常の太さで、
+ * 今いる所だけ太字＋下線（地の色を変えるより、白い帯の上では線のほうが読める）。
+ * 行き先の間は細い縦線で区切り、検索は低い入力欄の形にする。
+ * 押せるものの大きさは、マウスでは 36px（WCAG 2.2 の最低 24px を満たす）、指では ui-hit で 44px。
+ *
  * 主な行き先は広い画面だけ。狭い画面は下部ナビ（GlobalBottomNav）が同じ表を読んで持つ
  * —— 同じ階層のナビを 2 系統並べない。三本線のメニューは持たない（ST02 の狭い画面の帯は
  * ロゴ・検索・通知・アカウントだけ。ナレッジのページの一覧はナレッジの文脈バーから開く）。
@@ -34,17 +43,24 @@ export default function Header({ onOpenSearch }: HeaderProps) {
   return (
     <>
       {loggingOut && <Loading fullscreen message="ログアウト中..." />}
-      {/* 常時表示・不透明。本文とは縦に並ぶだけで重ねないので、半透明やぼかしは不要。 */}
-      <header className="app-header-surface flex-shrink-0 h-14 md:h-16 flex items-center gap-1 md:gap-3 px-2 md:px-5 [&_button]:min-h-11 [&_button]:min-w-11 [&_a]:min-h-11 [&_a]:min-w-11 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600 [&_a]:focus-visible:outline [&_a]:focus-visible:outline-2 [&_a]:focus-visible:outline-brand-600">
-        {/* ロゴは favicon と同じ画像（favicon.svg = 三角の飛翔マーク）に揃える。 */}
-        <Link to="/" className="flex items-center gap-2 flex-shrink-0 px-1" aria-label="FreStyle ホーム">
-          <img src="/favicon.svg" alt="" aria-hidden="true" className="w-7 h-7 flex-shrink-0" />
-          <span className="hidden sm:block text-lg font-bold text-[var(--color-text-primary)]">FreStyle</span>
+      {/* 常時表示・不透明。本文とは縦に並ぶだけで重ねないので、半透明やぼかしは不要。
+          高さは --app-header-h（48px）と合わせる。狭い画面の板（TicketDetailSheet）がその値で下に付く。 */}
+      <header className="app-header-surface flex h-12 flex-shrink-0 items-center gap-3 px-3 md:h-[3.25rem] md:gap-6 md:px-5">
+        {/* ロゴは favicon と同じ画像（favicon.svg = 三角の飛翔マーク）に揃える。名前は太字で、
+            狭い画面でも出す（三本線が無いぶん左に余白がある）。 */}
+        <Link
+          to="/"
+          aria-label="FreStyle ホーム"
+          className={`ui-hit flex flex-shrink-0 items-center gap-2 rounded-md ${focusRing}`}
+        >
+          <img src="/favicon.svg" alt="" aria-hidden="true" className="h-7 w-7 flex-shrink-0" />
+          <span className="text-lg font-bold tracking-tight text-[var(--color-text-primary)]">FreStyle</span>
         </Link>
 
-        {/* 主な行き先（広い画面）。ひとまとまりの地の上に並べ、今いる所だけ一段濃くする。
+        {/* 主な行き先（広い画面）。帯の高さいっぱいに並べ、項目の間は細い縦線で区切る。
+            通常の太さで並べ、今いる所だけ太字にして帯の下端に線を引く。
             狭い画面の下部ナビと同じ名前にする（同じ役割のナビを別の名前で読ませない）。 */}
-        <nav aria-label="主な行き先" className="hidden md:flex items-center gap-1 rounded-xl bg-surface-2 p-1 flex-shrink-0">
+        <nav aria-label="主な行き先" className="hidden self-stretch items-stretch md:flex">
           {GLOBAL_NAV_PRIMARY.map((item) => {
             const active = navActive(item, pathname);
             return (
@@ -52,10 +68,10 @@ export default function Header({ onOpenSearch }: HeaderProps) {
                 key={item.id}
                 to={item.to}
                 aria-current={active ? 'page' : undefined}
-                className={`inline-flex items-center justify-center rounded-lg px-4 text-sm font-medium transition-colors ${
+                className={`relative inline-flex items-center px-3 text-sm transition-colors before:absolute before:left-0 before:top-1/2 before:h-3.5 before:w-px before:-translate-y-1/2 before:bg-surface-3 first:before:hidden ${focusRing} focus-visible:-outline-offset-2 ${
                   active
-                    ? 'bg-[var(--color-nav-active)] text-[var(--color-text-primary)]'
-                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)]'
+                    ? 'font-bold text-[var(--color-text-primary)] after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-[var(--color-nav-selected-rule)]'
+                    : 'font-normal text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
                 {item.label}
@@ -65,27 +81,31 @@ export default function Header({ onOpenSearch }: HeaderProps) {
         </nav>
 
         {/* 右側 utilities。ml-auto で右端へ寄せる。 */}
-        <div className="ml-auto flex items-center gap-1">
-          {/* 検索。狭い幅では虫眼鏡だけ、十分な幅があれば名前と ⌘K も出す。 */}
+        <div className="ml-auto flex items-center gap-1 md:gap-3">
+          {/* 検索。広い画面では低い入力欄の形（薄い文言と ⌘K、右端に虫眼鏡）にして「ここで探せる」と
+              分かるようにする。中身は入力欄ではなく 1 つのボタンで、押せばパレットが開く。狭い幅は虫眼鏡だけ。 */}
           <button
             type="button"
             onClick={onOpenSearch}
             aria-label="移動先を探す"
-            className="inline-flex items-center justify-center gap-2 p-2 lg:px-3 rounded-md text-sm text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
+            className={`ui-hit inline-flex h-9 w-9 items-center justify-center rounded-md text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] md:w-60 md:justify-start md:border md:border-surface-3 md:bg-surface-2 md:pl-3 md:text-[var(--color-text-muted)] md:hover:border-[var(--color-border-hover)] md:hover:bg-surface-2 lg:w-72 ${focusRing}`}
           >
-            <FsIcon name="search" className="w-5 h-5 flex-shrink-0" />
-            <span aria-hidden="true" className="hidden lg:inline">移動先を探す</span>
-            <span aria-hidden="true" className="hidden lg:inline text-xs text-[var(--color-text-muted)]">⌘K</span>
+            <span aria-hidden="true" className="hidden truncate text-sm md:inline">移動先を探す</span>
+            <span aria-hidden="true" className="ml-auto hidden text-xs md:inline">⌘K</span>
+            <span aria-hidden="true" className="grid h-full place-items-center md:w-9 md:flex-shrink-0">
+              <FsIcon name="search" className="h-5 w-5" />
+            </span>
           </button>
+
           {/* 通知ベル（未読バッジ付き） */}
           <Link
             to="/notifications"
             aria-label={unread > 0 ? `通知 (未読 ${unread} 件)` : '通知'}
-            className="relative inline-flex items-center justify-center p-2 rounded-md text-[var(--color-text-tertiary)] hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] transition-colors"
+            className={`ui-hit relative inline-flex h-9 w-9 items-center justify-center rounded-md text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-nav-hover)] hover:text-[var(--color-text-primary)] ${focusRing}`}
           >
-            <FsIcon name="bell" className="w-5 h-5" />
+            <FsIcon name="bell" className="h-5 w-5" />
             {unread > 0 && (
-              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-danger text-white text-xs leading-4 text-center">
+              <span className="absolute right-0.5 top-0.5 h-4 min-w-4 rounded-full bg-danger px-1 text-center text-[11px] font-bold leading-4 text-white">
                 {unread > 99 ? '99+' : unread}
               </span>
             )}

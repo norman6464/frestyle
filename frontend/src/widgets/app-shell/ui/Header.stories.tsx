@@ -9,6 +9,9 @@ import Header from './Header';
  * （ホーム・担当・ナレッジ・バックログ）、右に検索・通知・アカウント。
  * 常時表示（本文の上には重ねない・自動的には隠れない）で、地は不透明。
  *
+ * 帯は低く（48px / 広い画面 52px）、部品は密に並べる。ロゴは太字、行き先は通常の太さで
+ * 今いる所だけ太字＋下線。行き先の間は細い縦線で区切り、検索は低い入力欄の形。
+ *
  * 狭い画面では主な行き先を下部ナビに譲り、検索は虫眼鏡だけになる。三本線のメニューは持たない。
  */
 const meta = {
@@ -37,7 +40,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** ふだんの見え方。今いる所（ホーム）だけ一段濃くなる。 */
+/** ふだんの見え方。今いる所（ホーム）だけ太字になり、帯の下端に線が付く。 */
 export const 既定: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

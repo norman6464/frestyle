@@ -28,7 +28,8 @@ export default function HeaderUserMenu({
         // 名前だけだと、押すと何が開くのか読み上げでは分からない。
         aria-label={`${displayName || 'ユーザー'} のアカウント`}
         // 見た目は顔だけ（設計ボード ST02）。名前は開いた先の先頭に出す。
-        className="flex min-h-11 items-center justify-center rounded-full p-1 transition-colors hover:bg-[var(--color-nav-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+        // 大きさは帯の他の部品と同じ 36px（指では ui-hit で 44px）。
+        className="ui-hit flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-[var(--color-nav-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
       >
         <span aria-hidden="true">
           <Avatar name={displayName || 'U'} src={avatarUrl ?? undefined} size="sm" />
