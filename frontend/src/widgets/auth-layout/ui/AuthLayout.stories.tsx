@@ -61,7 +61,7 @@ export const 補足つき: Story = {
   },
 };
 
-/** 上に公開ページの帯を足したところ（実際のログイン画面の形）。 */
+/** 上に公開ページの帯を足したところ（招待の画面の形）。 */
 export const 帯つき: Story = {
   args: {
     header: <PublicHeader />,

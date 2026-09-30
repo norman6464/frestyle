@@ -20,16 +20,16 @@ export default function AuthNotice({ tone, children }: { tone: 'error' | 'succes
   );
 }
 
-/** フォームとほかの入口の間の「または」。 */
+/**
+ * フォームとほかの入口の間の「または」。両脇の線は文字の左右に並べて引く（線の上に地の色の
+ * 帯を重ねて文字を抜く作りだと、置く面の色が変わるたびに帯の色を合わせ直すことになる）。
+ */
 export function AuthDivider() {
   return (
-    <div className="relative my-6" aria-hidden="true">
-      <div className="absolute inset-0 flex items-center">
-        <div className="w-full border-t border-surface-3" />
-      </div>
-      <div className="relative flex justify-center text-sm">
-        <span className="bg-surface px-3 text-[var(--color-text-muted)]">または</span>
-      </div>
+    <div className="my-6 flex items-center gap-3 text-sm text-[var(--color-text-muted)]" aria-hidden="true">
+      <span className="h-px flex-1 bg-surface-3" />
+      または
+      <span className="h-px flex-1 bg-surface-3" />
     </div>
   );
 }

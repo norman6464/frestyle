@@ -38,7 +38,7 @@ function state(over: Partial<SignupPageState> = {}): SignupPageState {
 }
 
 /**
- * アカウント作成画面（ログイン画面と同じ ST06 の形）。状態を渡して描くので、本番（GCIP）の
+ * アカウント作成画面（ログイン画面と同じ枠）。状態を渡して描くので、本番（GCIP）の
  * フォーム・欄の失敗・ローカル（Dex）・設定の欠けを並べて見られる。
  */
 const meta = {

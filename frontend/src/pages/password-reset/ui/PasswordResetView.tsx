@@ -1,11 +1,11 @@
-import { AuthNotice, AuthSplitLayout } from '@/widgets/auth-layout';
+import { AuthCardLayout, AuthNotice } from '@/widgets/auth-layout';
 import { AuthUnavailableNotice } from '@/features/auth';
 import { Button, InputField, LinkText } from '@/shared/ui';
 import { toChangeHandler } from '@/shared/lib/formHandlers';
 import type { PasswordResetPageState } from '../model/usePasswordResetPage';
 
 /**
- * パスワード再設定画面の見た目（ログイン画面と同じ ST06 の形）。状態を受け取って描くだけ。
+ * パスワード再設定画面の見た目（ログイン画面と同じ枠）。状態を受け取って描くだけ。
  *
  * 送った結果（そのアドレスのアカウントがあったか）は画面に出さない（登録の有無を探る手がかりに
  * しないため）。ローカル（Dex）はこの機能を持たないので、その旨を案内する（設定の欠けとは別の状態）。
@@ -14,13 +14,16 @@ export default function PasswordResetView(props: PasswordResetPageState) {
   const { mode, email, setEmail, submitted, loading, handleSubmit, missing } = props;
 
   return (
-    <AuthSplitLayout
-      eyebrow="Reset password"
+    <AuthCardLayout
       title="パスワードの再設定"
       description={
         mode === 'firebase' && !submitted ? '登録済みのメールアドレスに、パスワード再設定用のリンクをお送りします。' : undefined
       }
-      footer={<LinkText to="/login">ログインへ戻る</LinkText>}
+      footer={
+        <p className="text-center">
+          <LinkText to="/login">ログインへ戻る</LinkText>
+        </p>
+      }
     >
       {mode === 'unconfigured' && <AuthUnavailableNotice missing={missing} />}
 
@@ -53,6 +56,6 @@ export default function PasswordResetView(props: PasswordResetPageState) {
       {mode === 'firebase' && submitted && (
         <AuthNotice tone="success">該当するアカウントが存在する場合、パスワード再設定のご案内をお送りしました。</AuthNotice>
       )}
-    </AuthSplitLayout>
+    </AuthCardLayout>
   );
 }

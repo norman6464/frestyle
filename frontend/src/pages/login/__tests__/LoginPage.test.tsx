@@ -80,14 +80,12 @@ describe('LoginPage（Dex モード・既定）', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('ログインの検証に失敗しました。');
   });
 
-  it('アカウント作成への導線がフォームの下にあり、ロゴは 1 つだけ', () => {
+  it('アカウント作成への導線がフォームの下にあり、ロゴは上の帯に 1 つだけ', () => {
     renderLoginPage();
     expect(screen.getByRole('link', { name: '新規登録' })).toHaveAttribute('href', '/signup');
-    // 上部の帯は置かない。ロゴ（ホームへのリンク）は広い画面の左の面か、狭い画面のフォームの上の
-    // どちらか 1 つだけが見える（もう片方は CSS で隠す）。jsdom は CSS を当てないので両方が DOM にある。
-    for (const logo of screen.getAllByRole('link', { name: 'FreStyle ホーム' })) {
-      expect(logo).toHaveAttribute('href', '/');
-    }
+    const logo = screen.getByRole('link', { name: 'FreStyle ホーム' });
+    expect(logo).toHaveAttribute('href', '/');
+    expect(screen.getByRole('banner')).toContainElement(logo);
   });
 });
 

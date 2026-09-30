@@ -1,11 +1,11 @@
-import { AuthDivider, AuthNotice, AuthSplitLayout } from '@/widgets/auth-layout';
+import { AuthCardLayout, AuthDivider, AuthNotice } from '@/widgets/auth-layout';
 import { AuthUnavailableNotice } from '@/features/auth';
-import { Button, InputField, LinkText, SNSSignInButton } from '@/shared/ui';
+import { Button, ButtonLink, InputField, LinkText, SNSSignInButton } from '@/shared/ui';
 import { toChangeHandler } from '@/shared/lib/formHandlers';
 import type { LoginPageState } from '../model/useLoginPage';
 
 /**
- * ログイン画面の見た目（設計ボード ST06）。状態を受け取って描くだけで、発行者とはつながない。
+ * ログイン画面の見た目。状態を受け取って描くだけで、発行者とはつながない。
  * 本番（GCIP）のフォーム・失敗・設定欠け・ローカル（Dex）の形を、story からそのまま描けるように
  * 分けてある（つなぐのは LoginPage）。
  *
@@ -13,6 +13,7 @@ import type { LoginPageState } from '../model/useLoginPage';
  *   その欄のそばに出す（メールかパスワードのどちらかが違う、は欄に寄せない）
  * - ローカル（Dex）は発行者のログイン画面へ送るだけ
  * - ログインの戻り処理が失敗して戻ってきたときは、その理由を失敗として出す
+ * - アカウントを持っていない人の入口（新規登録）は、カードの下段に線で区切って置く
  */
 export default function LoginView(props: LoginPageState) {
   const {
@@ -41,18 +42,16 @@ export default function LoginView(props: LoginPageState) {
       : [];
 
   return (
-    <AuthSplitLayout
-      eyebrow="Welcome back"
+    <AuthCardLayout
       title="ログイン"
-      description="おかえりなさい。続きをはじめましょう。"
       footer={
         <>
-          <p>
-            アカウントをお持ちでないですか？
-            <br />
-            <LinkText to="/signup">新規登録</LinkText>
+          <ButtonLink to="/signup" variant="secondary" size="lg" fullWidth>
+            新規登録
+          </ButtonLink>
+          <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-muted)]">
+            登録すると、あなた専用のワークスペースが用意されます。招待を受けた方は、届いた招待リンクを開いてください。
           </p>
-          <p className="mt-4">招待を受けた方は、届いた招待リンクを開いてください。</p>
         </>
       }
     >
@@ -82,7 +81,7 @@ export default function LoginView(props: LoginPageState) {
               onChange={toChangeHandler(setPassword)}
               error={fieldError === 'password' ? (firebase.errorMessage ?? undefined) : undefined}
             />
-            <div className="-mt-3 mb-6">
+            <div className="-mt-3 mb-6 text-right">
               <LinkText to="/password-reset">パスワードをお忘れですか？</LinkText>
             </div>
             <Button variant="primary" size="lg" fullWidth type="submit" loading={firebase.loading}>
@@ -103,6 +102,6 @@ export default function LoginView(props: LoginPageState) {
           <SNSSignInButton provider="google" label="Google でログイン" disabled={dex.loading} onClick={() => dex.start('Google')} />
         </>
       )}
-    </AuthSplitLayout>
+    </AuthCardLayout>
   );
 }
