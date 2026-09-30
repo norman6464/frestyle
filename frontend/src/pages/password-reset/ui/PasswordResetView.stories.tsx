@@ -18,7 +18,7 @@ function state(over: Partial<PasswordResetPageState> = {}): PasswordResetPageSta
 }
 
 /**
- * パスワード再設定画面（ログイン画面と同じ ST06 の形）。送った結果（アカウントがあったか）は
+ * パスワード再設定画面（ログイン画面と同じ枠）。送った結果（アカウントがあったか）は
  * 画面に出さない。ローカル（Dex）はこの機能を持たない。
  */
 const meta = {

@@ -1,6 +1,6 @@
-import { AuthDivider, AuthNotice, AuthSplitLayout } from '@/widgets/auth-layout';
+import { AuthCardLayout, AuthDivider, AuthNotice } from '@/widgets/auth-layout';
 import { AuthUnavailableNotice } from '@/features/auth';
-import { Button, InputField, LinkText, SNSSignInButton } from '@/shared/ui';
+import { Button, ButtonLink, InputField, SNSSignInButton } from '@/shared/ui';
 import { toChangeHandler } from '@/shared/lib/formHandlers';
 import type { SignupPageState } from '../model/useSignupPage';
 
@@ -8,7 +8,7 @@ import type { SignupPageState } from '../model/useSignupPage';
 const PASSWORD_HINT = '6 文字以上で入力してください。';
 
 /**
- * アカウント作成画面の見た目（ログイン画面と同じ ST06 の形）。状態を受け取って描くだけ。
+ * アカウント作成画面の見た目（ログイン画面と同じ枠）。状態を受け取って描くだけ。
  *
  * - 本番（GCIP）はメールとパスワードでこの場でアカウントを作る。パスワードの要件は欄の下に
  *   初めから出し、欄の直しで解ける失敗（形式・使用済み・短い）はその欄のそばに出す
@@ -39,8 +39,7 @@ export default function SignupView(props: SignupPageState) {
       : [];
 
   return (
-    <AuthSplitLayout
-      eyebrow="Get started"
+    <AuthCardLayout
       title="アカウントを作成"
       description={
         mode === 'unconfigured' ? undefined : (
@@ -52,11 +51,12 @@ export default function SignupView(props: SignupPageState) {
         )
       }
       footer={
-        <p>
-          すでにアカウントをお持ちですか？
-          <br />
-          <LinkText to="/login">ログイン</LinkText>
-        </p>
+        <>
+          <p className="mb-3 text-sm text-[var(--color-text-muted)]">すでにアカウントをお持ちの方</p>
+          <ButtonLink to="/login" variant="secondary" size="lg" fullWidth>
+            ログイン
+          </ButtonLink>
+        </>
       }
     >
       {formError && <AuthNotice tone="error">{formError}</AuthNotice>}
@@ -115,6 +115,6 @@ export default function SignupView(props: SignupPageState) {
           />
         </>
       )}
-    </AuthSplitLayout>
+    </AuthCardLayout>
   );
 }

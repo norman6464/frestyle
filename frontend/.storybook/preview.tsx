@@ -11,6 +11,10 @@ import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
 
+// アプリの index.html と同じく、文書の言語を日本語にする。言語で変わる描き方（漢字の字形の選び方・
+// 文節での折り返し）を、見本でもアプリと同じにするため。
+document.documentElement.lang = 'ja';
+
 const preview: Preview = {
   // 取得した結果の置き場（TanStack Query）。見本ごとに作り直し、前の見本の結果を持ち越さない。
   // 取り直しはしない（失敗の見本がすぐに失敗を出すように）。本番は app/layouts/AuthenticatedLayout が配る。

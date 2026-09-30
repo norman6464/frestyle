@@ -53,7 +53,7 @@ function Interactive(props: LoginPageState) {
 }
 
 /**
- * ログイン画面（設計ボード ST06）。左にブランドの面、右にフォーム。見た目の部品に状態を
+ * ログイン画面。上にロゴだけの帯、灰色の地に白いカード。見た目の部品に状態を
  * 渡して描くので、手元の設定（.env）に左右されず、本番（GCIP）の形・失敗・送信中・設定の欠け・
  * ローカル（Dex）の形を並べて見られる。
  */
@@ -75,13 +75,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** 本番（GCIP）。メールとパスワードをこの場で受け取る。ロゴは 1 つだけ。 */
+/** 本番（GCIP）。メールとパスワードをこの場で受け取る。新規登録はカードの下段。ロゴは帯の 1 つだけ。 */
 export const 本番のフォーム: Story = {
   render: (args) => <Interactive {...args} />,
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { level: 1, name: 'ログイン' })).toBeVisible();
-    await expect(canvas.getByText('おかえりなさい。続きをはじめましょう。')).toBeVisible();
     await userEvent.type(canvas.getByLabelText('メールアドレス'), 'you@example.com');
     await userEvent.type(canvas.getByLabelText('パスワード'), 'secret-pass');
     await expect(canvas.getByRole('link', { name: 'パスワードをお忘れですか？' })).toHaveAttribute('href', '/password-reset');
@@ -89,8 +88,7 @@ export const 本番のフォーム: Story = {
     await expect(args.handleEmailSignIn).toHaveBeenCalledTimes(1);
     await expect(canvas.getByRole('button', { name: 'Google でログイン' })).toBeVisible();
     await expect(canvas.getByRole('link', { name: '新規登録' })).toHaveAttribute('href', '/signup');
-    const logos = canvas.getAllByRole('link', { name: 'FreStyle ホーム' });
-    await expect(logos.filter((l) => l.checkVisibility())).toHaveLength(1);
+    await expect(canvas.getByRole('banner')).toContainElement(canvas.getByRole('link', { name: 'FreStyle ホーム' }));
   },
 };
 
