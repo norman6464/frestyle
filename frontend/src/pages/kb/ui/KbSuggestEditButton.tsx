@@ -19,7 +19,7 @@ export default function KbSuggestEditButton({ active, onToggle }: KbSuggestEditB
       type="button"
       onClick={onToggle}
       aria-expanded={active}
-      className="rounded border border-surface-3 px-2 py-1 text-xs text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2"
+      className="inline-flex h-8 items-center rounded-md border border-surface-3 px-2.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 [@media(pointer:coarse)]:h-11"
     >
       変更を提案する
     </button>

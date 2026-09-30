@@ -12,16 +12,15 @@ import (
 
 // ── ナレッジの「権限そのものを変える」API に共通する認可 ──
 //
-// 権限を書き換える usecase（GrantWorkspaceRoleUseCase / GrantSpaceRoleUseCase /
-// GrantPageRoleUseCase / IssueShareLinkUseCase …）は認可を一切見ない。受け取った
-// workspaceID / spaceID / principalID をそのまま書くだけで、検査するのは入力の妥当性
-// （空文字・役割名やケイパビリティが既知か・主体が実在するか）に限る。認可は handler が
+// 権限を書き換える usecase（GrantWorkspaceRoleUseCase / GrantSpaceRoleUseCase …）は
+// 認可を一切見ない。受け取った workspaceID / spaceID / principalID をそのまま書くだけで、
+// 検査するのは入力の妥当性（空文字・役割名が既知か・主体が実在するか）に限る。認可は handler が
 // Check*PermissionUseCase を呼んで先に決める（ページ操作と同じ分担）。判定を usecase へ
 // 持ち込まないのは、ワークスペースを確定させるのが middleware（URL の slug + principals）で、
 // 呼び出し元が誰かを知っているのが handler だけだから — usecase は *gin.Context を受け取らない。
 // 裏を返すと、このファイルの関数を通さずにルートを生やした時点で「ログインさえしていれば
 // 誰でも自分を admin にできる」状態になる。権限操作のルートは必ず requireWorkspaceAdmin /
-// requireSpaceAdmin / requirePageAdmin のいずれかを最初に通すこと。
+// requireSpaceAdmin のどちらかを最初に通すこと。ページ単位の権限と共有リンクは持たない。
 //
 // 特権ロール（super_admin 的なもの）は存在せず、特別扱いもしない。ナレッジの役割
 // （domain.GrantRole の admin/editor/commenter/viewer）は per-workspace の grant だけで
@@ -33,7 +32,7 @@ import (
 // 拒否はすべて 404 not_found に揃える（存在オラクル対策）。「存在しない」と「権限が無い」を
 // 撃ち分けると、対象の ID を総当たりするだけで中身を 1 バイトも読めないまま実在を数え上げ
 // られる（このリポジトリは直近で似た撃ち分けの穴を 2 件塞いだところで、同じ穴を新設しない）。
-// 対象の種類（ワークスペース/スペース/ページ/主体/共有リンク）にも理由（不在か無権限か）
+// 対象の種類（ワークスペース/スペース/主体）にも理由（不在か無権限か）
 // にもよらず 404 + {"error":"not_found"} に揃え、middleware.KnowledgeBaseWorkspace が
 // 非メンバーへ返す応答と完全に一致させる。手順も「認可を先に、対象に触るのは後」を守り、
 // 認可に落ちた要求は対象を一度も読まないので応答が対象の状態に依存しようがない。
@@ -46,16 +45,14 @@ import (
 type kbPermissionGate struct {
 	checkWorkspace *kb.CheckWorkspacePermissionUseCase
 	checkSpace     *kb.CheckSpacePermissionUseCase
-	checkPage      *kb.CheckPagePermissionUseCase
 }
 
 // newKbPermissionGate は権限操作 API 共通の認可判定を組み立てる。
 func newKbPermissionGate(
 	checkWorkspace *kb.CheckWorkspacePermissionUseCase,
 	checkSpace *kb.CheckSpacePermissionUseCase,
-	checkPage *kb.CheckPagePermissionUseCase,
 ) *kbPermissionGate {
-	return &kbPermissionGate{checkWorkspace: checkWorkspace, checkSpace: checkSpace, checkPage: checkPage}
+	return &kbPermissionGate{checkWorkspace: checkWorkspace, checkSpace: checkSpace}
 }
 
 // respondKbPermissionDenied は権限操作 API の唯一の拒否応答。
@@ -108,31 +105,6 @@ func (g *kbPermissionGate) requireSpaceAdmin(c *gin.Context, scope kbRequestScop
 	return true
 }
 
-// requirePageAdmin はページに対する権限を変えてよいかを確かめる（満たさなければ応答を書いて
-// false）。判定は「そのページに届いている既定の役割が admin か」— 役割はワークスペース/
-// スペース/ページの 3 段のどこから来てもよく、最も強いものが実効になる。スペースの admin
-// かどうかだけを見るのでは足りない — page_grants でページにも admin を張れるため、
-// スペースだけ見ると admin を与えられた本人が権限を行使できない状態になる。
-// 閲覧できるかは別途確かめない（admin は必ず閲覧もできる）。DB への問い合わせは常に 1 回
-// だけ — ページが無い場合も ErrPageNotFound が役割不足と同じ 404 に落ちるので、往復回数の
-// 違いから対象の実在が読めることはない。
-func (g *kbPermissionGate) requirePageAdmin(c *gin.Context, scope kbRequestScope, pageID string) bool {
-	perm, err := g.checkPage.Execute(c.Request.Context(), kb.CheckPagePermissionInput{
-		WorkspaceID: scope.workspaceID,
-		PageID:      pageID,
-		UserID:      scope.userID,
-	})
-	if err != nil {
-		respondKbPermissionErr(c, err)
-		return false
-	}
-	if !perm.CanManage {
-		respondKbPermissionDenied(c)
-		return false
-	}
-	return true
-}
-
 // respondKbPermissionErr は認可判定の途中で起きたエラーを応答へ落とす。対象が見つからない
 // センチネルは拒否と同じ 404 not_found、それ以外（DB 障害など）だけ 500 にする。
 // respondKnowledgeBaseErr を使わないのは、あちらが理由ごとの撃ち分け（403 等）を持つため —
@@ -143,7 +115,6 @@ func respondKbPermissionErr(c *gin.Context, err error) {
 		errors.Is(err, repository.ErrSpaceNotFound),
 		errors.Is(err, repository.ErrPageNotFound),
 		errors.Is(err, repository.ErrPrincipalNotFound),
-		errors.Is(err, repository.ErrShareLinkNotFound),
 		errors.Is(err, repository.ErrUserNotFound):
 		respondKbPermissionDenied(c)
 	default:
@@ -157,7 +128,6 @@ func respondKbPermissionErr(c *gin.Context, err error) {
 func respondKbPermissionOperationErr(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, kb.ErrInvalidGrantRole),
-		errors.Is(err, kb.ErrInvalidCapability),
 		errors.Is(err, kb.ErrPrincipalKindMismatch):
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_request"})
 	case errors.Is(err, repository.ErrPrincipalGroupNameTaken):

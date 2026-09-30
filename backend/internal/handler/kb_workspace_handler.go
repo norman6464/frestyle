@@ -199,8 +199,7 @@ type kbWorkspaceMemberResponse struct {
 }
 
 // ListMembers はワークスペースに属する人を表示名つきで返す。所属していれば誰でも叩ける
-// （担当の名指し・発言の名指しは権限を変えられない人にも要る。権限を張る相手を選ぶ
-// ListGrantablePrincipals とは別の口 — あちらはページの管理権限を要求する）。
+// （担当の名指し・発言の名指しは権限を変えられない人にも要るため、管理権限は求めない）。
 func (h *KnowledgeBaseWorkspaceHandler) ListMembers(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
@@ -383,7 +382,7 @@ func (h *KnowledgeBaseWorkspaceHandler) ListMembershipEvents(c *gin.Context) {
 // WHERE）に持たせ、最も内側で守る。全員のナレッジが入る入れ物で、消しても起動時のバック
 // フィルが作り直すため中身だけ空になったワークスペースが残ってしまう。
 //
-// 配下のスペース・ページ・本文・所属・権限・共有リンクは FK の CASCADE ですべて消えるが、
+// 配下のスペース・ページ・本文・所属・権限は FK の CASCADE ですべて消えるが、
 // users は消えない（ナレッジの片付けで人を消さない）。
 func (h *KnowledgeBaseWorkspaceHandler) Delete(c *gin.Context) {
 	scope, ok := kbScope(c)

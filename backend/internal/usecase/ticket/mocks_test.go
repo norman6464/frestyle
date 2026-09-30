@@ -634,23 +634,6 @@ func (m *mockKBPermissionRepo) ListSpaceGrants(ctx context.Context, workspaceID,
 	return g, args.Error(1)
 }
 
-func (m *mockKBPermissionRepo) UpsertPageGrant(ctx context.Context, workspaceID, pageID, principalID string, role domain.GrantRole) (*domain.PageGrant, error) {
-	args := m.Called(ctx, workspaceID, pageID, principalID, role)
-	g, _ := args.Get(0).(*domain.PageGrant)
-	return g, args.Error(1)
-}
-
-func (m *mockKBPermissionRepo) DeletePageGrant(ctx context.Context, workspaceID, pageID, principalID string) error {
-	args := m.Called(ctx, workspaceID, pageID, principalID)
-	return args.Error(0)
-}
-
-func (m *mockKBPermissionRepo) ListGrantablePrincipals(ctx context.Context, workspaceID string) ([]domain.GrantablePrincipal, error) {
-	args := m.Called(ctx, workspaceID)
-	p, _ := args.Get(0).([]domain.GrantablePrincipal)
-	return p, args.Error(1)
-}
-
 func (m *mockKBPermissionRepo) ListWorkspaceMembers(ctx context.Context, workspaceID string) ([]domain.WorkspaceMember, error) {
 	args := m.Called(ctx, workspaceID)
 	p, _ := args.Get(0).([]domain.WorkspaceMember)
@@ -675,20 +658,8 @@ func (m *mockKBPermissionRepo) ListMySpaces(ctx context.Context, workspaceID str
 	return p, args.Error(1)
 }
 
-func (m *mockKBPermissionRepo) ListPageGrants(ctx context.Context, workspaceID, pageID string) ([]domain.PageGrant, error) {
-	args := m.Called(ctx, workspaceID, pageID)
-	g, _ := args.Get(0).([]domain.PageGrant)
-	return g, args.Error(1)
-}
-
 func (m *mockKBPermissionRepo) PagePermissionFactsForUser(ctx context.Context, workspaceID, pageID string, userID uint64) (*domain.PagePermissionFacts, error) {
 	args := m.Called(ctx, workspaceID, pageID, userID)
-	f, _ := args.Get(0).(*domain.PagePermissionFacts)
-	return f, args.Error(1)
-}
-
-func (m *mockKBPermissionRepo) PagePermissionFactsForPrincipal(ctx context.Context, workspaceID, pageID, principalID string) (*domain.PagePermissionFacts, error) {
-	args := m.Called(ctx, workspaceID, pageID, principalID)
 	f, _ := args.Get(0).(*domain.PagePermissionFacts)
 	return f, args.Error(1)
 }

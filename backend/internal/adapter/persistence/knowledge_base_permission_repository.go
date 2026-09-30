@@ -70,10 +70,6 @@ func toDomainPrincipal(row sqlcgen.Principal) domain.Principal {
 		id := row.SpaceID.UUID.String()
 		p.SpaceID = &id
 	}
-	if row.PageID.Valid {
-		id := row.PageID.UUID.String()
-		p.PageID = &id
-	}
 	return p
 }
 
@@ -91,17 +87,6 @@ func toDomainSpaceGrant(row sqlcgen.SpaceGrant) domain.SpaceGrant {
 	return domain.SpaceGrant{
 		WorkspaceID: row.WorkspaceID.String(),
 		SpaceID:     row.SpaceID.String(),
-		PrincipalID: row.PrincipalID.String(),
-		Role:        domain.GrantRole(row.Role),
-		CreatedAt:   row.CreatedAt,
-		UpdatedAt:   row.UpdatedAt,
-	}
-}
-
-func toDomainPageGrant(row sqlcgen.PageGrant) domain.PageGrant {
-	return domain.PageGrant{
-		WorkspaceID: row.WorkspaceID.String(),
-		PageID:      row.PageID.String(),
 		PrincipalID: row.PrincipalID.String(),
 		Role:        domain.GrantRole(row.Role),
 		CreatedAt:   row.CreatedAt,
@@ -723,30 +708,6 @@ func (r *knowledgeBasePermissionRepository) ListSpaceGrants(ctx context.Context,
 	return grants, nil
 }
 
-func (r *knowledgeBasePermissionRepository) ListGrantablePrincipals(ctx context.Context, workspaceID string) ([]domain.GrantablePrincipal, error) {
-	wsID, ok := kbParseID(workspaceID)
-	if !ok {
-		return []domain.GrantablePrincipal{}, nil
-	}
-	rows, err := r.queries(ctx).ListGrantablePrincipals(ctx, wsID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]domain.GrantablePrincipal, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, domain.GrantablePrincipal{
-			ID:        row.ID.String(),
-			Kind:      domain.PrincipalKind(row.Kind),
-			Name:      row.Name,
-			AvatarURL: row.AvatarUrl,
-			StatusMessage: domain.ComposeStatusDisplay(
-				row.StatusEmoji, row.StatusText, nullTimePtr(row.StatusExpiresAt), time.Now(),
-			),
-		})
-	}
-	return out, nil
-}
-
 func (r *knowledgeBasePermissionRepository) ListWorkspaceMembers(ctx context.Context, workspaceID string) ([]domain.WorkspaceMember, error) {
 	wsID, ok := kbParseID(workspaceID)
 	if !ok {
@@ -913,60 +874,6 @@ func (r *knowledgeBasePermissionRepository) ListMySpaces(ctx context.Context, wo
 	return out, nil
 }
 
-func (r *knowledgeBasePermissionRepository) UpsertPageGrant(ctx context.Context, workspaceID, pageID, principalID string, role domain.GrantRole) (*domain.PageGrant, error) {
-	wsID, ok := kbParseID(workspaceID)
-	pgID, ok2 := kbParseID(pageID)
-	prID, ok3 := kbParseID(principalID)
-	if !ok || !ok2 || !ok3 {
-		return nil, repository.ErrPrincipalNotFound
-	}
-	row, err := r.queries(ctx).UpsertPageGrant(ctx, sqlcgen.UpsertPageGrantParams{
-		WorkspaceID: wsID,
-		PageID:      pgID,
-		PrincipalID: prID,
-		Role:        string(role),
-	})
-	if err != nil {
-		return nil, err
-	}
-	g := toDomainPageGrant(row)
-	return &g, nil
-}
-
-// DeletePageGrant はページ権限を 1 件取り消す。
-// DeleteSpaceGrant と同じ理由で 0 行削除は成功のまま（取り消しは冪等）。
-func (r *knowledgeBasePermissionRepository) DeletePageGrant(ctx context.Context, workspaceID, pageID, principalID string) error {
-	wsID, ok := kbParseID(workspaceID)
-	pgID, ok2 := kbParseID(pageID)
-	prID, ok3 := kbParseID(principalID)
-	if !ok || !ok2 || !ok3 {
-		return nil
-	}
-	_, err := r.queries(ctx).DeletePageGrant(ctx, sqlcgen.DeletePageGrantParams{
-		WorkspaceID: wsID,
-		PageID:      pgID,
-		PrincipalID: prID,
-	})
-	return err
-}
-
-func (r *knowledgeBasePermissionRepository) ListPageGrants(ctx context.Context, workspaceID, pageID string) ([]domain.PageGrant, error) {
-	wsID, ok := kbParseID(workspaceID)
-	pgID, ok2 := kbParseID(pageID)
-	if !ok || !ok2 {
-		return []domain.PageGrant{}, nil
-	}
-	rows, err := r.queries(ctx).ListPageGrants(ctx, sqlcgen.ListPageGrantsParams{WorkspaceID: wsID, PageID: pgID})
-	if err != nil {
-		return nil, err
-	}
-	grants := make([]domain.PageGrant, 0, len(rows))
-	for _, row := range rows {
-		grants = append(grants, toDomainPageGrant(row))
-	}
-	return grants, nil
-}
-
 func (r *knowledgeBasePermissionRepository) PagePermissionFactsForUser(ctx context.Context, workspaceID, pageID string, userID uint64) (*domain.PagePermissionFacts, error) {
 	// bigint に収まらない userID は principals のどの行にも一致しない。クエリ側で言えば
 	// me / mine の CTE が空になる状態で、そのとき SQL が返す自分についての事実は
@@ -984,24 +891,12 @@ func (r *knowledgeBasePermissionRepository) PagePermissionFactsForUser(ctx conte
 	if !uok {
 		return &domain.PagePermissionFacts{}, nil
 	}
-	return r.pagePermissionFacts(ctx, workspaceID, pageID,
-		sql.NullInt64{Int64: uid, Valid: true}, uuid.NullUUID{})
+	return r.pagePermissionFacts(ctx, workspaceID, pageID, uid)
 }
 
-func (r *knowledgeBasePermissionRepository) PagePermissionFactsForPrincipal(ctx context.Context, workspaceID, pageID, principalID string) (*domain.PagePermissionFacts, error) {
-	prID, ok := kbParseID(principalID)
-	if !ok {
-		return nil, repository.ErrPrincipalNotFound
-	}
-	return r.pagePermissionFacts(ctx, workspaceID, pageID,
-		sql.NullInt64{}, uuid.NullUUID{UUID: prID, Valid: true})
-}
-
-// pagePermissionFacts はユーザーとしての解決と共有リンクの来訪者としての解決の実体。
-// どちらも同じ 1 本のクエリを通す（主体の種類で解決の道筋が分かれないようにするため）。
+// pagePermissionFacts はログイン済みユーザーとしての解決の実体。
 func (r *knowledgeBasePermissionRepository) pagePermissionFacts(
-	ctx context.Context, workspaceID, pageID string,
-	userID sql.NullInt64, principalID uuid.NullUUID,
+	ctx context.Context, workspaceID, pageID string, userID int64,
 ) (*domain.PagePermissionFacts, error) {
 	wsID, ok := kbParseID(workspaceID)
 	pgID, ok2 := kbParseID(pageID)
@@ -1012,7 +907,6 @@ func (r *knowledgeBasePermissionRepository) pagePermissionFacts(
 		WorkspaceID: wsID,
 		PageID:      pgID,
 		UserID:      userID,
-		PrincipalID: principalID,
 	})
 	if err != nil {
 		return nil, err

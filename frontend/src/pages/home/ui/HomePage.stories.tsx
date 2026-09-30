@@ -26,11 +26,6 @@ const recentPages = [
   { pageId: 'page-spec', workspaceSlug: 'frestyle', title: '仕様レビューの進め方', spaceId: 's4', spaceName: '開発ガイド', viewedAt: hoursAgo(50) },
 ];
 
-const references = [
-  { id: 'ticket-invite', projectKey: 'FRE', number: 143, title: '招待フローの案内文を確認する' },
-  { id: 'ticket-first', projectKey: 'FRE', number: 151, title: '初参加の手順を動作確認する' },
-];
-
 const assigned = [
   { id: 'ticket-invite', workspaceSlug: 'frestyle', workspaceName: 'frestyle', projectId: 'p1', projectKey: 'FRE', projectName: 'Product', number: 143, title: '招待フローの案内文を確認する', typeName: 'タスク', statusName: '進行中', statusCategory: 'in_progress', statusColor: '#2563eb', priority: 2, dueDate: daysFromToday(2) },
   { id: 'ticket-release', workspaceSlug: 'devsync', workspaceName: 'devsync', projectId: 'p2', projectKey: 'DEV', projectName: 'Website', number: 52, title: 'リリース手順の確認項目を整理する', typeName: 'タスク', statusName: '未着手', statusCategory: 'todo', statusColor: '#66655f', priority: 2, dueDate: daysFromToday(4) },
@@ -45,12 +40,11 @@ const favorites = [
 ];
 
 /**
- * 見本の通信。細かい宛先を先に書く（`/kb/workspaces` が先だと、お気に入りや逆参照・検索の問い合わせ
+ * 見本の通信。細かい宛先を先に書く（`/kb/workspaces` が先だと、お気に入りや検索の問い合わせ
  * にもワークスペース一覧が返ってしまう）。上書きしても並びは元の位置のまま。
  */
 function api(over: ApiStubs = {}): ApiStubs {
   const base: ApiStubs = {
-    '/ticket-backlinks': { tickets: references },
     '/search': [],
     '/kb/workspaces/frestyle/favorites': favorites,
     '/kb/workspaces/devsync/favorites': [],
@@ -103,8 +97,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * いつものホーム（DB01）。最後に開いたページを大きなカードで、参照チケットを 2 行、残りの履歴を
- * 短い行で。担当は期限の近い順、未読は件数と入口だけ。
+ * いつものホーム（DB01）。最後に開いたページを大きなカードで、残りの履歴を小さなカードで。
+ * 担当は期限の近い順、未読は件数と入口だけ。
  */
 export const いつものホーム: Story = {
   decorators: [withApi(api())],
@@ -114,27 +108,16 @@ export const いつものホーム: Story = {
     await expect(canvas.getByRole('heading', { level: 1, name: 'マイホーム' })).toBeVisible();
 
     const card = await canvas.findByRole('article', { name: 'オンボーディングの進め方' });
-    await expect(within(card).getByText('frestyle / プロダクト開発')).toBeVisible();
     await expect(within(card).getByRole('link', { name: /続きをひらく/ })).toHaveAttribute('href', '/kb/page-onboarding');
-
-    // 参照チケット（狭い画面は畳んである）。
-    if (!wide) await userEvent.click(within(card).getByRole('button', { name: 'このページを参照しているチケット' }));
-    const refs = await within(card).findByRole('list', { name: 'このページを参照しているチケット' });
-    await expect(within(refs).getAllByRole('link')).toHaveLength(2);
-    await expect(within(refs).getByRole('link', { name: /招待フローの案内文を確認する/ })).toHaveAttribute(
-      'href',
-      '/tickets/ticket-invite',
-    );
 
     const history = canvas.getByRole('list', { name: '最近開いたページ' });
     await expect(within(history).getAllByRole('listitem')).toHaveLength(wide ? 2 : 1);
-    await expect(within(history).getByText('devsync / 開発ガイド')).toBeVisible();
+    await expect(within(history).getByRole('link', { name: 'リリース前の確認事項' })).toHaveAttribute('href', '/kb/page-release');
 
     const mine = await canvas.findByRole('list', { name: '自分の担当' });
     await expect(within(mine).getAllByRole('listitem')).toHaveLength(wide ? 3 : 2);
     await expect(within(mine).getByText('FRE-143')).toBeVisible();
     await expect(within(mine).getAllByText('frestyle / Product')[0]).toBeVisible();
-    await expect(canvas.getByText(wide ? '3件を表示' : '2件を表示')).toBeVisible();
 
     await expect(canvas.getByRole('link', { name: wide ? /通知一覧をひらく/ : /未読の通知 3件/ })).toHaveAttribute(
       'href',
@@ -168,7 +151,7 @@ export const 新しくつくるを開く: Story = {
   },
 };
 
-/** 狭い画面（DB02）。未読 → 再開 → 担当 2 件 → お気に入り 2 件の 1 列。参照チケットは畳む。 */
+/** 狭い画面（DB02）。再開 → 未読 → 担当 2 件 → お気に入り 2 件の 1 列。 */
 export const 狭い画面: Story = {
   decorators: [withApi(api())],
   globals: { viewport: { value: 'mobile1', isRotated: false } },
@@ -245,7 +228,7 @@ export const 担当が0件: Story = {
 };
 
 /**
- * 一部の枠だけ取得に失敗（担当・参照チケット・未読）。その枠だけに理由と再試行を出し、ほかの枠は
+ * 一部の枠だけ取得に失敗（担当・未読）。その枠だけに理由と再試行を出し、ほかの枠は
  * そのまま使える。0 件のふりをしない。
  */
 export const 一部の取得に失敗: Story = {
@@ -253,7 +236,6 @@ export const 一部の取得に失敗: Story = {
     withApi(
       api({
         '/me/assigned-tickets': networkError,
-        '/ticket-backlinks': networkError,
         '/notifications/unread-count': networkError,
       }),
     ),
@@ -264,20 +246,7 @@ export const 一部の取得に失敗: Story = {
     await expect(canvas.queryByText('未完了の担当はありません')).toBeNull();
     await expect(await canvas.findByText('未読の通知の件数を取得できませんでした。')).toBeVisible();
     const card = await canvas.findByRole('article', { name: 'オンボーディングの進め方' });
-    await expect(await within(card).findByText('このページを参照しているチケットを取得できませんでした。')).toBeVisible();
     await expect(within(card).getByRole('link', { name: /続きをひらく/ })).toBeVisible();
-  },
-};
-
-/** 参照しているチケットが無ければ、節ごと出さない（空の飾りで埋めない）。 */
-export const 参照チケットが無い: Story = {
-  decorators: [withApi(api({ '/ticket-backlinks': { tickets: [] } }))],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const card = await canvas.findByRole('article', { name: 'オンボーディングの進め方' });
-    await waitFor(async () => {
-      await expect(within(card).queryByText('このページを参照しているチケット')).toBeNull();
-    });
   },
 };
 

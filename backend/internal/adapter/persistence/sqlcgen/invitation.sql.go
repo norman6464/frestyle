@@ -108,7 +108,7 @@ func (q *Queries) DeclineInvitation(ctx context.Context, arg DeclineInvitationPa
 }
 
 const getInvitation = `-- name: GetInvitation :one
-SELECT id, workspace_id, scope, space_id, page_id, role, email, invitee_name, token_hash, invited_by_user_id, expires_at, last_sent_at, last_sent_by_user_id, send_count, accepted_at, accepted_by_user_id, declined_at, declined_by_user_id, revoked_at, revoked_by_user_id, created_at, updated_at FROM invitations
+SELECT id, workspace_id, scope, space_id, role, email, invitee_name, token_hash, invited_by_user_id, expires_at, last_sent_at, last_sent_by_user_id, send_count, accepted_at, accepted_by_user_id, declined_at, declined_by_user_id, revoked_at, revoked_by_user_id, created_at, updated_at FROM invitations
 WHERE workspace_id = $1 AND id = $2
 `
 
@@ -126,7 +126,6 @@ func (q *Queries) GetInvitation(ctx context.Context, arg GetInvitationParams) (I
 		&i.WorkspaceID,
 		&i.Scope,
 		&i.SpaceID,
-		&i.PageID,
 		&i.Role,
 		&i.Email,
 		&i.InviteeName,
@@ -149,7 +148,7 @@ func (q *Queries) GetInvitation(ctx context.Context, arg GetInvitationParams) (I
 }
 
 const getInvitationByID = `-- name: GetInvitationByID :one
-SELECT id, workspace_id, scope, space_id, page_id, role, email, invitee_name, token_hash, invited_by_user_id, expires_at, last_sent_at, last_sent_by_user_id, send_count, accepted_at, accepted_by_user_id, declined_at, declined_by_user_id, revoked_at, revoked_by_user_id, created_at, updated_at FROM invitations
+SELECT id, workspace_id, scope, space_id, role, email, invitee_name, token_hash, invited_by_user_id, expires_at, last_sent_at, last_sent_by_user_id, send_count, accepted_at, accepted_by_user_id, declined_at, declined_by_user_id, revoked_at, revoked_by_user_id, created_at, updated_at FROM invitations
 WHERE id = $1
 `
 
@@ -162,7 +161,6 @@ func (q *Queries) GetInvitationByID(ctx context.Context, id uuid.UUID) (Invitati
 		&i.WorkspaceID,
 		&i.Scope,
 		&i.SpaceID,
-		&i.PageID,
 		&i.Role,
 		&i.Email,
 		&i.InviteeName,
@@ -185,7 +183,7 @@ func (q *Queries) GetInvitationByID(ctx context.Context, id uuid.UUID) (Invitati
 }
 
 const getInvitationByIDForUpdate = `-- name: GetInvitationByIDForUpdate :one
-SELECT id, workspace_id, scope, space_id, page_id, role, email, invitee_name, token_hash, invited_by_user_id, expires_at, last_sent_at, last_sent_by_user_id, send_count, accepted_at, accepted_by_user_id, declined_at, declined_by_user_id, revoked_at, revoked_by_user_id, created_at, updated_at FROM invitations
+SELECT id, workspace_id, scope, space_id, role, email, invitee_name, token_hash, invited_by_user_id, expires_at, last_sent_at, last_sent_by_user_id, send_count, accepted_at, accepted_by_user_id, declined_at, declined_by_user_id, revoked_at, revoked_by_user_id, created_at, updated_at FROM invitations
 WHERE id = $1
 FOR UPDATE
 `
@@ -200,7 +198,6 @@ func (q *Queries) GetInvitationByIDForUpdate(ctx context.Context, id uuid.UUID) 
 		&i.WorkspaceID,
 		&i.Scope,
 		&i.SpaceID,
-		&i.PageID,
 		&i.Role,
 		&i.Email,
 		&i.InviteeName,
@@ -223,7 +220,7 @@ func (q *Queries) GetInvitationByIDForUpdate(ctx context.Context, id uuid.UUID) 
 }
 
 const getInvitationDetailByTokenHash = `-- name: GetInvitationDetailByTokenHash :one
-SELECT invitations.id, invitations.workspace_id, invitations.scope, invitations.space_id, invitations.page_id, invitations.role, invitations.email, invitations.invitee_name, invitations.token_hash, invitations.invited_by_user_id, invitations.expires_at, invitations.last_sent_at, invitations.last_sent_by_user_id, invitations.send_count, invitations.accepted_at, invitations.accepted_by_user_id, invitations.declined_at, invitations.declined_by_user_id, invitations.revoked_at, invitations.revoked_by_user_id, invitations.created_at, invitations.updated_at,
+SELECT invitations.id, invitations.workspace_id, invitations.scope, invitations.space_id, invitations.role, invitations.email, invitations.invitee_name, invitations.token_hash, invitations.invited_by_user_id, invitations.expires_at, invitations.last_sent_at, invitations.last_sent_by_user_id, invitations.send_count, invitations.accepted_at, invitations.accepted_by_user_id, invitations.declined_at, invitations.declined_by_user_id, invitations.revoked_at, invitations.revoked_by_user_id, invitations.created_at, invitations.updated_at,
        workspaces.slug AS workspace_slug, workspaces.name AS workspace_name,
        COALESCE(users.name, '') AS inviter_name
 FROM invitations
@@ -250,7 +247,6 @@ func (q *Queries) GetInvitationDetailByTokenHash(ctx context.Context, tokenHash 
 		&i.Invitation.WorkspaceID,
 		&i.Invitation.Scope,
 		&i.Invitation.SpaceID,
-		&i.Invitation.PageID,
 		&i.Invitation.Role,
 		&i.Invitation.Email,
 		&i.Invitation.InviteeName,
@@ -302,7 +298,7 @@ func (q *Queries) InsertInvitationSend(ctx context.Context, arg InsertInvitation
 }
 
 const listOpenInvitationsByEmail = `-- name: ListOpenInvitationsByEmail :many
-SELECT invitations.id, invitations.workspace_id, invitations.scope, invitations.space_id, invitations.page_id, invitations.role, invitations.email, invitations.invitee_name, invitations.token_hash, invitations.invited_by_user_id, invitations.expires_at, invitations.last_sent_at, invitations.last_sent_by_user_id, invitations.send_count, invitations.accepted_at, invitations.accepted_by_user_id, invitations.declined_at, invitations.declined_by_user_id, invitations.revoked_at, invitations.revoked_by_user_id, invitations.created_at, invitations.updated_at,
+SELECT invitations.id, invitations.workspace_id, invitations.scope, invitations.space_id, invitations.role, invitations.email, invitations.invitee_name, invitations.token_hash, invitations.invited_by_user_id, invitations.expires_at, invitations.last_sent_at, invitations.last_sent_by_user_id, invitations.send_count, invitations.accepted_at, invitations.accepted_by_user_id, invitations.declined_at, invitations.declined_by_user_id, invitations.revoked_at, invitations.revoked_by_user_id, invitations.created_at, invitations.updated_at,
        workspaces.slug AS workspace_slug, workspaces.name AS workspace_name,
        COALESCE(users.name, '') AS inviter_name
 FROM invitations
@@ -337,7 +333,6 @@ func (q *Queries) ListOpenInvitationsByEmail(ctx context.Context, email string) 
 			&i.Invitation.WorkspaceID,
 			&i.Invitation.Scope,
 			&i.Invitation.SpaceID,
-			&i.Invitation.PageID,
 			&i.Invitation.Role,
 			&i.Invitation.Email,
 			&i.Invitation.InviteeName,
@@ -373,7 +368,7 @@ func (q *Queries) ListOpenInvitationsByEmail(ctx context.Context, email string) 
 }
 
 const listWorkspaceInvitations = `-- name: ListWorkspaceInvitations :many
-SELECT invitations.id, invitations.workspace_id, invitations.scope, invitations.space_id, invitations.page_id, invitations.role, invitations.email, invitations.invitee_name, invitations.token_hash, invitations.invited_by_user_id, invitations.expires_at, invitations.last_sent_at, invitations.last_sent_by_user_id, invitations.send_count, invitations.accepted_at, invitations.accepted_by_user_id, invitations.declined_at, invitations.declined_by_user_id, invitations.revoked_at, invitations.revoked_by_user_id, invitations.created_at, invitations.updated_at,
+SELECT invitations.id, invitations.workspace_id, invitations.scope, invitations.space_id, invitations.role, invitations.email, invitations.invitee_name, invitations.token_hash, invitations.invited_by_user_id, invitations.expires_at, invitations.last_sent_at, invitations.last_sent_by_user_id, invitations.send_count, invitations.accepted_at, invitations.accepted_by_user_id, invitations.declined_at, invitations.declined_by_user_id, invitations.revoked_at, invitations.revoked_by_user_id, invitations.created_at, invitations.updated_at,
        workspaces.slug AS workspace_slug, workspaces.name AS workspace_name,
        COALESCE(users.name, '') AS inviter_name
 FROM invitations
@@ -412,7 +407,6 @@ func (q *Queries) ListWorkspaceInvitations(ctx context.Context, arg ListWorkspac
 			&i.Invitation.WorkspaceID,
 			&i.Invitation.Scope,
 			&i.Invitation.SpaceID,
-			&i.Invitation.PageID,
 			&i.Invitation.Role,
 			&i.Invitation.Email,
 			&i.Invitation.InviteeName,
@@ -458,7 +452,7 @@ SET token_hash           = $1,
 WHERE workspace_id = $4 AND id = $5
   AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
   AND last_sent_at <= $6
-RETURNING id, workspace_id, scope, space_id, page_id, role, email, invitee_name, token_hash, invited_by_user_id, expires_at, last_sent_at, last_sent_by_user_id, send_count, accepted_at, accepted_by_user_id, declined_at, declined_by_user_id, revoked_at, revoked_by_user_id, created_at, updated_at
+RETURNING id, workspace_id, scope, space_id, role, email, invitee_name, token_hash, invited_by_user_id, expires_at, last_sent_at, last_sent_by_user_id, send_count, accepted_at, accepted_by_user_id, declined_at, declined_by_user_id, revoked_at, revoked_by_user_id, created_at, updated_at
 `
 
 type RefreshInvitationTokenParams struct {
@@ -488,7 +482,6 @@ func (q *Queries) RefreshInvitationToken(ctx context.Context, arg RefreshInvitat
 		&i.WorkspaceID,
 		&i.Scope,
 		&i.SpaceID,
-		&i.PageID,
 		&i.Role,
 		&i.Email,
 		&i.InviteeName,
@@ -559,18 +552,17 @@ func (q *Queries) RevokeOpenInvitationsByInviter(ctx context.Context, arg Revoke
 const upsertOpenInvitation = `-- name: UpsertOpenInvitation :one
 
 INSERT INTO invitations (
-    id, workspace_id, scope, space_id, page_id, role, email, invitee_name,
+    id, workspace_id, scope, space_id, role, email, invitee_name,
     token_hash, invited_by_user_id, expires_at, last_sent_by_user_id
 )
 VALUES (
-    $1, $2, $3, $4, $5,
-    $6, $7, $8,
-    $9, $10, $11, $10
+    $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9, $10, $9
 )
 ON CONFLICT (
     workspace_id, email, scope,
-    COALESCE(space_id, '00000000-0000-0000-0000-000000000000'::uuid),
-    COALESCE(page_id, '00000000-0000-0000-0000-000000000000'::uuid)
+    COALESCE(space_id, '00000000-0000-0000-0000-000000000000'::uuid)
 ) WHERE accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
 DO UPDATE SET
     role                 = EXCLUDED.role,
@@ -581,8 +573,8 @@ DO UPDATE SET
     last_sent_by_user_id = EXCLUDED.last_sent_by_user_id,
     send_count           = invitations.send_count + 1,
     updated_at           = now()
-WHERE invitations.last_sent_at <= $12
-RETURNING id, workspace_id, scope, space_id, page_id, role, email, invitee_name, token_hash, invited_by_user_id, expires_at, last_sent_at, last_sent_by_user_id, send_count, accepted_at, accepted_by_user_id, declined_at, declined_by_user_id, revoked_at, revoked_by_user_id, created_at, updated_at
+WHERE invitations.last_sent_at <= $11
+RETURNING id, workspace_id, scope, space_id, role, email, invitee_name, token_hash, invited_by_user_id, expires_at, last_sent_at, last_sent_by_user_id, send_count, accepted_at, accepted_by_user_id, declined_at, declined_by_user_id, revoked_at, revoked_by_user_id, created_at, updated_at
 `
 
 type UpsertOpenInvitationParams struct {
@@ -590,7 +582,6 @@ type UpsertOpenInvitationParams struct {
 	WorkspaceID uuid.UUID
 	Scope       string
 	SpaceID     uuid.NullUUID
-	PageID      uuid.NullUUID
 	Role        string
 	Email       string
 	InviteeName string
@@ -628,7 +619,6 @@ func (q *Queries) UpsertOpenInvitation(ctx context.Context, arg UpsertOpenInvita
 		arg.WorkspaceID,
 		arg.Scope,
 		arg.SpaceID,
-		arg.PageID,
 		arg.Role,
 		arg.Email,
 		arg.InviteeName,
@@ -643,7 +633,6 @@ func (q *Queries) UpsertOpenInvitation(ctx context.Context, arg UpsertOpenInvita
 		&i.WorkspaceID,
 		&i.Scope,
 		&i.SpaceID,
-		&i.PageID,
 		&i.Role,
 		&i.Email,
 		&i.InviteeName,

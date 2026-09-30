@@ -234,25 +234,6 @@ export const KB_API = {
   pageBacklinks: (workspaceSlug: string, pageId: string) =>
     `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/pages/${encodeURIComponent(pageId)}/backlinks`,
   /**
-   * GET(一覧) — /api/v2/kb/workspaces/:slug/pages/:pageId/grants
-   *
-   * **返るのはそのページ自身に張った行だけ**で、上の段（ワークスペース / スペース /
-   * 祖先のページ）から届いている相手は含まない。空 = 誰も見られない、ではない。
-   */
-  pageGrants: (workspaceSlug: string, pageId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/pages/${encodeURIComponent(pageId)}/grants`,
-  /** PUT(付与) / DELETE(取り消し) — 同じ 1 行を指す（DB の主キーと同じ形） */
-  pageGrant: (workspaceSlug: string, pageId: string, principalId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/pages/${encodeURIComponent(pageId)}/grants/${encodeURIComponent(principalId)}`,
-  /**
-   * GET — /api/v2/kb/workspaces/:slug/pages/:pageId/principals
-   *
-   * 権限を張れる相手を表示名つきで返す（相手選び用）。中身はワークスペース全体だが、
-   * 呼べるかはページ単位で決まる。
-   */
-  pagePrincipals: (workspaceSlug: string, pageId: string) =>
-    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/pages/${encodeURIComponent(pageId)}/principals`,
-  /**
    * GET(一覧) / POST(作成) — /api/v2/kb/workspaces/:slug/pages/:pageId/comment-threads
    *
    * 一覧は作成日時昇順で、各スレッドは comments 配列を持つ。作成（POST）の応答も
@@ -422,7 +403,7 @@ export const SPRINT_API = {
  *
  * PROJECT_API と同じく `/kb` の下に置かない。ワークスペースは URL の slug で指す。
  * チケットはページのような個票の grant を持たず、実効権限は常にワークスペース単位なので、
- * grants / principals 系のルートは無い（担当者候補の名前解決は KB_API.pagePrincipals を流用する）。
+ * grants / principals 系のルートは無い（担当者の名前解決はワークスペースのメンバー一覧を使う）。
  */
 export const TICKET_API = {
   /**

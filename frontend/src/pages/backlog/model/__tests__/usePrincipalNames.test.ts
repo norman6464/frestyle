@@ -4,14 +4,11 @@ import { workspaceKeys } from '@/entities/workspace/api/workspaceQueries';
 import { createTestQueryClient, queryWrapper } from '@/test/queryClient';
 import { usePrincipalNames } from '../usePrincipalNames';
 
-const hoisted = vi.hoisted(() => ({ fetchMembers: vi.fn(), listGrantablePrincipals: vi.fn() }));
+const hoisted = vi.hoisted(() => ({ fetchMembers: vi.fn() }));
 
 // 取得の本体を偽物にする（公開口だけを替えると、共有の問い合わせは本物を呼ぶ）。
 vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
   default: { fetchMembers: hoisted.fetchMembers },
-}));
-vi.mock('@/entities/kb/api/kbRepository', () => ({
-  default: { listGrantablePrincipals: hoisted.listGrantablePrincipals },
 }));
 
 const MEMBERS = [
@@ -37,7 +34,6 @@ describe('usePrincipalNames', () => {
     const { result } = renderHook(() => usePrincipalNames('acme'), { wrapper: queryWrapper() });
 
     await waitFor(() => expect(result.current.members).toEqual(MEMBERS));
-    expect(hoisted.listGrantablePrincipals).not.toHaveBeenCalled();
   });
 
   it('担当が無い・一覧に無い・名前が引けない人は空文字', async () => {

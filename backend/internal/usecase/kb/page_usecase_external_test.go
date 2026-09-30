@@ -1052,9 +1052,9 @@ func Test_パンくず_閲覧できる祖先だけがclosureの順で返る(t *t
 	unreachable := "00000000-0000-7000-8000-00000000000c"
 	pages.On("ListAncestorPageIDs", mock.Anything, kbRefWS, "page-x").
 		Return([]string{root, child, unreachable}, nil)
-	// 祖先には届いていないのに手前のページは開ける、という並びは本番でも起こる:
-	// 付与は 3 段（ワークスペース / スペース / ページ）を足し合わせるので、深い側の
-	// ページに直接付与を張れば、その祖先に役割が無いまま子だけが見える。
+	// 祖先は見えないのに手前のページは開ける、という並びは本番でも起こる:
+	// 祖先が作成者以外に見せない private のページで、子はそうでないとき
+	// （private はページ 1 枚ごとの印で、子へは降りない）。
 	perms.On("ListWorkspacePageViewFactsByIDs", mock.Anything, kbRefWS, uint64(7),
 		[]string{root, child, unreachable}).
 		Return([]repository.PageWithViewFacts{

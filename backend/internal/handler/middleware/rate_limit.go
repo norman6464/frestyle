@@ -25,8 +25,7 @@ func RespondRateLimited(c *gin.Context) {
 // 鍵は RealClientIP（client_ip.go）— X-Forwarded-For の末尾（Cloud Run 自身が観測した接続元）
 // を読むので、先頭側を詐称して鍵を変え続けることはできない。ただし IP は「その場所にいる
 // 全員」で共有される値でもあるので、秘密（パスワード等）を守る上限は鍵を守る対象そのものに
-// 取ること。共有リンクの検証がその例で、リンク 1 本ごとの上限を handler 側で別に掛けている
-// （kb_share_link_handler.go）。
+// 取ること（IP 単位の上限だけでは総当たりの歯止めにならない）。
 func RateLimitPerMinute(perMinute float64, burst int) gin.HandlerFunc {
 	return RateLimitPerMinuteBy(perMinute, burst, RealClientIP)
 }

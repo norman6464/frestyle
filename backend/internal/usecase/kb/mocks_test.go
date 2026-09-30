@@ -358,12 +358,6 @@ func (m *mockKBPermissionRepo) ListWorkspaceGrants(ctx context.Context, workspac
 	return rows, args.Error(1)
 }
 
-func (m *mockKBPermissionRepo) ListGrantablePrincipals(ctx context.Context, workspaceID string) ([]domain.GrantablePrincipal, error) {
-	args := m.Called(ctx, workspaceID)
-	p, _ := args.Get(0).([]domain.GrantablePrincipal)
-	return p, args.Error(1)
-}
-
 func (m *mockKBPermissionRepo) ListWorkspaceMembers(ctx context.Context, workspaceID string) ([]domain.WorkspaceMember, error) {
 	args := m.Called(ctx, workspaceID)
 	p, _ := args.Get(0).([]domain.WorkspaceMember)
@@ -376,12 +370,6 @@ func (m *mockKBPermissionRepo) ListWorkspaceMembersForAdmin(ctx context.Context,
 	return p, args.Error(1)
 }
 
-func (m *mockKBPermissionRepo) UpsertPageGrant(ctx context.Context, workspaceID, pageID, principalID string, role domain.GrantRole) (*domain.PageGrant, error) {
-	args := m.Called(ctx, workspaceID, pageID, principalID, role)
-	g, _ := args.Get(0).(*domain.PageGrant)
-	return g, args.Error(1)
-}
-
 func (m *mockKBPermissionRepo) ListSpaceMembers(ctx context.Context, workspaceID, spaceID string) ([]domain.SpaceMember, error) {
 	args := m.Called(ctx, workspaceID, spaceID)
 	p, _ := args.Get(0).([]domain.SpaceMember)
@@ -392,17 +380,6 @@ func (m *mockKBPermissionRepo) ListMySpaces(ctx context.Context, workspaceID str
 	args := m.Called(ctx, workspaceID, userID)
 	p, _ := args.Get(0).([]domain.MySpace)
 	return p, args.Error(1)
-}
-
-func (m *mockKBPermissionRepo) DeletePageGrant(ctx context.Context, workspaceID, pageID, principalID string) error {
-	args := m.Called(ctx, workspaceID, pageID, principalID)
-	return args.Error(0)
-}
-
-func (m *mockKBPermissionRepo) ListPageGrants(ctx context.Context, workspaceID, pageID string) ([]domain.PageGrant, error) {
-	args := m.Called(ctx, workspaceID, pageID)
-	g, _ := args.Get(0).([]domain.PageGrant)
-	return g, args.Error(1)
 }
 
 func (m *mockKBPermissionRepo) UpsertSpaceGrant(ctx context.Context, workspaceID, spaceID, principalID string, role domain.GrantRole) (*domain.SpaceGrant, error) {
@@ -423,12 +400,6 @@ func (m *mockKBPermissionRepo) ListSpaceGrants(ctx context.Context, workspaceID,
 
 func (m *mockKBPermissionRepo) PagePermissionFactsForUser(ctx context.Context, workspaceID, pageID string, userID uint64) (*domain.PagePermissionFacts, error) {
 	args := m.Called(ctx, workspaceID, pageID, userID)
-	f, _ := args.Get(0).(*domain.PagePermissionFacts)
-	return f, args.Error(1)
-}
-
-func (m *mockKBPermissionRepo) PagePermissionFactsForPrincipal(ctx context.Context, workspaceID, pageID, principalID string) (*domain.PagePermissionFacts, error) {
-	args := m.Called(ctx, workspaceID, pageID, principalID)
 	f, _ := args.Get(0).(*domain.PagePermissionFacts)
 	return f, args.Error(1)
 }
@@ -480,32 +451,6 @@ func (m *mockKBPermissionRepo) ListWorkspaceSpaceScopeFacts(ctx context.Context,
 func (m *mockKBPermissionRepo) ListSubtreePagePermissionFacts(ctx context.Context, workspaceID, pageID string, userID uint64) ([]repository.PageWithPermissionFacts, error) {
 	args := m.Called(ctx, workspaceID, pageID, userID)
 	rows, _ := args.Get(0).([]repository.PageWithPermissionFacts)
-	return rows, args.Error(1)
-}
-
-type mockShareLinkRepo struct{ mock.Mock }
-
-var _ repository.ShareLinkRepository = (*mockShareLinkRepo)(nil)
-
-func (m *mockShareLinkRepo) Create(ctx context.Context, in repository.ShareLinkWrite) (*domain.ShareLink, error) {
-	args := m.Called(ctx, in)
-	l, _ := args.Get(0).(*domain.ShareLink)
-	return l, args.Error(1)
-}
-
-func (m *mockShareLinkRepo) Revoke(ctx context.Context, workspaceID, shareLinkID string) error {
-	return m.Called(ctx, workspaceID, shareLinkID).Error(0)
-}
-
-func (m *mockShareLinkRepo) FindByTokenHash(ctx context.Context, tokenHash []byte) (*domain.ShareLink, error) {
-	args := m.Called(ctx, tokenHash)
-	l, _ := args.Get(0).(*domain.ShareLink)
-	return l, args.Error(1)
-}
-
-func (m *mockShareLinkRepo) ListByPage(ctx context.Context, workspaceID, pageID string) ([]domain.ShareLink, error) {
-	args := m.Called(ctx, workspaceID, pageID)
-	rows, _ := args.Get(0).([]domain.ShareLink)
 	return rows, args.Error(1)
 }
 

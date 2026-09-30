@@ -42,8 +42,6 @@ const hoisted = vi.hoisted(() => ({
   setPageCover: vi.fn(),
   clearPageCover: vi.fn(),
   createPage: vi.fn(),
-  listPageGrants: vi.fn(),
-  listGrantablePrincipals: vi.fn(),
   listCommentThreads: vi.fn(),
   createCommentThread: vi.fn(),
   addComment: vi.fn(),
@@ -106,8 +104,6 @@ vi.mock('@/entities/kb/api/kbRepository', () => ({
     setPageCover: hoisted.setPageCover,
     clearPageCover: hoisted.clearPageCover,
     createPage: hoisted.createPage,
-    listPageGrants: hoisted.listPageGrants,
-    listGrantablePrincipals: hoisted.listGrantablePrincipals,
     listCommentThreads: hoisted.listCommentThreads,
     createCommentThread: hoisted.createCommentThread,
     addComment: hoisted.addComment,
@@ -227,7 +223,6 @@ vi.mock('../KbPageTitle', async (importOriginal) => {
 
 const resolved = (
   canEdit: boolean,
-  canManage = false,
   canComment = true,
   workspaceCanEdit = true,
 ): KbResolvedPage => ({
@@ -249,7 +244,6 @@ const resolved = (
   },
   doc: { type: 'doc', content: [] },
   canEdit,
-  canManage,
   canComment,
   workspaceCanEdit,
   lastEditedBy: null,
@@ -305,8 +299,6 @@ beforeEach(() => {
   hoisted.useParams.mockReturnValue({ pageId: 'p1' });
   hoisted.getLastVisitedPageId.mockReturnValue(null);
   hoisted.resolvePage.mockResolvedValue(resolved(true));
-  hoisted.listPageGrants.mockResolvedValue([]);
-  hoisted.listGrantablePrincipals.mockResolvedValue([]);
   hoisted.listCommentThreads.mockResolvedValue([]);
   hoisted.listPageVersions.mockResolvedValue([]);
   hoisted.listBacklinks.mockResolvedValue([]);
@@ -761,40 +753,14 @@ describe('KbPage のカバー画像', () => {
 });
 
 describe('KbPage の共有', () => {
-  it('権限を変えられないページには共有ボタンを出さない', async () => {
-    // 押しても 404 が返るだけのボタンは、権限が無いことすら伝えない。
-    hoisted.resolvePage.mockResolvedValue(resolved(true, false));
+  it('ページ単位の共有は持たない（編集できるページでも共有ボタンを出さない）', async () => {
+    // 見られる人はワークスペースとスペースの権限で決まる。ページごとに人を足す入口は置かない。
+    hoisted.resolvePage.mockResolvedValue(resolved(true));
     renderPage();
 
     await screen.findByRole('heading', { level: 1, name: '親ページ' });
     expect(screen.queryByRole('button', { name: '共有' })).not.toBeInTheDocument();
-  });
-
-  it('開くまで権限は取りに行かない', async () => {
-    hoisted.resolvePage.mockResolvedValue(resolved(true, true));
-    renderPage();
-
-    const share = await screen.findByRole('button', { name: '共有' });
-    // 開いていないパネルのために、ページを開くたび 2 本引かない。
-    // 片方だけ先読みに戻る退行を拾えるよう、両方を見る。
-    expect(hoisted.listPageGrants).not.toHaveBeenCalled();
-    expect(hoisted.listGrantablePrincipals).not.toHaveBeenCalled();
-
-    fireEvent.click(share);
-    await waitFor(() => expect(hoisted.listPageGrants).toHaveBeenCalledWith('w-3f2a9c', 'p1'));
-    expect(hoisted.listGrantablePrincipals).toHaveBeenCalledWith('w-3f2a9c', 'p1');
-    expect(await screen.findByRole('region', { name: '共有' })).toBeInTheDocument();
-  });
-
-  it('閉じるボタンでパネルが消える', async () => {
-    hoisted.resolvePage.mockResolvedValue(resolved(true, true));
-    renderPage();
-
-    fireEvent.click(await screen.findByRole('button', { name: '共有' }));
-    const panel = await screen.findByRole('region', { name: '共有' });
-    fireEvent.click(within(panel).getByLabelText('共有を閉じる'));
-
-    await waitFor(() => expect(screen.queryByRole('region', { name: '共有' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('region', { name: '共有' })).not.toBeInTheDocument();
   });
 });
 
@@ -811,7 +777,7 @@ describe('KbPage のテンプレート', () => {
     // canEdit（ページ単位）は true だが workspaceCanEdit（ワークスペース全体）は false ——
     // ページ/スペース限定の編集権限しか持たない人を想定。押せるが 403 になるボタンを
     // 出さないための、canEdit だけでは判定しない旗。
-    hoisted.resolvePage.mockResolvedValue(resolved(true, false, true, false));
+    hoisted.resolvePage.mockResolvedValue(resolved(true, true, false));
     renderPage();
 
     await screen.findByTestId('editor');
@@ -866,7 +832,7 @@ describe('KbPage のテンプレート', () => {
     // canEdit（ページ単位）は true・workspaceCanEdit（ワークスペース全体）は false ——
     // ページ/スペース限定の編集権限しか持たない人を想定。canManageTemplates が canEdit を
     // 見ていたら誤って削除ボタンが出てしまうところを、workspaceCanEdit で正しく隠すことを固定する。
-    hoisted.resolvePage.mockResolvedValue(resolved(true, false, true, false));
+    hoisted.resolvePage.mockResolvedValue(resolved(true, true, false));
     hoisted.listPageTemplates.mockResolvedValue([
       { id: 't-1', name: '議事録', createdAt: '2026-09-01T00:00:00Z' },
     ]);
@@ -982,7 +948,7 @@ describe('KbPage のコメント', () => {
   });
 
   it('コメント権限が無ければ読めるが、作成フォームは出ない', async () => {
-    hoisted.resolvePage.mockResolvedValue(resolved(true, false, false));
+    hoisted.resolvePage.mockResolvedValue(resolved(true, false));
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: 'コメント' }));
@@ -1355,7 +1321,7 @@ describe('KbPage の提案編集（commenter のドラフトモード）', () =>
   });
 
   it('viewerには出ない（canComment も無い）', async () => {
-    hoisted.resolvePage.mockResolvedValue(resolved(false, false, false)); // canEdit:false, canComment:false
+    hoisted.resolvePage.mockResolvedValue(resolved(false, false)); // canEdit:false, canComment:false
     renderPage();
     await screen.findByTestId('editor');
 
@@ -1770,14 +1736,14 @@ describe('KbPage の操作バーと右レール', () => {
   });
 
   it('編集できない人には保存状態を出さず、「閲覧のみ」または「コメント可」の印を出す', async () => {
-    hoisted.resolvePage.mockResolvedValue(resolved(false, false, false));
+    hoisted.resolvePage.mockResolvedValue(resolved(false, false));
     const { unmount } = renderPage();
     await screen.findByTestId('editor');
     expect(screen.queryByRole('status', { name: '保存状態' })).not.toBeInTheDocument();
     expect(screen.getByText('閲覧のみ')).toBeInTheDocument();
     unmount();
 
-    hoisted.resolvePage.mockResolvedValue(resolved(false, false, true));
+    hoisted.resolvePage.mockResolvedValue(resolved(false, true));
     renderPage();
     expect(await screen.findByText('コメント可')).toBeInTheDocument();
   });

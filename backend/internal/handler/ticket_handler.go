@@ -194,7 +194,7 @@ func respondTicketErr(c *gin.Context, err error) {
 		c.JSON(http.StatusConflict, errorResponse{Error: "type_in_use"})
 	case errors.Is(err, repository.ErrTicketAssigneeNotFound):
 		// 担当 principal がこのワークスペースに実在しない。リクエスト本文の誤りなので
-		// URL 対象を隠す 404 群とは分けて 400（候補は ListGrantablePrincipals で既に見えている）。
+		// URL 対象を隠す 404 群とは分けて 400（候補はワークスペースのメンバー一覧で既に見えている）。
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_assignee"})
 	case errors.Is(err, domain.ErrTicketHierarchyRejected):
 		c.JSON(http.StatusConflict, errorResponse{Error: "ticket_hierarchy_rejected"})
@@ -247,7 +247,7 @@ func requireTicketWorkspacePermissionWith(
 }
 
 // requireTicketPermission はチケット 1 件の実効権限を確かめる（CheckTicketPermissionUseCase
-// 経由のワークスペース単位判定。ページ付与のような個票の例外は無い）。
+// 経由のワークスペース単位判定。チケット 1 件ごとの例外は無い）。
 func (h *TicketHandler) requireTicketPermission(
 	c *gin.Context, scope kbRequestScope, ticketID string, capability domain.Capability,
 ) bool {

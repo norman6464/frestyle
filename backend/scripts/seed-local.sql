@@ -75,11 +75,9 @@ SELECT n_users, activity_days
 \set kb_principal_admin_id '00000000-5eed-0000-0000-000000000002'
 \set kb_space_dev_id '00000000-5eed-0000-0000-0000000000a1'
 \set kb_space_handbook_id '00000000-5eed-0000-0000-0000000000a2'
-\set kb_page_onboarding_id '00000000-5eed-0000-0000-0000000000b1'
 \set kb_page_local_setup_id '00000000-5eed-0000-0000-0000000000b2'
 \set kb_page_local_setup_faq_id '00000000-5eed-0000-0000-0000000000b3'
 \set kb_page_architecture_id '00000000-5eed-0000-0000-0000000000b4'
-\set kb_page_faq_id '00000000-5eed-0000-0000-0000000000b5'
 -- バックログ（プロジェクト）。ナレッジのスペースとは無関係の別の入れ物。
 \set pj_project_id '00000000-5eed-0000-0000-0000000000e1'
 \set pj_status_todo_id '00000000-5eed-0000-0000-0000000000e2'
@@ -119,7 +117,7 @@ BEGIN;
 -- 追加)を持つため、users を先に消すと「まだ pages から参照されている」で 2 回目以降の
 -- 実行が失敗する(1 回目は pages が空なので気づけない)。workspaces を消せば配下
 -- (spaces / pages / blocks / page_paths / page_snapshots / principals / workspace_grants /
--- space_grants / page_grants)が ON DELETE CASCADE で全部まとめて消える(schema.hcl 参照)。
+-- space_grants)が ON DELETE CASCADE で全部まとめて消える(schema.hcl 参照)。
 -- bulk データのように子テーブルから順に DELETE する必要は無い。3 つとも
 -- (個人ワークスペース + チーム共有ワークスペース 2 つ)ここでまとめて消す。
 DELETE FROM workspaces
@@ -244,16 +242,14 @@ INSERT INTO spaces (id, workspace_id, "key", name, visibility)
 VALUES
   (:'kb_space_dev_id',      :'kb_workspace_id', 'dev',      '開発ナレッジ',   'workspace'),
   (:'kb_space_handbook_id', :'kb_workspace_id', 'handbook', 'ハンドブック', 'workspace');
+-- ハンドブックにはページを入れない（ページの無いスペースの見え方を確かめる）。
 
 -- ページは親→子の順で INSERT する(pages.parent_id は同じ workspace_id/space_id の
 -- 既存ページしか参照できない複合 FK なので、子を先には入れられない)。
 -- position は fracindex.Between が実際に振る値と同じ形("a0" が 1 件目、"a1" が 2 件目 …)。
 -- ここでは件数が少なく並べ替えも起きないため、採番ロジックを呼ばずに決め打ちで足りる。
 INSERT INTO pages (id, workspace_id, space_id, parent_id, "position", title, created_by_user_id)
-VALUES (:'kb_page_onboarding_id', :'kb_workspace_id', :'kb_space_dev_id', NULL, 'a0', 'オンボーディング', 1000000);
-
-INSERT INTO pages (id, workspace_id, space_id, parent_id, "position", title, created_by_user_id)
-VALUES (:'kb_page_local_setup_id', :'kb_workspace_id', :'kb_space_dev_id', :'kb_page_onboarding_id', 'a0', 'ローカル環境構築', 1000000);
+VALUES (:'kb_page_local_setup_id', :'kb_workspace_id', :'kb_space_dev_id', NULL, 'a0', 'ローカル環境構築', 1000000);
 
 INSERT INTO pages (id, workspace_id, space_id, parent_id, "position", title, created_by_user_id)
 VALUES (:'kb_page_local_setup_faq_id', :'kb_workspace_id', :'kb_space_dev_id', :'kb_page_local_setup_id', 'a0', 'よくある詰まりどころ', 1000000);
@@ -261,22 +257,15 @@ VALUES (:'kb_page_local_setup_faq_id', :'kb_workspace_id', :'kb_space_dev_id', :
 INSERT INTO pages (id, workspace_id, space_id, parent_id, "position", title, created_by_user_id)
 VALUES (:'kb_page_architecture_id', :'kb_workspace_id', :'kb_space_dev_id', NULL, 'a1', 'アーキテクチャ概要', 1000000);
 
-INSERT INTO pages (id, workspace_id, space_id, parent_id, "position", title, created_by_user_id)
-VALUES (:'kb_page_faq_id', :'kb_workspace_id', :'kb_space_handbook_id', NULL, 'a0', 'よくある質問', 1000000);
-
 -- page_paths は pages.parent_id から導ける派生データ(closure table)。正本である
 -- pages 側は上で正しく作ってあるので、ここは木の形どおりに depth を手で書き下すだけでよい
 -- (自分自身の depth=0 の行も必須。ck_page_paths_depth が「depth=0 ⇔ 自己参照」を強制する)。
 INSERT INTO page_paths (workspace_id, page_id, ancestor_id, depth)
 VALUES
-  (:'kb_workspace_id', :'kb_page_onboarding_id',      :'kb_page_onboarding_id',      0),
   (:'kb_workspace_id', :'kb_page_local_setup_id',      :'kb_page_local_setup_id',      0),
-  (:'kb_workspace_id', :'kb_page_local_setup_id',      :'kb_page_onboarding_id',       1),
   (:'kb_workspace_id', :'kb_page_local_setup_faq_id',  :'kb_page_local_setup_faq_id',  0),
   (:'kb_workspace_id', :'kb_page_local_setup_faq_id',  :'kb_page_local_setup_id',      1),
-  (:'kb_workspace_id', :'kb_page_local_setup_faq_id',  :'kb_page_onboarding_id',       2),
-  (:'kb_workspace_id', :'kb_page_architecture_id',     :'kb_page_architecture_id',     0),
-  (:'kb_workspace_id', :'kb_page_faq_id',               :'kb_page_faq_id',              0);
+  (:'kb_workspace_id', :'kb_page_architecture_id',     :'kb_page_architecture_id',     0);
 
 -- ブロック(ページ本文)。page_snapshots(読み取りキャッシュ)は書かない — GetPageUseCase は
 -- snapshot が無ければ blocks から組み立てて返すので無くても表示できる(kb_page_usecase.go)。
@@ -284,18 +273,6 @@ VALUES
 -- inline は葉ノード(見出し/段落/コードブロック)だけが持ち、容器ノード(bulletList/listItem)は
 -- NULL のまま子をブロック行として持つ。
 --
--- 「オンボーディング」— フラットな見出し + 段落だけなので 1 回の多行 INSERT で足りる。
-INSERT INTO blocks (id, workspace_id, page_id, parent_id, "position", type, attrs, inline)
-VALUES
-  (gen_random_uuid(), :'kb_workspace_id', :'kb_page_onboarding_id', NULL, 'a0', 'heading',
-   '{"level":2}'::jsonb, '[{"type":"text","text":"はじめに"}]'::jsonb),
-  (gen_random_uuid(), :'kb_workspace_id', :'kb_page_onboarding_id', NULL, 'a1', 'paragraph',
-   '{}'::jsonb, '[{"type":"text","text":"このワークスペースは backend ディレクトリで make local-seed を実行すると作られるサンプルのナレッジです。"}]'::jsonb),
-  (gen_random_uuid(), :'kb_workspace_id', :'kb_page_onboarding_id', NULL, 'a2', 'paragraph',
-   '{}'::jsonb, '[{"type":"text","text":"ログインは admin@example.com / password(Dex の staticPasswords によるダミーアカウント)です。"}]'::jsonb),
-  (gen_random_uuid(), :'kb_workspace_id', :'kb_page_onboarding_id', NULL, 'a3', 'paragraph',
-   '{}'::jsonb, '[{"type":"text","text":"左のサイドバーから他のページも開いてみてください。"}]'::jsonb);
-
 -- 「ローカル環境構築」— codeBlock は language を attrs に持つ。
 INSERT INTO blocks (id, workspace_id, page_id, parent_id, "position", type, attrs, inline)
 VALUES
@@ -364,18 +341,6 @@ VALUES
    '{}'::jsonb, '[{"type":"text","text":"handler → usecase → repository/infra → domain の一方向依存です。"}]'::jsonb),
   (gen_random_uuid(), :'kb_workspace_id', :'kb_page_architecture_id', NULL, 'a2', 'paragraph',
    '{}'::jsonb, '[{"type":"text","text":"詳しくはリポジトリ直下の AGENTS.md を参照してください。"}]'::jsonb);
-
--- 「よくある質問」(ハンドブック側)
-INSERT INTO blocks (id, workspace_id, page_id, parent_id, "position", type, attrs, inline)
-VALUES
-  (gen_random_uuid(), :'kb_workspace_id', :'kb_page_faq_id', NULL, 'a0', 'heading',
-   '{"level":2}'::jsonb, '[{"type":"text","text":"Q. ログインできない"}]'::jsonb),
-  (gen_random_uuid(), :'kb_workspace_id', :'kb_page_faq_id', NULL, 'a1', 'paragraph',
-   '{}'::jsonb, '[{"type":"text","text":"A. docker compose up -d で idp(Dex)コンテナが起動しているか確認してください。"}]'::jsonb),
-  (gen_random_uuid(), :'kb_workspace_id', :'kb_page_faq_id', NULL, 'a2', 'heading',
-   '{"level":2}'::jsonb, '[{"type":"text","text":"Q. ナレッジのページが空っぽ"}]'::jsonb),
-  (gen_random_uuid(), :'kb_workspace_id', :'kb_page_faq_id', NULL, 'a3', 'paragraph',
-   '{}'::jsonb, '[{"type":"text","text":"A. backend ディレクトリで make local-seed を実行するとサンプルのナレッジが作られます。"}]'::jsonb);
 
 -- ---- 複数ワークスペースの例 --------------------------------------------------
 -- ワークスペース一覧・切り替え UI が実際に複数件を返す状態を確認できるよう、上の

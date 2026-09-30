@@ -21,11 +21,10 @@ type KbInviteByEmailRequest struct {
 // 「domain をそのまま返したら秘密が増えていた」事故を防ぐ）。
 type KbInvitationResponse struct {
 	ID string `json:"id" example:"0198a000-0000-7000-8000-00000000000d"`
-	// Scope は場所の種類（workspace / space / page）。
+	// Scope は場所の種類（workspace / space）。
 	Scope string `json:"scope" example:"workspace"`
-	// SpaceID / PageID は Scope に応じてどちらか一方だけ入る。
+	// SpaceID は Scope が space のときだけ入る。
 	SpaceID *string `json:"spaceId,omitempty"`
-	PageID  *string `json:"pageId,omitempty"`
 	Role    string  `json:"role" example:"editor"`
 	// Email は宛先（正規形）。
 	Email       string `json:"email" example:"taro@example.com"`
@@ -53,7 +52,6 @@ func KbInvitationFromDomain(d domain.InvitationDetail, now time.Time) KbInvitati
 		ID:              d.ID,
 		Scope:           string(d.Scope),
 		SpaceID:         d.SpaceID,
-		PageID:          d.PageID,
 		Role:            string(d.Role),
 		Email:           d.Email,
 		InviteeName:     d.InviteeName,
@@ -145,5 +143,4 @@ type KbAcceptedInvitationResponse struct {
 	WorkspaceSlug string  `json:"workspaceSlug" example:"acme"`
 	Scope         string  `json:"scope" example:"workspace"`
 	SpaceID       *string `json:"spaceId,omitempty"`
-	PageID        *string `json:"pageId,omitempty"`
 }

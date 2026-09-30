@@ -254,10 +254,6 @@ func respondKnowledgeBaseErr(c *gin.Context, err error) {
 		c.JSON(http.StatusConflict, errorResponse{Error: "page_cycle"})
 	case errors.Is(err, domain.ErrPageDepthExceeded):
 		c.JSON(http.StatusConflict, errorResponse{Error: "page_depth_exceeded"})
-	case errors.Is(err, repository.ErrPageMoveVoidsSpaceGrant):
-		// 業務上の衝突であってサーバの故障ではない。既にアーカイブ済み・循環と同じ 409 に揃える
-		// （500 だと DB 障害と区別できず再試行してよいと誤解される）。
-		c.JSON(http.StatusConflict, errorResponse{Error: "space_grant_voided"})
 	case errors.Is(err, repository.ErrBlockIDConflict):
 		c.JSON(http.StatusConflict, errorResponse{Error: "block_id_conflict"})
 	case errors.Is(err, repository.ErrWorkspaceSlugTaken):
@@ -386,8 +382,8 @@ func requirePagePermissionWith(
 }
 
 // requireSpacePermission はスペース 1 つの実効権限を確かめる。満たさなければレスポンスを
-// 書いて false を返す。**ページを名指しする経路でこれを使ってはいけない**（page_grants を
-// 見ないため祖先のページで足された役割を取りこぼす）。使ってよいのは対象がまだ存在しない
+// 書いて false を返す。**ページを名指しする経路でこれを使ってはいけない**（ページの公開範囲
+// private を見ないため、作成者以外に見せないページを取りこぼす）。使ってよいのは対象がまだ存在しない
 // 操作（スペース直下へのページ作成）だけで、親を持つ作成は requirePagePermission を通す。
 func (h *KnowledgeBasePageHandler) requireSpacePermission(
 	c *gin.Context, scope kbRequestScope, spaceID string, capability domain.Capability,
@@ -425,9 +421,8 @@ func requireSpacePermissionWith(
 // requireSubtreeEditPermission はページと全子孫の編集権限を確かめる。満たさなければ
 // レスポンスを書いて false を返す。子孫ごと影響が及ぶ操作（アーカイブ / 復帰 / 移動）が通す。
 //
-// いまの権限モデルでは役割は木を下るほど弱くならないのでこの検査が断ることは無いが
-// （理由は CanEditPageSubtreeUseCase の doc）、クエリの回帰を捕まえる最後の網として残す。
-// 部分的にアーカイブして逃げる手も採れない（迷子ページや復帰前提の破綻を招く）ため
+// 断るのは、子孫に他人の private のページ（作成者以外には見せない 1 枚）が混ざっているとき
+// （理由は CanEditPageSubtreeUseCase の doc）。部分的にアーカイブして逃げる手も採れない（迷子ページや復帰前提の破綻を招く）ため
 // 全部できるか何もしないかの二択にし、フェイルクローズ側に倒す。断ること自体が
 // 「この下に触れないページがある」という粗い信号になるが、ページの実在を隠す規則との
 // 衝突は承知のうえで、見えないページを黙って書き換えられる方を重く見た。
@@ -741,7 +736,7 @@ type kbSetVisibilityRequest struct {
 }
 
 // SetVisibility はページの公開範囲を変更する（編集権限が要る。SetIcon と同じ理由 —
-// 表示上の見た目・整理に関わる操作で、grants そのものを変える CanManage までは要らない）。
+// 表示上の見た目・整理に関わる操作で、権限そのものを変える管理者の資格までは要らない）。
 func (h *KnowledgeBasePageHandler) SetVisibility(c *gin.Context) {
 	scope, ok := kbScope(c)
 	if !ok {
@@ -1045,9 +1040,9 @@ func (h *KnowledgeBasePageHandler) Move(c *gin.Context) {
 		return
 	}
 	// 根の権限を先に見て応答を撃ち分けず、そのうえで子孫まで確かめる（Archive と同じ形）。
-	// 移動はサブツリーごと動き、動いた瞬間に子孫それぞれの祖先の並びが変わる。ページ付与は
-	// 経路の上から降りてくるため、操作者が見られない子孫の実効権限を、admin の gate
-	// （kb_permission_gate.go）を経ずに書き換えられてしまう穴になる。移動も
+	// 移動はサブツリーごと動き、スペースをまたげば子孫それぞれの実効権限が変わる。操作者が
+	// 見られない子孫（作成者以外に見せない private のページ）まで動かせてしまうと、admin の gate
+	// （kb_permission_gate.go）を経ずに他人のページの見え方を変えられる穴になる。移動も
 	// pages/page_paths/子孫の space_id を 1 トランザクションでまとめて付け替える
 	// 「全部かゼロか」の操作なので、Archive と判定を分ける理由が無い（実測コストは同一
 	// クエリ 1 回、5,000 ページのサブツリーで 3.0ms）。この検査は読み取りだけで、通らなければ
@@ -1283,12 +1278,10 @@ type kbResolvedPageResponse struct {
 	Page          kbPageResponse  `json:"page"`
 	Doc           json.RawMessage `json:"doc"`
 	CanEdit       bool            `json:"canEdit"`
-	// CanManage はそのページの権限を変えられるか（届いている役割が admin かどうかで決まる）。
-	CanManage bool `json:"canManage"`
 	// WorkspaceCanEdit はページではなく**ワークスペース全体**への書き込み資格
 	// （雛形の作成・削除ボタンの出し分けに使う。ページ単位の CanEdit とは別軸）。
 	WorkspaceCanEdit bool `json:"workspaceCanEdit"`
-	// CanComment はコメントを作成・返信・解決/再開できるか（共有リンク経由では常に false）。
+	// CanComment はコメントを作成・返信・解決/再開できるか。
 	CanComment   bool                 `json:"canComment"`
 	Ancestors    []kb.AncestorRef     `json:"ancestors"`
 	LastEditedBy *userDisplayResponse `json:"lastEditedBy,omitempty"`
@@ -1397,7 +1390,6 @@ func (h *KnowledgeBasePageHandler) ResolveByID(c *gin.Context) {
 		Page:             toKbPageResponse(&out.Page),
 		Doc:              json.RawMessage(doc),
 		CanEdit:          perm.CanEdit,
-		CanManage:        perm.CanManage,
 		CanComment:       perm.CanComment,
 		WorkspaceCanEdit: workspaceCanEdit,
 		Ancestors:        ancestors,

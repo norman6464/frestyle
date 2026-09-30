@@ -21,8 +21,9 @@ const focusRing = 'focus-visible:outline focus-visible:outline-2 focus-visible:o
  * 左: ロゴと主な行き先（ホーム・担当・ナレッジ・バックログ）／ 右: 検索・通知ベル・アカウント。
  *
  * 帯は低く（48px、広い画面で 52px）、部品は密に並べる —— 報道系サイトの帯の作り。本文の面積を
- * 削らず、帯であることは高さではなく文字の強弱で分からせる：ロゴは太字、行き先は通常の太さで、
- * 今いる所だけ太字＋下線（地の色を変えるより、白い帯の上では線のほうが読める）。
+ * 削らず、帯であることは高さではなく文字の強弱で分からせる：ロゴは印だけ（名前は読み上げにだけ
+ * 残す）、行き先は通常の太さで、今いる所だけ太字＋下線（地の色を変えるより、白い帯の上では線の
+ * ほうが読める）。
  * 行き先の間は細い縦線で区切り、検索は低い入力欄の形にする。
  * 押せるものの大きさは、マウスでは 36px（WCAG 2.2 の最低 24px を満たす）、指では ui-hit で 44px。
  *
@@ -46,15 +47,16 @@ export default function Header({ onOpenSearch }: HeaderProps) {
       {/* 常時表示・不透明。本文とは縦に並ぶだけで重ねないので、半透明やぼかしは不要。
           高さは --app-header-h（48px）と合わせる。狭い画面の板（TicketDetailSheet）がその値で下に付く。 */}
       <header className="app-header-surface flex h-12 flex-shrink-0 items-center gap-3 px-3 md:h-[3.25rem] md:gap-6 md:px-5">
-        {/* ロゴは favicon と同じ画像（favicon.svg = 三角の飛翔マーク）に揃える。名前は太字で、
-            狭い画面でも出す（三本線が無いぶん左に余白がある）。 */}
+        {/* ロゴは favicon と同じ印（favicon.svg = 三角の飛翔マーク）だけにする。帯の中で一番重い文字が
+            ロゴの名前だと、今いる行き先の太字より先に目が行く。使う人はログイン済みで、どの製品かは
+            分かっているので、名前は読み上げ（aria-label）にだけ残す（ログイン前の画面は BrandLogo が
+            名前まで出す）。押せる大きさは帯のほかの部品と同じ 36px（指では ui-hit で 44px）。 */}
         <Link
           to="/"
           aria-label="FreStyle ホーム"
-          className={`ui-hit flex flex-shrink-0 items-center gap-2 rounded-md ${focusRing}`}
+          className={`ui-hit inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md ${focusRing}`}
         >
           <img src="/favicon.svg" alt="" aria-hidden="true" className="h-7 w-7 flex-shrink-0" />
-          <span className="text-lg font-bold tracking-tight text-[var(--color-text-primary)]">FreStyle</span>
         </Link>
 
         {/* 主な行き先（広い画面）。帯の高さいっぱいに並べ、項目の間は細い縦線で区切る。

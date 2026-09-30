@@ -58,14 +58,23 @@ func TestApplySchema_Integration(t *testing.T) {
 		for _, table := range []string{
 			"workspaces", "spaces", "pages", "blocks", "page_paths", "page_snapshots",
 			"principals", "principal_members", "workspace_grants", "space_grants",
-			"page_grants", "share_links",
 		} {
 			require.True(t, tableExists(t, db, table), "ナレッジのテーブル %s が無い", table)
 		}
 	})
 
+	t.Run("ページ単位の共有の置き場は作られない", func(t *testing.T) {
+		// ページ単位の付与と共有リンクはやめた。見られる人はワークスペースとスペースの 2 段の
+		// 付与で決まるので、その置き場だったテーブルと列が DDL に戻っていないことを見る。
+		for _, table := range []string{"page_grants", "share_links"} {
+			require.False(t, tableExists(t, db, table), "撤去したテーブル %s が残っている", table)
+		}
+		require.False(t, columnExists(t, db, "principals", "page_id"))
+		require.False(t, columnExists(t, db, "invitations", "page_id"))
+	})
+
 	t.Run("権限を打ち消す置き場は作られない", func(t *testing.T) {
-		// 権限は 3 段の付与（workspace / space / page）を足し合わせ、届いた中で
+		// 権限は 2 段の付与（workspace / space）を足し合わせ、届いた中で
 		// 最も強い役割で決まる。下の段が上の段を弱める仕組みは持たないので、その
 		// 置き場だったテーブルが DDL に戻っていないことを見る。
 		for _, table := range []string{"page_restrictions", "page_allow_lists"} {
@@ -115,9 +124,7 @@ func TestApplySchema_Integration(t *testing.T) {
 	t.Run("password_hash は撤去されている（段 4）", func(t *testing.T) {
 		// ログイン経路は発行者のトークン検証に一本化されており、ローカルのパスワード
 		// 照合は行わない。列を残すと「パスワードログインもある」という誤解を招くため落とした。
-		// share_links.password_hash（共有リンクを開くための別物のパスワード）は対象外。
 		require.False(t, columnExists(t, db, "users", "password_hash"))
-		require.True(t, columnExists(t, db, "share_links", "password_hash"))
 	})
 
 	t.Run("is_active は status に統合されている（段 3）", func(t *testing.T) {

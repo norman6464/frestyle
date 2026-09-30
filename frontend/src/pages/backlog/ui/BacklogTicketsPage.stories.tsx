@@ -275,123 +275,39 @@ export const 担当で絞る: Story = {
   },
 };
 
-/** 詳細を開いたときに中の節が取りに行く宛先。どれも空で返す。 */
-function detailApi(): ApiStubs {
-  return {
-    '/profile/me': { userId: 1, displayName: 'norman6464', email: '', bio: '', avatarUrl: '', status: '', updatedAt: '' },
-    '/workspaces/acme/tickets/t-1/comments': { comments: [] },
-    '/workspaces/acme/tickets/t-1/attachments': { attachments: [] },
-    '/workspaces/acme/tickets/t-1/children': { tickets: [] },
-    '/workspaces/acme/tickets/t-1/watch': { watching: false, count: 0 },
-    ...baseApi(),
-  };
-}
-
 const TITLE = '段1: チケットの骨格（9表）';
 
-/**
- * 行を押すと右に詳細が開き（設計ボード ST10）、一覧は領域が狭くなるのでカードに変わる。
- * 開いたら詳細の見出しへ、Escape で閉じて押した行へ戻る（ST14 の 04）。
- */
-export const 選ぶと右に詳細が開く: Story = {
-  decorators: [route, withApi(detailApi())],
+/** 題名は独立したチケット画面へのリンク。表の行全体をリンクで包まず、操作と分ける。 */
+export const 題名からチケットを開く: Story = {
+  decorators: [route, withApi(baseApi())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
-    const aside = await canvas.findByRole('complementary', { name: '選択中のチケット' });
-    const heading = within(aside).getByRole('heading', { level: 2, name: /選択中 FRESTYLE-457/ });
-    await waitFor(async () => {
-      await expect(heading).toHaveFocus();
-    });
+    await expect(await canvas.findByRole('link', { name: TITLE })).toHaveAttribute('href', '/tickets/t-1');
+    await expect(canvas.getByRole('table', { name: 'チケット' })).toHaveAttribute('data-layout', 'table');
+  },
+};
+
+/** 行の「…」は並び替えを開く。題名への移動とは別の操作として使える。 */
+export const 行の操作を開く: Story = {
+  decorators: [route, withApi(baseApi())],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: `${TITLE} の操作` }));
+    await expect(await screen.findByRole('menuitem', { name: '1 つ上へ' })).toBeInTheDocument();
+    await expect(canvas.getByRole('link', { name: TITLE })).toHaveAttribute('href', '/tickets/t-1');
+  },
+};
+
+/** 狭い画面では一覧がカードになる。題名から同じチケット画面へ進む。 */
+export const 狭い画面のチケットリンク: Story = {
+  decorators: [route, withApi(baseApi())],
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
     await waitFor(async () => {
       await expect(canvas.getByRole('table', { name: 'チケット' })).toHaveAttribute('data-layout', 'card');
     });
-    await userEvent.keyboard('{Escape}');
-    await waitFor(async () => {
-      await expect(canvas.queryByRole('complementary', { name: '選択中のチケット' })).toBeNull();
-    });
-    await waitFor(async () => {
-      await expect(canvas.getByRole('button', { name: TITLE })).toHaveFocus();
-    });
-  },
-};
-
-/** 詳細を開いたままの形（見た目の確認用。ST10 と見比べる）。 */
-export const 詳細を開いた形: Story = {
-  decorators: [route, withApi(detailApi())],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
-    await expect(await canvas.findByRole('complementary', { name: '選択中のチケット' })).toBeVisible();
-  },
-};
-
-/** 狭い画面で選んだだけの形（ST12）。一覧の下に選択中の帯。 */
-export const 狭い画面で選んだ形: Story = {
-  decorators: [route, withApi(detailApi())],
-  globals: { viewport: { value: 'mobile1', isRotated: false } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
-    await expect(await canvas.findByRole('button', { name: '選択した課題をひらく' })).toBeVisible();
-  },
-};
-
-/** 狭い画面で詳細を開いた形（ST13）。 */
-export const 狭い画面で詳細を開いた形: Story = {
-  decorators: [route, withApi(detailApi())],
-  globals: { viewport: { value: 'mobile1', isRotated: false } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
-    await userEvent.click(await canvas.findByRole('button', { name: '選択した課題をひらく' }));
-    await expect(await canvas.findByRole('region', { name: '選択中 FRESTYLE-457' })).toBeVisible();
-  },
-};
-
-/** 選択解除は文字のボタン。押すと閉じて、押した行へ戻る。 */
-export const 選択解除で閉じる: Story = {
-  decorators: [route, withApi(detailApi())],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
-    const aside = await canvas.findByRole('complementary', { name: '選択中のチケット' });
-    await userEvent.click(within(aside).getByRole('button', { name: '選択解除' }));
-    await waitFor(async () => {
-      await expect(canvas.queryByRole('complementary', { name: '選択中のチケット' })).toBeNull();
-    });
-    await waitFor(async () => {
-      await expect(canvas.getByRole('button', { name: TITLE })).toHaveFocus();
-    });
-  },
-};
-
-/**
- * 狭い画面では、選ぶと一覧の下に選択中の帯が出るだけ（ST12）。「選択した課題をひらく」で
- * 全画面の詳細（ST13）、「一覧へ」で戻る。戻っても選択は残る（選択解除とは別の操作）。
- */
-export const 狭い画面で選んで開いて戻る: Story = {
-  decorators: [route, withApi(detailApi())],
-  globals: { viewport: { value: 'mobile1', isRotated: false } },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
-    await userEvent.click(await canvas.findByRole('button', { name: '選択した課題をひらく' }));
-    const sheet = await canvas.findByRole('region', { name: '選択中 FRESTYLE-457' });
-    await waitFor(async () => {
-      await expect(within(sheet).getByRole('heading', { level: 2 })).toHaveFocus();
-    });
-    // 裏の一覧は触れない（Tab が抜けない）。
-    await expect(canvas.getByRole('button', { name: 'フィルター', hidden: true }).closest('[inert]')).not.toBeNull();
-    await userEvent.click(within(sheet).getByRole('button', { name: '一覧へ' }));
-    await waitFor(async () => {
-      await expect(canvas.queryByRole('region', { name: '選択中 FRESTYLE-457' })).toBeNull();
-    });
-    // 戻ったら開いた行へ（一覧の inert が外れてからフォーカスが移る）。
-    await waitFor(async () => {
-      await expect(canvas.getByRole('button', { name: TITLE })).toHaveFocus();
-    });
-    await expect(canvas.getByRole('button', { name: '選択した課題をひらく' })).toBeVisible();
+    await expect(canvas.getByRole('link', { name: TITLE })).toHaveAttribute('href', '/tickets/t-1');
   },
 };
 
@@ -458,7 +374,6 @@ function statefulSprintApi(initial: string[], tickets: ReturnType<typeof ticket>
       members = at === -1 ? [...rest, ticketId] : [...rest.slice(0, at + (anchorAfter ? 1 : 0)), ticketId, ...rest.slice(at + (anchorAfter ? 1 : 0))];
       return undefined;
     },
-    ...detailApi(),
     '/workspaces/acme/projects/p-1/tickets': { tickets },
     ...baseApi({ '/workspaces/acme/projects/p-1/tickets': { tickets } }),
   };
@@ -470,18 +385,17 @@ function sprintRowTitles(canvasElement: HTMLElement): string[] {
   const sprintGroup = groups.find((group) => group.textContent?.includes('スプリント 1'));
   if (!sprintGroup) return [];
   return within(sprintGroup)
-    .queryAllByRole('button', { name: /^段/ })
-    .map((button) => button.textContent ?? '');
+    .queryAllByRole('link', { name: /^段/ })
+    .map((link) => link.textContent ?? '');
 }
 
-/** 選んだチケットを「スプリントへ」で入れると、その場でスプリントの段へ移る。 */
+/** 行の「…」からスプリントへ入れると、その場でスプリントの段へ移る。 */
 export const スプリントへ入れるとその段へ移る: Story = {
   decorators: [route, withApi(statefulSprintApi([], [ticket({})]))],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(await canvas.findByRole('button', { name: TITLE }));
-    await userEvent.click(await canvas.findByRole('combobox', { name: '入れ先のスプリント' }));
-    await userEvent.click(await screen.findByRole('option', { name: 'スプリント 1' }));
+    await userEvent.click(await canvas.findByRole('button', { name: `${TITLE} の操作` }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'スプリント 1 へ入れる' }));
     await waitFor(async () => {
       await expect(canvas.getByRole('button', { name: /スプリント 1.*1 件/ })).toBeInTheDocument();
     });
@@ -505,8 +419,8 @@ export const スプリントの中で並べ替えると順が変わる: Story = 
     await waitFor(async () => {
       await expect(sprintRowTitles(canvasElement)).toEqual([TITLE, '段2: 並べ替え']);
     });
-    await userEvent.click(canvas.getByRole('button', { name: TITLE }));
-    await userEvent.click(await canvas.findByRole('button', { name: /末尾へ/ }));
+    await userEvent.click(canvas.getByRole('button', { name: `${TITLE} の操作` }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: '末尾へ' }));
     await waitFor(async () => {
       await expect(sprintRowTitles(canvasElement)).toEqual(['段2: 並べ替え', TITLE]);
     });
@@ -527,4 +441,3 @@ export const バックログからはすぐスプリントを作る: Story = {
     });
   },
 };
-

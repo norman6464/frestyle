@@ -195,7 +195,6 @@ func (h *KnowledgeBaseInvitationHandler) Accept(c *gin.Context) {
 		WorkspaceSlug: out.WorkspaceSlug,
 		Scope:         string(out.Invitation.Scope),
 		SpaceID:       out.Invitation.SpaceID,
-		PageID:        out.Invitation.PageID,
 	})
 }
 
@@ -232,7 +231,7 @@ func NewKnowledgeBaseInvitationPreviewHandler(preview *kb.PreviewInvitationUseCa
 // 使えない招待は理由を伏せて 200 の {status: "unavailable"} にする（404 や 410 で撃ち分けると、
 // トークンを持っているだけの相手に「取り消された」「期限切れ」まで分かる）。トークンは 256 bit の
 // 乱数なので当てられず、案内には秘密が無い（宛先 email は URL を渡された本人のもの）ため、
-// 共有リンクの検証のようなリンク単位の試行上限は置かず、ルート側の IP 単位の上限だけにする。
+// 招待 1 件ごとの試行上限は置かず、ルート側の IP 単位の上限だけにする。
 func (h *KnowledgeBaseInvitationPreviewHandler) Preview(c *gin.Context) {
 	limitKnowledgeBaseBody(c)
 	var req dto.KbInvitationPreviewRequest

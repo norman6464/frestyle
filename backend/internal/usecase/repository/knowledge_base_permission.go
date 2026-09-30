@@ -57,8 +57,7 @@ type PageSearchViewFact struct {
 
 // SpaceWithScopeFacts は 1 スペースと、その入れ物に対する実効権限を決める事実の組。
 // ListWorkspaceSpaceScopeFacts が返す（判定は domain.ResolveScopePermission が行う）。
-// ここにあるのはワークスペース / スペースの grants で届いた役割だけで、ページ付与
-// （page_grants）は含まない。
+// ここにあるのはワークスペース / スペースの grants で届いた役割だけ（ページの公開範囲は含まない）。
 type SpaceWithScopeFacts struct {
 	Space domain.Space
 	Facts domain.ScopeFacts
@@ -66,15 +65,15 @@ type SpaceWithScopeFacts struct {
 
 // WorkspaceWithScopeFacts はワークスペース 1 つと、そこで呼び出し元に届いている役割の組。
 // ListMemberWorkspaces が返す（判定は domain.ResolveScopePermission が行う）。役割は
-// ワークスペースの grants（自分自身と所属グループ宛て）だけで、スペースやページの付与は含まない。
+// ワークスペースの grants（自分自身と所属グループ宛て）だけで、スペースの付与は含まない。
 type WorkspaceWithScopeFacts struct {
 	Workspace domain.Workspace
 	Facts     domain.ScopeFacts
 }
 
 // KnowledgeBasePermissionRepository はナレッジの権限モデル（principals /
-// principal_members / workspace_grants / space_grants / page_grants）への
-// アクセスを提供する（share_links は [ShareLinkRepository] が持つ）。
+// principal_members / workspace_grants / space_grants）へのアクセスを提供する。
+// ページ単位の付与と共有リンクは持たない。
 // KnowledgeBaseRepository（ページとブロック）と分けているのは、権限を張る操作とページを
 // 書く操作が同じトランザクションに入らないため（境界を書き込み単位で決めている）。
 type KnowledgeBasePermissionRepository interface {
@@ -141,20 +140,8 @@ type KnowledgeBasePermissionRepository interface {
 	// ListSpaceGrants はスペースの grant 一覧を返す。
 	ListSpaceGrants(ctx context.Context, workspaceID, spaceID string) ([]domain.SpaceGrant, error)
 
-	// UpsertPageGrant はページでの既定の役割を与える（同じ主体には 1 行だけ。workspace / space
-	// に続く 3 段目で、このページとその子孫に効く）。**これで誰かを弱めることはできない**
-	// （最も強い役割が実効になる。狭めたい内容は private のスペースへ置く）。
-	UpsertPageGrant(ctx context.Context, workspaceID, pageID, principalID string, role domain.GrantRole) (*domain.PageGrant, error)
-	// DeletePageGrant はページでの既定の役割を剥がす（冪等）。
-	// 上位の段で得ている役割はそのまま残る（消えるのはこの段で足した分だけ）。
-	DeletePageGrant(ctx context.Context, workspaceID, pageID, principalID string) error
-	// ListGrantablePrincipals は権限を張れる相手を表示名・アイコンつきで返す
-	// （kind → 名前 → id 順）。share_link は含まない（人が選んで役割を与える相手ではない）。
-	// 人（kind=user）はアカウント・所属がどちらも有効なものだけを返す（停止・退会した
-	// ユーザーは共有候補に出さない）。group / space_all はこの絞り込みの対象外。
-	ListGrantablePrincipals(ctx context.Context, workspaceID string) ([]domain.GrantablePrincipal, error)
 	// ListWorkspaceMembers はワークスペースに属する人を表示名・アイコンつきで返す
-	// （名前 → id 順）。ListGrantablePrincipals と違い人でない主体は含まない。
+	// （名前 → id 順）。人でない主体（グループ / スペース全員）は含まない。
 	// 担当の表示名と発言での名指しに使う。
 	ListWorkspaceMembers(ctx context.Context, workspaceID string) ([]domain.WorkspaceMember, error)
 	// ListWorkspaceMembersForAdmin はメンバー管理画面向け。ListWorkspaceMembers と違い、
@@ -166,10 +153,6 @@ type KnowledgeBasePermissionRepository interface {
 	// ListMySpaces は ListSpaceMembers の向きを逆にしたもの（GET /me/spaces 用）:
 	// 「1 スペース→全員」ではなく「1 人→全スペース」を、最も強い役割で 1 行にまとめて返す。
 	ListMySpaces(ctx context.Context, workspaceID string, userID uint64) ([]domain.MySpace, error)
-	// ListPageGrants はそのページ自身に張られた grant の一覧を返す（継承分は含まない）。
-	// **これは「このページを見られる人の一覧」ではない。** 空で返っても
-	// 「この段では何も足していない」の意味。
-	ListPageGrants(ctx context.Context, workspaceID, pageID string) ([]domain.PageGrant, error)
 
 	// ListMembershipEvents は所属・権限の変更履歴を新しい順で返す（監査用）。
 	ListMembershipEvents(ctx context.Context, workspaceID string) ([]domain.MembershipEvent, error)
@@ -185,9 +168,6 @@ type KnowledgeBasePermissionRepository interface {
 	// 事実を 1 回のクエリで集める。判定は domain.ResolvePagePermission が行う。
 	// ページが無い・別ワークスペースなら ErrPageNotFound。
 	PagePermissionFactsForUser(ctx context.Context, workspaceID, pageID string, userID uint64) (*domain.PagePermissionFacts, error)
-	// PagePermissionFactsForPrincipal は共有リンクの来訪者（kind='share_link' の主体）として
-	// 同じ事実を集める。既定（リンクの capability）は呼び出し側が facts に載せる。
-	PagePermissionFactsForPrincipal(ctx context.Context, workspaceID, pageID, principalID string) (*domain.PagePermissionFacts, error)
 	// ListSpacePageViewFacts はスペース配下のページ全件と、その閲覧の事実を
 	// archived で現役／アーカイブ済みを切り替える（false で現役）。アーカイブ用に
 	// 別のクエリを持たないのは、権限の事実を組み立てる部分を写経しないため
@@ -212,9 +192,9 @@ type KnowledgeBasePermissionRepository interface {
 	// ため呼び出し側が決める（題名解決は除外、パンくずは含める）。ParentArchived は常に false。
 	ListWorkspacePageViewFactsByIDs(ctx context.Context, workspaceID string, userID uint64, pageIDs []string) ([]PageWithViewFacts, error)
 	// SpacePermissionFactsForUser はページを介さず、スペース 1 つの実効権限を決める事実を集める
-	// （スペースが無い・別ワークスペースなら ErrSpaceNotFound）。ページ付与（page_grants）は
-	// 見ない。したがって**この口の答えをページの編集可否に使ってはいけない**
-	// （祖先のページに張られた付与を取りこぼし、必ず狭い側へ倒れる）。
+	// （スペースが無い・別ワークスペースなら ErrSpaceNotFound）。ページの公開範囲は見ない。
+	// したがって**この口の答えをページの編集可否に使ってはいけない**
+	// （作成者以外に見せない private のページを取りこぼし、広い側へ倒れる）。
 	// スペースの実在を確かめるのは、確かめないと workspace_grants 経由で他テナントの
 	// スペースに対しても役割を返してしまう（fail-open になる）ため。
 	SpacePermissionFactsForUser(ctx context.Context, workspaceID, spaceID string, userID uint64) (*domain.ScopeFacts, error)

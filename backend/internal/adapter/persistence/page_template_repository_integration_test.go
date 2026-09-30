@@ -21,7 +21,7 @@ import (
 // （pageVersionTables と同じ役割分担）。
 var pageTemplateTables = []string{
 	"page_templates",
-	"share_links", "page_grants", "space_grants", "workspace_grants",
+	"space_grants", "workspace_grants",
 	"principal_members", "principals",
 	"blocks", "page_paths", "page_snapshots", "page_search", "page_links", "pages", "spaces", "workspaces",
 }

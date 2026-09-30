@@ -9,20 +9,19 @@ import (
 )
 
 // InvitationScope は招待の「場所」の種類（invitations.scope）。承諾時にどの表へ付与を張るかが
-// これで決まる。ワークスペース宛は所属 + workspace_grants、スペース宛 / ページ宛は
-// ゲスト（所属は作らず space_grants / page_grants だけ）。
+// これで決まる。ワークスペース宛は所属 + workspace_grants、スペース宛はゲスト（所属は作らず
+// space_grants だけ）。ページ宛は持たない（ページ単位の共有をやめたため）。
 type InvitationScope string
 
 const (
 	InvitationScopeWorkspace InvitationScope = "workspace"
 	InvitationScopeSpace     InvitationScope = "space"
-	InvitationScopePage      InvitationScope = "page"
 )
 
 // Valid は既知の scope かを返す。
 func (s InvitationScope) Valid() bool {
 	switch s {
-	case InvitationScopeWorkspace, InvitationScopeSpace, InvitationScopePage:
+	case InvitationScopeWorkspace, InvitationScopeSpace:
 		return true
 	}
 	return false
@@ -97,8 +96,6 @@ type Invitation struct {
 	Scope       InvitationScope `json:"scope"`
 	// SpaceID は Scope が space のときだけ入る。
 	SpaceID *string `json:"spaceId,omitempty"`
-	// PageID は Scope が page のときだけ入る。
-	PageID *string `json:"pageId,omitempty"`
 	// Role は承諾時にその場所へ張る役割。
 	Role GrantRole `json:"role"`
 	// Email は宛先の正規形（NormalizeEmail）。

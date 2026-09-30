@@ -63,7 +63,7 @@ schema "public" {
 # 利用者。deleted_at は実際に NULL になり得る。
 #
 # アプリ全体のロール（かつての users.role）は撤去済み。権限は per-workspace の
-# grant（workspace_grants / space_grants / page_grants / course_grants / chapter_grants、
+# grant（workspace_grants / space_grants / course_grants / chapter_grants、
 # domain.GrantRole）だけで表現する。
 #
 # 段 2: 所属の正本だった workspace_id は撤去した（1 人 1 ワークスペースの単一列で、
@@ -725,7 +725,7 @@ column "content_revision" {
 }
   # visibility はバイラインの公開範囲バッジの元。'public' と 'space' はいまの閲覧可否
   # （grants の解決）を一切変えない — 表示だけが違う。'private' だけが唯一の例外で、
-  # 作成者以外は既存の付与（grants・共有リンク含む）を問わず一切見せない
+  # 作成者以外は既存の付与（grants）を問わず一切見せない
   # （domain.PagePermissionFacts.IsOwner・domain.ResolvePageView 参照。この列が
   # 「打ち消す層を持たない」という grants の原則の外にある、意図した唯一の例外）。
   column "visibility" {
@@ -1722,12 +1722,12 @@ table "comments" {
 }
 
 # =====================================================================
-# ナレッジの権限（principals / grants / share_links）
+# ナレッジの権限（principals / grants）
 # =====================================================================
 #
 # 設計の柱（骨格の 2 つに加えて）:
 #
-#   (3) 主体（principal）を 1 つの表に集める。ユーザー・グループ・スペース全員・公開リンクは
+#   (3) 主体（principal）を 1 つの表に集める。ユーザー・グループ・スペース全員は
 #       「権限を与える相手」という点で同じなので、grant 側から見て 1 本の FK で済む。
 #       主体ごとに表を分けると grant が主体の種類だけ列（または表）を持つことになり、
 #       権限を解く SQL が主体の種類だけ分岐する。
@@ -1737,14 +1737,14 @@ table "comments" {
 #       「いつ埋まるか」だけを制約で表す。
 #
 #   (5) 権限は付与（grants）だけで表し、打ち消す層は持たない。
-#       入れ物の階層に合わせて 3 段（workspace_grants / space_grants / page_grants）を置き、
+#       入れ物の階層に合わせて 2 段（workspace_grants / space_grants）を置き、
 #       届いた中で最も強い役割を採る。下の段が上の段を弱めることはない。
+#       ページ単位の付与は持たない（ページ単位の共有をやめたため）。ページを見られる人は、
+#       そのページが置かれたスペースまでの 2 段で決まる。
 #
 #       全ページへ ACL を展開する方式は解決が 1 行の取得で済む代わりに、ページを 1 回動かす /
 #       メンバーを 1 人足すだけで数万行を書き換える。ページ移動が日常の道具である以上、
-#       書き込み側の代償が大きすぎる。付与はごく少数のページにしか付かない性質を使い、
-#       行を持つのは付与された段だけにして、解決は page_paths（closure）を 1 回 JOIN するだけで
-#       済ませる。
+#       書き込み側の代償が大きすぎるので、付与は入れ物（ワークスペース / スペース）にだけ持つ。
 
 # principals: 権限を与える相手（主体）。
 #
@@ -1767,7 +1767,7 @@ table "principals" {
     null = false
     type = uuid
   }
-  # kind の値は domain.PrincipalKind が正（user / group / space_all / share_link）。
+  # kind の値は domain.PrincipalKind が正（user / group / space_all）。
   column "kind" {
     null = false
     type = character_varying(16)
@@ -1779,14 +1779,6 @@ table "principals" {
   }
   # space_id は kind='space_all'（そのスペースの全員）のときだけ埋まる。
   column "space_id" {
-    null = true
-    type = uuid
-  }
-  # page_id は kind='share_link'（公開リンクの来訪者）のときだけ埋まる。そのリンクの対象ページ。
-  # 主体を「それが意味を持つ入れ物」に必ず結び付けるためで、こうするとページを物理削除したときに
-  # 主体もリンクも CASCADE で一緒に消える。逆向き（share_links → principals）の FK だけでは、
-  # ページを消してもリンクの行だけが消えて主体が残り、誰も指さない行が溜まる。
-  column "page_id" {
     null = true
     type = uuid
   }
@@ -1832,13 +1824,6 @@ table "principals" {
     on_update   = NO_ACTION
     on_delete   = CASCADE
   }
-  # 公開リンクの主体は「同じワークスペースの page」にしか結び付かない。
-  foreign_key "fk_principals_page" {
-    columns     = [column.workspace_id, column.page_id]
-    ref_columns = [table.pages.column.workspace_id, table.pages.column.id]
-    on_update   = NO_ACTION
-    on_delete   = CASCADE
-  }
   index "idx_principals_workspace_id" {
     columns = [column.workspace_id]
   }
@@ -1847,9 +1832,6 @@ table "principals" {
   }
   index "idx_principals_space_id" {
     columns = [column.space_id]
-  }
-  index "idx_principals_page_id" {
-    columns = [column.page_id]
   }
   # 1 ユーザー 1 ワークスペースにつき主体は 1 つ（重複メンバーを作らない）。
   index "uq_principals_workspace_user" {
@@ -1869,24 +1851,18 @@ table "principals" {
     columns = [column.workspace_id, column.name]
     where   = "((kind)::text = 'group'::text)"
   }
-  # grant / share_link からの複合 FK の参照先。id の PK があるので実データ上は
+  # grant からの複合 FK の参照先。id の PK があるので実データ上は
   # 冗長だが、「別ワークスペースの principal に権限を張れない」を FK で塞ぐ足場として要る。
   unique "uq_principals_workspace_id" {
     columns = [column.workspace_id, column.id]
   }
   # kind まで含めた足場。参照側が「この列は group の principal でなければならない」を
-  # FK で言えるようにする（principal_members / share_links が使う）。
+  # FK で言えるようにする（principal_members が使う）。
   unique "uq_principals_workspace_kind_id" {
     columns = [column.workspace_id, column.kind, column.id]
   }
-  # share_links からの複合 FK の参照先。リンクが持つ page_id と、その主体が持つ page_id が
-  # 必ず同じページを指すことを FK で言えるようにする（2 か所に同じ値を持つ以上、
-  # 食い違わないことは制約で担保する）。
-  unique "uq_principals_workspace_kind_page_id" {
-    columns = [column.workspace_id, column.kind, column.page_id, column.id]
-  }
   check "ck_principals_kind" {
-    expr = "(kind)::text = ANY (ARRAY[('user'::character varying)::text, ('group'::character varying)::text, ('space_all'::character varying)::text, ('share_link'::character varying)::text])"
+    expr = "(kind)::text = ANY (ARRAY[('user'::character varying)::text, ('group'::character varying)::text, ('space_all'::character varying)::text])"
   }
   # 使う列は kind で決まる。「その kind のときだけ非 NULL」を等式で書き、
   # 片方向（NOT NULL なのに kind が違う）も同時に塞ぐ。
@@ -1895,9 +1871,6 @@ table "principals" {
   }
   check "ck_principals_space_id" {
     expr = "((kind)::text = 'space_all'::text) = (space_id IS NOT NULL)"
-  }
-  check "ck_principals_page_id" {
-    expr = "((kind)::text = 'share_link'::text) = (page_id IS NOT NULL)"
   }
   check "ck_principals_name" {
     expr = "((kind)::text = 'group'::text) = (name <> ''::character varying)"
@@ -2087,203 +2060,6 @@ table "space_grants" {
   }
   check "ck_space_grants_role" {
     expr = "(role)::text = ANY (ARRAY[('admin'::character varying)::text, ('editor'::character varying)::text, ('commenter'::character varying)::text, ('viewer'::character varying)::text])"
-  }
-}
-
-# page_grants: そのページ以下での既定の役割。workspace_grants / space_grants に続く 3 段目で、
-# 意味も合成の仕方も上の 2 つと同じ（配下へ降りる・最も強いものを採る）。
-#
-# これが要るのは「この人にこのページだけ編集を渡す」を書くため。
-#
-# 経路は page_paths を辿る。祖先のページに editor を張れば、その子孫は既定が editor 以上に
-# なる（親に渡したら配下も編集できる、という素直な形）。
-#
-# **弱める手段はこの層にも、どの層にも無い。** 権限は 3 段の付与を足し合わせて
-# 「届いた中で最も強いもの」で決まり、下の段が上の段を打ち消すことはない。
-# 「親は共有、この子だけ隠す」は書けない — 狭めたい内容は private のスペースへ置く。
-table "page_grants" {
-  schema = schema.public
-  column "workspace_id" {
-    null = false
-    type = uuid
-  }
-  column "page_id" {
-    null = false
-    type = uuid
-  }
-  column "principal_id" {
-    null = false
-    type = uuid
-  }
-  column "role" {
-    null = false
-    type = character_varying(16)
-  }
-  column "created_at" {
-    null    = false
-    type    = timestamptz
-    default = sql("now()")
-  }
-  column "updated_at" {
-    null    = false
-    type    = timestamptz
-    default = sql("now()")
-  }
-  primary_key {
-    columns = [column.workspace_id, column.page_id, column.principal_id]
-  }
-  foreign_key "fk_page_grants_page" {
-    columns     = [column.workspace_id, column.page_id]
-    ref_columns = [table.pages.column.workspace_id, table.pages.column.id]
-    on_update   = NO_ACTION
-    on_delete   = CASCADE
-  }
-  # space_grants と同じ理由で workspace_id を含む複合 FK にする（別テナントの principal へ
-  # 付与できてしまうと、そのままテナント越えの権限昇格になる）。
-  foreign_key "fk_page_grants_principal" {
-    columns     = [column.workspace_id, column.principal_id]
-    ref_columns = [table.principals.column.workspace_id, table.principals.column.id]
-    on_update   = NO_ACTION
-    on_delete   = CASCADE
-  }
-  # 経路をさかのぼって「祖先に張られた付与」を引く向きの索引。主キーは (workspace_id, page_id,
-  # principal_id) なので page_id 先頭では principal から引けない。
-  index "idx_page_grants_principal" {
-    columns = [column.workspace_id, column.principal_id]
-  }
-  check "ck_page_grants_role" {
-    expr = "(role)::text = ANY (ARRAY[('admin'::character varying)::text, ('editor'::character varying)::text, ('commenter'::character varying)::text, ('viewer'::character varying)::text])"
-  }
-}
-
-# share_links: ログイン不要の公開 URL。
-#
-# 来訪者は kind='share_link' の principal として扱う。主体の種類を 1 本に揃えておくと、
-# 権限解決の入口が主体ごとに分岐しない。
-#
-# ただし既定（そのリンクで何ができるか）は grants ではなくこの表の capability で決める。
-# リンクの来訪者はワークスペースに所属しないので、付与の 3 段はそもそも届かない。
-#
-# **共有リンクは広げる方向にしか働かない。** ログインしていない相手へ「見せる」を足すだけで、
-# すでに見えている人から取り上げることはない。
-#
-# token は平文で持たない。DB が漏れた時点で全リンクが開けるのを避けるため、SHA-256 の
-# ダイジェストだけを保存して照合はハッシュ同士で行う（トークンは十分な長さの乱数なので
-# 総当たりに強く、bcrypt のような遅いハッシュは要らない）。パスワードは人が選ぶ値なので
-# 逆に総当たりに弱く、こちらは bcrypt で持つ。
-table "share_links" {
-  schema = schema.public
-  column "id" {
-    null = false
-    type = uuid
-  }
-  column "workspace_id" {
-    null = false
-    type = uuid
-  }
-  # page_id はリンクの対象ページ。このページとその子孫が対象になる。
-  column "page_id" {
-    null = false
-    type = uuid
-  }
-  column "principal_id" {
-    null = false
-    type = uuid
-  }
-  # FK の足場（定数の生成列）。principal_members と同じ理由でここも生成列にする。
-  column "principal_kind" {
-    null = true
-    type = character_varying(16)
-    as {
-      expr = "'share_link'::character varying"
-      type = STORED
-    }
-  }
-  # capability の値は domain.Capability が正（view / edit）。
-  column "capability" {
-    null = false
-    type = character_varying(8)
-  }
-  # token_hash は共有 URL に載るトークンの SHA-256（32 バイト固定）。
-  column "token_hash" {
-    null = false
-    type = bytea
-  }
-  # password_hash は bcrypt。NULL ならパスワード無しで開ける。
-  column "password_hash" {
-    null = true
-    type = text
-  }
-  # expires_at が NULL なら無期限。
-  column "expires_at" {
-    null = true
-    type = timestamptz
-  }
-  # revoked_at が NULL なら有効。失効は行を消さず日付で残す（誰がいつ止めたかを追えるように）。
-  column "revoked_at" {
-    null = true
-    type = timestamptz
-  }
-  column "created_by_user_id" {
-    null = false
-    type = bigint
-  }
-  column "created_at" {
-    null    = false
-    type    = timestamptz
-    default = sql("now()")
-  }
-  column "updated_at" {
-    null    = false
-    type    = timestamptz
-    default = sql("now()")
-  }
-  primary_key {
-    columns = [column.id]
-  }
-  foreign_key "fk_share_links_page" {
-    columns     = [column.workspace_id, column.page_id]
-    ref_columns = [table.pages.column.workspace_id, table.pages.column.id]
-    on_update   = NO_ACTION
-    on_delete   = CASCADE
-  }
-  # principal は「同じワークスペースの、kind='share_link' の、同じページに結び付いた」主体だけ。
-  # page_id まで参照列に含めることで、リンクと主体が別々のページを指す状態を作れなくする。
-  foreign_key "fk_share_links_principal" {
-    columns     = [column.workspace_id, column.principal_kind, column.page_id, column.principal_id]
-    ref_columns = [table.principals.column.workspace_id, table.principals.column.kind, table.principals.column.page_id, table.principals.column.id]
-    on_update   = NO_ACTION
-    on_delete   = CASCADE
-  }
-  foreign_key "fk_share_links_created_by" {
-    columns     = [column.created_by_user_id]
-    ref_columns = [table.users.column.id]
-    on_update   = NO_ACTION
-    on_delete   = CASCADE
-  }
-  index "idx_share_links_page" {
-    columns = [column.workspace_id, column.page_id]
-  }
-  index "idx_share_links_created_by" {
-    columns = [column.created_by_user_id]
-  }
-  # 1 つの share_link principal は 1 本のリンクだけを表す（使い回すと失効が効かなくなる）。
-  unique "uq_share_links_principal" {
-    columns = [column.principal_id]
-  }
-  # トークンからリンクを 1 件引く経路。UNIQUE はその索引も兼ねる。
-  unique "uq_share_links_token_hash" {
-    columns = [column.token_hash]
-  }
-  check "ck_share_links_capability" {
-    expr = "(capability)::text = ANY (ARRAY[('view'::character varying)::text, ('edit'::character varying)::text])"
-  }
-  check "ck_share_links_password_hash" {
-    expr = "(password_hash IS NULL) OR (password_hash <> ''::text)"
-  }
-  # SHA-256 以外（平文トークンをそのまま入れた等）を入口で弾く。
-  check "ck_share_links_token_hash_len" {
-    expr = "octet_length(token_hash) = 32"
   }
 }
 
@@ -4448,11 +4224,12 @@ table "page_ticket_links" {
 # 相手は email で指す（users.id ではない）。users.id を受ける口は「実在する id なら 204、無ければ
 # 404」で他人の実在を探れる走査器になっていた。email なら、まだアカウントの無い人も招ける。
 #
-# 1 表にする理由: 場所の種類（scope）は workspace / space / page の 3 つだが、違うのは「どの id を
+# 1 表にする理由: 場所の種類（scope）は workspace / space の 2 つだが、違うのは「どの id を
 # 指すか」だけで、宛先・トークン・期限・承諾・辞退・取消の列は共通。種類ごとに表を分けると
-# 「自分宛の招待」が 3 表の UNION になり、「未決は宛先 × 場所ごとに 1 件」の制約も 3 か所に散る。
-# NULL になるのは space_id / page_id の 2 列だけで、CHECK で scope と 1 対 1 に固定する
-# （principals の kind + user_id / space_id / page_id と同じ作法）。
+# 「自分宛の招待」が表の数だけの UNION になり、「未決は宛先 × 場所ごとに 1 件」の制約も散る。
+# NULL になるのは space_id の 1 列だけで、CHECK で scope と 1 対 1 に固定する
+# （principals の kind + user_id / space_id と同じ作法）。ページ単位の招待は持たない
+# （ページ単位の共有をやめたため。見られる人はワークスペースとスペースの権限で決まる）。
 #
 # 状態は列で持たず、日時列から導く:
 #   未決     = accepted_at / declined_at / revoked_at がすべて NULL かつ now() < expires_at
@@ -4493,12 +4270,6 @@ table "invitations" {
     null = true
     type = uuid
   }
-  # scope='page' のときの対象。ページは別スペースへ移動できるので space_id と組にせず、
-  # page_grants と同じく (workspace_id, page_id) だけで pages を指す。
-  column "page_id" {
-    null = true
-    type = uuid
-  }
   # 承諾時にその場所へ張る役割。既存の *_grants と同じ 4 値。
   column "role" {
     null = false
@@ -4520,7 +4291,7 @@ table "invitations" {
     default = ""
   }
   # 招待 URL に載せる 256 ビット乱数の SHA-256。平文は発行・再送の応答で 1 回返すだけで
-  # DB・ログ・通知には残さない（share_links.token_hash と同じ作法）。再送のたびに差し替える。
+  # DB・ログ・通知には残さない。再送のたびに差し替える。
   # 用途は未認証の案内（誰から・どこへ・どの役割か）だけで、承諾の鍵ではない。
   column "token_hash" {
     null = false
@@ -4572,7 +4343,7 @@ table "invitations" {
     type = bigint
   }
   # 取消。admin が止めた、または招いた人の除名・降格に伴いシステムが止めた（revoked_by は操作者）。
-  # 行は消さず「誰がいつ止めたか」を残す（share_links.revoked_at と同じ方針）。
+  # 行は消さず「誰がいつ止めたか」を残す。
   column "revoked_at" {
     null = true
     type = timestamptz
@@ -4616,13 +4387,6 @@ table "invitations" {
     on_update   = NO_ACTION
     on_delete   = CASCADE
   }
-  foreign_key "fk_invitations_page" {
-    columns     = [column.workspace_id, column.page_id]
-    ref_columns = [table.pages.column.workspace_id, table.pages.column.id]
-    on_update   = NO_ACTION
-    on_delete   = CASCADE
-  }
-  # 人を指す 5 列。記録が残る users 行は消せない（RESTRICT）。
   foreign_key "fk_invitations_invited_by" {
     columns     = [column.invited_by_user_id]
     ref_columns = [table.users.column.id]
@@ -4653,7 +4417,7 @@ table "invitations" {
     on_update   = NO_ACTION
     on_delete   = RESTRICT
   }
-  # 「未決の招待は宛先 × 場所ごとに 1 件」。space_id / page_id の NULL を同じ値として扱うため
+  # 「未決の招待は宛先 × 場所ごとに 1 件」。space_id の NULL を同じ値として扱うため
   # COALESCE の式索引にする（uq_users_email_active と同じ式索引の形）。同じ宛先 × 場所への
   # 2 回目の INSERT は ON CONFLICT (同じ式) WHERE (同じ述語) DO UPDATE で再送にする。
   index "uq_invitations_open_target" {
@@ -4669,9 +4433,6 @@ table "invitations" {
     }
     on {
       expr = "COALESCE(space_id, '00000000-0000-0000-0000-000000000000'::uuid)"
-    }
-    on {
-      expr = "COALESCE(page_id, '00000000-0000-0000-0000-000000000000'::uuid)"
     }
     where = "((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL))"
   }
@@ -4703,16 +4464,16 @@ table "invitations" {
   }
   # 列挙値は varchar + CHECK（enum 型は値の追加・削除が移行になるので使わない）。
   check "ck_invitations_scope" {
-    expr = "(scope)::text = ANY (ARRAY[('workspace'::character varying)::text, ('space'::character varying)::text, ('page'::character varying)::text])"
+    expr = "(scope)::text = ANY (ARRAY[('workspace'::character varying)::text, ('space'::character varying)::text])"
   }
   # scope と id 列の対応を固定する。「どの表に付与を張るか」が行だけで決まる。
   check "ck_invitations_target" {
-    expr = "(((scope)::text = 'workspace'::text) AND (space_id IS NULL) AND (page_id IS NULL)) OR (((scope)::text = 'space'::text) AND (space_id IS NOT NULL) AND (page_id IS NULL)) OR (((scope)::text = 'page'::text) AND (space_id IS NULL) AND (page_id IS NOT NULL))"
+    expr = "(((scope)::text = 'workspace'::text) AND (space_id IS NULL)) OR (((scope)::text = 'space'::text) AND (space_id IS NOT NULL))"
   }
   check "ck_invitations_role" {
     expr = "(role)::text = ANY (ARRAY[('admin'::character varying)::text, ('editor'::character varying)::text, ('commenter'::character varying)::text, ('viewer'::character varying)::text])"
   }
-  # スペース宛・ページ宛（承諾者はゲスト）に admin は張れない。
+  # スペース宛（承諾者はゲスト）に admin は張れない。
   check "ck_invitations_scoped_role_not_admin" {
     expr = "((scope)::text = 'workspace'::text) OR ((role)::text <> 'admin'::text)"
   }

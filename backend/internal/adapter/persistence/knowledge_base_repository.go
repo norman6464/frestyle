@@ -853,19 +853,6 @@ func (r *knowledgeBaseRepository) MovePage(ctx context.Context, workspaceID, pag
 				return repository.ErrPageNotFound
 			}
 		} else {
-			// 「そのスペースの全員」宛ての付与はスペースをまたぐと評価されなくなる（画面には
-			// 見えているのに効かない状態になる）。移動と同じトランザクションで調べて拒否する。
-			voids, err := qtx.SubtreeHasForeignSpaceAllGrant(ctx, sqlcgen.SubtreeHasForeignSpaceAllGrantParams{
-				WorkspaceID: wsID,
-				PageID:      pgID,
-				NewSpaceID:  spID,
-			})
-			if err != nil {
-				return err
-			}
-			if voids {
-				return repository.ErrPageMoveVoidsSpaceGrant
-			}
 			// スペースをまたぐ移動は本人 + 子孫の space_id を 1 文で更新する（クエリ側コメント参照）。
 			n, err := qtx.MovePageSubtreeToSpace(ctx, sqlcgen.MovePageSubtreeToSpaceParams{
 				NewSpaceID:  spID,

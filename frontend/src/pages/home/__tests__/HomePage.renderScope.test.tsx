@@ -56,7 +56,6 @@ describe('HomePage の描き直しの範囲', () => {
     vi.spyOn(KbRepository, 'fetchFavorites').mockResolvedValue([]);
     vi.spyOn(KbRepository, 'fetchSpaces').mockResolvedValue([]);
     vi.spyOn(TicketRepository, 'fetchMyAssignedTickets').mockResolvedValue([]);
-    vi.spyOn(TicketRepository, 'fetchPageTicketReferences').mockResolvedValue([]);
     vi.spyOn(NotificationRepository, 'getUnreadCount').mockResolvedValue(0);
     vi.spyOn(ProfileRepository, 'fetchProfile').mockRejectedValue(new Error('no profile'));
   });

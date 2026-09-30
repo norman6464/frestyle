@@ -3,7 +3,6 @@ package handler
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -574,44 +573,20 @@ func (f *kbFakePages) GetPageSnapshot(_ context.Context, workspaceID, pageID str
 	}, nil
 }
 
-// ancestorsOf は対象ページから根までの経路を近い順に返す（本番の page_paths と同じ並びで、
-// 先頭が対象ページ自身 = depth 0）。返る添字がそのまま depth になる。
-func (f *kbFakePages) ancestorsOf(workspaceID, pageID string) []string {
-	path := make([]string, 0, 4)
-	seen := map[string]bool{}
-	for cur, ok := f.pages[pageID], true; ok && cur != nil; {
-		if cur.WorkspaceID != workspaceID || seen[cur.ID] {
-			break
-		}
-		seen[cur.ID] = true
-		path = append(path, cur.ID)
-		if cur.ParentID == nil {
-			break
-		}
-		cur, ok = f.pages[*cur.ParentID]
-	}
-	return path
-}
-
 // kbPermKey は「どのページを誰が」の組。
 type kbPermKey struct {
 	pageID string
 	userID uint64
 }
 
-// errKbFakeNotModeled はこの fake が再現していない口を呼ばれたときのエラー。
-//
-// nil を返して黙って成功させない。ここが呼ばれるのは配線が変わったときだけなので、
-// そのときは 500 として目に見えるようにする。
-var errKbFakeNotModeled = errors.New("kb fake: この口は再現していない")
-
 // kbFakePerms は repository.KnowledgeBasePermissionRepository の in-memory fake。
 //
 // 判定そのものはせず、domain.ResolvePagePermission がその答えを出すような「事実」を返す。
 //
-// 権限は 3 段の付与（ワークスペース / スペース / ページ）を足し合わせ、届いた中で最も強い
-// 役割で決まる。打ち消す層は無いので、**同じスペースの中で 1 枚だけ隠すことはできない**
-// （見せたくないものは別のスペースへ置く。hideInOwnPrivateSpace 参照）。
+// 権限は 2 段の付与（ワークスペース / スペース）を足し合わせ、届いた中で最も強い
+// 役割で決まる。打ち消す層は無いので、**付与で同じスペースの中の 1 枚だけを隠すことはできない**
+// （隠せるのは作成者以外に見せない private のページだけ。見せたくないものは別のスペースへ置く。
+// hideInOwnPrivateSpace 参照）。
 //
 // 印を「allow 行があるか」で代用すると、主体を 1 つ消しただけで限定公開が解けるという
 // 本番には無い挙動になり、その穴を踏むテストが緑のまま通ってしまう。
@@ -647,15 +622,10 @@ type kbFakePerms struct {
 	// grants は workspace_grants / space_grants の行。入れ物 ID が
 	// ワークスペースかスペースかの違いしかないので 1 つの map で持つ。
 	grants map[kbGrantKey]domain.GrantRole
-	// pageGrants は page_grants の行（既定の 3 段目）。入れ物の grant と別に持つのは、
-	// 効く範囲が違うため — こちらは張ったページとその子孫にだけ届く。
-	pageGrants map[kbGrantKey]domain.GrantRole
 	// userNames は users.name の写し（相手選びの一覧で使う表示名）。
 	// principals.name とは別に持つ。本番でも正本が別の表なので、
 	// まとめると「グループ以外は名前が空」という挙動を再現できない。
 	userNames map[uint64]string
-	// shareLinks は share_links の行（linkID -> 行）。
-	shareLinks map[string]*domain.ShareLink
 	// scopeFactsErr は入れ物単位の事実収集を失敗させる（500 経路の確認用）。
 	scopeFactsErr error
 	// listWorkspacesErr は所属ワークスペース一覧を失敗させる（500 経路の確認用）。
@@ -683,11 +653,6 @@ type kbGrantKey struct {
 
 var _ repository.KnowledgeBasePermissionRepository = (*kbFakePerms)(nil)
 
-// kbFakePerms は ShareLinkRepository も兼ねる。principal の採番（f.newPrincipal）と
-// ページの実在確認（f.pages）を共有リンクの発行がそのまま使うため、本番のように
-// 別 struct へ分けるとこの 2 つを二重に持つことになる。
-var _ repository.ShareLinkRepository = (*kbFakePerms)(nil)
-
 func newKbFakePerms(pages *kbFakePages, fallback domain.PagePermission) *kbFakePerms {
 	return &kbFakePerms{
 		pages:        pages,
@@ -696,9 +661,7 @@ func newKbFakePerms(pages *kbFakePages, fallback domain.PagePermission) *kbFakeP
 		perPage:      map[kbPermKey]domain.PagePermission{},
 		scopeRoles:   map[kbScopeKey]domain.GrantRole{},
 		grants:       map[kbGrantKey]domain.GrantRole{},
-		pageGrants:   map[kbGrantKey]domain.GrantRole{},
 		userNames:    map[uint64]string{},
-		shareLinks:   map[string]*domain.ShareLink{},
 		fallback:     fallback,
 	}
 }
@@ -710,13 +673,14 @@ func (f *kbFakePerms) addMember(workspaceID string, userID uint64) {
 
 // denyPage はそのページに「この人だけ外す」例外（deny）を 1 行張る。
 //
-// 既定を弱く張り替える形では表せない。既定は 3 段（ワークスペース / スペース / ページ）
+// 既定を弱く張り替える形では表せない。既定は 2 段（ワークスペース / スペース）
 // から届いて**最も強いものが実効**になるので、弱い役割を足しても下がらない。
 // hideInOwnPrivateSpace は対象ページを「自分が届かない private スペース」へ移し、
 // その相手から見えなくする。
 //
-// **これが「見えないページ」を作る唯一のやり方**。権限は 3 段の付与を足し合わせて
-// 最も強い役割で決まり、打ち消す層が無いので、同じスペースの中で 1 枚だけ隠すことはできない。
+// **付与で「見えないページ」を作る唯一のやり方**。権限は 2 段の付与を足し合わせて
+// 最も強い役割で決まり、打ち消す層が無いので、付与では同じスペースの中の 1 枚だけを隠せない
+// （隠せるのは private のページだけ）。
 // 見せたくないものは別のスペースへ置く、という本番の運用をそのまま写している。
 //
 // 親子は DB の複合 FK（fk_pages_parent）でスペースが揃うので、子を持つページには使わない。
@@ -743,10 +707,10 @@ func (f *kbFakePerms) hideInOwnPrivateSpace(workspaceID, pageID string) {
 
 // setPagePermission はそのページでの既定（役割）を差し替える。
 //
-// **これはテスト用の口で、ページの grant を張ったのに近いが子孫には伝わらない。**
-// 本番のページ付与は子孫へ降りるので、「祖先より弱い子孫」を作れるのは fake の中だけ。
-// サブツリー検査のような防御を突く回帰テストに使う（本番では起こらない状態を作って、
-// 検査がまだ働くことを確かめる）。
+// **これはテスト用の口で、本番には無い「ページごとの役割」を作る。** 本番の役割は
+// ワークスペースとスペースの 2 段だけで決まり、同じスペースのページは同じ役割になるので、
+// 「祖先より弱い子孫」を作れるのは fake の中だけ。サブツリー検査のような防御を突く
+// 回帰テストに使う（本番では起こらない状態を作って、検査がまだ働くことを確かめる）。
 func (f *kbFakePerms) setPagePermission(pageID string, userID uint64, perm domain.PagePermission) {
 	f.perPage[kbPermKey{pageID: pageID, userID: userID}] = perm
 }
@@ -754,9 +718,6 @@ func (f *kbFakePerms) setPagePermission(pageID string, userID uint64, perm domai
 // roleFor は望む実効権限になる既定の役割を返す（例外を使わずに表現する）。
 func roleFor(perm domain.PagePermission) *domain.GrantRole {
 	switch {
-	case perm.CanManage:
-		role := domain.GrantRoleAdmin
-		return &role
 	case perm.CanEdit:
 		role := domain.GrantRoleEditor
 		return &role
@@ -800,30 +761,6 @@ func (f *kbFakePerms) userPrincipal(workspaceID string, userID uint64) *domain.P
 	return nil
 }
 
-// mine は「そのユーザーとして扱われる主体」の集合（本人 / 所属グループ / そのスペースの全員）。
-// 本番の権限クエリの mine CTE と同じ組み立て方で、非メンバーには空集合を返す。
-func (f *kbFakePerms) mine(workspaceID, spaceID string, userID uint64) map[string]bool {
-	self := f.userPrincipal(workspaceID, userID)
-	if self == nil {
-		return map[string]bool{}
-	}
-	out := map[string]bool{self.ID: true}
-	for groupID, members := range f.groupMembers {
-		if members[self.ID] {
-			out[groupID] = true
-		}
-	}
-	// private のスペースには space_all（そのスペースの全員）を届かせない（本番と同じ規則）。
-	if sp, ok := f.pages.spaces[spaceID]; !ok || sp.Visibility != domain.SpaceVisibilityPrivate {
-		for _, p := range f.principals {
-			if p.WorkspaceID == workspaceID && p.Kind == domain.PrincipalKindSpaceAll && p.SpaceID != nil && *p.SpaceID == spaceID {
-				out[p.ID] = true
-			}
-		}
-	}
-	return out
-}
-
 func (f *kbFakePerms) IsWorkspaceMember(_ context.Context, workspaceID string, userID uint64) (bool, error) {
 	if f.membersErr != nil {
 		return false, f.membersErr
@@ -861,9 +798,9 @@ func (f *kbFakePerms) LeaveWorkspaceMembership(ctx context.Context, workspaceID 
 
 // PagePermissionFactsForUser はそのページに届いている既定の役割と、経路上の例外を返す。
 //
-// 既定は 3 段（ワークスペース / スペース / ページ）から届き、**最も強いものが実効**になる。
-// fake もその 3 つを合成する。片方しか見ないと、たとえばワークスペースの admin が
-// ページの権限を変えられないといった、本番には無い挙動でテストが緑になる。
+// 既定は 2 段（ワークスペース / スペース）から届き、**最も強いものが実効**になる。
+// fake もその 2 つを合成する。片方しか見ないと、たとえばワークスペースの admin が
+// スペースのページを編集できないといった、本番には無い挙動でテストが緑になる。
 //
 // perPage / fallback は「このページでの既定」をテストが直接指定するための口で、
 // 合成の 3 つ目として混ぜる（ページの grant を張ったのと同じ扱い）。
@@ -891,7 +828,7 @@ func (f *kbFakePerms) PagePermissionFactsForUser(_ context.Context, workspaceID,
 
 // roleForPage はそのページに届いている最も強い役割を返す（grant が 1 つも無ければ nil）。
 //
-// **1 ページ解決も一覧も検索もこれを通す。** 本番はどの経路も同じ 3 段の付与を同じ
+// **1 ページ解決も一覧も検索もこれを通す。** 本番はどの経路も同じ 2 段の付与を同じ
 // 畳み方で集めるので、fake がどれか 1 つだけ別の作り方をすると「開けるのに一覧に出ない」
 // 側のずれをテストが見逃す。
 //
@@ -901,28 +838,11 @@ func (f *kbFakePerms) roleForPage(workspaceID string, page *domain.Page, userID 
 	if f.userPrincipal(workspaceID, userID) == nil {
 		return nil
 	}
-	mine := f.mine(workspaceID, page.SpaceID, userID)
 	roles := f.rolesAt(kbScopeKey{scopeID: page.SpaceID, userID: userID}, workspaceID, userID)
-	roles = append(roles, f.pageGrantRoles(workspaceID, page.ID, mine)...)
 	if role := roleFor(f.permFor(page.ID, userID)); role != nil {
 		roles = append(roles, *role)
 	}
 	return domain.StrongestGrantRole(roles)
-}
-
-// pageGrantRoles は対象ページと祖先に張られた grant のうち、自分に効くものを返す。
-// 経路は近い順に辿るが、合成が「最も強いもの」なので段の近さは効かない
-// （例外の層と違い、grant には「最も近い段が勝つ」という規則が無い）。
-func (f *kbFakePerms) pageGrantRoles(workspaceID, pageID string, mine map[string]bool) []domain.GrantRole {
-	roles := make([]domain.GrantRole, 0, 2)
-	for _, ancestorID := range f.pages.ancestorsOf(workspaceID, pageID) {
-		for key, role := range f.pageGrants {
-			if key.scopeID == ancestorID && mine[key.principalID] {
-				roles = append(roles, role)
-			}
-		}
-	}
-	return roles
 }
 
 // SearchWorkspacePageViewFacts は本番のクエリと同じ見方で候補と事実を返す:
@@ -1072,7 +992,7 @@ func (f *kbFakePerms) countPermRead(method string) {
 }
 
 // SpacePermissionFactsForUser はスペース単位の事実（届いている役割の集合）を返す。
-// ページ付与（page_grants）は見ない — 本番の口と同じで、対象がまだ存在しない操作に使う。
+// ページの公開範囲は見ない — 本番の口と同じで、対象がまだ存在しない操作に使う。
 func (f *kbFakePerms) SpacePermissionFactsForUser(
 	_ context.Context, workspaceID, spaceID string, userID uint64,
 ) (*domain.ScopeFacts, error) {
@@ -1337,46 +1257,6 @@ func (f *kbFakePerms) FindUserPrincipal(_ context.Context, workspaceID string, u
 	return &c, nil
 }
 
-// ListGrantablePrincipals は権限を張れる相手を kind → 名前 → id の順で返す。
-//
-// 名前は本番と同じ出どころにする（group は principals.name、user は users、
-// space_all は spaces）。fake で principals.name を全 kind に使うと、
-// 「グループ以外は名前が空で返る」という本番の挙動をテストで再現できない。
-func (f *kbFakePerms) ListGrantablePrincipals(_ context.Context, workspaceID string) ([]domain.GrantablePrincipal, error) {
-	out := []domain.GrantablePrincipal{}
-	for _, p := range f.principals {
-		if p.WorkspaceID != workspaceID || p.Kind == domain.PrincipalKindShareLink {
-			continue
-		}
-		name := ""
-		switch p.Kind {
-		case domain.PrincipalKindGroup:
-			name = p.Name
-		case domain.PrincipalKindUser:
-			if p.UserID != nil {
-				name = f.userNames[*p.UserID]
-			}
-		case domain.PrincipalKindSpaceAll:
-			if p.SpaceID != nil {
-				if sp, ok := f.pages.spaces[*p.SpaceID]; ok {
-					name = sp.Name
-				}
-			}
-		}
-		out = append(out, domain.GrantablePrincipal{ID: p.ID, Kind: p.Kind, Name: name})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Kind != out[j].Kind {
-			return out[i].Kind < out[j].Kind
-		}
-		if out[i].Name != out[j].Name {
-			return out[i].Name < out[j].Name
-		}
-		return out[i].ID < out[j].ID
-	})
-	return out, nil
-}
-
 // ListWorkspaceMembers は人だけを名前 → id の順で返す（本番の SQL と同じく、
 // 人でない主体と名前を引けないユーザーを落とす）。
 func (f *kbFakePerms) ListWorkspaceMembers(_ context.Context, workspaceID string) ([]domain.WorkspaceMember, error) {
@@ -1465,7 +1345,7 @@ func (f *kbFakePerms) RemoveGroupMember(_ context.Context, _, groupPrincipalID, 
 	return nil
 }
 
-// --- ここから grant（既定の権限）と共有リンク。権限操作 API が通る口。
+// --- ここから grant（既定の権限）。権限操作 API が通る口。
 
 // mirrorGrant は grant の書き換えを読み取り側（scopeRoles）にも反映する。
 //
@@ -1573,111 +1453,6 @@ func (f *kbFakePerms) ListSpaceGrants(_ context.Context, workspaceID, spaceID st
 		})
 	}
 	return out, nil
-}
-
-func (f *kbFakePerms) UpsertPageGrant(
-	ctx context.Context, workspaceID, pageID, principalID string, role domain.GrantRole,
-) (*domain.PageGrant, error) {
-	if _, err := f.FindPrincipal(ctx, workspaceID, principalID); err != nil {
-		return nil, err
-	}
-	f.pageGrants[kbGrantKey{scopeID: pageID, principalID: principalID}] = role
-	return &domain.PageGrant{
-		WorkspaceID: workspaceID, PageID: pageID, PrincipalID: principalID, Role: role,
-	}, nil
-}
-
-func (f *kbFakePerms) DeletePageGrant(_ context.Context, _, pageID, principalID string) error {
-	delete(f.pageGrants, kbGrantKey{scopeID: pageID, principalID: principalID})
-	return nil
-}
-
-// ListPageGrants はそのページ自身に張られた行だけを返す（祖先の分は含まない）。
-// 解決（pageGrantRoles）は祖先も辿るので、ここで祖先まで返すと
-// 「一覧に出るのは自分の段だけ」という約束が fake でだけ崩れる。
-func (f *kbFakePerms) ListPageGrants(_ context.Context, workspaceID, pageID string) ([]domain.PageGrant, error) {
-	keys := make([]kbGrantKey, 0, len(f.pageGrants))
-	for k := range f.pageGrants {
-		if k.scopeID == pageID {
-			keys = append(keys, k)
-		}
-	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i].principalID < keys[j].principalID })
-	out := []domain.PageGrant{}
-	for _, k := range keys {
-		out = append(out, domain.PageGrant{
-			WorkspaceID: workspaceID, PageID: pageID, PrincipalID: k.principalID, Role: f.pageGrants[k],
-		})
-	}
-	return out, nil
-}
-
-// Create は共有リンクと、その来訪者を表す主体を一緒に作る（本番は 1 トランザクション）。
-func (f *kbFakePerms) Create(_ context.Context, in repository.ShareLinkWrite) (*domain.ShareLink, error) {
-	page, ok := f.pages.pages[in.PageID]
-	if !ok || page.WorkspaceID != in.WorkspaceID {
-		return nil, repository.ErrPageNotFound
-	}
-	pageID := in.PageID
-	principal := f.newPrincipal(domain.Principal{
-		WorkspaceID: in.WorkspaceID, Kind: domain.PrincipalKindShareLink, PageID: &pageID,
-	})
-	f.nextID++
-	link := &domain.ShareLink{
-		ID:              "share-link-" + strconv.Itoa(f.nextID),
-		WorkspaceID:     in.WorkspaceID,
-		PageID:          in.PageID,
-		PrincipalID:     principal.ID,
-		Capability:      in.Capability,
-		TokenHash:       in.TokenHash,
-		PasswordHash:    in.PasswordHash,
-		ExpiresAt:       in.ExpiresAt,
-		CreatedByUserID: in.CreatedByUserID,
-		CreatedAt:       time.Now(),
-	}
-	f.shareLinks[link.ID] = link
-	c := *link
-	return &c, nil
-}
-
-// Revoke は行を消さず revoked_at を立てる（誰がいつ止めたかを残すため）。
-// 既に失効済みなら何もしない（冪等）。
-func (f *kbFakePerms) Revoke(_ context.Context, workspaceID, shareLinkID string) error {
-	link, ok := f.shareLinks[shareLinkID]
-	if !ok || link.WorkspaceID != workspaceID {
-		return repository.ErrShareLinkNotFound
-	}
-	if link.RevokedAt == nil {
-		now := time.Now()
-		link.RevokedAt = &now
-	}
-	return nil
-}
-
-// FindByTokenHash は期限切れ・失効も含めて返す（判定は usecase 側）。
-func (f *kbFakePerms) FindByTokenHash(_ context.Context, tokenHash []byte) (*domain.ShareLink, error) {
-	for _, link := range f.shareLinks {
-		if string(link.TokenHash) == string(tokenHash) {
-			c := *link
-			return &c, nil
-		}
-	}
-	return nil, repository.ErrShareLinkNotFound
-}
-
-func (f *kbFakePerms) ListByPage(_ context.Context, workspaceID, pageID string) ([]domain.ShareLink, error) {
-	out := []domain.ShareLink{}
-	for _, link := range f.shareLinks {
-		if link.WorkspaceID == workspaceID && link.PageID == pageID {
-			out = append(out, *link)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
-	return out, nil
-}
-
-func (f *kbFakePerms) PagePermissionFactsForPrincipal(context.Context, string, string, string) (*domain.PagePermissionFacts, error) {
-	return nil, errKbFakeNotModeled
 }
 
 // kbFakeImagePresigner は repository.KbImagePresigner の最小 fake。
@@ -2412,7 +2187,7 @@ func (f *kbFakeInvitations) detail(inv *domain.Invitation) domain.InvitationDeta
 func sameTarget(a *domain.Invitation, in repository.InvitationWrite) bool {
 	ptrEq := func(x, y *string) bool { return (x == nil && y == nil) || (x != nil && y != nil && *x == *y) }
 	return a.WorkspaceID == in.WorkspaceID && a.Email == in.Email && a.Scope == in.Scope &&
-		ptrEq(a.SpaceID, in.SpaceID) && ptrEq(a.PageID, in.PageID)
+		ptrEq(a.SpaceID, in.SpaceID)
 }
 
 func (f *kbFakeInvitations) Upsert(_ context.Context, in repository.InvitationWrite) (*domain.Invitation, error) {
@@ -2435,7 +2210,7 @@ func (f *kbFakeInvitations) Upsert(_ context.Context, in repository.InvitationWr
 	now := f.now()
 	row := &domain.Invitation{
 		ID: fmt.Sprintf("0198a000-0000-7000-8000-%012d", f.nextID), WorkspaceID: in.WorkspaceID, Scope: in.Scope,
-		SpaceID: in.SpaceID, PageID: in.PageID, Role: in.Role, Email: in.Email, InviteeName: in.InviteeName,
+		SpaceID: in.SpaceID, Role: in.Role, Email: in.Email, InviteeName: in.InviteeName,
 		TokenHash: in.TokenHash, InvitedByUserID: in.ActorUserID, ExpiresAt: in.ExpiresAt,
 		LastSentAt: now, LastSentByUserID: in.ActorUserID, SendCount: 1, CreatedAt: now, UpdatedAt: now,
 	}

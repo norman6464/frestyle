@@ -244,9 +244,8 @@ func (u *RenamePageUseCase) Execute(ctx context.Context, in RenamePageInput) (*d
 }
 
 // FindPageUseCase はページ 1 件のメタ情報だけを引く（本文は読まない）。
-// 権限操作 API（ページ付与・共有リンク）の認可がこれを使う — 編集の可否は「そのページが
-// 属するスペースの admin か」で決まるため、まずスペースを知る必要がある。認可より前に
-// 呼ばれる口なので、本文まで読めてしまうと認可前に中身が見えてしまう。
+// ページの所属スペースを先に知りたい入口が使う。認可より前に呼ばれうる口なので、本文まで
+// 読めてしまうと認可前に中身が見えてしまう。
 type FindPageUseCase struct {
 	repo repository.KnowledgeBaseRepository
 }

@@ -43,8 +43,8 @@ export default function TicketCreateRow({ onCreate }: TicketCreateRowProps) {
 
   return (
     <div role="row" className="border-b border-surface-3">
-      <div role="cell" aria-colspan={6} className="flex flex-wrap items-center gap-2 px-3 py-1.5 text-sm sm:px-4">
-        <FsIcon name="plus" className="h-4 w-4 shrink-0 text-brand-600" />
+      <div role="cell" aria-colspan={6} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm sm:px-4">
+        <FsIcon name="plus" className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
         <input
           type="text"
           value={title}

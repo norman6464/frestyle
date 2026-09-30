@@ -26,9 +26,11 @@ export default function KbPageTitle({ title, canEdit, onRename, onEnter }: KbPag
   // （setDraft(null) はまだ描画に反映されておらず、blur ハンドラは取消前の値を見ている）
   const cancelledRef = useRef(false);
 
+  // 題名は記事面の見出しの大きさ（24px、狭い画面では 20px。行送りは 1.35）。本文の h2（20px の帯）より
+  // 一段だけ大きく、面の主役は題名ではなく本文にする。
   if (!canEdit) {
     return (
-      <h1 className="mb-3 text-3xl font-bold leading-tight text-[var(--color-text-primary)] [overflow-wrap:anywhere] md:text-4xl">
+      <h1 className="mb-3 text-xl font-bold leading-[1.35] text-[var(--color-text-primary)] [overflow-wrap:anywhere] md:text-2xl">
         {title}
       </h1>
     );
@@ -84,7 +86,7 @@ export default function KbPageTitle({ title, canEdit, onRename, onEnter }: KbPag
       }}
       // 枠 1px と内側の余白 4px のぶん左へ寄せ、読むだけのときの h1 と文字の左端をそろえる
       // （そろえないと、編集できる人にだけ題名が約 5px 右にずれて見える）。
-      className="-ml-[5px] mb-3 min-h-14 w-[calc(100%+5px)] rounded-md border border-transparent bg-transparent px-1 text-3xl font-bold text-[var(--color-text-primary)] outline-none hover:border-surface-3 focus:ring-2 focus:ring-brand-600 md:text-4xl"
+      className="-ml-[5px] mb-3 min-h-9 w-[calc(100%+5px)] rounded-md border border-transparent bg-transparent px-1 text-xl font-bold leading-[1.35] text-[var(--color-text-primary)] outline-none hover:border-surface-3 focus:ring-2 focus:ring-brand-600 md:min-h-10 md:text-2xl"
     />
     </>
   );

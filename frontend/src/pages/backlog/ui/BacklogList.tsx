@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Ticket, TicketStatus, TicketType } from '@/entities/ticket';
 import type { SprintState } from '@/entities/sprint';
 import { EmptyState, Loading, FsIllustration } from '@/shared/ui';
@@ -24,12 +24,12 @@ export interface BacklogGroupModel {
 export const BACKLOG_GROUP_ID = '__backlog__';
 
 /**
- * 表（6 列）を保てる領域の幅。これより狭いとカードに組み替える（設計ボード ST10）。
- * 画面幅ではなく領域の幅で見る —— 画面は広くても、右に詳細が開けば一覧は狭い。
- * 題名以外の 5 列と余白で約 570px を使うので、題名に 290px ほど残る幅を境にする
+ * 表（7 列）を保てる領域の幅。これより狭いとカードに組み替える（設計ボード ST10）。
+ * 画面幅ではなく領域の幅で見る（狭い端末のほか、ウィンドウを分割して使う場合等も含む）。
+ * 題名以外の 6 列と余白で約 600px を使うので、題名に 300px ほど残る幅を境にする
  * （これより狭いと、題名が 1 文字ずつ縦に折れ始める）。
  */
-export const BACKLOG_TABLE_MIN_WIDTH = 860;
+export const BACKLOG_TABLE_MIN_WIDTH = 900;
 
 export interface BacklogListProps {
   groups: BacklogGroupModel[];
@@ -43,15 +43,16 @@ export interface BacklogListProps {
   /** 絞り込み前の全件数。「N 件を表示・全 M 件」に使う。取れていなければ null。 */
   totalCount?: number | null;
   canEdit: boolean;
-  selectedId: string | null;
   busyId: string | null;
   nameOf: (principalId: string | null) => string;
-  onSelect: (ticketId: string) => void;
-  /** 狭い画面で、選択中のカードから詳細を全画面で開く。渡さなければカードに「詳細をひらく」は出ない。 */
-  onOpenDetail?: (ticketId: string) => void;
   onCreate: (title: string) => Promise<void>;
   onChangeStatus: (ticketId: string, statusId: string) => void;
-  /** 行で状態を変えた結果（PX04）。行のすぐ下に出す。 */
+  onMoveUp: (ticketId: string) => void;
+  onMoveDown: (ticketId: string) => void;
+  onMoveLast: (ticketId: string) => void;
+  onMoveToSprint: (ticketId: string, sprintId: string) => void;
+  onRemoveFromSprint: (ticketId: string) => void;
+  /** 行で状態や並びを変えた結果（PX04）。行のすぐ下に出す。 */
   outcomeOf?: (ticketId: string) => WriteOutcome | null;
   /** 結果が分からない失敗のあとの「最新を確認」。 */
   onVerify?: () => void;
@@ -62,18 +63,22 @@ export interface BacklogListProps {
   onRetry: () => void;
 }
 
-const COLUMNS = ['課題', 'やること', '担当', '優先度', '期限', '状態'] as const;
+const COLUMNS = ['課題', 'やること', '担当', '優先度', '期限', '状態', '操作'] as const;
 
 /**
  * バックログの本文。見出し行を持つ表に、スプリントの段 → バックログの段を積み、
- * 下に件数を置く（設計ボード ST08）。並び替えは選択中の帯（BacklogSelectionBand）が持つ。
+ * 下に件数を置く（設計ボード ST08）。並び替えは行ごとの「…」（BacklogRowMenu）が持つ —
+ * 選んで開く帯や、開くための別の面は持たない。
  *
  * 表は CSS グリッドで組む。`<table>` にしないのは、領域が狭いときに列を捨ててカードに
  * 組み替えるため（表の要素は列の構造を捨てられない）。役割（table / row / cell）は
  * 付けておき、読み上げでは表として辿れるようにする。
  *
- * 表かカードかは一覧の領域の幅で決める（useContainerNarrowerThan。境目をまたいだときだけ描き直す）。チケットを選んで右に詳細が
- * 開くと領域が狭くなり、自動でカードに変わる（ST10）。測れない環境では表。
+ * 文字の大きさと空きは報道系サイトの記事面の一覧に寄せる。題名は 15px の太字、補足は 13px。見出し行は
+ * 白い地に下の線だけにし、灰色の地はスプリントの段の帯にだけ使う（灰色の帯が 2 段重ならないように）。
+ *
+ * 表かカードかは一覧の領域の幅で決める（useContainerNarrowerThan。境目をまたいだときだけ描き直す）。
+ * 測れない環境では表。
  */
 export default function BacklogList({
   groups,
@@ -86,13 +91,15 @@ export default function BacklogList({
   filtered = false,
   totalCount = null,
   canEdit,
-  selectedId,
   busyId,
   nameOf,
-  onSelect,
-  onOpenDetail,
   onCreate,
   onChangeStatus,
+  onMoveUp,
+  onMoveDown,
+  onMoveLast,
+  onMoveToSprint,
+  onRemoveFromSprint,
   outcomeOf,
   onVerify,
   renderGroupAction,
@@ -108,6 +115,16 @@ export default function BacklogList({
   // 測り直せるよう callback ref で受ける。
   const [containerRef, narrow] = useContainerNarrowerThan<HTMLDivElement>(BACKLOG_TABLE_MIN_WIDTH);
   const layout: BacklogRowLayout = narrow === true ? 'card' : 'table';
+  // 一覧の取得・作成で groups が変わっても、スプリントの選択肢が同じなら各行へ
+  // 同じ配列を渡す。毎回 filter/map すると memo の行をすべて描き直してしまう。
+  const sprintOptionsKey = JSON.stringify(groups.filter((group) => group.kind === 'sprint').map(({ id, name }) => [id, name]));
+  const { sprintOptions, otherSprintsById } = useMemo(() => {
+    const options = (JSON.parse(sprintOptionsKey) as [string, string][]).map(([id, name]) => ({ id, name }));
+    return {
+      sprintOptions: options,
+      otherSprintsById: new Map(options.map(({ id }) => [id, options.filter((sprint) => sprint.id !== id)])),
+    };
+  }, [sprintOptionsKey]);
 
   if (error) {
     return (
@@ -143,7 +160,8 @@ export default function BacklogList({
   const statusOf = (id: string) => statuses.find((s) => s.id === id);
   const typeOf = (id: string) => types.find((t) => t.id === id);
   const showTotal = filtered && totalCount !== null && totalCount !== total;
-
+  // 並び替えの「…」はアーカイブでは出さない（アーカイブ済みの並びに意味は無い）。
+  const canReorder = !archived;
   return (
     <div ref={containerRef} className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -152,61 +170,72 @@ export default function BacklogList({
           {layout === 'table' && (
             <div
               role="row"
-              className={`sticky top-0 z-10 border-b border-surface-3 bg-surface-2 px-3 text-xs text-[var(--color-text-muted)] sm:px-4 ${BACKLOG_TABLE_GRID}`}
+              className={`sticky top-0 z-10 border-b border-surface-3 bg-surface-1 px-3 text-[13px] font-medium text-[var(--color-text-muted)] sm:px-4 ${BACKLOG_TABLE_GRID}`}
             >
               {COLUMNS.map((label) => (
-                <div key={label} role="columnheader" className="whitespace-nowrap py-2.5">
-                  {label}
+                <div key={label} role="columnheader" className="whitespace-nowrap py-3">
+                  {label === '操作' ? <span className="sr-only">{label}</span> : label}
                 </div>
               ))}
             </div>
           )}
 
-          {groups.map((group) => (
-            <BacklogGroup
-              key={group.id}
-              name={group.name}
-              count={group.tickets.length}
-              note={group.note}
-              open={!closed[group.id]}
-              onToggle={() => setClosed((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
-              action={renderGroupAction?.(group)}
-            >
-              {group.tickets.length === 0 ? (
-                <div role="row" className="border-b border-surface-3">
-                  <div role="cell" aria-colspan={6} className="px-3 py-4 text-center text-xs text-[var(--color-text-muted)]">
-                    {group.kind === 'sprint'
-                      ? 'このスプリントにはまだ何も入っていません。下の一覧から選んで「スプリントへ」で入れます。'
-                      : 'すべてスプリントに入っています。'}
+          {groups.map((group) => {
+            // 入れ先に選べるスプリント（いま入っている段は除く）。段の中では同じ配列でよい。
+            const otherSprints = otherSprintsById.get(group.id) ?? sprintOptions;
+            return (
+              <BacklogGroup
+                key={group.id}
+                name={group.name}
+                count={group.tickets.length}
+                note={group.note}
+                open={!closed[group.id]}
+                onToggle={() => setClosed((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
+                action={renderGroupAction?.(group)}
+              >
+                {group.tickets.length === 0 ? (
+                  <div role="row" className="border-b border-surface-3">
+                    <div role="cell" aria-colspan={7} className="px-3 py-6 text-center text-[13px] leading-[1.7] text-[var(--color-text-muted)]">
+                      {group.kind === 'sprint'
+                        ? 'このスプリントにはまだ何も入っていません。バックログの行の「…」から入れられます。'
+                        : 'すべてスプリントに入っています。'}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                group.tickets.map((ticket) => (
-                  <BacklogRow
-                    key={ticket.id}
-                    ticket={ticket}
-                    projectKey={projectKey}
-                    type={typeOf(ticket.typeId)}
-                    status={statusOf(ticket.statusId)}
-                    statuses={statuses}
-                    assigneeName={nameOf(ticket.assigneePrincipalId)}
-                    selected={ticket.id === selectedId}
-                    busy={ticket.id === busyId}
-                    canEdit={canEdit && !archived}
-                    indented={ticket.parentId !== null}
-                    today={today}
-                    layout={layout}
-                    onOpen={onSelect}
-                    onOpenDetail={onOpenDetail}
-                    onChangeStatus={onChangeStatus}
-                    outcome={outcomeOf?.(ticket.id) ?? null}
-                    onVerify={onVerify}
-                  />
-                ))
-              )}
-              {group.kind === 'backlog' && canEdit && !archived && <TicketCreateRow onCreate={onCreate} />}
-            </BacklogGroup>
-          ))}
+                ) : (
+                  group.tickets.map((ticket, index) => (
+                    <BacklogRow
+                      key={ticket.id}
+                      ticket={ticket}
+                      projectKey={projectKey}
+                      type={typeOf(ticket.typeId)}
+                      status={statusOf(ticket.statusId)}
+                      statuses={statuses}
+                      assigneeName={nameOf(ticket.assigneePrincipalId)}
+                      busy={ticket.id === busyId}
+                      canEdit={canEdit && !archived}
+                      canReorder={canReorder}
+                      indented={ticket.parentId !== null}
+                      today={today}
+                      layout={layout}
+                      isFirst={index === 0}
+                      isLast={index === group.tickets.length - 1}
+                      inSprint={group.kind === 'sprint'}
+                      otherSprints={otherSprints}
+                      onChangeStatus={onChangeStatus}
+                      onMoveUp={onMoveUp}
+                      onMoveDown={onMoveDown}
+                      onMoveLast={onMoveLast}
+                      onMoveToSprint={onMoveToSprint}
+                      onRemoveFromSprint={onRemoveFromSprint}
+                      outcome={outcomeOf?.(ticket.id) ?? null}
+                      onVerify={onVerify}
+                    />
+                  ))
+                )}
+                {group.kind === 'backlog' && canEdit && !archived && <TicketCreateRow onCreate={onCreate} />}
+              </BacklogGroup>
+            );
+          })}
         </div>
 
         {/*
@@ -214,8 +243,8 @@ export default function BacklogList({
           取り直し中は古い一覧を出したまま「更新中」を添える —— 消して読み込み表示にすると、
           押した行がその瞬間だけ消えて選び直すことになる。
         */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:px-4">
-          <p role="status" aria-live="polite" className="text-xs tabular-nums text-[var(--color-text-muted)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-4 sm:px-4">
+          <p role="status" aria-live="polite" className="text-[13px] tabular-nums text-[var(--color-text-muted)]">
             {total} 件の課題を表示{showTotal && <>・全 {totalCount} 件</>}
             {loading && <span className="ml-2">更新中…</span>}
           </p>

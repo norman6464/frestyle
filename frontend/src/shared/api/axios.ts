@@ -42,7 +42,7 @@ export interface PublicSafeRequestConfig extends AxiosRequestConfig {
  * リクエストのたびに、いまサインインしている人の ID トークンを Bearer で付ける。
  *
  * トークンが無ければ（未サインイン）何も付けない。未認証で呼べる公開エンドポイント
- * （例: 共有リンクの検証）はこれで通り、認証必須のエンドポイントは backend 側の
+ * （例: 招待の案内）はこれで通り、認証必須のエンドポイントは backend 側の
  * 401 で弾かれる。
  */
 apiClient.interceptors.request.use(async (config) => {

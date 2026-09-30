@@ -70,7 +70,6 @@ const resolved = (over: Record<string, unknown> = {}) => ({
   page,
   doc,
   canEdit: true,
-  canManage: true,
   workspaceCanEdit: true,
   canComment: true,
   ancestors: [],
@@ -153,7 +152,6 @@ export const 読むだけ: Story = {
       api({
         '/kb/pages/p-1': resolved({
           canEdit: false,
-          canManage: false,
           canComment: false,
           page: { ...page, icon: { type: 'emoji', value: '📘' } },
         }),
@@ -256,7 +254,7 @@ export const 提案を送信する: Story = {
     kbFrameRoute('/kb/:pageId', '/kb/p-1'),
     withApi(
       api({
-        '/kb/pages/p-1': resolved({ canEdit: false, canManage: false, canComment: true }),
+        '/kb/pages/p-1': resolved({ canEdit: false, canComment: true }),
         '/pages/p-1/suggestions': (config: { method?: string }) =>
           config.method === 'post'
             ? {
@@ -383,22 +381,119 @@ export const バイラインに公開範囲とラベルと閲覧数が出る: St
 };
 
 /**
- * 本文の幅は 900px 相当。パンくず（ページの場所）と操作ボタンは別の行に分かれ、
- * 「共有」は塗りの主ボタンになる。
+ * 本文の器は 742px の読みの幅（左右の余白ぶんを足した幅で切る）。パンくず（ページの場所）と
+ * 操作ボタンは別の行に分かれる。ページ単位の共有は持たないので、権限を変えられる人にも
+ * 「共有」ボタンは出ない（見られる人はワークスペースとスペースの権限で決まる）。
  */
-export const 幅とパンくずと共有ボタン: Story = {
+export const 幅とパンくずと操作の行: Story = {
   decorators: [kbFrameRoute('/kb/:pageId', '/kb/p-1'), withApi(api())],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const article = await canvas.findByRole('article');
-    await expect(article.parentElement).toHaveClass('max-w-[900px]');
-
-    const share = canvas.getByRole('button', { name: '共有' });
-    await expect(share).toHaveClass('bg-brand-600');
+    await expect(article.parentElement).toHaveClass('max-w-[calc(742px+3rem)]');
 
     // パンくずの行に操作ボタンは同居しない（別の行）。
     const nav = canvas.getByRole('navigation', { name: 'ページの場所' });
-    await expect(within(nav).queryByRole('button', { name: '共有' })).toBeNull();
+    const actions = await canvas.findByRole('group', { name: 'ページの操作' });
+    await expect(nav.contains(actions)).toBe(false);
+
+    await expect(canvas.queryByRole('button', { name: '共有' })).toBeNull();
+  },
+};
+
+/** 記事の組み方の見本の本文。見出し・箱の引用・箇条書き・区切り線を一通り持つ。 */
+const articleDoc = {
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: 'ナレッジは「知識を残し、その知識を使って仕事を進める」ための場所です。ページは木の形で整理し、本文はブロックで書きます。',
+        },
+      ],
+    },
+    { type: 'heading', attrs: { level: 2, id: 'h-1' }, content: [{ type: 'text', text: 'ページの作り方' }] },
+    {
+      type: 'paragraph',
+      content: [{ type: 'text', text: '左の列の「＋」から作ります。題名で Enter を押すと本文の先頭へ移り、そのまま書き始められます。' }],
+    },
+    {
+      type: 'blockquote',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '決めごと：ページは 1 つの話題につき 1 枚。長くなったら子ページに分ける。' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: '見直し：四半期ごとに、参照されていないページをアーカイブする。' }] },
+      ],
+    },
+    { type: 'heading', attrs: { level: 3, id: 'h-2' }, content: [{ type: 'text', text: '本文で使えるブロック' }] },
+    {
+      type: 'bulletList',
+      content: [
+        { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: '見出し（h1〜h3）と段落' }] }] },
+        { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: '箇条書き・番号付き・チェックリスト' }] }] },
+        { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: '引用・コード・表・画像' }] }] },
+      ],
+    },
+    { type: 'heading', attrs: { level: 2, id: 'h-3' }, content: [{ type: 'text', text: 'レビューの流れ' }] },
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: '編集できない人は「変更を提案する」から下書きを送れます。採用すると本文が置き換わり、版として残ります。' },
+      ],
+    },
+    { type: 'paragraph', content: [{ type: 'text', text: '採用した提案は、履歴から元の版に戻せます。' }] },
+    // 空行（空の段落）。段落の間は空けないので、空けたい所はこれで 1 行ぶん空ける。
+    { type: 'paragraph' },
+    { type: 'paragraph', content: [{ type: 'text', text: '提案は誰でも一覧で読めます。' }] },
+    { type: 'horizontalRule' },
+    { type: 'paragraph', content: [{ type: 'text', text: '困ったときは、右の欄の「コメント」から聞いてください。' }] },
+  ],
+};
+
+/**
+ * 本文の組み方（報道系サイトの記事面から借りた型）。題名は 24px（狭い画面では 20px）で、操作は
+ * 最終編集の行の右端。本文は 16px/1.8 で段落の間は空けず、空行（空の段落）が 1 行ぶん空く。
+ * 見出しは文字の大きさだけを変え（h2 は 20px）、地の色や枠は付けない。
+ */
+export const 記事の組み方: Story = {
+  decorators: [
+    kbFrameRoute('/kb/:pageId', '/kb/p-1'),
+    withApi(
+      api({
+        '/kb/pages/p-1': resolved({
+          doc: articleDoc,
+          lastEditedBy: { userId: 1, name: '田中 太郎' },
+          lastEditedAt: '2026-09-01T10:00:00',
+          viewCount: 42,
+        }),
+      }),
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const article = await canvas.findByRole('article');
+    const paragraph = await waitFor(() => {
+      const found = article.querySelector('.ProseMirror p');
+      if (!found) throw new Error('本文がまだ描かれていない');
+      return found;
+    });
+    await expect(getComputedStyle(paragraph).lineHeight).toBe('28.8px');
+    // 段落の間は空けない。空けたい所は空の段落で、1 行ぶん（28.8px）空く。
+    await expect(getComputedStyle(paragraph).marginBottom).toBe('0px');
+    const blank = [...article.querySelectorAll('.ProseMirror p')].find((p) => p.textContent === '') as HTMLElement;
+    await expect(Math.abs(blank.getBoundingClientRect().height - 28.8)).toBeLessThan(1);
+    // 見出しは文字の大きさだけを変える（地の色・帯は付けない）。
+    const h2 = within(article).getByRole('heading', { level: 2, name: 'ページの作り方' });
+    await expect(getComputedStyle(h2).fontSize).toBe('20px');
+    await expect(getComputedStyle(h2).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    const title = canvas.getByRole('textbox', { name: 'ページの題名' });
+    await expect(['24px', '20px']).toContain(getComputedStyle(title).fontSize);
+    // 操作は最終編集の行の右端（パンくずの行にも、題名の上にも無い）。
+    const actions = canvas.getByRole('group', { name: 'ページの操作' });
+    await expect(within(actions).getByRole('button', { name: '目次' })).toBeVisible();
+    await expect(within(actions).queryByRole('button', { name: '共有' })).toBeNull();
+    await expect(actions.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   },
 };
 

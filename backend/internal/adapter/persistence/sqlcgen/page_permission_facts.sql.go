@@ -7,7 +7,6 @@ package sqlcgen
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -27,13 +26,10 @@ WITH rpf_target AS (
     WHERE rpf_pg.workspace_id = $2 AND rpf_pg.id = $3
 ),
 rpf_me AS (
-    SELECT rpf_pr.id, rpf_pr.kind
+    SELECT rpf_pr.id
     FROM principals rpf_pr
     WHERE rpf_pr.workspace_id = $2
-      AND (
-            (rpf_pr.kind = 'user' AND rpf_pr.user_id = $1::bigint)
-         OR (rpf_pr.kind = 'share_link' AND rpf_pr.id = $4::uuid)
-      )
+      AND rpf_pr.kind = 'user' AND rpf_pr.user_id = $1::bigint
 ),
 rpf_mine AS (
     SELECT id FROM rpf_me
@@ -50,29 +46,17 @@ rpf_mine AS (
       AND rpf_spall.kind = 'space_all'
       AND rpf_spall.space_id = rpf_t1.space_id
       AND rpf_t1.space_visibility = 'workspace'
-      AND EXISTS (SELECT 1 FROM rpf_me WHERE rpf_me.kind = 'user')
-),
-rpf_page_grant_rank AS (
-    SELECT max(CASE rpf_pg2."role"
-                 WHEN 'admin' THEN 4 WHEN 'editor' THEN 3
-                 WHEN 'commenter' THEN 2 WHEN 'viewer' THEN 1 ELSE 0 END) AS rank
-    FROM page_paths rpf_pp
-    JOIN page_grants rpf_pg2
-      ON rpf_pg2.workspace_id = rpf_pp.workspace_id AND rpf_pg2.page_id = rpf_pp.ancestor_id
-    WHERE rpf_pp.workspace_id = $2 AND rpf_pp.page_id = $3
-      AND rpf_pg2.principal_id IN (SELECT id FROM rpf_mine)
+      AND EXISTS (SELECT 1 FROM rpf_me)
 )
 SELECT
     EXISTS (SELECT 1 FROM rpf_target) AS page_exists,
-    EXISTS (SELECT 1 FROM rpf_me WHERE rpf_me.kind = 'user') AS is_member,
+    EXISTS (SELECT 1 FROM rpf_me) AS is_member,
     -- ページが無いときの既定値は 'space'（何も特別扱いしない値）。page_exists が false の
     -- ときは呼び出し側（persistence）がその場で ErrPageNotFound を返すので、実際に使われる
     -- ことはない。
     COALESCE((SELECT page_visibility FROM rpf_target), 'space')::text AS page_visibility,
-    -- 共有リンク経由（user_id が NULL）では常に false。ログインしていない来訪者を
-    -- 作成者と同一だと判定しようがないため。
     COALESCE((SELECT created_by_user_id FROM rpf_target) = $1::bigint, false)::boolean AS is_owner,
-    -- 3 段の grant を合わせ、最も強い役割の強さを返す。
+    -- 2 段の grant を合わせ、最も強い役割の強さを返す。
     -- 弱い方を採るとスペースに viewer を張るだけでワークスペース管理者を締め出せてしまう。
     --
     -- 役割そのもの（text）ではなく強さ（整数）を返すのは、役割が 1 つも無いときに
@@ -81,7 +65,7 @@ SELECT
     -- 0 は「grant が無い」を表し、persistence が domain.GrantRoleByRank で nil に直す
     -- （この値がそのまま上の層へ出ることはない）。
     -- CASE の並びは domain.GrantRole.Rank と一対一に対応させること。
-    GREATEST(COALESCE((
+    COALESCE((
         SELECT max(CASE rpf_g."role"
                      WHEN 'admin' THEN 4 WHEN 'editor' THEN 3
                      WHEN 'commenter' THEN 2 WHEN 'viewer' THEN 1 ELSE 0 END)
@@ -95,14 +79,13 @@ SELECT
              WHERE rpf_sg.workspace_id = $2 AND rpf_sg.space_id = rpf_t3.space_id
                AND rpf_sg.principal_id IN (SELECT id FROM rpf_mine)
         ) rpf_g
-    ), 0), COALESCE((SELECT rank FROM rpf_page_grant_rank), 0))::integer AS grant_rank
+    ), 0)::integer AS grant_rank
 `
 
 type ResolvePagePermissionFactsParams struct {
-	UserID      sql.NullInt64
+	UserID      int64
 	WorkspaceID uuid.UUID
 	PageID      uuid.UUID
-	PrincipalID uuid.NullUUID
 }
 
 type ResolvePagePermissionFactsRow struct {
@@ -122,8 +105,7 @@ type ResolvePagePermissionFactsRow struct {
 // 1 ページの実効権限を決めるのに必要な「事実」を 1 回のクエリで集める。
 // 判定そのものは domain.ResolvePagePermission が行う（ここには規則を書かない）。
 //
-// user_id / principal_id はどちらか一方だけを渡す。前者はログイン済みユーザーとして、
-// 後者は共有リンクの来訪者（kind='share_link'）として解決する。
+// 解決するのはログイン済みユーザー（user_id）だけ。共有リンクの来訪者は持たない。
 //
 // CTE の役割:
 //
@@ -131,23 +113,14 @@ type ResolvePagePermissionFactsRow struct {
 //	rpf_me     … 自分自身の主体
 //	rpf_mine   … 自分に効く主体すべて（自分 + 所属グループ + スペース全員）。
 //	         グループの入れ子は DB 側で禁じているので 1 段の JOIN で足りる。
-//	         スペース全員はメンバーにだけ効かせる（共有リンクの来訪者には効かせない）。
 //
-// **打ち消す層は無い（ページの visibility='private' だけが唯一の例外）。** 権限は 3 段の
-// 付与を足し合わせ、届いた中で最も強い役割で決まる。下の段が上の段を弱めることはないので、
-// 経路をさかのぼって拾うのは「最も強い役割」だけでよく、どの段にあったかを覚えておく
-// 必要がない（最近段の depth も要らない）。'private' の判定（作成者以外には一切見せない）は
+// **打ち消す層は無い（ページの visibility='private' だけが唯一の例外）。** 権限は
+// ワークスペースとスペースの 2 段の付与を足し合わせ、届いた中で最も強い役割で決まる。
+// ページ単位の付与は持たない（ページ単位の共有をやめたため）。'private' の判定（作成者以外には一切見せない）は
 // domain.ResolvePagePermission が持ち、ここでは page_visibility / is_owner を事実として
 // 渡すだけ。
-// 経路上のページ付与（自分自身と祖先）のうち最も強いもの。祖先に editor を張れば
-// 子孫の既定が editor 以上になる、という降り方は grant の他の 2 段と同じ。
 func (q *Queries) ResolvePagePermissionFacts(ctx context.Context, arg ResolvePagePermissionFactsParams) (ResolvePagePermissionFactsRow, error) {
-	row := q.db.QueryRowContext(ctx, resolvePagePermissionFacts,
-		arg.UserID,
-		arg.WorkspaceID,
-		arg.PageID,
-		arg.PrincipalID,
-	)
+	row := q.db.QueryRowContext(ctx, resolvePagePermissionFacts, arg.UserID, arg.WorkspaceID, arg.PageID)
 	var i ResolvePagePermissionFactsRow
 	err := row.Scan(
 		&i.PageExists,

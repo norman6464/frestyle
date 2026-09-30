@@ -12,19 +12,30 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const 未着手: Story = {
-  args: { name: 'To Do', color: '#5b6b7a', category: 'todo' },
+  args: { name: 'To Do', category: 'todo' },
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByText('To Do')).toBeInTheDocument();
   },
 };
 
 export const 進行中_選べる: Story = {
-  args: { name: '開発', color: '#a0661a', category: 'in_progress', showChevron: true },
+  args: { name: '開発', category: 'in_progress', showChevron: true },
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByText('開発')).toBeInTheDocument();
   },
 };
 
 export const 完了: Story = {
-  args: { name: 'リリース', color: '#2f6b47', category: 'done' },
+  args: { name: 'リリース', category: 'done' },
+};
+
+/** 状態の印は色を持たない。形（枠ごとの輪）と名前で読ませ、印も文字色の段で描く。 */
+export const 印は色を持たない: Story = {
+  args: { name: 'レビュー', category: 'in_progress' },
+  play: async ({ canvasElement }) => {
+    const icon = canvasElement.querySelector('svg');
+    await expect(icon).not.toBeNull();
+    await expect(icon?.getAttribute('style') ?? '').not.toContain('color');
+    await expect(icon).toHaveClass('text-[var(--color-text-secondary)]');
+  },
 };

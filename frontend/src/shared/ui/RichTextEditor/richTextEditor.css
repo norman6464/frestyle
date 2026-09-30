@@ -26,7 +26,7 @@
 
 /*
  * rte-compact: 表示幅が狭い文脈（バックログのチケット本文。サイドパネル・詳細パネルの中で、
- * ナレッジ本文の 900px 相当より明らかに狭い）向けの一回り小さい見出し・本文サイズ。
+ * ナレッジ本文の 742px の読みの幅より明らかに狭い）向けの一回り小さい見出し・本文サイズ。
  * Typography（.prose）の既定サイズのままだと、この幅では見出しが大きすぎて折り返しだらけになる。
  * 見出しの margin は Typography 側が em 指定なので、font-size を縮めるだけで比例して縮む
  * （:where() で specificity 0 のため、素の要素セレクタで打ち消せる — !important 不要）。
@@ -53,6 +53,57 @@
 .rte-compact .rte-content .ProseMirror li,
 .rte-compact .rte-content .ProseMirror blockquote {
   font-size: 14px;
+}
+
+/*
+ * rte-article: ナレッジのページ本文（中央 742px の読みの幅）向けの、記事の組み方。
+ * 報道系サイトの記事面から借りるのは、文字の大きさと行の空き具合だけ。本文は 16px・行送り 1.8 で、
+ * 段落の間は空けない（空けたい所は空の段落を入れ、1 行ぶん = 28.8px 空く）。見出しは文字の大きさ
+ * だけを合わせ、太さ・余白・地の色はエディタの既定（Typography）のままにする。引用やコードなど、
+ * ブロックそのものの見た目は変えない。
+ * Typography（.prose）は :where() で specificity 0 なので、素の要素セレクタで上書きできる。
+ */
+.rte-article .rte-content .ProseMirror {
+  line-height: 1.8;
+}
+
+/* 本文の書き出しは頭部から一定の間隔（KbPage の mt-9 = 36px）。先頭のブロックの上の余白は足さない。 */
+.rte-article .rte-content .ProseMirror > :first-child {
+  margin-top: 0;
+}
+
+/* 段落と箇条書きは行と行の間を空けない。Enter で次の段落へ移ってもそのまま次の行になり、
+   空の段落（空行）を入れた所だけが 1 行ぶん空く。 */
+.rte-article .rte-content .ProseMirror p,
+.rte-article .rte-content .ProseMirror ul,
+.rte-article .rte-content .ProseMirror ol,
+.rte-article .rte-content .ProseMirror li {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* 見出しは文字の大きさだけを変える（本文の中の h1 は題名の 24px より小さく、h2 は記事の見出しと同じ 20px）。 */
+.rte-article .rte-content .ProseMirror h1 {
+  font-size: 1.375rem;
+}
+
+.rte-article .rte-content .ProseMirror h2 {
+  font-size: 1.25rem;
+}
+
+.rte-article .rte-content .ProseMirror h3 {
+  font-size: 1.125rem;
+}
+
+/* 画像は本文の幅いっぱいに、角を丸めない。 */
+.rte-article .rte-content .ProseMirror img {
+  border-radius: 0;
+  margin: 1rem 0;
+}
+
+/* 水平線は前後を広く空ける（段の切れ目）。 */
+.rte-article .rte-content .ProseMirror hr {
+  margin: 2rem 0;
 }
 
 /* Placeholder（@tiptap/extensions の Placeholder が空段落へ data-placeholder を付与する）。 */

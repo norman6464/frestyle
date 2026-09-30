@@ -28,9 +28,8 @@ var ErrInvitationScopeUnsupported = errors.New("invitation scope is not supporte
 type InvitationWrite struct {
 	WorkspaceID string
 	Scope       domain.InvitationScope
-	// SpaceID / PageID は Scope に応じてどちらか一方だけ入る（workspace 宛はどちらも nil）。
+	// SpaceID は Scope が space のときだけ入る（workspace 宛は nil）。
 	SpaceID *string
-	PageID  *string
 	Role    domain.GrantRole
 	// Email は正規形（domain.ParseInvitationEmail の戻り）。
 	Email       string

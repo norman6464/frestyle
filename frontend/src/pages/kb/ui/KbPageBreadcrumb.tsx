@@ -13,7 +13,7 @@ export interface KbPageBreadcrumbProps {
 }
 
 const CRUMB_LINK_CLASS =
-  'inline-flex min-h-11 max-w-40 items-center truncate rounded px-1 hover:text-[var(--color-text-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600';
+  'inline-flex min-h-8 max-w-40 items-center truncate rounded px-1 [@media(pointer:coarse)]:min-h-11 hover:text-[var(--color-text-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600';
 
 /**
  * KbPageBreadcrumb はページの場所（見本 3a のパンくず）。
@@ -30,7 +30,7 @@ export default function KbPageBreadcrumb({ workspaceSlug, workspaceName, spaceId
   const space = frameSpace && frameSpace.id === spaceId ? frameSpace : null;
 
   return (
-    <nav aria-label="ページの場所" className="mb-2 flex min-w-0 flex-wrap items-center gap-1 text-xs text-[var(--color-text-muted)]">
+    <nav aria-label="ページの場所" className="mb-3 flex min-w-0 flex-wrap items-center gap-1 text-xs text-[var(--color-text-muted)]">
       <Link to={`/kb/spaces?workspace=${encodeURIComponent(workspaceSlug)}`} className={CRUMB_LINK_CLASS}>
         {workspaceName}
       </Link>

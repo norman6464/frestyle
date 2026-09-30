@@ -20,7 +20,7 @@ import (
 // 加えたもの。子から先に並べる。
 var commentTables = []string{
 	"comments", "comment_threads",
-	"share_links", "page_grants", "space_grants", "workspace_grants",
+	"space_grants", "workspace_grants",
 	"principal_members", "principals",
 	"blocks", "page_paths", "page_snapshots", "pages", "spaces", "workspaces",
 }

@@ -17,18 +17,21 @@ export interface SprintCardProps {
   projectKey?: string;
   onRemoveTicket?: (ticketId: string) => void;
   /**
-   * スプリントの中で 1 つ動かす。バックログの並べ替えと同じ「ボタンで動かす」流儀に揃える
-   * （ドラッグは入れない。キーボードだけで完結し、依存も増やさない。ボタンは選択中の帯
-   * BacklogSelectionBand に集まっている）。
+   * スプリントの中で 1 つ動かす。バックログ一覧の行の「…」（BacklogRowMenu）と同じ
+   * 「ボタンで動かす」流儀に揃える（ドラッグは入れない。キーボードだけで完結し、依存も増やさない）。
    */
   onMoveTicket?: (ticketId: string, anchorTicketId: string, anchorAfter: boolean) => void;
 }
 
-/** 状態ごとの見た目。名前は利用者が足せないので、ここに 3 つ書き切れる。 */
+/**
+ * 状態ごとの見た目。名前は利用者が足せないので、ここに 3 つ書き切れる。
+ * 色は付けず、濃さで分ける（バックログの画面では色を混ぜない）。いま動いている「進行中」だけを
+ * 白黒反転にして目を止め、計画中と完了は灰色の地に文字の濃さの違いだけにする。
+ */
 const STATE_STYLE: Record<Sprint['state'], { label: string; className: string }> = {
-  planned: { label: '計画中', className: 'bg-surface-3 text-[var(--color-text-secondary)]' },
-  active: { label: '進行中', className: 'bg-brand-100 text-brand-700' },
-  completed: { label: '完了', className: 'bg-success-soft text-success' },
+  planned: { label: '計画中', className: 'bg-surface-2 text-[var(--color-text-secondary)]' },
+  active: { label: '進行中', className: 'bg-[var(--color-text-primary)] text-white' },
+  completed: { label: '完了', className: 'bg-surface-2 text-[var(--color-text-muted)]' },
 };
 
 /**

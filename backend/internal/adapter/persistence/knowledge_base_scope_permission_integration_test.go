@@ -34,9 +34,10 @@ func workspaceScopeOf(ctx context.Context, t *testing.T, f kbPermFixture, userID
 // （スペース / ワークスペース単位）を実 PostgreSQL で固定する。
 //
 // この口は「対象がまだ存在しない操作」（空のスペースへの最初のページ作成 / スペースの作成）
-// のためにあり、ページ単位の付与（page_grants）を見ない。見ないこと自体が正しい設計だが、
-// 見ないまま**ページを名指しする操作**に使うと必ず狭い側へ倒れるので、
-// 「ページ単位の答えと食い違わないこと」と「食い違ってよい範囲」の両方をここで固定する。
+// のためにあり、ページの公開範囲（visibility='private'）を見ない。見ないこと自体が正しい設計だが、
+// 見ないまま**ページを名指しする操作**に使うと広い側へ倒れる（作成者以外に見せないページを
+// 取りこぼす）ので、「ページ単位の答えと食い違わないこと」と「食い違ってよい範囲」の両方を
+// ここで固定する。
 func TestKnowledgeBaseScopePermission_Integration(t *testing.T) {
 	sqlDB := testsupport.OpenTestDB(t)
 	ctx := context.Background()
@@ -175,10 +176,12 @@ func TestKnowledgeBaseScopePermission_Integration(t *testing.T) {
 		assert.ErrorIs(t, err, repository.ErrSpaceNotFound, "形が UUID でない ID も同じ扱い")
 	})
 
-	t.Run("スペース単位とページ単位の答えはページ付与が無ければ一致する", func(t *testing.T) {
+	t.Run("スペース単位とページ単位の答えはprivateでなければ一致する", func(t *testing.T) {
 		// スペースの判定（役割の集合を domain が畳む）とページの判定（SQL が強さを返す）は
 		// 実装が別なので、同じ既定に対して同じ答えになることを役割ごとに固定する。
 		// ここが割れると「ページは編集できるのに直下に作れない」（逆も）になる。
+		// 役割はどちらもワークスペースとスペースの 2 段から来るので、食い違ってよいのは
+		// ページが private のときだけ（次のサブテスト）。
 		for _, role := range domain.ValidGrantRoles {
 			t.Run(string(role), func(t *testing.T) {
 				f := setupKBPermission(t, sqlDB)
@@ -195,22 +198,25 @@ func TestKnowledgeBaseScopePermission_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("スペース単位の答えはページ付与を見ない", func(t *testing.T) {
-		// この口の限界をそのまま固定する。ページに付与を張ってもスペースの答えは変わらない
-		// （ページ付与を集めていないため）。倒れる向きは常に狭い側なので、この口だけを見て
-		// 「編集できない」と断ってはいけない — **ページを名指しする操作には使わない**。
+	t.Run("スペース単位の答えはページの公開範囲を見ない", func(t *testing.T) {
+		// この口の限界をそのまま固定する。ページを private にしてもスペースの答えは変わらない
+		// （ページの公開範囲を集めていないため）。倒れる向きは広い側なので、この口だけを見て
+		// 「編集できる」と通してはいけない — **ページを名指しする操作には使わない**。
 		// 呼び出し側がそれを守っていることは handler の結合テストが確かめる。
 		f := setupKBPermission(t, sqlDB)
 		alice := f.principalFor(ctx, t, f.alice)
-		f.grantSpace(ctx, t, f.spaceA, alice.ID, domain.GrantRoleViewer)
+		f.grantSpace(ctx, t, f.spaceA, alice.ID, domain.GrantRoleEditor)
+		// 作成者は alice ではない（mustCreatePage はベースラインのユーザーで作る）。
 		page := mustCreatePage(ctx, t, f.pageUC, f.ws, f.spaceA, nil, "root")
-		f.grantPage(ctx, t, page.ID, alice.ID, domain.GrantRoleEditor)
+		_, err := f.pages.UpdatePageVisibility(ctx, f.ws, page.ID, domain.PageVisibilityPrivate)
+		require.NoError(t, err)
 
-		assert.True(t, f.permFor(ctx, t, page.ID, f.alice).CanEdit, "ページ単位ではページ付与が効く")
+		pagePerm := f.permFor(ctx, t, page.ID, f.alice)
+		assert.False(t, pagePerm.CanView, "ページ単位では private が効く（作成者以外には見えない）")
+		assert.False(t, pagePerm.CanEdit)
 		scope := scopeOf(ctx, t, f, f.spaceA, f.alice)
-		assert.True(t, scope.CanView, "スペースの既定（viewer）はそのまま返る")
-		assert.False(t, scope.CanEdit,
-			"スペース単位はページ付与を見ない（見ていない事実を答えに混ぜないための設計）")
+		assert.True(t, scope.CanEdit,
+			"スペース単位はページの公開範囲を見ない（見ていない事実を答えに混ぜないための設計）")
 	})
 }
 

@@ -18,9 +18,8 @@ export type GrantRole = 'admin' | 'editor' | 'commenter' | 'viewer';
 /**
  * ワークスペースに属する人 1 件（発言での名指し用）。
  *
- * `KbGrantablePrincipal` とは別の口から来る — あちらは権限を張る相手（グループ・
- * スペース全体も含む）を返すページ管理権限つきの口、こちらは所属していれば誰でも
- * 引ける「人」だけの口（担当の表示名解決と、発言の名指しの両方がここを使う）。
+ * 所属していれば誰でも引ける「人」だけの口から来る（担当の表示名解決と、発言の名指しの
+ * 両方がここを使う）。グループやスペース全体は含まない。
  * userId は名指し（TicketCommentSegment の mention）が指す ID、principalId は
  * 担当の割り当て先が指す ID で、用途が違うので両方持つ。
  */
@@ -62,10 +61,9 @@ export type InvitationStatus = 'pending' | 'expired' | 'accepted' | 'declined' |
  */
 export interface Invitation {
   id: string;
-  /** 場所の種類。いま画面が扱うのは workspace だけ。 */
-  scope: 'workspace' | 'space' | 'page';
+  /** 場所の種類。いま画面が扱うのは workspace だけ（ページ宛の招待は持たない）。 */
+  scope: 'workspace' | 'space';
   spaceId?: string;
-  pageId?: string;
   /** 承諾したときにその場所へ張られる役割。 */
   role: GrantRole;
   /** 宛先（正規形。小文字・前後の空白なし）。 */
@@ -118,14 +116,13 @@ export interface InvitationPreview {
   /** 宛先。参加にはこのアドレスで確認済みのアカウントが要る、と案内するために返る。 */
   email?: string;
   role?: GrantRole;
-  scope?: 'workspace' | 'space' | 'page';
+  scope?: 'workspace' | 'space';
   expiresAt?: string;
 }
 
 /** 承諾直後の返却形。画面はこれで入った先へ移動する。 */
 export interface AcceptedInvitation {
   workspaceSlug: string;
-  scope: 'workspace' | 'space' | 'page';
+  scope: 'workspace' | 'space';
   spaceId?: string;
-  pageId?: string;
 }

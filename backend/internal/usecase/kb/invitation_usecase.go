@@ -32,7 +32,7 @@ const (
 	InvitationDailyLimitPerEmail = 5
 	// InvitationOpenLimitPerWorkspace はワークスペースが同時に抱えられる未決の件数。
 	InvitationOpenLimitPerWorkspace = 100
-	// invitationTokenBytes は招待 URL に載せるトークンの乱数バイト数（共有リンクと同じ 256 bit）。
+	// invitationTokenBytes は招待 URL に載せるトークンの乱数バイト数（256 bit）。
 	invitationTokenBytes = 32
 	// invitationListLimit は admin の一覧が返す最大件数（未決の上限より十分大きい。履歴を含む）。
 	invitationListLimit = 500
@@ -62,7 +62,7 @@ var (
 )
 
 // hashInvitationToken はトークンを SHA-256 で縮める。DB には平文を置かない
-// （共有リンクと同じ作法。総当たりが現実的でない 256 bit の乱数なので、遅いハッシュは要らない）。
+// （総当たりが現実的でない 256 bit の乱数なので、遅いハッシュは要らない）。
 func hashInvitationToken(token string) []byte {
 	sum := sha256.Sum256([]byte(token))
 	return sum[:]

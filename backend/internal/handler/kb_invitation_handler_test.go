@@ -98,7 +98,7 @@ func Test_招待API_adminはemailで招きトークンが1回だけ返る(t *tes
 	// 招待 URL を開いた人（未認証）への案内はトークンで引ける。
 	public := newKbFixture(kbCanEdit, 0)
 	public.invitations = f.invitations // 同じ fake を読む（別の router から）
-	registerKnowledgeBasePublicRoutesWith(public.router.Group("/api/v2/again"), public.pages, public.perms, public.perms, f.invitations)
+	registerKnowledgeBasePublicRoutesWith(public.router.Group("/api/v2/again"), f.invitations)
 	pw := public.do(t, http.MethodPost, "/api/v2/again/kb/invitations/preview", `{"token":"`+got.Token+`"}`)
 	require.Equal(t, http.StatusOK, pw.Code, pw.Body.String())
 	preview := decodePreview(t, pw.Body.Bytes())
@@ -184,7 +184,7 @@ func Test_招待API_一覧と再送と取消(t *testing.T) {
 	assert.Equal(t, 2, resent.Invitation.SendCount)
 	assert.Equal(t, id, resent.Invitation.ID, "同じ行を更新する（新しい行は作らない）")
 	public := newKbFixture(kbCanEdit, 0)
-	registerKnowledgeBasePublicRoutesWith(public.router.Group("/api/v2/again"), public.pages, public.perms, public.perms, f.invitations)
+	registerKnowledgeBasePublicRoutesWith(public.router.Group("/api/v2/again"), f.invitations)
 	assert.Equal(t, "unavailable", decodePreview(t, public.do(t, http.MethodPost, "/api/v2/again/kb/invitations/preview", `{"token":"`+created.Token+`"}`).Body.Bytes()).Status)
 	assert.Equal(t, "pending", decodePreview(t, public.do(t, http.MethodPost, "/api/v2/again/kb/invitations/preview", `{"token":"`+resent.Token+`"}`).Body.Bytes()).Status)
 

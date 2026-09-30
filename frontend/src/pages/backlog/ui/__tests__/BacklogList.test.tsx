@@ -1,12 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import BacklogList, { type BacklogListProps } from '../BacklogList';
 
 const props: BacklogListProps = {
   groups: [], statuses: [], types: [], projectKey: 'TEST', loading: false, error: null,
-  archived: false, canEdit: true, selectedId: null, busyId: null,
-  nameOf: () => '', initialsOf: () => '', onSelect: vi.fn(), onCreate: vi.fn().mockResolvedValue(undefined),
-  onChangeStatus: vi.fn(), onMove: vi.fn(), onRetry: vi.fn(),
+  archived: false, canEdit: true, busyId: null,
+  nameOf: () => '', onCreate: vi.fn().mockResolvedValue(undefined),
+  onChangeStatus: vi.fn(), onMoveUp: vi.fn(), onMoveDown: vi.fn(), onMoveLast: vi.fn(),
+  onMoveToSprint: vi.fn(), onRemoveFromSprint: vi.fn(), onRetry: vi.fn(),
 };
 
 describe('BacklogList の状態別の導線', () => {
@@ -41,12 +43,12 @@ const oneGroup = [{ id: '__backlog__', kind: 'backlog' as const, name: 'バッ�
 
 describe('BacklogList の件数の行', () => {
   it('件数は status で読み上げに通知し、取り直し中は一覧を消さず「更新中」を添える', () => {
-    const { rerender } = render(<BacklogList {...props} groups={oneGroup} filtered totalCount={6} />);
+    const { rerender } = render(<MemoryRouter><BacklogList {...props} groups={oneGroup} filtered totalCount={6} /></MemoryRouter>);
     const status = screen.getByRole('status');
     expect(status).toHaveTextContent('1 件の課題を表示・全 6 件');
     expect(status).not.toHaveTextContent('更新中');
 
-    rerender(<BacklogList {...props} groups={oneGroup} filtered totalCount={6} loading />);
+    rerender(<MemoryRouter><BacklogList {...props} groups={oneGroup} filtered totalCount={6} loading /></MemoryRouter>);
     expect(screen.getByRole('status')).toHaveTextContent('更新中');
     expect(screen.getByRole('table', { name: 'チケット' })).toHaveAttribute('aria-busy', 'true');
     // 行はそのまま見えている（読み込み表示に差し替えない）。
@@ -54,7 +56,7 @@ describe('BacklogList の件数の行', () => {
   });
 
   it('件数の行の右端に渡された操作を置く', () => {
-    render(<BacklogList {...props} groups={oneGroup} footerAction={<button type="button">この絞り込みを保存</button>} />);
+    render(<MemoryRouter><BacklogList {...props} groups={oneGroup} footerAction={<button type="button">この絞り込みを保存</button>} /></MemoryRouter>);
     expect(screen.getByRole('button', { name: 'この絞り込みを保存' })).toBeInTheDocument();
   });
 });

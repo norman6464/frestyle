@@ -14,8 +14,7 @@ const recentPagesLimit = 10
 
 // RecordPageViewUseCase は「このページを見た」を記録し、そのページの閲覧数
 // （= 見たことのある人数）を返す。呼び出し元（KnowledgeBasePageHandler.ResolveByID）は
-// CanView が確かめられた後にだけこれを呼ぶこと。共有リンク経由の来訪者（ユーザーでない）は
-// 呼び出し元がそもそも呼ばないことで記録しない（userID を持たないため）。
+// CanView が確かめられた後にだけこれを呼ぶこと。
 type RecordPageViewUseCase struct {
 	repo repository.PageViewRepository
 }

@@ -177,10 +177,10 @@ func (u *ListViewablePagesUseCase) Execute(ctx context.Context, in ListViewableP
 // CanEditPageSubtreeUseCase は「このユーザーは、このページと全子孫を編集できるか」に答える。
 // アーカイブ / 復帰など、ページを名指しして子孫ごと書き換える操作の入口で使う。
 //
-// いまの権限モデルでは役割は木を下るほど弱くならない（子孫の経路は必ず親の経路を含む）ため、
-// 根を編集できれば全子孫も編集できこの検査は実質断らない。それでも残しているのは、事実を
-// 集めるクエリが経路を取り違えたときの回帰を捕まえる網になるため（呼ぶのはアーカイブ / 復帰の
-// 1 回だけで代償は小さい）。
+// 役割はワークスペースとスペースの 2 段で決まるので、同じスペースにある子孫は根と同じ役割になる。
+// それでもこの検査が断るのは、子孫に作成者以外へ見せない private のページが混ざっているとき
+// （作成者でなければ、その 1 枚は閲覧も編集もできない）。見えないページを黙って書き換えさせない
+// ための網で、呼ぶのはアーカイブ / 復帰 / 移動の入口の 1 回だけなので代償は小さい。
 type CanEditPageSubtreeUseCase struct {
 	repo repository.KnowledgeBasePermissionRepository
 }
@@ -453,9 +453,6 @@ func (u *ListPagesReferencingTicketUseCase) Execute(ctx context.Context, in List
 // ErrInvalidGrantRole は既知でない役割を指定したときに返す。
 var ErrInvalidGrantRole = errors.New("invalid grant role")
 
-// ErrInvalidCapability は既知でないケイパビリティを指定したときに返す。
-var ErrInvalidCapability = errors.New("invalid capability")
-
 // GrantWorkspaceRoleUseCase はワークスペース全体での既定の役割を主体に与える。
 // 配下の全スペースに効くので、テナント全体の管理者はここで 1 行張れば足りる。
 type GrantWorkspaceRoleUseCase struct {
@@ -580,133 +577,8 @@ func (u *RevokeSpaceRoleUseCase) Execute(ctx context.Context, in RevokeSpaceRole
 	return u.repo.DeleteSpaceGrant(ctx, in.WorkspaceID, in.SpaceID, in.PrincipalID)
 }
 
-// GrantPageRoleUseCase はページでの既定の役割を主体に与える（既定の 3 段目。
-// ワークスペース → スペース → ページで、このページとその子孫に効く）。
-//
-// **これで誰かを弱めることはできない。** 付与はどこまでも足し算で打ち消す層は持たない
-// （domain.GrantRole.Rank / domain.PagePermissionFacts 参照）。狭めたい内容は private の
-// スペースへ置く。
-type GrantPageRoleUseCase struct {
-	repo repository.KnowledgeBasePermissionRepository
-}
-
-func NewGrantPageRoleUseCase(r repository.KnowledgeBasePermissionRepository) *GrantPageRoleUseCase {
-	return &GrantPageRoleUseCase{repo: r}
-}
-
-type GrantPageRoleInput struct {
-	WorkspaceID string
-	PageID      string
-	PrincipalID string
-	Role        domain.GrantRole
-}
-
-func (u *GrantPageRoleUseCase) Execute(ctx context.Context, in GrantPageRoleInput) (*domain.PageGrant, error) {
-	if in.WorkspaceID == "" {
-		return nil, errors.New("workspaceID is required")
-	}
-	if in.PageID == "" {
-		return nil, errors.New("pageID is required")
-	}
-	if in.PrincipalID == "" {
-		return nil, errors.New("principalID is required")
-	}
-	if !in.Role.Valid() {
-		return nil, ErrInvalidGrantRole
-	}
-	if _, err := u.repo.FindPrincipal(ctx, in.WorkspaceID, in.PrincipalID); err != nil {
-		return nil, err
-	}
-	return u.repo.UpsertPageGrant(ctx, in.WorkspaceID, in.PageID, in.PrincipalID, in.Role)
-}
-
-// RevokePageRoleUseCase はページでの既定の役割を剥がす（冪等）。消えるのはこの段で
-// 足した分だけで、ワークスペース / スペース / 祖先のページから届いている役割は残る
-// （「このページだけ見せない」は書けない — 狭めたい内容は private のスペースへ置く）。
-// 「最後の admin」の検査は要らない。ワークスペースの admin は配下の全ページに届くため、
-// ページの grant を全部消してもワークスペース admin が 0 人になることはない。
-type RevokePageRoleUseCase struct {
-	repo repository.KnowledgeBasePermissionRepository
-}
-
-func NewRevokePageRoleUseCase(r repository.KnowledgeBasePermissionRepository) *RevokePageRoleUseCase {
-	return &RevokePageRoleUseCase{repo: r}
-}
-
-type RevokePageRoleInput struct {
-	WorkspaceID string
-	PageID      string
-	PrincipalID string
-}
-
-func (u *RevokePageRoleUseCase) Execute(ctx context.Context, in RevokePageRoleInput) error {
-	if in.WorkspaceID == "" {
-		return errors.New("workspaceID is required")
-	}
-	if in.PageID == "" {
-		return errors.New("pageID is required")
-	}
-	if in.PrincipalID == "" {
-		return errors.New("principalID is required")
-	}
-	return u.repo.DeletePageGrant(ctx, in.WorkspaceID, in.PageID, in.PrincipalID)
-}
-
-// ListPageGrantsUseCase はそのページ自身に張られた既定の役割の一覧を返す。
-// **返るのは「このページを見られる人の一覧」ではない。** この段で足した行だけで、
-// 上の段や祖先のページから届いている相手は含まれない。空でも「誰も見られない」ではなく
-// 「この段では何も足していない」の意味になる。呼び出し側の画面はそれが分かる見せ方をすること。
-type ListPageGrantsUseCase struct {
-	repo repository.KnowledgeBasePermissionRepository
-}
-
-func NewListPageGrantsUseCase(r repository.KnowledgeBasePermissionRepository) *ListPageGrantsUseCase {
-	return &ListPageGrantsUseCase{repo: r}
-}
-
-type ListPageGrantsInput struct {
-	WorkspaceID string
-	PageID      string
-}
-
-func (u *ListPageGrantsUseCase) Execute(ctx context.Context, in ListPageGrantsInput) ([]domain.PageGrant, error) {
-	if in.WorkspaceID == "" {
-		return nil, errors.New("workspaceID is required")
-	}
-	if in.PageID == "" {
-		return nil, errors.New("pageID is required")
-	}
-	return u.repo.ListPageGrants(ctx, in.WorkspaceID, in.PageID)
-}
-
-// ListGrantablePrincipalsUseCase は権限を張れる相手を表示名つきで返す。返るのはワークスペース
-// 全体の主体で、ページでは絞らない（ページ単位の付与も相手はワークスペースの主体なので、
-// 絞ると「同じ人に張れるはずなのに一覧に出ない」というずれが生まれる）。呼べる範囲・
-// 認可は handler 側の gate がページ単位で決める。
-type ListGrantablePrincipalsUseCase struct {
-	repo repository.KnowledgeBasePermissionRepository
-}
-
-func NewListGrantablePrincipalsUseCase(r repository.KnowledgeBasePermissionRepository) *ListGrantablePrincipalsUseCase {
-	return &ListGrantablePrincipalsUseCase{repo: r}
-}
-
-type ListGrantablePrincipalsInput struct {
-	WorkspaceID string
-}
-
-func (u *ListGrantablePrincipalsUseCase) Execute(
-	ctx context.Context, in ListGrantablePrincipalsInput,
-) ([]domain.GrantablePrincipal, error) {
-	if in.WorkspaceID == "" {
-		return nil, errors.New("workspaceID is required")
-	}
-	return u.repo.ListGrantablePrincipals(ctx, in.WorkspaceID)
-}
-
 // ListWorkspaceMembersUseCase はワークスペースに属する人を表示名つきで返す。
-// ListGrantablePrincipalsUseCase とは呼べる範囲が違う: あちらは権限を張る画面用で
-// ページの管理権限を要るが、こちらは担当の表示名・名指し用途なので所属していれば読める。
+// 担当の表示名・名指し用途なので、所属していれば読める（管理権限は要らない）。
 type ListWorkspaceMembersUseCase struct {
 	repo repository.KnowledgeBasePermissionRepository
 }
@@ -1056,8 +928,8 @@ func (u *CanRemoveWorkspaceAdminUseCase) Execute(ctx context.Context, in CanRemo
 
 // CheckSpacePermissionUseCase は「このユーザーはこのスペースで既定で何ができるか」に答える。
 // ページを名指しできない操作（スペース直下へのページ作成）の入口で使う。
-// **ページの可否をこれで決めてはいけない**（page_grants を見ないため必ず狭い側へ倒れる。
-// ページには CheckPagePermissionUseCase を使う）。判定規則は domain.ResolveScopePermission にある。
+// **ページの可否をこれで決めてはいけない**（ページの公開範囲 private を見ないため広い側へ
+// 倒れる。ページには CheckPagePermissionUseCase を使う）。判定規則は domain.ResolveScopePermission にある。
 type CheckSpacePermissionUseCase struct {
 	repo repository.KnowledgeBasePermissionRepository
 }
@@ -1126,9 +998,8 @@ func (u *CheckWorkspacePermissionUseCase) Execute(ctx context.Context, in CheckW
 // スペースは「誰に何を見せるか」を分ける入れ物そのもの（key と name が並ぶだけでも
 // 「人事」「M&A 準備」といった進行中の情報が伝わる）ため、一覧も権限でふるう。判定は
 // domain.ResolveScopePermission だけが持ち、ここに書き足すと CheckSpacePermissionUseCase の
-// 単体解決と食い違う。ページに張った付与（page_grants）は見ない — スペースが見えるかは
-// そのスペース自体の役割で決まるため。**この結果をページの可否に使ってはいけない**
-// （必ず狭い側へ倒れる）。
+// 単体解決と食い違う。スペースが見えるかはそのスペース自体の役割で決まる。
+// **この結果をページの可否に使ってはいけない**（ページの公開範囲 private を見ないため）。
 type ListViewableSpacesUseCase struct {
 	repo repository.KnowledgeBasePermissionRepository
 }

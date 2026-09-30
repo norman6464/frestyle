@@ -18,19 +18,20 @@ function renderAt(initial: string) {
 }
 
 describe('useBacklogUrlState', () => {
-  it('絞り込みの解除は選択中のチケットと無関係なクエリを残す', () => {
-    const { result } = renderAt('/backlog/s-1?ticket=t-9&statusId=st-1&typeId=ty-1&labelId=l-1&unassigned=1&overdue=1&q=x&from=home');
+  it('絞り込みの解除は無関係なクエリを残す', () => {
+    const { result } = renderAt('/backlog/s-1?statusId=st-1&typeId=ty-1&labelId=l-1&unassigned=1&overdue=1&q=x&from=home');
     act(() => result.current.state.clearFilters());
-    expect(result.current.search).toBe('?ticket=t-9&from=home');
+    expect(result.current.search).toBe('?from=home');
   });
-  it('何も付いていない URL は既定（未選択・絞り込み無し）', () => {
+  it('何も付いていない URL は絞り込み無し', () => {
     const { result } = renderAt('/backlog/s-1');
-    expect(result.current.state).toMatchObject({ selectedId: null, statusId: null, assignedToMe: false });
+    expect(result.current.state).toMatchObject({ statusId: null, assignedToMe: false, filtered: false });
   });
 
-  it('URL から選択を読む', () => {
+  it('チケットの選択は一覧の URL 状態として扱わない', () => {
     const { result } = renderAt('/backlog/s-1?ticket=t-9');
-    expect(result.current.state.selectedId).toBe('t-9');
+    expect(result.current.state).not.toHaveProperty('selectedId');
+    expect(result.current.search).toBe('?ticket=t-9');
   });
 
   // 面は経路（/backlog/:projectId/settings 等）が持つ。問い合わせに tab が残っていても
@@ -41,30 +42,28 @@ describe('useBacklogUrlState', () => {
     expect(result.current.state).not.toHaveProperty('setTab');
   });
 
-  it('選んだチケットを URL に載せ、他の項目は残す', () => {
-    const { result } = renderAt('/backlog/s-1?statusId=st-1');
-    act(() => result.current.state.selectTicket('t-9'));
-    expect(result.current.search).toContain('ticket=t-9');
-    expect(result.current.search).toContain('statusId=st-1');
+  it('絞り込みを変えても無関係なクエリは残す', () => {
+    const { result } = renderAt('/backlog/s-1?from=notification');
+    act(() => result.current.state.setStatusId('st-1'));
+    expect(result.current.search).toBe('?from=notification&statusId=st-1');
   });
 
   it('既定の値は URL に書かない', () => {
-    const { result } = renderAt('/backlog/s-1?ticket=t-9&statusId=st-1');
-    act(() => result.current.state.selectTicket(null));
+    const { result } = renderAt('/backlog/s-1?statusId=st-1');
     act(() => result.current.state.setStatusId(null));
     expect(result.current.search).toBe('');
   });
 
-  it('プロジェクトを移ったときは文脈ごと捨てる', () => {
-    const { result } = renderAt('/backlog/s-1?statusId=st-1&assignedToMe=1&ticket=t-9');
+  it('プロジェクトを移ったときは絞り込みを捨てる', () => {
+    const { result } = renderAt('/backlog/s-1?statusId=st-1&assignedToMe=1');
     act(() => result.current.state.reset());
     expect(result.current.search).toBe('');
   });
 
-  it('チケット以外のクエリには触らない', () => {
+  it('絞り込み以外のクエリには触らない', () => {
     const { result } = renderAt('/backlog/s-1?from=notification');
-    act(() => result.current.state.selectTicket('t-9'));
-    expect(result.current.search).toContain('from=notification');
+    act(() => result.current.state.setQuery('認証'));
+    expect(result.current.search).toBe('?from=notification&q=%E8%AA%8D%E8%A8%BC');
   });
 
   it('URL から絞り込み(状態・種別・担当・期限切れ・題名検索)を読む', () => {
@@ -171,7 +170,7 @@ describe('useBacklogUrlState', () => {
     };
 
     it('選ぶと条件をすべて書き出し、filter に id を載せる。書いていない条件は外す', () => {
-      const { result } = renderAt('/backlog/s-1?typeId=ty-9&overdue=1&unassigned=1&ticket=t-9');
+      const { result } = renderAt('/backlog/s-1?typeId=ty-9&overdue=1&unassigned=1&from=home');
       act(() => result.current.state.applySavedFilter(saved));
       expect(result.current.state).toMatchObject({
         savedFilterId: 'f-1',
@@ -182,8 +181,8 @@ describe('useBacklogUrlState', () => {
         unassigned: false,
         overdue: false,
         q: '検索',
-        selectedId: 't-9',
       });
+      expect(result.current.search).toContain('from=home');
     });
 
     it('条件のどれかを手で変えると選択が外れる（保存したものと違う条件を同じ名前で見せない）', () => {
@@ -201,18 +200,12 @@ describe('useBacklogUrlState', () => {
       expect(result.current.state.quickFilter).toBe('overdue');
     });
 
-    it('チケットの選択は条件ではないので選択が外れない', () => {
-      const { result } = renderAt('/backlog/s-1?filter=f-1&assignedToMe=1');
-      act(() => result.current.state.selectTicket('t-9'));
-      expect(result.current.state.savedFilterId).toBe('f-1');
-    });
-
     it('すべて解除・プロジェクトの切替で filter も消える', () => {
-      const a = renderAt('/backlog/s-1?filter=f-1&assignedToMe=1&ticket=t-9');
+      const a = renderAt('/backlog/s-1?filter=f-1&assignedToMe=1&from=home');
       act(() => a.result.current.state.clearFilters());
-      expect(a.result.current.search).toBe('?ticket=t-9');
+      expect(a.result.current.search).toBe('?from=home');
 
-      const b = renderAt('/backlog/s-1?filter=f-1&assignedToMe=1&ticket=t-9');
+      const b = renderAt('/backlog/s-1?filter=f-1&assignedToMe=1');
       act(() => b.result.current.state.reset());
       expect(b.result.current.search).toBe('');
     });

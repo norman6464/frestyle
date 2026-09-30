@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -17,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// 権限操作 API（grant / メンバー / グループ / 共有リンク）の handler テスト。
+// 権限操作 API（grant / メンバー / グループ / 招待）の handler テスト。
 //
 // 見るのは 2 つだけ:
 //
@@ -39,8 +38,6 @@ const (
 	kbMissingID = "0198a000-0000-7000-8000-0000000000ff"
 	// kbMissingUserID は存在しないユーザー ID。
 	kbMissingUserID = "987654"
-	// kbShareLinkVerifyPath は認証不要の共有リンク検証。
-	kbShareLinkVerifyPath = "/api/v2/kb/share-links/verify"
 )
 
 // kbDenied は権限操作 API の唯一の拒否応答（バイト列で固定する）。
@@ -96,43 +93,6 @@ var kbPermissionEndpoints = []kbPermissionEndpoint{
 			"/api/v2/kb/workspaces/{slug}/spaces/" + kbMissingID + "/grants/{target}",
 		},
 		okStatus: http.StatusNoContent,
-	},
-	{
-		name: "ページ権限一覧", method: http.MethodGet,
-		pattern: "/api/v2/kb/workspaces/:workspaceSlug/pages/:pageId/grants",
-		path:    "/api/v2/kb/workspaces/{slug}/pages/{page}/grants",
-		missing: []string{
-			"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingID + "/grants",
-		},
-		okStatus: http.StatusOK,
-	},
-	{
-		name: "ページ権限付与", method: http.MethodPut,
-		pattern: "/api/v2/kb/workspaces/:workspaceSlug/pages/:pageId/grants/:principalId",
-		path:    "/api/v2/kb/workspaces/{slug}/pages/{page}/grants/{target}",
-		missing: []string{
-			"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingID + "/grants/{target}",
-			"/api/v2/kb/workspaces/{slug}/pages/{page}/grants/" + kbMissingID,
-		},
-		body: `{"role":"editor"}`, okStatus: http.StatusOK,
-	},
-	{
-		name: "ページ権限取り消し", method: http.MethodDelete,
-		pattern: "/api/v2/kb/workspaces/:workspaceSlug/pages/:pageId/grants/:principalId",
-		path:    "/api/v2/kb/workspaces/{slug}/pages/{page}/grants/{target}",
-		missing: []string{
-			"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingID + "/grants/{target}",
-		},
-		okStatus: http.StatusNoContent,
-	},
-	{
-		name: "権限を張れる相手の一覧", method: http.MethodGet,
-		pattern: "/api/v2/kb/workspaces/:workspaceSlug/pages/:pageId/principals",
-		path:    "/api/v2/kb/workspaces/{slug}/pages/{page}/principals",
-		missing: []string{
-			"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingID + "/principals",
-		},
-		okStatus: http.StatusOK,
 	},
 	{
 		// 人を招く入口は email 宛の招待（users.id を受ける口は無い）。missing は持たない — 宛先の
@@ -197,30 +157,6 @@ var kbPermissionEndpoints = []kbPermissionEndpoint{
 		missing:  []string{"/api/v2/kb/workspaces/{slug}/spaces/" + kbMissingID + "/principals/everyone"},
 		okStatus: http.StatusOK,
 	},
-	{
-		name: "共有リンク一覧", method: http.MethodGet,
-		pattern:  "/api/v2/kb/workspaces/:workspaceSlug/pages/:pageId/share-links",
-		path:     "/api/v2/kb/workspaces/{slug}/pages/{page}/share-links",
-		missing:  []string{"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingID + "/share-links"},
-		okStatus: http.StatusOK,
-	},
-	{
-		name: "共有リンク発行", method: http.MethodPost,
-		pattern: "/api/v2/kb/workspaces/:workspaceSlug/pages/:pageId/share-links",
-		path:    "/api/v2/kb/workspaces/{slug}/pages/{page}/share-links",
-		missing: []string{"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingID + "/share-links"},
-		body:    `{"capability":"view"}`, okStatus: http.StatusCreated,
-	},
-	{
-		name: "共有リンク失効", method: http.MethodDelete,
-		pattern: "/api/v2/kb/workspaces/:workspaceSlug/pages/:pageId/share-links/:shareLinkId",
-		path:    "/api/v2/kb/workspaces/{slug}/pages/{page}/share-links/{link}",
-		missing: []string{
-			"/api/v2/kb/workspaces/{slug}/pages/{page}/share-links/" + kbMissingID,
-			"/api/v2/kb/workspaces/{slug}/pages/" + kbMissingID + "/share-links/{link}",
-		},
-		okStatus: http.StatusNoContent,
-	},
 }
 
 // kbPermFixture は権限操作 API の検証環境。
@@ -232,10 +168,6 @@ type kbPermFixture struct {
 	targetPrincipalID string
 	// groupPrincipalID はグループの主体。
 	groupPrincipalID string
-	// shareLinkID は child ページに発行済みの共有リンク。
-	shareLinkID string
-	// shareToken は shareLinkID の平文トークン（検証経路の入力）。
-	shareToken string
 	// invitationID は発行済み（未決）の email 宛の招待。再送・取消の対象。
 	invitationID string
 }
@@ -270,17 +202,6 @@ func newKbPermFixture(t *testing.T, uid uint64, role *domain.GrantRole) kbPermFi
 	require.NoError(t, err)
 	out.groupPrincipalID = group.ID
 
-	out.shareToken = "token-for-test"
-	link, err := f.perms.Create(ctx, repository.ShareLinkWrite{
-		WorkspaceID:     kbWorkspaceID,
-		PageID:          kbChildPageID,
-		Capability:      domain.CapabilityView,
-		TokenHash:       kbTestTokenHash(out.shareToken),
-		CreatedByUserID: kbUserID,
-	})
-	require.NoError(t, err)
-	out.shareLinkID = link.ID
-
 	invitation, err := f.invitations.Upsert(ctx, repository.InvitationWrite{
 		WorkspaceID: kbWorkspaceID, Scope: domain.InvitationScopeWorkspace, Role: domain.GrantRoleEditor,
 		Email: "pending@example.com", TokenHash: kbTestTokenHash("invitation-token-for-test"),
@@ -294,7 +215,7 @@ func newKbPermFixture(t *testing.T, uid uint64, role *domain.GrantRole) kbPermFi
 }
 
 // kbTestTokenHash は usecase 側と同じ SHA-256 でトークンを縮める
-// （fake に入れた共有リンクを、本物の検証経路から引けるようにするため）。
+// （fake に入れた招待を、本物の経路から引けるようにするため）。
 func kbTestTokenHash(token string) []byte {
 	sum := sha256.Sum256([]byte(token))
 	return sum[:]
@@ -307,7 +228,6 @@ func (f kbPermFixture) fill(s string) string {
 		"{page}", kbChildPageID,
 		"{target}", f.targetPrincipalID,
 		"{group}", f.groupPrincipalID,
-		"{link}", f.shareLinkID,
 		"{invitation}", f.invitationID,
 	).Replace(s)
 }
@@ -392,118 +312,6 @@ func Test_ナレッジ権限API_拒否の応答は対象の実在で変わらな
 				gotCode, gotBody := f.call(t, e, missing)
 				assert.Equal(t, wantCode, gotCode, "path=%s", missing)
 				assert.Equal(t, wantBody, gotBody, "path=%s（本文がバイト単位で一致すること）", missing)
-			}
-		})
-	}
-}
-
-func Test_ナレッジ権限API_ページを名指しする入口は結果によらず同じ回数だけ引く(t *testing.T) {
-	// 応答のバイト列を揃えても、返るまでの時間が違えば「そのページ ID が実在するか」が読める。
-	// 「ページを引く → スペースの実在を確かめる → 役割を集める」の 3 段を、途中の段で
-	// 落ちたら即座に打ち切る実装にすると、落ちる段によって DB の往復が 0 / 1 / 3 回に
-	// 分かれてしまい、この経路のタイミングから実在が読めてしまう。
-	//
-	// 数えるのは問い合わせの回数そのもの。時間を測るテストは環境のノイズで揺れるので、
-	// 揺れない量で固定する。**特定の数と比べるのではなく、4 通りの内訳が互いに一致すること**を
-	// 見る。こうしておくと、別のメソッドで前段の確認が復活しても（回数が結果で変われば）落ちる。
-	//
-	// ページを名指しする入口は 1 本ではないので、**経路ごとに** 4 通りを回す。
-	// 1 本だけ見ていると、あとから足した口が gate より先にページを読んでいても気付けない。
-	pagePath := func(pageID string) string {
-		return "/api/v2/kb/workspaces/" + kbWorkspaceSlug + "/pages/" + pageID
-	}
-
-	// snapshot は「権限の読み取り（メソッド名ごと）」と「ページの読み取り」の内訳。
-	type snapshot struct {
-		permReads map[string]int
-		findPage  int
-	}
-	take := func(f kbPermFixture) snapshot {
-		reads := map[string]int{}
-		for k, v := range f.perms.permReadCalls {
-			reads[k] = v
-		}
-		return snapshot{permReads: reads, findPage: f.pages.findPageCalls}
-	}
-
-	// routes はページを名指しする権限操作の全経路。主体を URL に含むものは
-	// fixture の targetPrincipalID を後から差し込む。
-	routes := []struct {
-		name   string
-		method string
-		suffix func(f kbPermFixture) string
-		body   string
-	}{
-		{
-			name: "権限一覧", method: http.MethodGet,
-			suffix: func(kbPermFixture) string { return "/grants" },
-		},
-		{
-			name: "権限付与", method: http.MethodPut,
-			suffix: func(f kbPermFixture) string { return "/grants/" + f.targetPrincipalID },
-			body:   `{"role":"editor"}`,
-		},
-		{
-			name: "権限取り消し", method: http.MethodDelete,
-			suffix: func(f kbPermFixture) string { return "/grants/" + f.targetPrincipalID },
-		},
-		{
-			name: "相手の一覧", method: http.MethodGet,
-			suffix: func(kbPermFixture) string { return "/principals" },
-		},
-		{
-			name: "共有リンク一覧", method: http.MethodGet,
-			suffix: func(kbPermFixture) string { return "/share-links" },
-		},
-		{
-			name: "共有リンク発行", method: http.MethodPost,
-			suffix: func(kbPermFixture) string { return "/share-links" },
-			body:   `{"capability":"view"}`,
-		},
-	}
-
-	cases := []struct {
-		name   string
-		role   *domain.GrantRole
-		pageID string
-	}{
-		{"実在するページ・admin ではない", kbGrantRolePtr(domain.GrantRoleEditor), kbChildPageID},
-		{"存在しないページ・admin ではない", kbGrantRolePtr(domain.GrantRoleEditor), kbMissingID},
-		{"実在するページ・admin", kbGrantRolePtr(domain.GrantRoleAdmin), kbChildPageID},
-		{"存在しないページ・admin", kbGrantRolePtr(domain.GrantRoleAdmin), kbMissingID},
-	}
-
-	for _, route := range routes {
-		t.Run(route.name, func(t *testing.T) {
-			var want *snapshot
-			for _, tc := range cases {
-				t.Run(tc.name, func(t *testing.T) {
-					f := newKbPermFixture(t, kbUserID, tc.role)
-					before := take(f)
-
-					w := f.do(t, route.method, pagePath(tc.pageID)+route.suffix(f), route.body)
-					require.NotEqual(t, http.StatusInternalServerError, w.Code)
-
-					after := take(f)
-					got := snapshot{permReads: map[string]int{}, findPage: after.findPage - before.findPage}
-					for k, v := range after.permReads {
-						if d := v - before.permReads[k]; d != 0 {
-							got.permReads[k] = d
-						}
-					}
-
-					if want == nil {
-						want = &got
-						// 認可の前に対象を読まないこと自体も押さえる（読むと必ず回数が結果で揺れる）。
-						assert.Equal(t, 0, got.findPage, "認可より先にページを読まない")
-						// **絶対値も固定する。** 一致だけを見ると、入口が権限を一切引かずに
-						// 一律拒否する退行（全ケース 0 回）でも通ってしまう。
-						assert.Equal(t, map[string]int{"PagePermissionFactsForUser": 1}, got.permReads,
-							"引くのはページ経由の 1 回だけ")
-						return
-					}
-					assert.Equal(t, *want, got, "結果が違っても引く回数と内訳は同じであること")
-				})
 			}
 		})
 	}
@@ -624,137 +432,6 @@ func Test_ナレッジ権限API_復帰はadminだけが通る(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
 }
 
-func Test_ナレッジ権限API_共有リンクは発行時の1回だけトークンを返す(t *testing.T) {
-	f := newKbPermFixture(t, kbUserID, kbGrantRolePtr(domain.GrantRoleAdmin))
-	base := "/api/v2/kb/workspaces/" + kbWorkspaceSlug + "/pages/" + kbChildPageID + "/share-links"
-
-	issued := f.do(t, http.MethodPost, base, `{"capability":"view"}`)
-	require.Equal(t, http.StatusCreated, issued.Code, issued.Body.String())
-	var out kbIssuedShareLinkResponse
-	require.NoError(t, json.Unmarshal(issued.Body.Bytes(), &out))
-	require.NotEmpty(t, out.Token, "発行時だけ平文トークンが返る")
-
-	listed := f.do(t, http.MethodGet, base, "")
-	require.Equal(t, http.StatusOK, listed.Code)
-	assert.NotContains(t, listed.Body.String(), out.Token, "一覧に平文トークンは出ない")
-	assert.NotContains(t, listed.Body.String(), "tokenHash", "ハッシュも出さない")
-	assert.NotContains(t, listed.Body.String(), "principalId", "内部の主体 ID も出さない")
-}
-
-func Test_ナレッジ権限API_別ページの共有リンクは失効させられない(t *testing.T) {
-	// 認可はページ（が属するスペース）で判断するので、リンクが本当にそのページのもので
-	// あることを確かめないと、ページ ID とリンク ID を組み替えるだけで
-	// 別のページのリンクを止められる。
-	f := newKbPermFixture(t, kbUserID, kbGrantRolePtr(domain.GrantRoleAdmin))
-	w := f.do(t, http.MethodDelete,
-		"/api/v2/kb/workspaces/"+kbWorkspaceSlug+"/pages/"+kbRootPageID+"/share-links/"+f.shareLinkID, "")
-	assert.Equal(t, http.StatusNotFound, w.Code, "リンクは child ページのもの")
-	assert.JSONEq(t, kbDenied, w.Body.String())
-}
-
-func Test_ナレッジ権限API_共有リンク検証は未認証で通る(t *testing.T) {
-	// current user を注入しないルータでも通ること（リンクを受け取った人はログインしていない）。
-	f := newKbPermFixture(t, 0, nil)
-	w := f.do(t, http.MethodPost, kbShareLinkVerifyPath, `{"token":"`+f.shareToken+`"}`)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-
-	var got kbVerifiedShareLinkResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
-	assert.Equal(t, kbChildPageID, got.PageID)
-	assert.Equal(t, string(domain.CapabilityView), got.Capability)
-	assert.NotContains(t, w.Body.String(), f.shareToken, "応答にトークンを反射しない")
-}
-
-func Test_ナレッジ権限API_共有リンク検証は知らないトークンを404にする(t *testing.T) {
-	f := newKbPermFixture(t, 0, nil)
-	w := f.do(t, http.MethodPost, kbShareLinkVerifyPath, `{"token":"unknown-token"}`)
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.JSONEq(t, kbDenied, w.Body.String())
-}
-
-// kbVerifyWithXFF は共有リンク検証を、X-Forwarded-For を毎回変えて叩く。
-//
-// gin の ClientIP() は XFF の最左を読み、このリポジトリは SetTrustedProxies を
-// 呼んでいない（gin の既定は全 IP を信頼する）。つまり **要求元は攻撃者が自由に名乗れる**。
-// 「IP を変えれば上限を抜けられるのか」を、その前提のまま再現するためのヘルパ。
-func kbVerifyWithXFF(t *testing.T, f kbPermFixture, token, xff string) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, kbShareLinkVerifyPath,
-		strings.NewReader(`{"token":"`+token+`"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.RemoteAddr = "198.51.100.7:1234"
-	req.Header.Set("X-Forwarded-For", xff)
-	w := httptest.NewRecorder()
-	f.router.ServeHTTP(w, req)
-	return w
-}
-
-func Test_ナレッジ権限API_共有リンク検証はIPを変えても頭打ちになる(t *testing.T) {
-	// パスワード付きリンクのパスワードは人が選ぶ短い値で、総当たりに弱い。
-	// 上限の鍵を IP に取ると攻撃者が鍵ごと変えられるので、鍵はリンクそのものに取っている。
-	// ここで固定するのは「IP を毎回変えても、同じリンクへの試行は必ず頭打ちになる」こと。
-	f := newKbPermFixture(t, 0, nil)
-
-	codes := make([]int, 0, kbShareLinkVerifyBurst+5)
-	for i := 0; i < kbShareLinkVerifyBurst+5; i++ {
-		w := kbVerifyWithXFF(t, f, f.shareToken, "203.0.113."+strconv.Itoa(i))
-		codes = append(codes, w.Code)
-	}
-	for i := 0; i < kbShareLinkVerifyBurst; i++ {
-		require.Equal(t, http.StatusOK, codes[i], "burst 内は通る: %v", codes)
-	}
-	assert.Equal(t, http.StatusTooManyRequests, codes[kbShareLinkVerifyBurst],
-		"IP を変えても同じリンクへの試行は頭打ちになる: %v", codes)
-	last := kbVerifyWithXFF(t, f, f.shareToken, "192.0.2.250")
-	assert.Equal(t, http.StatusTooManyRequests, last.Code)
-	assert.Equal(t, "60", last.Header().Get("Retry-After"))
-}
-
-func Test_ナレッジ権限API_共有リンクの上限は別のリンクを巻き込まない(t *testing.T) {
-	// 上限が「リンク 1 本ごと」であることの裏側。1 本を叩き切っても、他のリンクを
-	// 受け取った人は開ける（鍵がリンクなので、巻き添えが起きるとしたらここ）。
-	f := newKbPermFixture(t, 0, nil)
-	other := "another-token-for-test"
-	_, err := f.perms.Create(context.Background(), repository.ShareLinkWrite{
-		WorkspaceID:     kbWorkspaceID,
-		PageID:          kbChildPageID,
-		Capability:      domain.CapabilityView,
-		TokenHash:       kbTestTokenHash(other),
-		CreatedByUserID: kbUserID,
-	})
-	require.NoError(t, err)
-
-	for i := 0; i < kbShareLinkVerifyBurst+3; i++ {
-		kbVerifyWithXFF(t, f, f.shareToken, "203.0.113."+strconv.Itoa(i))
-	}
-	require.Equal(t, http.StatusTooManyRequests,
-		kbVerifyWithXFF(t, f, f.shareToken, "203.0.113.99").Code, "1 本目は頭打ち")
-	assert.Equal(t, http.StatusOK,
-		kbVerifyWithXFF(t, f, other, "203.0.113.99").Code, "別のリンクは巻き添えにならない")
-}
-
-func Test_ナレッジ権限API_存在しないトークンは上限の的にならない(t *testing.T) {
-	// 鍵は要求ごとに変えられる（トークンは攻撃者が名乗る値）ので、実在しないリンクの
-	// 鍵まで limiter に残すと、でたらめなトークンを投げ続けるだけで中身を太らせられる。
-	// 実在しないトークンは 1 回ごとに鍵ごと捨てるので、何度投げても 404 のまま
-	// （パスワードの総当たりには実在するトークンが要るので、これで守りは緩まない）。
-	f := newKbPermFixture(t, 0, nil)
-	for i := 0; i < kbShareLinkVerifyBurst+10; i++ {
-		w := kbVerifyWithXFF(t, f, "unknown-"+strconv.Itoa(i), "203.0.113."+strconv.Itoa(i))
-		require.Equal(t, http.StatusNotFound, w.Code, "%d 回目", i+1)
-	}
-	// 実在するリンクの上限は 1 つも減っていない。
-	assert.Equal(t, http.StatusOK, kbVerifyWithXFF(t, f, f.shareToken, "192.0.2.1").Code)
-}
-
-func Test_ナレッジ権限API_同じ存在しないトークンでも上限の的にならない(t *testing.T) {
-	f := newKbPermFixture(t, 0, nil)
-	for i := 0; i < kbShareLinkVerifyBurst+10; i++ {
-		w := kbVerifyWithXFF(t, f, "always-unknown", "203.0.113."+strconv.Itoa(i))
-		require.Equal(t, http.StatusNotFound, w.Code, "%d 回目", i+1)
-	}
-}
-
 func Test_ナレッジ権限API_email招待はユーザー単位で頭打ちになる(t *testing.T) {
 	// ワークスペースは誰でも作れて作った本人が admin になるので、放っておくと全ログインユーザーが
 	// 好きな宛先へ招待を撃てる口になる（1 日の件数上限は usecase が別に持つ。ここは連打の速度）。
@@ -780,23 +457,6 @@ func Test_ナレッジ権限API_email招待はユーザー単位で頭打ちに�
 		"IP を変えても同じユーザーなら頭打ちになる")
 }
 
-// Test_ナレッジ権限API_共有リンクの発行応答にパスワードを載せない は、受け取った
-// パスワードが応答へ echo されないことを固定する。保存はハッシュで、平文は持ち回らない。
-// 発行はトークンの平文が応答に載る唯一の経路なので、そのついでにパスワードまで
-// 出してしまう間違いが起きやすい。
-func Test_ナレッジ権限API_共有リンクの発行応答にパスワードを載せない(t *testing.T) {
-	f := newKbPermFixture(t, kbUserID, kbGrantRolePtr(domain.GrantRoleAdmin))
-	const password = "sup3r-secret-passphrase"
-	w := f.do(t, http.MethodPost,
-		"/api/v2/kb/workspaces/"+kbWorkspaceSlug+"/pages/"+kbChildPageID+"/share-links",
-		`{"capability":"view","password":"`+password+`"}`)
-	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-	var issued kbIssuedShareLinkResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &issued))
-	require.NotEmpty(t, issued.Token)
-	assert.NotContains(t, w.Body.String(), password)
-}
-
 func Test_ナレッジ権限API_未知の役割は400(t *testing.T) {
 	f := newKbPermFixture(t, kbUserID, kbGrantRolePtr(domain.GrantRoleAdmin))
 	w := f.do(t, http.MethodPut,
@@ -804,33 +464,6 @@ func Test_ナレッジ権限API_未知の役割は400(t *testing.T) {
 		`{"role":"super_admin"}`)
 	assert.Equal(t, http.StatusBadRequest, w.Code,
 		"アプリ内ロールは grant の役割として通らない（権限の出どころを 2 系統にしない）")
-}
-
-func Test_ナレッジ権限API_弱い付与を足しても管理の口は閉じない(t *testing.T) {
-	// 権限は 3 段（ワークスペース / スペース / ページ）の付与を足し合わせ、届いた中で
-	// 最も強い役割で決まる。下の段が上の段を弱めることはないので、自分自身に弱い付与を
-	// 張っても、上から届いている管理権限は残る。
-	//
-	// 「近い段が勝つ」形へ戻すと、ここが 404 に落ちる（自分で自分の管理権限を
-	// 取り上げられてしまい、張った行を消す手段が本人から消える）。
-	f := newKbPermFixture(t, kbUserID, kbGrantRolePtr(domain.GrantRoleAdmin))
-	grants := "/api/v2/kb/workspaces/" + kbWorkspaceSlug + "/pages/" + kbChildPageID + "/grants"
-
-	require.Equal(t, http.StatusOK,
-		f.do(t, http.MethodPut, grants+"/"+f.callerPrincipalID, `{"role":"viewer"}`).Code,
-		"自分自身に viewer のページ付与を張る")
-
-	listed := f.do(t, http.MethodGet, grants, "")
-	require.Equal(t, http.StatusOK, listed.Code,
-		"ワークスペースの admin が届いたままなので、権限の口は開いている")
-
-	// 張った行そのものは残っている（下がらないのは実効の役割だけ）。
-	// ここまで見ないと、付与が黙って捨てられていても上の 200 で緑になる。
-	var rows []map[string]any
-	require.NoError(t, json.Unmarshal(listed.Body.Bytes(), &rows))
-	require.Len(t, rows, 1)
-	assert.Equal(t, f.callerPrincipalID, rows[0]["principalId"])
-	assert.Equal(t, "viewer", rows[0]["role"])
 }
 
 func Test_ナレッジ権限API_fakeは非メンバーに既定の役割を届かせない(t *testing.T) {
@@ -851,6 +484,25 @@ func Test_ナレッジ権限API_fakeは非メンバーに既定の役割を届�
 
 	assert.False(t, facts.Member, "所属していない")
 	assert.Nil(t, facts.Role, "役割は 1 つも届かない")
-	assert.False(t, domain.ResolvePagePermission(*facts).CanManage)
+	assert.False(t, domain.ResolvePagePermission(*facts).CanEdit)
 	assert.False(t, domain.ResolvePagePermission(*facts).CanView)
+}
+
+func Test_ナレッジ権限API_弱い付与を足しても管理の口は閉じない(t *testing.T) {
+	// 権限は 2 段（ワークスペース / スペース）の付与を足し合わせ、届いた中で最も強い役割で
+	// 決まる。下の段が上の段を弱めることはないので、自分自身にスペースの弱い付与を張っても、
+	// ワークスペースから届いている管理権限は残る。
+	//
+	// 「近い段が勝つ」形へ戻すと、ここが 404 に落ちる（自分で自分の管理権限を取り上げられて
+	// しまい、張った行を消す手段が本人から消える）。
+	f := newKbPermFixture(t, kbUserID, kbGrantRolePtr(domain.GrantRoleAdmin))
+	spaceGrants := "/api/v2/kb/workspaces/" + kbWorkspaceSlug + "/spaces/" + kbSpaceID + "/grants/"
+
+	require.Equal(t, http.StatusOK,
+		f.do(t, http.MethodPut, spaceGrants+f.callerPrincipalID, `{"role":"viewer"}`).Code,
+		"自分自身に viewer のスペース付与を張る")
+
+	assert.Equal(t, http.StatusOK,
+		f.do(t, http.MethodPut, spaceGrants+f.targetPrincipalID, `{"role":"editor"}`).Code,
+		"ワークスペースの admin が届いたままなので、スペースの権限の口は開いている")
 }

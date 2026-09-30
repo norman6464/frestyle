@@ -34,13 +34,6 @@ var ErrPersonalWorkspaceAlreadyExists = errors.New("personal workspace already e
 // テナント越えのアクセスは「無い」と同じ扱いにする（存在の有無自体を漏らさない）。
 var ErrPageNotFound = errors.New("page not found")
 
-// ErrPageMoveVoidsSpaceGrant は、移動するサブツリーに「スペース全員」宛てのページ付与が
-// 残っている状態で、そのスペースの外へ移そうとしたときに返す。space_all の行は移動後も
-// 残ったまま評価対象から外れ、**権限設定画面に見えているものと実効が違う**状態になり、
-// 移動した本人にも気づけない。付与を先に整理してから移す運用に倒し、黙って権限が変わる
-// 経路を塞ぐ。
-var ErrPageMoveVoidsSpaceGrant = errors.New("page move would void a space-wide page grant")
-
 // ErrPageSnapshotNotFound は対象ページの snapshot がまだ無いときに返す。
 // snapshot は派生データなので、呼び出し側はこれを受けて blocks から組み立てる。
 var ErrPageSnapshotNotFound = errors.New("page snapshot not found")
@@ -164,8 +157,7 @@ type KnowledgeBaseRepository interface {
 	TouchPageLastEditedBy(ctx context.Context, workspaceID, pageID string, userID uint64) error
 	// MovePage はページを newParentID（nil はスペース直下）の末尾へ移す。pages の付け替え・
 	// スペースが変わる場合のサブツリー space_id 更新・closure の付け替えを 1 トランザクションで
-	// 行う。スペースをまたぐ移動で、移動先以外のスペースの「全員」宛てページ付与が残っている
-	// 場合は ErrPageMoveVoidsSpaceGrant を返して移動しない。
+	// 行う。
 	MovePage(ctx context.Context, workspaceID, pageID string, newParentID *string, newSpaceID, newPosition string) error
 	// DeletePageSubtree はページを子孫ごと物理削除する（closure・blocks・snapshot も
 	// CASCADE で消える。アーカイブと違い戻せない）。

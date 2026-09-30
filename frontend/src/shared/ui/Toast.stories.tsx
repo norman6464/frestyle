@@ -45,7 +45,7 @@ export const 失敗: Story = {
 
 /** ただのお知らせ。 */
 export const お知らせ: Story = {
-  args: { type: 'info', message: '共有リンクをコピーしました' },
+  args: { type: 'info', message: 'リンクをコピーしました' },
 };
 
 /** 3 種類を並べて比べる。 */
@@ -55,7 +55,7 @@ export const 種類ぜんぶ: Story = {
     <div className="flex flex-col gap-3">
       <Toast {...args} type="success" message="ページを保存しました" />
       <Toast {...args} type="error" message="保存できませんでした" />
-      <Toast {...args} type="info" message="共有リンクをコピーしました" />
+      <Toast {...args} type="info" message="リンクをコピーしました" />
     </div>
   ),
 };
@@ -71,7 +71,7 @@ export const 長い文: Story = {
 
 /** ✕ を押すと閉じる。 */
 export const 閉じたとき: Story = {
-  args: { type: 'info', message: '共有リンクをコピーしました' },
+  args: { type: 'info', message: 'リンクをコピーしました' },
   play: async ({ args, canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole('button', { name: '閉じる' }));
     await expect(args.onClose).toHaveBeenCalled();

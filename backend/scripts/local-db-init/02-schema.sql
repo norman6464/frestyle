@@ -169,7 +169,6 @@ CREATE TABLE "invitations" (
   "workspace_id" uuid NOT NULL,
   "scope" character varying(16) NOT NULL,
   "space_id" uuid NULL,
-  "page_id" uuid NULL,
   "role" character varying(16) NOT NULL,
   "email" text NOT NULL,
   "invitee_name" character varying(200) NOT NULL DEFAULT '',
@@ -194,7 +193,6 @@ CREATE TABLE "invitations" (
   CONSTRAINT "fk_invitations_declined_by" FOREIGN KEY ("declined_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
   CONSTRAINT "fk_invitations_invited_by" FOREIGN KEY ("invited_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
   CONSTRAINT "fk_invitations_last_sent_by" FOREIGN KEY ("last_sent_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
-  CONSTRAINT "fk_invitations_page" FOREIGN KEY ("workspace_id", "page_id") REFERENCES "pages" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT "fk_invitations_revoked_by" FOREIGN KEY ("revoked_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
   CONSTRAINT "fk_invitations_space" FOREIGN KEY ("workspace_id", "space_id") REFERENCES "spaces" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT "fk_invitations_workspace" FOREIGN KEY ("workspace_id") REFERENCES "workspaces" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
@@ -206,11 +204,11 @@ CREATE TABLE "invitations" (
   CONSTRAINT "ck_invitations_expires_after_created" CHECK (expires_at > created_at),
   CONSTRAINT "ck_invitations_revoked_pair" CHECK ((revoked_at IS NULL) = (revoked_by_user_id IS NULL)),
   CONSTRAINT "ck_invitations_role" CHECK ((role)::text = ANY (ARRAY[('admin'::character varying)::text, ('editor'::character varying)::text, ('commenter'::character varying)::text, ('viewer'::character varying)::text])),
-  CONSTRAINT "ck_invitations_scope" CHECK ((scope)::text = ANY (ARRAY[('workspace'::character varying)::text, ('space'::character varying)::text, ('page'::character varying)::text])),
+  CONSTRAINT "ck_invitations_scope" CHECK ((scope)::text = ANY (ARRAY[('workspace'::character varying)::text, ('space'::character varying)::text])),
   CONSTRAINT "ck_invitations_scoped_role_not_admin" CHECK (((scope)::text = 'workspace'::text) OR ((role)::text <> 'admin'::text)),
   CONSTRAINT "ck_invitations_send_count" CHECK (send_count >= 1),
   CONSTRAINT "ck_invitations_single_outcome" CHECK (((((accepted_at IS NOT NULL))::integer + ((declined_at IS NOT NULL))::integer) + ((revoked_at IS NOT NULL))::integer) <= 1),
-  CONSTRAINT "ck_invitations_target" CHECK ((((scope)::text = 'workspace'::text) AND (space_id IS NULL) AND (page_id IS NULL)) OR (((scope)::text = 'space'::text) AND (space_id IS NOT NULL) AND (page_id IS NULL)) OR (((scope)::text = 'page'::text) AND (space_id IS NULL) AND (page_id IS NOT NULL))),
+  CONSTRAINT "ck_invitations_target" CHECK ((((scope)::text = 'workspace'::text) AND (space_id IS NULL)) OR (((scope)::text = 'space'::text) AND (space_id IS NOT NULL))),
   CONSTRAINT "ck_invitations_token_hash_len" CHECK (octet_length(token_hash) = 32)
 );
 -- Create index "idx_invitations_email_created" to table: "invitations"
@@ -220,7 +218,7 @@ CREATE INDEX "idx_invitations_open_inviter" ON "invitations" ("invited_by_user_i
 -- Create index "idx_invitations_workspace_created" to table: "invitations"
 CREATE INDEX "idx_invitations_workspace_created" ON "invitations" ("workspace_id", "created_at" DESC);
 -- Create index "uq_invitations_open_target" to table: "invitations"
-CREATE UNIQUE INDEX "uq_invitations_open_target" ON "invitations" ("workspace_id", "email", "scope", (COALESCE(space_id, '00000000-0000-0000-0000-000000000000'::uuid)), (COALESCE(page_id, '00000000-0000-0000-0000-000000000000'::uuid))) WHERE ((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL));
+CREATE UNIQUE INDEX "uq_invitations_open_target" ON "invitations" ("workspace_id", "email", "scope", (COALESCE(space_id, '00000000-0000-0000-0000-000000000000'::uuid))) WHERE ((accepted_at IS NULL) AND (declined_at IS NULL) AND (revoked_at IS NULL));
 -- Create "invitation_sends" table
 CREATE TABLE "invitation_sends" (
   "id" uuid NOT NULL,
@@ -288,60 +286,6 @@ CREATE TABLE "page_favorites" (
 );
 -- Create index "idx_page_favorites_user_created_at" to table: "page_favorites"
 CREATE INDEX "idx_page_favorites_user_created_at" ON "page_favorites" ("user_id", "created_at");
--- Create "principals" table
-CREATE TABLE "principals" (
-  "id" uuid NOT NULL,
-  "workspace_id" uuid NOT NULL,
-  "kind" character varying(16) NOT NULL,
-  "user_id" bigint NULL,
-  "space_id" uuid NULL,
-  "page_id" uuid NULL,
-  "name" character varying(200) NOT NULL DEFAULT '',
-  "created_at" timestamptz NOT NULL DEFAULT now(),
-  "updated_at" timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY ("id"),
-  CONSTRAINT "uq_principals_workspace_id" UNIQUE ("workspace_id", "id"),
-  CONSTRAINT "uq_principals_workspace_kind_id" UNIQUE ("workspace_id", "kind", "id"),
-  CONSTRAINT "uq_principals_workspace_kind_page_id" UNIQUE ("workspace_id", "kind", "page_id", "id"),
-  CONSTRAINT "fk_principals_page" FOREIGN KEY ("workspace_id", "page_id") REFERENCES "pages" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "fk_principals_space" FOREIGN KEY ("workspace_id", "space_id") REFERENCES "spaces" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "fk_principals_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "fk_principals_workspace" FOREIGN KEY ("workspace_id") REFERENCES "workspaces" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "ck_principals_kind" CHECK ((kind)::text = ANY (ARRAY[('user'::character varying)::text, ('group'::character varying)::text, ('space_all'::character varying)::text, ('share_link'::character varying)::text])),
-  CONSTRAINT "ck_principals_name" CHECK (((kind)::text = 'group'::text) = ((name)::text <> (''::character varying)::text)),
-  CONSTRAINT "ck_principals_page_id" CHECK (((kind)::text = 'share_link'::text) = (page_id IS NOT NULL)),
-  CONSTRAINT "ck_principals_space_id" CHECK (((kind)::text = 'space_all'::text) = (space_id IS NOT NULL)),
-  CONSTRAINT "ck_principals_user_id" CHECK (((kind)::text = 'user'::text) = (user_id IS NOT NULL))
-);
--- Create index "idx_principals_page_id" to table: "principals"
-CREATE INDEX "idx_principals_page_id" ON "principals" ("page_id");
--- Create index "idx_principals_space_id" to table: "principals"
-CREATE INDEX "idx_principals_space_id" ON "principals" ("space_id");
--- Create index "idx_principals_user_id" to table: "principals"
-CREATE INDEX "idx_principals_user_id" ON "principals" ("user_id");
--- Create index "idx_principals_workspace_id" to table: "principals"
-CREATE INDEX "idx_principals_workspace_id" ON "principals" ("workspace_id");
--- Create index "uq_principals_group_name" to table: "principals"
-CREATE UNIQUE INDEX "uq_principals_group_name" ON "principals" ("workspace_id", "name") WHERE ((kind)::text = 'group'::text);
--- Create index "uq_principals_space_all" to table: "principals"
-CREATE UNIQUE INDEX "uq_principals_space_all" ON "principals" ("workspace_id", "space_id") WHERE ((kind)::text = 'space_all'::text);
--- Create index "uq_principals_workspace_user" to table: "principals"
-CREATE UNIQUE INDEX "uq_principals_workspace_user" ON "principals" ("workspace_id", "user_id") WHERE ((kind)::text = 'user'::text);
--- Create "page_grants" table
-CREATE TABLE "page_grants" (
-  "workspace_id" uuid NOT NULL,
-  "page_id" uuid NOT NULL,
-  "principal_id" uuid NOT NULL,
-  "role" character varying(16) NOT NULL,
-  "created_at" timestamptz NOT NULL DEFAULT now(),
-  "updated_at" timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY ("workspace_id", "page_id", "principal_id"),
-  CONSTRAINT "fk_page_grants_page" FOREIGN KEY ("workspace_id", "page_id") REFERENCES "pages" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "fk_page_grants_principal" FOREIGN KEY ("workspace_id", "principal_id") REFERENCES "principals" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "ck_page_grants_role" CHECK ((role)::text = ANY (ARRAY[('admin'::character varying)::text, ('editor'::character varying)::text, ('commenter'::character varying)::text, ('viewer'::character varying)::text]))
-);
--- Create index "idx_page_grants_principal" to table: "page_grants"
-CREATE INDEX "idx_page_grants_principal" ON "page_grants" ("workspace_id", "principal_id");
 -- Create "labels" table
 CREATE TABLE "labels" (
   "id" uuid NOT NULL,
@@ -662,6 +606,39 @@ CREATE TABLE "page_views" (
 CREATE INDEX "idx_page_views_page_id" ON "page_views" ("page_id");
 -- Create index "idx_page_views_user_viewed_at" to table: "page_views"
 CREATE INDEX "idx_page_views_user_viewed_at" ON "page_views" ("user_id", "viewed_at");
+-- Create "principals" table
+CREATE TABLE "principals" (
+  "id" uuid NOT NULL,
+  "workspace_id" uuid NOT NULL,
+  "kind" character varying(16) NOT NULL,
+  "user_id" bigint NULL,
+  "space_id" uuid NULL,
+  "name" character varying(200) NOT NULL DEFAULT '',
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  "updated_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "uq_principals_workspace_id" UNIQUE ("workspace_id", "id"),
+  CONSTRAINT "uq_principals_workspace_kind_id" UNIQUE ("workspace_id", "kind", "id"),
+  CONSTRAINT "fk_principals_space" FOREIGN KEY ("workspace_id", "space_id") REFERENCES "spaces" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_principals_user" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_principals_workspace" FOREIGN KEY ("workspace_id") REFERENCES "workspaces" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "ck_principals_kind" CHECK ((kind)::text = ANY (ARRAY[('user'::character varying)::text, ('group'::character varying)::text, ('space_all'::character varying)::text])),
+  CONSTRAINT "ck_principals_name" CHECK (((kind)::text = 'group'::text) = ((name)::text <> (''::character varying)::text)),
+  CONSTRAINT "ck_principals_space_id" CHECK (((kind)::text = 'space_all'::text) = (space_id IS NOT NULL)),
+  CONSTRAINT "ck_principals_user_id" CHECK (((kind)::text = 'user'::text) = (user_id IS NOT NULL))
+);
+-- Create index "idx_principals_space_id" to table: "principals"
+CREATE INDEX "idx_principals_space_id" ON "principals" ("space_id");
+-- Create index "idx_principals_user_id" to table: "principals"
+CREATE INDEX "idx_principals_user_id" ON "principals" ("user_id");
+-- Create index "idx_principals_workspace_id" to table: "principals"
+CREATE INDEX "idx_principals_workspace_id" ON "principals" ("workspace_id");
+-- Create index "uq_principals_group_name" to table: "principals"
+CREATE UNIQUE INDEX "uq_principals_group_name" ON "principals" ("workspace_id", "name") WHERE ((kind)::text = 'group'::text);
+-- Create index "uq_principals_space_all" to table: "principals"
+CREATE UNIQUE INDEX "uq_principals_space_all" ON "principals" ("workspace_id", "space_id") WHERE ((kind)::text = 'space_all'::text);
+-- Create index "uq_principals_workspace_user" to table: "principals"
+CREATE UNIQUE INDEX "uq_principals_workspace_user" ON "principals" ("workspace_id", "user_id") WHERE ((kind)::text = 'user'::text);
 -- Create "principal_members" table
 CREATE TABLE "principal_members" (
   "workspace_id" uuid NOT NULL,
@@ -710,35 +687,6 @@ CREATE TABLE "project_versions" (
 CREATE INDEX "idx_project_versions_project_position" ON "project_versions" ("workspace_id", "project_id", "position");
 -- Create index "uq_project_versions_project_name" to table: "project_versions"
 CREATE UNIQUE INDEX "uq_project_versions_project_name" ON "project_versions" ("project_id", "name_lower") WHERE (archived_at IS NULL);
--- Create "share_links" table
-CREATE TABLE "share_links" (
-  "id" uuid NOT NULL,
-  "workspace_id" uuid NOT NULL,
-  "page_id" uuid NOT NULL,
-  "principal_id" uuid NOT NULL,
-  "principal_kind" character varying(16) NULL GENERATED ALWAYS AS ('share_link'::character varying) STORED,
-  "capability" character varying(8) NOT NULL,
-  "token_hash" bytea NOT NULL,
-  "password_hash" text NULL,
-  "expires_at" timestamptz NULL,
-  "revoked_at" timestamptz NULL,
-  "created_by_user_id" bigint NOT NULL,
-  "created_at" timestamptz NOT NULL DEFAULT now(),
-  "updated_at" timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY ("id"),
-  CONSTRAINT "uq_share_links_principal" UNIQUE ("principal_id"),
-  CONSTRAINT "uq_share_links_token_hash" UNIQUE ("token_hash"),
-  CONSTRAINT "fk_share_links_created_by" FOREIGN KEY ("created_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "fk_share_links_page" FOREIGN KEY ("workspace_id", "page_id") REFERENCES "pages" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "fk_share_links_principal" FOREIGN KEY ("workspace_id", "principal_kind", "page_id", "principal_id") REFERENCES "principals" ("workspace_id", "kind", "page_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT "ck_share_links_capability" CHECK ((capability)::text = ANY (ARRAY[('view'::character varying)::text, ('edit'::character varying)::text])),
-  CONSTRAINT "ck_share_links_password_hash" CHECK ((password_hash IS NULL) OR (password_hash <> ''::text)),
-  CONSTRAINT "ck_share_links_token_hash_len" CHECK (octet_length(token_hash) = 32)
-);
--- Create index "idx_share_links_created_by" to table: "share_links"
-CREATE INDEX "idx_share_links_created_by" ON "share_links" ("created_by_user_id");
--- Create index "idx_share_links_page" to table: "share_links"
-CREATE INDEX "idx_share_links_page" ON "share_links" ("workspace_id", "page_id");
 -- Create "space_grants" table
 CREATE TABLE "space_grants" (
   "workspace_id" uuid NOT NULL,

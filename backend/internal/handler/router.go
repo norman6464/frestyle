@@ -62,7 +62,7 @@ func NewRouter(db *sql.DB, cfg *config.Config, verifier *oidc.Verifier, mailer r
 	v2 := r.Group("/api/v2")
 
 	registerHealthRoutes(v2, deps)
-	// 共有リンクの検証だけは未認証（認可はトークンとパスワードそのものが担う）。
+	// 招待 URL の案内だけは未認証（承諾はできず、見せるのは宛先本人向けの案内だけ）。
 	registerKnowledgeBasePublicRoutes(v2, deps)
 	authHandler := registerAuthPublicRoutes(v2, deps)
 

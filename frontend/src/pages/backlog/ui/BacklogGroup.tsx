@@ -26,7 +26,7 @@ export default function BacklogGroup({ name, count, note, open, onToggle, action
   return (
     <div role="rowgroup">
       <div role="row" className="border-b border-surface-3 bg-surface-2">
-        <div role="cell" aria-colspan={6} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 sm:px-4">
+        <div role="cell" aria-colspan={6} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 sm:px-4">
           <button
             type="button"
             onClick={onToggle}
@@ -36,9 +36,9 @@ export default function BacklogGroup({ name, count, note, open, onToggle, action
             <FsIcon name="chevron-down"
               className={`h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition-transform duration-fast ${open ? '' : '-rotate-90'}`}
             />
-            <span className="text-sm font-semibold text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{name}</span>
-            {note && <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-muted)]">{note}</span>}
-            <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-muted)]">{count} 件</span>
+            <span className="text-base font-semibold text-[var(--color-text-primary)] [overflow-wrap:anywhere]">{name}</span>
+            {note && <span className="shrink-0 text-[13px] tabular-nums text-[var(--color-text-muted)]">{note}</span>}
+            <span className="shrink-0 text-[13px] tabular-nums text-[var(--color-text-muted)]">{count} 件</span>
           </button>
           {action && (
             <div className="ml-auto shrink-0 [&_button]:min-h-9 [&_button]:rounded-md [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-brand-600">

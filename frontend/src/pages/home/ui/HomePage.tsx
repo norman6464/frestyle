@@ -1,13 +1,12 @@
-import { useMemo } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
 import { useLocalToday } from '@/shared/lib/hooks/useLocalToday';
-import { FsIcon, PageFrame, SkeletonRows } from '@/shared/ui';
-import { homeStrongLink } from '../lib/homeStyles';
+import { FsIcon, SkeletonRows } from '@/shared/ui';
+import { homeBoxRowLink, homeContainer } from '../lib/homeStyles';
 import { useFavoritesWorkspace } from '../model/useFavoritesWorkspace';
 import { useHomeWorkspaces } from '../model/useHomeWorkspaces';
 import { useMyAssignedTickets } from '../model/useMyAssignedTickets';
-import { usePageTicketReferences } from '../model/usePageTicketReferences';
 import { useRecentPages } from '../model/useRecentPages';
 import { useUnreadCount } from '../model/useUnreadCount';
 import { useWorkspaceFavorites } from '../model/useWorkspaceFavorites';
@@ -18,16 +17,17 @@ import HomeFirstRun from './HomeFirstRun';
 import HomeResumeSection from './HomeResumeSection';
 import HomeUnreadNotice from './HomeUnreadNotice';
 
-
 /**
  * マイホーム。「知識を残し、その知識を使って仕事を進める」ための再開地点。
  *
- * - 主役は「続きからはじめる」（最後に開いたページ）。担当は補助として右の列（狭い画面では下）
+ * - 主役は「続きからはじめる」（最後に開いたページ）。ヘッダー直下の帯に、等幅のカードで並ぶ
  * - 履歴と担当はワークスペース横断。お気に入りとページ検索は選んだ 1 つのワークスペースの中
  * - 枠ごとに独立して読み、1 つの失敗でほかを隠さない。0 件と失敗は取り違えない
  * - どこにも所属していなければ初回ホーム（担当 0 件・履歴 0 件とは別の状態）
  *
- * 広い画面は左に再開とお気に入り、右に担当・未読・行き先。狭い画面は 未読 → 再開 → 担当 →
+ * 面の作りは報道系サイトの一覧面に合わせる：画面の名前や説明文は帯に出さず（読み上げにだけ残す）、
+ * 全幅の灰色の帯にカードを並べ、その下に白い本文。本文は中央 1125px の器で、広い画面は左に担当と
+ * お気に入り、右の脇柱（308px）に薄い青の箱（未読・行き先）。狭い画面は 帯 → 未読 → 担当 →
  * お気に入り の順に 1 列で、初めに出す件数を減らす。
  */
 export default function HomePage() {
@@ -36,47 +36,43 @@ export default function HomePage() {
   const today = useLocalToday();
   const workspaces = useHomeWorkspaces();
   const recent = useRecentPages();
-  const latest = recent.status === 'ready' ? (recent.data[0] ?? null) : null;
-  const references = usePageTicketReferences(latest);
   const assigned = useMyAssignedTickets();
   const unread = useUnreadCount();
   const [favoritesSlug, selectFavoritesSlug] = useFavoritesWorkspace(workspaces.data);
   const favorites = useWorkspaceFavorites(workspaces.status === 'ready' ? favoritesSlug : null);
 
-  const names = useMemo(() => new Map(workspaces.data.map((w) => [w.slug, w.name])), [workspaces.data]);
-  // 表示名は所属一覧から引く。引けない間は slug のまま（名前を勝手に作らない）。
-  const workspaceName = (slug: string) => names.get(slug) ?? slug;
-
   if (workspaces.status === 'ready' && workspaces.data.length === 0) {
     return <HomeFirstRun />;
   }
 
-  const header = (
-    <header className="flex items-start justify-between gap-4">
-      <div className="min-w-0">
-        <h1 className="text-3xl font-bold tracking-tight text-[var(--color-text-primary)] sm:text-4xl">マイホーム</h1>
-        <p className="mt-3 text-base text-[var(--color-text-muted)]">
-          続きをひらく。知識を取り出す。{wide && '次の作業へ。'}
-        </p>
-      </div>
-      {workspaces.status === 'ready' && (
-        <HomeCreateButton workspaces={workspaces.data} initialWorkspaceSlug={favoritesSlug} wide={wide} />
-      )}
-    </header>
+  // 画面の名前は帯に見出しとしては出さない（帯は特集面の作りで、行き先はヘッダーが示している）。
+  // 読み上げの見出しとしてだけ残す。
+  const title = <h1 className="sr-only">マイホーム</h1>;
+  // 全幅の灰色の帯。中の器は本文と同じ幅。
+  const band = (children: ReactNode) => (
+    <div className="border-b border-surface-3 bg-[var(--color-surface-band)]">
+      <div className={`${homeContainer} py-6 lg:py-[30px]`}>{children}</div>
+    </div>
   );
 
   if (workspaces.status === 'loading') {
     return (
-      <PageFrame className="pb-24">
-        {header}
-        <div className="mt-8">
-          <SkeletonRows label="ホームを読み込んでいます" rows={4} className="py-4" />
-        </div>
-      </PageFrame>
+      <div className="pb-24">
+        {title}
+        {band(<SkeletonRows label="ホームを読み込んでいます" rows={3} className="py-4" />)}
+      </div>
     );
   }
 
-  const resume = <HomeResumeSection recent={recent} references={references} workspaceName={workspaceName} wide={wide} />;
+  const resume = (
+    <HomeResumeSection
+      recent={recent}
+      wide={wide}
+      action={
+        <HomeCreateButton workspaces={workspaces.data} initialWorkspaceSlug={favoritesSlug} wide={wide} />
+      }
+    />
+  );
   const assignedSection = <HomeAssignedSection assigned={assigned} wide={wide} today={today} />;
   const favoritesSection = (
     <HomeFavoritesSection
@@ -89,41 +85,44 @@ export default function HomePage() {
   );
 
   return (
-    <PageFrame className="pb-24">
-      {header}
+    <div className="pb-24">
+      {title}
+      {band(resume)}
       {wide ? (
-        <div className="mt-10 grid grid-cols-[minmax(0,1fr)_22rem] gap-12">
-          <div className="flex min-w-0 flex-col gap-12">
-            {resume}
+        <div className={`${homeContainer} mt-8 grid grid-cols-[minmax(0,1fr)_308px] gap-10`}>
+          <div className="flex min-w-0 flex-col gap-10">
+            {assignedSection}
             {favoritesSection}
           </div>
-          <div className="flex min-w-0 flex-col gap-8 border-l border-surface-3 pl-10">
-            {assignedSection}
-            <HomeUnreadNotice unread={unread} wide />
-            <nav aria-label="ほかの行き先" className="flex flex-col gap-4">
-              <div>
-                <Link to="/backlog" className={homeStrongLink}>
-                  プロジェクトの作業へ <FsIcon name="arrow-right" className="h-4 w-4" />
-                </Link>
-                <p className="text-sm text-[var(--color-text-muted)]">スプリントやチームの優先順位はバックログで。</p>
+          <aside className="min-w-0">
+            {/* 脇柱の箱。薄い青の面に、見出しと白い段（未読・行き先）を重ねる（報道系サイトの宣伝箱の作り）。 */}
+            <div className="bg-brand-100 p-3">
+              <p className="py-1 text-center text-base font-bold text-brand-800">次の作業へ</p>
+              <div className="mt-2 flex flex-col gap-2">
+                <HomeUnreadNotice unread={unread} wide />
+                <nav aria-label="ほかの行き先" className="flex flex-col gap-2">
+                  <Link to="/backlog" className={homeBoxRowLink}>
+                    <FsIcon name="backlog" className="h-5 w-5 shrink-0 text-brand-700" />
+                    <span className="min-w-0 flex-1">プロジェクトの作業へ</span>
+                    <FsIcon name="arrow-right" className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
+                  </Link>
+                  <Link to="/kb/spaces" className={homeBoxRowLink}>
+                    <FsIcon name="knowledge" className="h-5 w-5 shrink-0 text-brand-700" />
+                    <span className="min-w-0 flex-1">スペースをひらく</span>
+                    <FsIcon name="arrow-right" className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
+                  </Link>
+                </nav>
               </div>
-              <Link to="/kb/spaces" className={homeStrongLink}>
-                スペースをひらく <FsIcon name="arrow-right" className="h-4 w-4" />
-              </Link>
-            </nav>
-          </div>
+            </div>
+          </aside>
         </div>
       ) : (
-        <div className="mt-6 flex flex-col gap-10">
+        <div className={`${homeContainer} mt-6 flex flex-col gap-10`}>
           <HomeUnreadNotice unread={unread} wide={false} />
-          {resume}
           {assignedSection}
           {favoritesSection}
         </div>
       )}
-      <p className="mt-12 text-sm text-[var(--color-text-muted)]">
-        最近のページと担当はワークスペース横断。お気に入りとページ検索は、選んだワークスペースの中。
-      </p>
-    </PageFrame>
+    </div>
   );
 }

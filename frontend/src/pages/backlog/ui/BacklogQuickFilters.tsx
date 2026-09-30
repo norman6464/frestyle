@@ -25,14 +25,16 @@ export interface BacklogQuickFiltersProps {
 
 const ITEMS: { key: BacklogQuickFilter; label: string; warn?: boolean }[] = [
   { key: 'assignedToMe', label: '自分の担当' },
-  // 期限切れだけは 0 でないことが「対処が要る」の合図なので、数字を赤で出す。
+  // 期限切れだけは 0 でないことが「対処が要る」の合図なので、数字を太字の濃い文字で出す（色は付けない）。
   { key: 'overdue', label: '期限切れ', warn: true },
   { key: 'unassigned', label: '未割り当て' },
 ];
 
 const tabClass = (active: boolean) =>
-  `inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm transition-colors duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
-    active ? 'font-semibold text-brand-700' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
+  `relative inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm transition-colors sm:text-[15px] duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
+    active
+      ? 'font-semibold text-[var(--color-text-primary)] after:absolute after:inset-x-2 after:bottom-1 after:h-0.5 after:rounded-full after:bg-[var(--color-text-primary)]'
+      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
   }`;
 
 /**
@@ -46,7 +48,9 @@ const tabClass = (active: boolean) =>
  * その条件が立っていて保存した絞り込みを選んでいないとき、保存した絞り込みは選んでいるとき。
  * 状態や種別など細かい条件だけが付いているときは、どれも押された表示にならない。
  *
- * 見た目は下線のタブではなく文字色で選択を示し、押されている状態は aria-pressed で伝える。
+ * 選んでいるものは太字と下の短い線で示し（色は付けない。面のタブと同じ示し方）、押されている状態は
+ * aria-pressed で伝える。文字は記事面の補足の段と同じ 15px。狭い画面は 14px にし、間も詰めて、固定の
+ * 4 つ（すべて・自分の担当・期限切れ・未割り当て）を 1 行に収める。
  */
 export default function BacklogQuickFilters({
   counts,
@@ -62,9 +66,9 @@ export default function BacklogQuickFilters({
   onDeleteSaved,
 }: BacklogQuickFiltersProps) {
   return (
-    <nav aria-label="保存した絞り込み" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+    <nav aria-label="保存した絞り込み" className="flex flex-wrap items-center gap-x-1 gap-y-1 sm:gap-x-4">
       {/* 見出しの言葉は狭い画面では畳む（nav の名前が同じことを読み上げる）。 */}
-      <span className="hidden text-sm text-[var(--color-text-muted)] sm:inline">保存した絞り込み</span>
+      <span className="hidden text-[15px] text-[var(--color-text-muted)] sm:inline">保存した絞り込み</span>
       <button type="button" aria-pressed={!filtered} onClick={() => onChange(null)} className={tabClass(!filtered)}>
         すべて
       </button>
@@ -82,7 +86,7 @@ export default function BacklogQuickFilters({
               count !== null && (
                 <span
                   className={`tabular-nums ${
-                    warn && count > 0 ? 'font-semibold text-danger-ink' : active ? '' : 'text-[var(--color-text-muted)]'
+                    warn && count > 0 ? 'font-semibold text-[var(--color-text-primary)]' : active ? '' : 'text-[var(--color-text-muted)]'
                   }`}
                 >
                   {count}

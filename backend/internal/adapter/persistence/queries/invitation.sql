@@ -23,18 +23,17 @@
 -- 直前の送信からの間が短い（last_sent_at > sent_before）ときは更新せず 0 行になる
 -- （:one なので sql.ErrNoRows。repository が ErrInvitationResendTooSoon に変換する）。
 INSERT INTO invitations (
-    id, workspace_id, scope, space_id, page_id, role, email, invitee_name,
+    id, workspace_id, scope, space_id, role, email, invitee_name,
     token_hash, invited_by_user_id, expires_at, last_sent_by_user_id
 )
 VALUES (
-    sqlc.arg(id), sqlc.arg(workspace_id), sqlc.arg(scope), sqlc.arg(space_id), sqlc.arg(page_id),
+    sqlc.arg(id), sqlc.arg(workspace_id), sqlc.arg(scope), sqlc.arg(space_id),
     sqlc.arg(role), sqlc.arg(email), sqlc.arg(invitee_name),
     sqlc.arg(token_hash), sqlc.arg(actor_user_id), sqlc.arg(expires_at), sqlc.arg(actor_user_id)
 )
 ON CONFLICT (
     workspace_id, email, scope,
-    COALESCE(space_id, '00000000-0000-0000-0000-000000000000'::uuid),
-    COALESCE(page_id, '00000000-0000-0000-0000-000000000000'::uuid)
+    COALESCE(space_id, '00000000-0000-0000-0000-000000000000'::uuid)
 ) WHERE accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
 DO UPDATE SET
     role                 = EXCLUDED.role,

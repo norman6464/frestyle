@@ -15,7 +15,8 @@ interface BacklogTabState {
 }
 
 /**
- * プロジェクトの行の右端に並ぶ面の切替（設計ボード ST08）。下線ではなく文字色で今いる面を示す。
+ * プロジェクトの行の右端に並ぶ面の切替（設計ボード ST08）。今いる面は太字と下の短い線で示し、
+ * 色は付けない（バックログの画面では色を混ぜない。ヘッダーの行き先と同じ、太さと線の示し方）。
  *
  * 押すと経路が変わる。ほかの場所には置かない —— 同じ行き先が 2 か所にあると、どちらが正か
  * 分からなくなるため。ここは `Link` なので、中クリックで別タブにも開ける。
@@ -48,9 +49,9 @@ export default function BacklogTabs({ projectId, current, fallbackFocusRef }: Ba
             state={{ fromBacklogTab: true } satisfies BacklogTabState}
             aria-current={active ? 'page' : undefined}
             // 狭い画面では今いる面を畳む（大きな見出しが同じ名前を出している。設計ボード ST12）。
-            className={`min-h-11 items-center rounded-md px-2.5 text-sm transition-colors duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
+            className={`relative min-h-11 items-center rounded-md px-2.5 text-sm transition-colors duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
               active
-                ? 'hidden font-semibold text-brand-700 sm:inline-flex'
+                ? 'hidden font-semibold text-[var(--color-text-primary)] after:absolute after:inset-x-2.5 after:bottom-1 after:h-0.5 after:rounded-full after:bg-[var(--color-text-primary)] sm:inline-flex'
                 : 'inline-flex text-[var(--color-text-muted)] hover:bg-surface-2 hover:text-[var(--color-text-primary)]'
             }`}
           >

@@ -59,7 +59,7 @@ export default function KbPageIconButton({ icon, canEdit, onChange }: KbPageIcon
   if (!canEdit) {
     if (!icon) return null;
     return (
-      <span role="img" aria-label="ページのアイコン" className="mb-1 block text-4xl leading-none">
+      <span role="img" aria-label="ページのアイコン" className="mb-1 block text-3xl leading-none">
         {icon.value}
       </span>
     );

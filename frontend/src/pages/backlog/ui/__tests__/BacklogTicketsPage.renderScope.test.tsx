@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import apiClient from '@/shared/api/axios';
@@ -87,6 +87,16 @@ afterEach(() => {
   apiClient.defaults.adapter = originalAdapter;
 });
 
+function TicketDestination() {
+  const location = useLocation();
+  return (
+    <div>
+      <p>{location.pathname}</p>
+      <p>戻り先: {String((location.state as { from?: unknown } | null)?.from)}</p>
+    </div>
+  );
+}
+
 async function renderReady() {
   render(
     <MemoryRouter initialEntries={['/backlog/p-1']}>
@@ -94,6 +104,7 @@ async function renderReady() {
         <Route element={<BacklogLayout />}>
           <Route path="/backlog/:projectId" element={<BacklogTicketsPage />} />
         </Route>
+        <Route path="/tickets/:ticketId" element={<TicketDestination />} />
       </Routes>
     </MemoryRouter>, { wrapper: queryWrapper() },
   );
@@ -112,17 +123,18 @@ describe('BacklogTicketsPage の描き直しの範囲', () => {
     expect((actual.default as unknown as { $$typeof: symbol }).$$typeof).toBe(Symbol.for('react.memo'));
   });
 
-  it('行を 1 つ選んでも、ほかの行を描き直さない', async () => {
+  it('行の題名を開くと独立した票へ進み、一覧への戻り先を渡す', async () => {
     await renderReady();
 
-    fireEvent.click(screen.getByRole('button', { name: '二つ目' }));
+    fireEvent.click(screen.getByRole('link', { name: '二つ目' }));
 
-    await waitFor(() => expect(hoisted.rowRenders['t-2'] ?? 0).toBeGreaterThan(0));
+    expect(await screen.findByText('/tickets/t-2')).toBeInTheDocument();
+    expect(screen.getByText('戻り先: /backlog/p-1')).toBeInTheDocument();
     expect(hoisted.rowRenders['t-1'] ?? 0).toBe(0);
     expect(hoisted.rowRenders['t-3'] ?? 0).toBe(0);
   });
 
-  it('チケットを 1 件作っても、ほかの行を描き直さない', async () => {
+  it('チケットを 1 件作ると旧末尾だけ更新し、ほかの行は描き直さない', async () => {
     await renderReady();
 
     const input = screen.getByRole('textbox', { name: '新しいチケットの題名' });
@@ -133,11 +145,10 @@ describe('BacklogTicketsPage の描き直しの範囲', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     });
-    expect({ t1: hoisted.rowRenders['t-1'] ?? 0, t2: hoisted.rowRenders['t-2'] ?? 0, t3: hoisted.rowRenders['t-3'] ?? 0 }).toEqual({
-      t1: 0,
-      t2: 0,
-      t3: 0,
-    });
+    expect(hoisted.rowRenders['t-1'] ?? 0).toBe(0);
+    expect(hoisted.rowRenders['t-2'] ?? 0).toBe(0);
+    // 新しい行が末尾になり、旧末尾の「下へ移動」可否が変わる。
+    expect(hoisted.rowRenders['t-3'] ?? 0).toBeGreaterThan(0);
   });
 
   it('絞り込みに 1 文字打っても、中身の変わらない行を描き直さない', async () => {
