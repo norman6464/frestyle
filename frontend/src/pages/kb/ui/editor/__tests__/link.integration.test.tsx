@@ -2,8 +2,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import { Editor, type JSONContent } from '@tiptap/react';
 import RichTextEditor from '../RichTextEditor';
-import { activeLinkHref, applyLink, removeLink } from '../editorCommands';
+import { activeLinkHref } from '../editorCommands';
 import { createEditorExtensions } from '../editorExtensions';
+import { applyLink, removeLink } from '@/shared/lib/editorLink';
 import { emptyRichDoc, type RichDocContent } from '@/shared/lib/richDoc';
 /*
  * リンクの XSS 対策は「入力」「貼り付け」「保存・再読込の往復」の 3 経路すべてで塞いで

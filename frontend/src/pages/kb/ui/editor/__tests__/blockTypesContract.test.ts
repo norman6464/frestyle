@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { getSchema } from '@tiptap/core';
 import type { NodeType } from '@tiptap/pm/model';
 import { createSchemaExtensions, isBlockRowNodeType } from '../schemaExtensions';
@@ -8,8 +8,11 @@ import { createSchemaExtensions, isBlockRowNodeType } from '../schemaExtensions'
 /**
  * 契約ファイルはリポジトリ直下。backend（internal/domain/block_contract_test.go）も同じファイルを読み、
  * 保存を許す種類と容器かどうかの表と突き合わせる。
+ *
+ * 場所は vitest の実行ディレクトリ（frontend/。設定ファイルの置き場）からの相対で引く。
+ * `import.meta.url` から辿る形は、jsdom 環境では file: 形式にならず使えない。
  */
-const CONTRACT_URL = new URL('../../../../../../../contracts/kb-block-types.json', import.meta.url);
+const CONTRACT_PATH = resolve(process.cwd(), '..', 'contracts', 'kb-block-types.json');
 
 interface Contract {
   blockTypes: { type: string; container: boolean }[];
@@ -31,7 +34,7 @@ function isContainer(type: NodeType): boolean {
 
 describe('ブロックの種類の契約（contracts/kb-block-types.json）', () => {
   it('blocks の行になる種類と、容器かどうかが契約ファイルと一致する', () => {
-    const contract = JSON.parse(readFileSync(fileURLToPath(CONTRACT_URL), 'utf8')) as Contract;
+    const contract = JSON.parse(readFileSync(CONTRACT_PATH, 'utf8')) as Contract;
     expect(contract.blockTypes.length).toBeGreaterThan(0);
     expect(new Set(contract.blockTypes.map((entry) => entry.type)).size, '契約ファイルに重複が無い').toBe(
       contract.blockTypes.length,
