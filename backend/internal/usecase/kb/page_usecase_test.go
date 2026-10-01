@@ -543,3 +543,65 @@ func Test_renderPageDoc_常にattrs_idを出力する(t *testing.T) {
 	_, err = uuid.Parse(parsed.Content[0].Attrs.ID)
 	require.NoError(t, err, "attrs が元々空だったノードでも render 後は id を持つ")
 }
+
+// 文字色（textStyle.color）と蛍光ペン（highlight.color）は名前だけを受け付ける。
+// 通らない値はマークごと剥がし、エラーにはしない（コードブロックの言語と同じ扱い）。
+// 文字そのものと、ほかのマーク（太字など）はそのまま残る。
+func Test_doc分解_文字色と蛍光ペンは許した名前だけ残す(t *testing.T) {
+	cases := []struct {
+		name      string
+		marks     string // text ノードの marks（JSON 配列）
+		wantMarks []string
+	}{
+		{"許した名前の文字色は残る", `[{"type":"textStyle","attrs":{"color":"red"}}]`, []string{"textStyle"}},
+		{"許した名前の蛍光ペンは残る", `[{"type":"highlight","attrs":{"color":"yellow"}}]`, []string{"highlight"}},
+		{"生の色コードはマークごと剥がす", `[{"type":"textStyle","attrs":{"color":"#ff0000"}}]`, nil},
+		{"文字列でない値はマークごと剥がす", `[{"type":"highlight","attrs":{"color":123}}]`, nil},
+		{"色の無い文字色は剥がす", `[{"type":"textStyle","attrs":{}}]`, nil},
+		{"attrs の無い蛍光ペンは剥がす", `[{"type":"highlight"}]`, nil},
+		{"ほかのマークはそのまま", `[{"type":"bold"},{"type":"textStyle","attrs":{"color":"zzz"}},{"type":"link","attrs":{"href":"https://example.com"}}]`, []string{"bold", "link"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"色","marks":` + tc.marks + `}]}]}`
+			tree, err := parsePageDoc(doc)
+			require.NoError(t, err)
+			require.Len(t, tree, 1)
+			require.NotNil(t, tree[0].Inline)
+
+			var inline []struct {
+				Type  string `json:"type"`
+				Text  string `json:"text"`
+				Marks []struct {
+					Type string `json:"type"`
+				} `json:"marks"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(*tree[0].Inline), &inline))
+			require.Len(t, inline, 1)
+			require.Equal(t, "色", inline[0].Text)
+			var got []string
+			for _, m := range inline[0].Marks {
+				got = append(got, m.Type)
+			}
+			require.Equal(t, tc.wantMarks, got)
+		})
+	}
+}
+
+// 剥がすものが無ければ、インラインの JSON は元の形（キーの並びも）のまま保つ。
+// 直す必要の無い本文を組み替えて、保存のたびに差分が出ることを避けるため。
+func Test_doc分解_剥がすものが無ければインラインは元のまま(t *testing.T) {
+	inline := `[{"type":"text","marks":[{"type":"bold"},{"type":"textStyle","attrs":{"color":"blue"}}],"text":"色"}]`
+	tree, err := parsePageDoc(`{"type":"doc","content":[{"type":"paragraph","content":` + inline + `}]}`)
+	require.NoError(t, err)
+	require.Equal(t, inline, *tree[0].Inline)
+}
+
+// 入れ子のインライン（content を持つインラインノード）の中のマークも同じように検査する。
+func Test_doc分解_入れ子のインラインの中の色も検査する(t *testing.T) {
+	doc := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"span","content":[{"type":"text","text":"内側","marks":[{"type":"highlight","attrs":{"color":"nope"}}]}]}]}]}`
+	tree, err := parsePageDoc(doc)
+	require.NoError(t, err)
+	require.NotContains(t, *tree[0].Inline, "highlight")
+	require.Contains(t, *tree[0].Inline, "内側")
+}

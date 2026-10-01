@@ -1,0 +1,11 @@
+{
+  "description": "ナレッジのページ本文のインライン（文字に掛けるマーク）の属性に許す値の一覧。backend（internal/domain/inline_marks.go）は保存時にこの値だけを残し、frontend（pages/kb の本文エディタ）は同じ名前だけを保存する。色は名前で持ち、生の色コード（hex）は保存しない。片方にだけ名前を足すと、保存で剥がされる・画面で描けないが起きるため、ここを 1 つの正本にする。",
+  "marks": {
+    "textStyle": {
+      "color": ["red", "orange", "yellow", "green", "blue", "purple", "pink", "gray"]
+    },
+    "highlight": {
+      "color": ["red", "orange", "yellow", "green", "blue", "purple", "pink", "gray"]
+    }
+  }
+}
