@@ -5,12 +5,15 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
+      # frontend と突き合わせる契約ファイル。backend のテストが読むので、ここだけ変えても動かす
+      - 'contracts/**'
       - '.github/workflows/ci-backend-go.yml'
       - '.github/scripts/*pull-with-mirror.sh'
   pull_request:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'contracts/**'
       - '.github/workflows/ci-backend-go.yml'
       - '.github/scripts/*pull-with-mirror.sh'
 
