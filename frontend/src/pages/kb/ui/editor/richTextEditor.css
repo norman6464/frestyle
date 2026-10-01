@@ -678,6 +678,73 @@
   z-index: 50;
   min-width: 11rem;
   padding: 4px;
+ * 文字色・蛍光ペン。本文には色の名前（data-color）だけが入り、色そのものはここで決める。
+ * 文字色は白地で 4.5:1 以上になる濃さ（Tailwind の 700。灰だけ 600）、蛍光ペンは本文の文字が
+ * そのまま読める淡さ（100）。吹き出し（body 直下に浮く）からも引けるよう、変数は :root に置く。
+ */
+:root {
+  --rte-text-red: theme('colors.red.700');
+  --rte-text-orange: theme('colors.orange.700');
+  --rte-text-yellow: theme('colors.yellow.700');
+  --rte-text-green: theme('colors.green.700');
+  --rte-text-blue: theme('colors.blue.700');
+  --rte-text-purple: theme('colors.purple.700');
+  --rte-text-pink: theme('colors.pink.700');
+  --rte-text-gray: theme('colors.gray.600');
+  --rte-mark-red: theme('colors.red.100');
+  --rte-mark-orange: theme('colors.orange.100');
+  --rte-mark-yellow: theme('colors.yellow.100');
+  --rte-mark-green: theme('colors.green.100');
+  --rte-mark-blue: theme('colors.blue.100');
+  --rte-mark-purple: theme('colors.purple.100');
+  --rte-mark-pink: theme('colors.pink.100');
+  --rte-mark-gray: theme('colors.gray.200');
+}
+
+.rte-color-red { color: var(--rte-text-red); }
+.rte-color-orange { color: var(--rte-text-orange); }
+.rte-color-yellow { color: var(--rte-text-yellow); }
+.rte-color-green { color: var(--rte-text-green); }
+.rte-color-blue { color: var(--rte-text-blue); }
+.rte-color-purple { color: var(--rte-text-purple); }
+.rte-color-pink { color: var(--rte-text-pink); }
+.rte-color-gray { color: var(--rte-text-gray); }
+
+mark.rte-highlight {
+  padding: 0 0.1em;
+  border-radius: 2px;
+  color: inherit;
+}
+
+.rte-highlight-red { background-color: var(--rte-mark-red); }
+.rte-highlight-orange { background-color: var(--rte-mark-orange); }
+.rte-highlight-yellow { background-color: var(--rte-mark-yellow); }
+.rte-highlight-green { background-color: var(--rte-mark-green); }
+.rte-highlight-blue { background-color: var(--rte-mark-blue); }
+.rte-highlight-purple { background-color: var(--rte-mark-purple); }
+.rte-highlight-pink { background-color: var(--rte-mark-pink); }
+.rte-highlight-gray { background-color: var(--rte-mark-gray); }
+
+/* 吹き出しの「色」ボタンと、押すと開くパレット（リンクの入力欄と同じ置き方）。 */
+.rte-color-control {
+  position: relative;
+}
+
+.rte-color-glyph {
+  font-weight: 700;
+  padding: 0 0.15em;
+  border-radius: 2px;
+}
+
+.rte-color-palette {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
   background: var(--color-surface-1);
   border: 1px solid var(--color-surface-3);
   border-radius: 8px;
@@ -720,4 +787,65 @@
   .rte-content.rte-with-handle .rte-block-handle {
     left: 0;
   }
+.rte-color-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rte-color-row__label {
+  width: 4.5em;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.rte-color-swatch {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgb(0 0 0 / 15%);
+}
+
+.rte-color-swatch[aria-pressed='true'],
+.rte-color-none[aria-pressed='true'] {
+  outline: 2px solid theme('colors.brand.600');
+  outline-offset: 2px;
+}
+
+.rte-color-swatch:focus-visible,
+.rte-color-none:focus-visible {
+  outline: 2px solid theme('colors.brand.600');
+  outline-offset: 2px;
+}
+
+.rte-swatch-text-red { background-color: var(--rte-text-red); }
+.rte-swatch-text-orange { background-color: var(--rte-text-orange); }
+.rte-swatch-text-yellow { background-color: var(--rte-text-yellow); }
+.rte-swatch-text-green { background-color: var(--rte-text-green); }
+.rte-swatch-text-blue { background-color: var(--rte-text-blue); }
+.rte-swatch-text-purple { background-color: var(--rte-text-purple); }
+.rte-swatch-text-pink { background-color: var(--rte-text-pink); }
+.rte-swatch-text-gray { background-color: var(--rte-text-gray); }
+.rte-swatch-mark-red { background-color: var(--rte-mark-red); }
+.rte-swatch-mark-orange { background-color: var(--rte-mark-orange); }
+.rte-swatch-mark-yellow { background-color: var(--rte-mark-yellow); }
+.rte-swatch-mark-green { background-color: var(--rte-mark-green); }
+.rte-swatch-mark-blue { background-color: var(--rte-mark-blue); }
+.rte-swatch-mark-purple { background-color: var(--rte-mark-purple); }
+.rte-swatch-mark-pink { background-color: var(--rte-mark-pink); }
+.rte-swatch-mark-gray { background-color: var(--rte-mark-gray); }
+
+.rte-color-none {
+  height: 1.5rem;
+  padding: 0 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
+.rte-color-none:hover {
+  background: var(--color-surface-2);
 }

@@ -1,6 +1,7 @@
 import { type Editor, useEditorState } from '@tiptap/react';
 import { getEditorCommands } from './editorCommands';
 import LinkFormatControl from './LinkFormatControl';
+import ColorFormatControl from './ColorFormatControl';
 import MenuButton from './MenuButton';
 import CommentFormatControl from './CommentFormatControl';
 import type { CommentAnchor } from './commentAnchor';
@@ -66,9 +67,10 @@ export default function FormatMenuBar({
             />
           ))}
           {/*
-            リンクだけは URL の入力を伴うため記述子（EDITOR_COMMANDS）では表せない。
-            マーク操作の並びの末尾に、入力欄を持つ専用コントロールとして置く。
+            色（文字色・蛍光ペン）とリンクは「値を選ぶ・入力する」操作なので記述子（EDITOR_COMMANDS）
+            では表せない。マーク操作の並びの末尾に、専用のコントロールとして置く（色 → リンクの順）。
           */}
+          <ColorFormatControl editor={editor} />
           <LinkFormatControl editor={editor} />
         </>
       )}

@@ -24,6 +24,22 @@ describe('extractPlainText', () => {
     expect(extractPlainText(doc)).toBe('[変更あり]\nok');
   });
 
+  it('文字色・蛍光ペンは名前を添えて出す（色だけ差し替えられても差分に現れる）', () => {
+    const doc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: '赤い', marks: [{ type: 'textStyle', attrs: { color: 'red' } }] },
+            { type: 'text', text: '強調', marks: [{ type: 'highlight', attrs: { color: 'yellow' } }] },
+          ],
+        },
+      ],
+    };
+    expect(extractPlainText(doc)).toBe('赤い [色: red]強調 [蛍光ペン: yellow]');
+  });
+
   it('テキストを持たないブロック（type だけ）は空行になる', () => {
     const doc = { type: 'doc', content: [{ type: 'horizontalRule' }] };
     expect(extractPlainText(doc)).toBe('');
