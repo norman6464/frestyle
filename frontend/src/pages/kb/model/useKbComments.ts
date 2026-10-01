@@ -2,8 +2,7 @@ import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryShownState } from '@/shared/api/queryState';
 import { reflectWrite } from '@/shared/api/queryCache';
-import { KbRepository, kbCommentThreadsQuery, type KbCommentThread } from '@/entities/kb';
-import type { CommentAnchor } from '@/shared/ui/RichTextEditor';
+import { KbRepository, kbCommentThreadsQuery, type CommentAnchor, type KbCommentThread } from '@/entities/kb';
 
 export interface KbCommentsState {
   threads: KbCommentThread[];

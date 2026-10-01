@@ -1,5 +1,5 @@
 import { FsIcon, type FsIconName } from '@/shared/ui';
-import { SAVE_STATUS_LABEL, type SaveStatus } from '@/shared/ui/RichTextEditor';
+import { SAVE_STATUS_LABEL, type SaveStatus } from '@/shared/lib/saveStatus';
 
 const VIEW: Record<Exclude<SaveStatus, 'idle'>, { icon: FsIconName; className: string }> = {
   saving: { icon: 'clock', className: 'text-[var(--color-text-muted)]' },

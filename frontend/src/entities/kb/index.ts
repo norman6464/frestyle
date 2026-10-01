@@ -56,4 +56,5 @@ export type {
   KbPageVersionDetail,
   KbPageTemplate,
   KbPageSuggestion,
+  CommentAnchor,
 } from './model/types';

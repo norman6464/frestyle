@@ -127,13 +127,30 @@ export interface KbPageTree {
 /**
  * ページのメタ情報と本文（ProseMirror の doc JSON）の組。
  *
- * doc の中身は tiptap のスキーマそのもの。型は shared/ui/RichTextEditor の RichDocContent と
- * 同じものを指すが、entities から shared/ui の部品型に依存させたくないので unknown で受け、
- * 描画する画面側で検証する（isRichDoc）。
+ * doc の中身は tiptap のスキーマそのもの。型は shared/lib/richDoc の RichDocContent と
+ * 同じものを指すが、API の応答は unknown で受け、描画する画面側で検証する（isRichDoc）。
  */
 export interface KbPageDoc {
   page: KbPage;
   doc: unknown;
+}
+
+/**
+ * CommentAnchor は、コメントが本文のどこを指しているかの写し（錨）。
+ *
+ * 位置の計算は本文エディタ（pages/kb）が行い、ここは API と画面が受け渡す形だけを決める。
+ * ブロックの id はエディタが各ブロックに振る安定した id（保存のたびに同じ id を送り続ける
+ * 限り、サーバー側の行が保たれる）。
+ */
+export interface CommentAnchor {
+  /** 錨を張ったブロックの安定 id（attrs.id）。 */
+  blockId: string;
+  /** ブロックの内容開始位置からの相対オフセット（開始側）。 */
+  anchorFrom: number;
+  /** ブロックの内容開始位置からの相対オフセット（終了側）。 */
+  anchorTo: number;
+  /** 選択していた文字列（前後の空白を trim 済み）。人が読める手がかり。 */
+  quote: string;
 }
 
 /**

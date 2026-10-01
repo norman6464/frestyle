@@ -3,13 +3,8 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useKbFrameLocation, useKbFrameSpace } from '@/widgets/kb-frame';
 import { KbSaveAsTemplateButton, KbTemplatePickerModal, useKbPageTemplates } from '@/features/kb-page-templates';
-import {
-  emptyRichDoc,
-  isRichDoc,
-  type EditorCommand,
-  type CommentAnchor,
-  type CommentBadgeCounts,
-} from '@/shared/ui/RichTextEditor';
+import { emptyRichDoc, isRichDoc } from '@/shared/lib/richDoc';
+import type { CommentBadgeCounts, EditorCommand } from './editor';
 import { FsIcon, fsIcon, Loading, EmptyState, ConfirmModal } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
@@ -26,6 +21,7 @@ import {
   KbRepository,
   subscribeKbTreeEvents,
   type KbIcon,
+  type CommentAnchor,
 } from '@/entities/kb';
 import KbPageHeading from './KbPageHeading';
 import KbPageEditor from './KbPageEditor';

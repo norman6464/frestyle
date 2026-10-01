@@ -3,15 +3,9 @@ import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/r
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import Link from '@tiptap/extension-link';
-import { FormatIcon, type FormatIconName } from '@/shared/ui';
-import {
-  emptyRichDoc,
-  isAllowedLinkHref,
-  isRichDoc,
-  LinkUrlForm,
-  sanitizeDocLinks,
-  type RichDocContent,
-} from '@/shared/ui/RichTextEditor';
+import { FormatIcon, LinkUrlForm, type FormatIconName } from '@/shared/ui';
+import { isAllowedLinkHref, sanitizeDocLinks } from '@/shared/lib/linkSafety';
+import { emptyRichDoc, isRichDoc, type RichDocContent } from '@/shared/lib/richDoc';
 
 export interface TicketDescriptionEditorProps {
   /** 表示・編集するチケット本文（tiptap の doc JSON）。 */
@@ -29,7 +23,7 @@ export interface TicketDescriptionEditorProps {
 /**
  * TicketDescriptionEditor はチケット本文専用のエディタ。
  *
- * **なぜナレッジ用（shared/ui/RichTextEditor）と分けたか**
+ * **なぜナレッジ用（pages/kb/ui/editor）と分けたか**
  *
  * 1. 保存の仕方が逆。ナレッジは書きながら勝手に保存されるのが正しく、チケットは「保存」を
  *    押すまで確定しないのが正しい。1 つの部品に両方を入れると、どちらの画面でも

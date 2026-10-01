@@ -1,4 +1,4 @@
-import { isAllowedLinkHref } from '@/shared/ui/RichTextEditor';
+import { isAllowedLinkHref } from '@/shared/lib/linkSafety';
 import type { TicketCommentBlock, TicketCommentMarks, TicketCommentSegment } from '../model/types';
 
 /**

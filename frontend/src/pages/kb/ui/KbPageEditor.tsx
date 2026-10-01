@@ -1,13 +1,7 @@
 import { memo } from 'react';
-import type { KbResolvedPage } from '@/entities/kb';
-import {
-  RichTextEditor,
-  emptyRichDoc,
-  isRichDoc,
-  type CommentAnchor,
-  type CommentBadgeCounts,
-  type EditorCommand,
-} from '@/shared/ui/RichTextEditor';
+import type { CommentAnchor, KbResolvedPage } from '@/entities/kb';
+import { emptyRichDoc, isRichDoc } from '@/shared/lib/richDoc';
+import { RichTextEditor, type CommentBadgeCounts, type EditorCommand } from './editor';
 import type { KbSelectedVersionState } from '../model/useKbPageVersions';
 
 export interface KbPageEditorProps {
