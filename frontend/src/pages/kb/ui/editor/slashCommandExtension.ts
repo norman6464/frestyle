@@ -2,7 +2,7 @@ import { Extension } from '@tiptap/react';
 import { ReactRenderer } from '@tiptap/react';
 import Suggestion, { type SuggestionProps, type SuggestionKeyDownProps } from '@tiptap/suggestion';
 import type { EditorCommand } from './editorCommands';
-import { filterSlashItems } from './slashItems';
+import { availableSlashItems, filterSlashItems } from './slashItems';
 import SlashMenuList, { type SlashMenuListHandle, type SlashMenuListProps } from './SlashMenuList';
 
 export interface SlashCommandOptions {
@@ -44,7 +44,8 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         // 日本語ラベルでは照合しない（トリガは英単語のみ）ため、空白は区切りとして打ち切る。
         allowSpaces: false,
         pluginKey: undefined,
-        items: ({ query }) => filterSlashItems(allItems(), query),
+        // その場で実行できる候補（表の操作は表の中でだけ）に絞ってから、打った語で絞り込む。
+        items: ({ query }) => filterSlashItems(availableSlashItems(editor, allItems()), query),
         command: ({ editor: currentEditor, range, props: item }) => {
           // 入力中の "/query" を取り除いてから実行する（本文にトリガ文字列を残さない）。
           currentEditor.chain().focus().deleteRange(range).run();

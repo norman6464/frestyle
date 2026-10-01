@@ -10,7 +10,7 @@ import { LINK_MARK_NAME } from '@/shared/lib/linkSafety';
  * - insert: カーソル位置への挿入（水平線…）
  * - history: 取り消し/やり直し
  */
-export type EditorCommandGroup = 'mark' | 'turn' | 'insert' | 'history';
+export type EditorCommandGroup = 'mark' | 'turn' | 'insert' | 'history' | 'table';
 
 /**
  * EditorCommandIcon はコマンドを線のアイコンで出すときの指定。書式の記号（FormatIcon）か、
@@ -213,6 +213,92 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
     keywords: ['redo'],
     isEnabled: (editor) => editor.can().redo(),
     run: (editor) => focused(editor).redo().run(),
+  },
+  // --- 表の操作（カーソルが表の中にあるときだけ実行できる） ---
+  // 表の中にいなければ tiptap の can() が false を返すので、吹き出しは押せない状態になり、
+  // '/' メニューは候補から外す（availableSlashItems）。字面は「どこに何をするか」が
+  // 一目で分かる短い日本語＋矢印にし、読み上げ名（label）は文として書く。
+  {
+    id: 'addRowBefore',
+    label: '上に行を足す',
+    group: 'table',
+    glyph: '↑行',
+    keywords: ['row', 'rowabove', 'addrowbefore'],
+    isEnabled: (editor) => editor.can().addRowBefore(),
+    run: (editor) => focused(editor).addRowBefore().run(),
+  },
+  {
+    id: 'addRowAfter',
+    label: '下に行を足す',
+    group: 'table',
+    glyph: '↓行',
+    keywords: ['row', 'rowbelow', 'addrowafter'],
+    isEnabled: (editor) => editor.can().addRowAfter(),
+    run: (editor) => focused(editor).addRowAfter().run(),
+  },
+  {
+    id: 'addColumnBefore',
+    label: '左に列を足す',
+    group: 'table',
+    glyph: '←列',
+    keywords: ['column', 'col', 'columnleft', 'addcolumnbefore'],
+    isEnabled: (editor) => editor.can().addColumnBefore(),
+    run: (editor) => focused(editor).addColumnBefore().run(),
+  },
+  {
+    id: 'addColumnAfter',
+    label: '右に列を足す',
+    group: 'table',
+    glyph: '→列',
+    keywords: ['column', 'col', 'columnright', 'addcolumnafter'],
+    isEnabled: (editor) => editor.can().addColumnAfter(),
+    run: (editor) => focused(editor).addColumnAfter().run(),
+  },
+  {
+    id: 'deleteRow',
+    label: '行を消す',
+    group: 'table',
+    glyph: '−行',
+    keywords: ['deleterow', 'removerow'],
+    isEnabled: (editor) => editor.can().deleteRow(),
+    run: (editor) => focused(editor).deleteRow().run(),
+  },
+  {
+    id: 'deleteColumn',
+    label: '列を消す',
+    group: 'table',
+    glyph: '−列',
+    keywords: ['deletecolumn', 'removecolumn'],
+    isEnabled: (editor) => editor.can().deleteColumn(),
+    run: (editor) => focused(editor).deleteColumn().run(),
+  },
+  {
+    id: 'toggleHeaderRow',
+    label: '見出し行の切り替え',
+    group: 'table',
+    glyph: '見出し行',
+    keywords: ['header', 'headerrow', 'toggleheaderrow'],
+    isEnabled: (editor) => editor.can().toggleHeaderRow(),
+    run: (editor) => focused(editor).toggleHeaderRow().run(),
+  },
+  {
+    id: 'mergeOrSplit',
+    label: 'セルを結合／分割',
+    group: 'table',
+    glyph: '結合',
+    keywords: ['merge', 'split', 'mergecells', 'splitcell'],
+    // 複数のセルを選んでいれば結合、結合済みのセルなら分割。どちらでもなければ押せない。
+    isEnabled: (editor) => editor.can().mergeOrSplit(),
+    run: (editor) => focused(editor).mergeOrSplit().run(),
+  },
+  {
+    id: 'deleteTable',
+    label: '表を消す',
+    group: 'table',
+    glyph: '×表',
+    keywords: ['deletetable', 'removetable'],
+    isEnabled: (editor) => editor.can().deleteTable(),
+    run: (editor) => focused(editor).deleteTable().run(),
   },
 ];
 

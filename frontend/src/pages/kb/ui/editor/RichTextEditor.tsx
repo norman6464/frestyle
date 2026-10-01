@@ -9,6 +9,7 @@ import { sanitizeDocLinks } from '@/shared/lib/linkSafety';
 import { openClickedLink } from './linkClick';
 import { fillMissingBlockIdsInDoc } from './stableBlockId';
 import BubbleFormatMenu from './BubbleFormatMenu';
+import TableBubbleMenu from './TableBubbleMenu';
 import { SaveStatusIndicator } from '@/shared/ui';
 import type { SaveStatus } from '@/shared/lib/saveStatus';
 import { emptyRichDoc, type RichDocContent } from '@/shared/lib/richDoc';
@@ -414,6 +415,8 @@ export default function RichTextEditor({
       {(editable || canComment) && editor && (
         <BubbleFormatMenu editor={editor} editable={editable} onRequestComment={onRequestComment} />
       )}
+      {/* 表の操作はカーソルが表の中にあるときだけ、表の上端に浮かぶ（編集できるときだけ）。 */}
+      {editable && editor && <TableBubbleMenu editor={editor} />}
       {onImageUpload && (
         // '/image' から開く隠しファイル入力（DnD/貼り付けと同じ挿入経路へ流す）。
         <input
