@@ -10,7 +10,6 @@ import (
 	"github.com/norman6464/frestyle/backend/internal/domain"
 	"github.com/norman6464/frestyle/backend/internal/handler/middleware"
 	"github.com/norman6464/frestyle/backend/internal/usecase/profile"
-	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 )
 
 // ProfileHandler は GET / PUT /profile/:userId(or "me")、PUT /me/status、
@@ -21,7 +20,6 @@ type ProfileHandler struct {
 	update         *profile.UpdateProfileUseCase
 	updateStatus   *profile.UpdateStatusUseCase
 	listIdentities *profile.ListMyIdentitiesUseCase
-	users          repository.UserRepository
 }
 
 func NewProfileHandler(
@@ -29,9 +27,13 @@ func NewProfileHandler(
 	u *profile.UpdateProfileUseCase,
 	updateStatus *profile.UpdateStatusUseCase,
 	listIdentities *profile.ListMyIdentitiesUseCase,
-	users repository.UserRepository,
 ) *ProfileHandler {
-	return &ProfileHandler{get: g, update: u, updateStatus: updateStatus, listIdentities: listIdentities, users: users}
+	return &ProfileHandler{
+		get:            g,
+		update:         u,
+		updateStatus:   updateStatus,
+		listIdentities: listIdentities,
+	}
 }
 
 var (
@@ -68,7 +70,7 @@ func (h *ProfileHandler) Get(c *gin.Context) {
 		writeProfileError(c, err)
 		return
 	}
-	view, err := h.buildView(c, uid)
+	view, err := h.get.Execute(c.Request.Context(), uid)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -103,32 +105,23 @@ func (h *ProfileHandler) Update(c *gin.Context) {
 	if avatarURL == "" {
 		avatarURL = req.IconURL
 	}
-	if name != "" {
-		if err := h.users.UpdateName(c.Request.Context(), uid, name); err != nil {
-			// 1 行も更新できなかった（リクエスト中に user 行が消えた）。保存されていないのに
-			// 保存済みに見せないよう、0 件更新は成功扱いにしない。
-			if errors.Is(err, domain.ErrNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "not_found"})
-				return
-			}
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-	}
-	if _, err := h.update.Execute(c.Request.Context(), profile.UpdateProfileInput{
+
+	view, err := h.update.Execute(c.Request.Context(), profile.UpdateProfileInput{
 		UserID:     uid,
+		Name:       name,
 		Bio:        req.Bio,
 		AvatarURL:  avatarURL,
 		StatusText: req.Status,
-	}); err != nil {
+	})
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not_found"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	view, err := h.buildView(c, uid)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": "プロフィールを更新しました"})
-		return
-	}
+
 	c.JSON(http.StatusOK, view)
 }
 
@@ -162,9 +155,9 @@ func (h *ProfileHandler) UpdateStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	view, err := h.buildView(c, uid)
+	view, err := h.get.Execute(c.Request.Context(), uid)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": "ステータスを更新しました"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, view)
@@ -195,29 +188,6 @@ func (h *ProfileHandler) ListIdentities(c *gin.Context) {
 		out = append(out, profileIdentityResponse{Provider: id.Provider, Subject: id.Subject, CreatedAt: id.CreatedAt})
 	}
 	c.JSON(http.StatusOK, out)
-}
-
-// buildView は users.name と profiles を合成して ProfileView を返す（欠損時は空文字で埋める）。
-func (h *ProfileHandler) buildView(c *gin.Context, uid uint64) (*domain.ProfileView, error) {
-	p, err := h.get.Execute(c.Request.Context(), uid)
-	if err != nil {
-		return nil, err
-	}
-	view := &domain.ProfileView{UserID: uid}
-	if p != nil {
-		view.Bio = p.Bio
-		view.AvatarURL = p.AvatarURL
-		view.StatusText = p.StatusText
-		view.StatusEmoji = p.StatusEmoji
-		view.StatusExpiresAt = p.StatusExpiresAt
-		view.UpdatedAt = p.UpdatedAt
-	}
-	user, _ := h.users.FindByID(c.Request.Context(), uid)
-	if user != nil {
-		view.Name = user.Name
-		view.Email = user.Email
-	}
-	return view, nil
 }
 
 func writeProfileError(c *gin.Context, err error) {
