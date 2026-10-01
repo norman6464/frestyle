@@ -1,14 +1,26 @@
+import type { Editor } from '@tiptap/react';
 import { getEditorCommands, type EditorCommand } from './editorCommands';
 
 /**
  * buildSlashItems は '/' メニューに出すコマンド一覧を組み立てる。
  *
- * ベースはコマンドレジストリのブロック変換（turn）と挿入（insert）。マーク（太字等）は
- * 選択済みテキストに掛けるものなのでバブルメニューに任せ、'/' には出さない。
+ * ベースはコマンドレジストリのブロック変換（turn）・挿入（insert）・表の操作（table）。
+ * マーク（太字等）は選択済みテキストに掛けるものなのでバブルメニューに任せ、'/' には出さない。
+ * 表の操作は、表の吹き出しをマウスで押せない人がキーボードだけで届くように '/' にも載せる
+ * （表の外では availableSlashItems が外す）。
  * extra には利用側だけが知る操作（例: 画像アップロード）を差し込める。
  */
 export function buildSlashItems(extra: EditorCommand[] = []): EditorCommand[] {
-  return [...getEditorCommands('turn', 'insert'), ...extra];
+  return [...getEditorCommands('turn', 'insert', 'table'), ...extra];
+}
+
+/**
+ * availableSlashItems は、いまのカーソル位置で実行できるコマンドだけに絞る。
+ * isEnabled を持たないコマンド（見出し・リスト・挿入）は常に出す。表の操作のように
+ * 場所に依るものは、押せない候補を並べて「選んだのに何も起きない」を起こさないために外す。
+ */
+export function availableSlashItems(editor: Editor, items: EditorCommand[]): EditorCommand[] {
+  return items.filter((item) => item.isEnabled?.(editor) ?? true);
 }
 
 /**

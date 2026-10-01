@@ -1,7 +1,7 @@
 import { type Editor, useEditorState } from '@tiptap/react';
-import { getEditorCommands, type EditorCommand } from './editorCommands';
+import { getEditorCommands } from './editorCommands';
 import LinkFormatControl from './LinkFormatControl';
-import EditorCommandGlyph from './EditorCommandGlyph';
+import MenuButton from './MenuButton';
 import CommentFormatControl from './CommentFormatControl';
 import type { CommentAnchor } from './commentAnchor';
 
@@ -20,42 +20,6 @@ const GLYPH_CLASS: Record<string, string> = {
   codeBlock: 'font-mono text-xs',
   blockquote: 'font-serif',
 };
-
-function MenuButton({
-  command,
-  editor,
-  active,
-  disabled,
-}: {
-  command: EditorCommand;
-  editor: Editor;
-  active: boolean;
-  disabled: boolean;
-}) {
-  // トグル系（isActive を持つ）だけ aria-pressed を付ける（非トグルに押下状態を持たせない）。
-  const togglable = command.isActive !== undefined;
-  return (
-    <button
-      type="button"
-      title={command.label}
-      aria-label={command.label}
-      aria-pressed={togglable ? active : undefined}
-      disabled={disabled}
-      // onMouseDown で preventDefault し、押下でエディタからフォーカス（＝選択）が外れないようにする。
-      onMouseDown={(mouseEvent) => mouseEvent.preventDefault()}
-      onClick={() => command.run(editor)}
-      className={[
-        'inline-flex h-8 min-w-8 items-center justify-center rounded px-2 text-sm font-medium',
-        'transition-colors disabled:cursor-not-allowed disabled:opacity-40',
-        active
-          ? 'bg-[var(--color-surface-3)] text-[var(--color-text-primary)]'
-          : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]',
-      ].join(' ')}
-    >
-      <EditorCommandGlyph command={command} glyphClassName={GLYPH_CLASS[command.id] ?? ''} />
-    </button>
-  );
-}
 
 /**
  * FormatMenuBar は書式コマンドのボタン列（presentational）。
@@ -98,6 +62,7 @@ export default function FormatMenuBar({
               editor={editor}
               active={states[index].active}
               disabled={!states[index].enabled}
+              glyphClassName={GLYPH_CLASS[command.id] ?? ''}
             />
           ))}
           {/*
