@@ -352,23 +352,6 @@ var kbCodeBlockLanguages = map[string]bool{
 	"scss": true, "shell": true, "lua": true, "perl": true, "r": true,
 }
 
-// kbContainerBlockTypes は子がブロック行になる「容器ノード」。それ以外の既知ノードは
-// 「葉ノード」で、content（text ノードとマークの配列）を行にせず inline に丸ごと持つ。
-// 粒度の境界はスキーマ設計（blocks.inline のコメント）で決めたもの: 文字単位で行を作ると
-// 1 段落の編集が大量の行更新になるため、行はブロックで止める。
-var kbContainerBlockTypes = map[domain.BlockType]bool{
-	domain.BlockTypeBlockquote:  true,
-	domain.BlockTypeBulletList:  true,
-	domain.BlockTypeOrderedList: true,
-	domain.BlockTypeListItem:    true,
-	domain.BlockTypeTaskList:    true,
-	domain.BlockTypeTaskItem:    true,
-	domain.BlockTypeTable:       true,
-	domain.BlockTypeTableRow:    true,
-	domain.BlockTypeTableHeader: true,
-	domain.BlockTypeTableCell:   true,
-}
-
 // kbDocNode はブロック行 1 つに対応する中間表現。分解（doc → 行）と組み立て（行 → doc）が
 // この木を共有することで、保存する snapshot が必ず「行から再生成できる形」になる。
 type kbDocNode struct {
@@ -489,7 +472,8 @@ func parseBlockNode(raw json.RawMessage, depth int, budget *kbDocBudget) (*kbDoc
 		node.Attrs = string(attrs)
 	}
 
-	if kbContainerBlockTypes[t] {
+	// 容器か葉かは domain の表（blockTypeSpecs）だけが知っている。ここで種類ごとに分岐しない。
+	if t.IsContainer() {
 		children, err := parseBlockNodes(rn.Content, depth+1, budget)
 		if err != nil {
 			return nil, err
@@ -1714,7 +1698,7 @@ type kbInlineTextNode struct {
 //
 // 木は parsePageDoc が返す kbDocNode（保存直前・正規化済み）を対象にし、flattenPageDoc を
 // 呼んだ**後**の木を渡すこと（呼び出し順は extractPageLinks と揃えてある）。容器ノード
-// （kbContainerBlockTypes）は子を辿るだけで自身は何も出さない。中身が空の葉ブロック
+// （domain.BlockType.IsContainer）は子を辿るだけで自身は何も出さない。中身が空の葉ブロック
 // （Inline が nil）はスキップする。
 func extractPageBodyText(nodes []*kbDocNode) string {
 	var buf strings.Builder

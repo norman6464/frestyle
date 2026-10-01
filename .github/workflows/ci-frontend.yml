@@ -5,12 +5,15 @@ on:
     branches: [main]
     paths:
       - 'frontend/**'
+      # backend と突き合わせる契約ファイル。frontend のテストが読むので、ここだけ変えても動かす
+      - 'contracts/**'
       - '.github/scripts/**'
       - '.github/workflows/ci-frontend.yml'
   push:
     branches: [main]
     paths:
       - 'frontend/**'
+      - 'contracts/**'
       - '.github/scripts/**'
       - '.github/workflows/ci-frontend.yml'
 

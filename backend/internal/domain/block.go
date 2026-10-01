@@ -4,8 +4,8 @@ import "time"
 
 // BlockType は blocks.type に入るノード名。値は ProseMirror（tiptap）のノード名そのもの。
 //
-// frontend の createSchemaExtensions()（shared/ui/RichTextEditor/schemaExtensions.ts）が
-// 組み立てるスキーマと 1 対 1 に対応する。片方を増やしたらもう片方も足すこと
+// frontend の本文エディタが組み立てるスキーマと 1 対 1 に対応する。両者は
+// contracts/kb-block-types.json を正本として、それぞれのテストで突き合わせる
 // （スキーマにないノード名を保存すると、読み出したドキュメントがエディタで開けなくなる）。
 type BlockType string
 
@@ -31,33 +31,66 @@ const (
 	BlockTypeHorizontalRule BlockType = "horizontalRule"
 )
 
-// ValidBlockTypes は保存を許すノード名の一覧（登録順は表示順とは無関係）。
-var ValidBlockTypes = []BlockType{
-	BlockTypeParagraph,
-	BlockTypeHeading,
-	BlockTypeCodeBlock,
-	BlockTypeBlockquote,
-	BlockTypeBulletList,
-	BlockTypeOrderedList,
-	BlockTypeListItem,
-	BlockTypeTaskList,
-	BlockTypeTaskItem,
-	BlockTypeTable,
-	BlockTypeTableRow,
-	BlockTypeTableHeader,
-	BlockTypeTableCell,
-	BlockTypeImage,
-	BlockTypeHorizontalRule,
+// blockTypeSpec は種類 1 つの定義。Container は「子がブロック行になる容器」かどうか。
+// 葉（Container=false）は content（text ノードとマークの配列）を行にせず inline に丸ごと持つ。
+// 粒度の境界はスキーマ設計（Block.Inline のコメント）で決めたもの: 文字単位で行を作ると
+// 1 段落の編集が大量の行更新になるため、行はブロックで止める。
+type blockTypeSpec struct {
+	Type      BlockType
+	Container bool
 }
+
+// blockTypeSpecs は保存を許す種類と、容器かどうかの 1 表（登録順は表示順とは無関係）。
+//
+// 種類を足すときは、ここと contracts/kb-block-types.json の両方を直す（突き合わせの
+// テストが block_contract_test.go にある）。容器かどうかは、この表の外では判定しない。
+// 容器を葉として登録してしまうと、保存は通るのに中のブロックが丸ごと 1 行の inline に
+// 入り、中の段落へのコメント・検索・被リンクが黙って壊れる。
+var blockTypeSpecs = []blockTypeSpec{
+	{BlockTypeParagraph, false},
+	{BlockTypeHeading, false},
+	{BlockTypeCodeBlock, false},
+	{BlockTypeBlockquote, true},
+	{BlockTypeBulletList, true},
+	{BlockTypeOrderedList, true},
+	{BlockTypeListItem, true},
+	{BlockTypeTaskList, true},
+	{BlockTypeTaskItem, true},
+	{BlockTypeTable, true},
+	{BlockTypeTableRow, true},
+	{BlockTypeTableHeader, true},
+	{BlockTypeTableCell, true},
+	{BlockTypeImage, false},
+	{BlockTypeHorizontalRule, false},
+}
+
+// ValidBlockTypes は保存を許すノード名の一覧。blockTypeSpecs から導く。
+var ValidBlockTypes = func() []BlockType {
+	types := make([]BlockType, 0, len(blockTypeSpecs))
+	for _, s := range blockTypeSpecs {
+		types = append(types, s.Type)
+	}
+	return types
+}()
+
+// blockTypeContainer は種類 → 容器かどうか。blockTypeSpecs から導く（Valid と IsContainer が引く）。
+var blockTypeContainer = func() map[BlockType]bool {
+	m := make(map[BlockType]bool, len(blockTypeSpecs))
+	for _, s := range blockTypeSpecs {
+		m[s.Type] = s.Container
+	}
+	return m
+}()
 
 // Valid は既知のノード名かを返す（保存前の検証に使う）。
 func (t BlockType) Valid() bool {
-	for _, v := range ValidBlockTypes {
-		if v == t {
-			return true
-		}
-	}
-	return false
+	_, ok := blockTypeContainer[t]
+	return ok
+}
+
+// IsContainer は子がブロック行になる容器かを返す。未知の種類は容器ではない（Valid で先に弾く）。
+func (t BlockType) IsContainer() bool {
+	return blockTypeContainer[t]
 }
 
 // Block はページ本文を構成する 1 ブロック（段落・見出し・リスト項目・表のセル …）。
