@@ -8,6 +8,7 @@ import { ReactNodeViewRenderer, textblockTypeInputRule } from '@tiptap/react';
 import type { EditorCommand } from './editorCommands';
 import CodeBlockView from './CodeBlockView';
 import ImageView from './ImageView';
+import { BlockOperations } from './blockOperations';
 import { ListNormalization } from './listNormalization';
 import { MarkdownShortcuts } from './markdownShortcuts';
 import { createSchemaExtensions } from './schemaExtensions';
@@ -126,6 +127,8 @@ export function createEditorExtensions(
   extensions.push(
     // 隣接する同種リストを結合し、番号リストの番号リセットを防ぐ。
     ListNormalization,
+    // いちばん外のブロック単位の上下移動・複製・削除（取っ手のメニュー・'/'・Alt+↑↓）。
+    BlockOperations,
     // IME（日本語入力）確定でも効く ＃ 見出し・``` コードブロック変換。
     MarkdownShortcuts,
     Placeholder.configure({ placeholder }),

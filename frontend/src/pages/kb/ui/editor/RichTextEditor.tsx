@@ -10,6 +10,7 @@ import { openClickedLink } from './linkClick';
 import { fillMissingBlockIdsInDoc } from './stableBlockId';
 import BubbleFormatMenu from './BubbleFormatMenu';
 import TableBubbleMenu from './TableBubbleMenu';
+import BlockHandle from './BlockHandle';
 import { SaveStatusIndicator } from '@/shared/ui';
 import type { SaveStatus } from '@/shared/lib/saveStatus';
 import { emptyRichDoc, type RichDocContent } from '@/shared/lib/richDoc';
@@ -206,6 +207,8 @@ export default function RichTextEditor({
   const editorRef = useRef<Editor | null>(null);
   // '/image' から開くファイル選択（キーボード/クリックでも画像を挿入できる経路）。
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 本文の器。ブロックの取っ手（BlockHandle）がこの中で位置を決める。
+  const contentRef = useRef<HTMLDivElement>(null);
 
   // onCommentBadgeClick も extension（生成時に固定）から呼ぶので ref 越しに最新を参照する
   // （onImageUploadRef と同じ理由）。
@@ -409,8 +412,10 @@ export default function RichTextEditor({
         }
       }}
     >
-      <div className="rte-content prose max-w-none">
+      <div ref={contentRef} className={`rte-content prose max-w-none${editable ? ' rte-with-handle' : ''}`}>
         <EditorContent editor={editor} />
+        {/* ブロックの取っ手。本文の左の余白に、乗せたブロックの高さで出る（編集できるときだけ）。 */}
+        {editable && editor && <BlockHandle editor={editor} containerRef={contentRef} />}
       </div>
       {(editable || canComment) && editor && (
         <BubbleFormatMenu editor={editor} editable={editable} onRequestComment={onRequestComment} />

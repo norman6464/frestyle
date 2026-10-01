@@ -4,14 +4,14 @@ import { getEditorCommands, type EditorCommand } from './editorCommands';
 /**
  * buildSlashItems は '/' メニューに出すコマンド一覧を組み立てる。
  *
- * ベースはコマンドレジストリのブロック変換（turn）・挿入（insert）・表の操作（table）。
- * マーク（太字等）は選択済みテキストに掛けるものなのでバブルメニューに任せ、'/' には出さない。
- * 表の操作は、表の吹き出しをマウスで押せない人がキーボードだけで届くように '/' にも載せる
- * （表の外では availableSlashItems が外す）。
+ * ベースはコマンドレジストリのブロック変換（turn）・挿入（insert）・表の操作（table）・
+ * ブロックの操作（block）。マーク（太字等）は選択済みテキストに掛けるものなのでバブルメニューに
+ * 任せ、'/' には出さない。表の操作とブロックの操作は、吹き出しや取っ手をマウスで押せない人が
+ * キーボードだけで届くように '/' にも載せる（その場で実行できないものは availableSlashItems が外す）。
  * extra には利用側だけが知る操作（例: 画像アップロード）を差し込める。
  */
 export function buildSlashItems(extra: EditorCommand[] = []): EditorCommand[] {
-  return [...getEditorCommands('turn', 'insert', 'table'), ...extra];
+  return [...getEditorCommands('turn', 'insert', 'table', 'block'), ...extra];
 }
 
 /**
