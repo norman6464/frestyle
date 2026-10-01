@@ -1,6 +1,7 @@
 package kb
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -489,9 +490,11 @@ func parseBlockNode(raw json.RawMessage, depth int, budget *kbDocBudget) (*kbDoc
 		if err := json.Unmarshal(rn.Content, &items); err != nil {
 			return nil, fmt.Errorf("%w: content が配列ではありません: %w", ErrPageDocInvalid, err)
 		}
-		if err := validateInlineNodes(items, depth+1, budget); err != nil {
+		normalized, err := normalizeInlineNodes(items, depth+1, budget)
+		if err != nil {
 			return nil, err
 		}
+		items = normalized
 		if len(items) > 0 {
 			compact, err := json.Marshal(items)
 			if err != nil {
@@ -542,20 +545,29 @@ func normalizeBlockAttrs(t domain.BlockType, m map[string]json.RawMessage) error
 	return nil
 }
 
-// validateInlineNodes は葉ノードの content（インライン列）を検査する。見るのは「要素が
-// {"type": 文字列, …} の object か」だけ。null や数値を混ぜたまま保存できると、描画側が
-// .type を読んだ瞬間に落ちる（保存者ではなく、そのページを開いた全員が落ちる）。marks も
-// 同じ理由で見る。入れ子の content には段数とノード数の上限を引き継ぐ。
-func validateInlineNodes(items []json.RawMessage, depth int, budget *kbDocBudget) error {
+// normalizeInlineNodes は葉ノードの content（インライン列）を検査し、必要なら直した列を返す。
+//
+// 見るのは 2 つ。
+//  1. 形: 要素が {"type": 文字列, …} の object か（marks も同じ）。null や数値を混ぜたまま
+//     保存できると、描画側が .type を読んだ瞬間に落ちる（保存者ではなく、そのページを開いた
+//     全員が落ちる）。形が違えばエラー
+//  2. 値: 文字色・蛍光ペン（domain.ColoredInlineMarkTypes）の color が許した名前か。通らなければ
+//     そのマークだけを剥がし、文字とほかのマークは残す（コードブロックの言語と同じで、エラーには
+//     しない）。生の色コードや CSS の値を通すと、書いた人の選んだ値がそのまま全員の画面に流れる
+//
+// 剥がすものが無い要素は元のバイト列をそのまま返す（キーの並びまで保ち、直す必要の無い本文を
+// 組み替えて保存のたびに差分を出さない）。入れ子の content には段数とノード数の上限を引き継ぐ。
+func normalizeInlineNodes(items []json.RawMessage, depth int, budget *kbDocBudget) ([]json.RawMessage, error) {
 	if len(items) == 0 {
-		return nil
+		return items, nil
 	}
 	if depth > kbDocMaxDepth {
-		return fmt.Errorf("%w: 入れ子が深すぎます（上限 %d 段）", ErrPageDocInvalid, kbDocMaxDepth)
+		return nil, fmt.Errorf("%w: 入れ子が深すぎます（上限 %d 段）", ErrPageDocInvalid, kbDocMaxDepth)
 	}
+	out := make([]json.RawMessage, 0, len(items))
 	for _, item := range items {
 		if err := budget.take(); err != nil {
-			return err
+			return nil, err
 		}
 		var n struct {
 			Type    string            `json:"type"`
@@ -563,32 +575,117 @@ func validateInlineNodes(items []json.RawMessage, depth int, budget *kbDocBudget
 			Content []json.RawMessage `json:"content"`
 		}
 		if err := json.Unmarshal(item, &n); err != nil {
-			return fmt.Errorf("%w: content の要素が object ではありません: %w", ErrPageDocInvalid, err)
+			return nil, fmt.Errorf("%w: content の要素が object ではありません: %w", ErrPageDocInvalid, err)
 		}
 		if n.Type == "" {
-			return fmt.Errorf("%w: content の要素に type がありません", ErrPageDocInvalid)
+			return nil, fmt.Errorf("%w: content の要素に type がありません", ErrPageDocInvalid)
 		}
+
+		changed := false
+		marks := make([]json.RawMessage, 0, len(n.Marks))
 		for _, mark := range n.Marks {
 			if err := budget.take(); err != nil {
-				return err
+				return nil, err
 			}
 			var mk struct {
-				Type string `json:"type"`
+				Type  string          `json:"type"`
+				Attrs json.RawMessage `json:"attrs"`
 			}
 			if err := json.Unmarshal(mark, &mk); err != nil {
-				return fmt.Errorf("%w: marks の要素が object ではありません: %w", ErrPageDocInvalid, err)
+				return nil, fmt.Errorf("%w: marks の要素が object ではありません: %w", ErrPageDocInvalid, err)
 			}
 			if mk.Type == "" {
-				return fmt.Errorf("%w: marks の要素に type がありません", ErrPageDocInvalid)
+				return nil, fmt.Errorf("%w: marks の要素に type がありません", ErrPageDocInvalid)
+			}
+			if domain.IsColoredInlineMark(mk.Type) && !inlineMarkColorAllowed(mk.Attrs) {
+				changed = true
+				continue
+			}
+			marks = append(marks, mark)
+		}
+
+		var content []json.RawMessage
+		if len(n.Content) > 0 {
+			normalized, err := normalizeInlineNodes(n.Content, depth+1, budget)
+			if err != nil {
+				return nil, err
+			}
+			content = normalized
+			if !sameRawMessages(normalized, n.Content) {
+				changed = true
 			}
 		}
-		if len(n.Content) > 0 {
-			if err := validateInlineNodes(n.Content, depth+1, budget); err != nil {
-				return err
-			}
+
+		if !changed {
+			out = append(out, item)
+			continue
+		}
+		rewritten, err := rewriteInlineNode(item, marks, content)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rewritten)
+	}
+	return out, nil
+}
+
+// inlineMarkColorAllowed は色付きのマークの attrs.color が許した名前かを返す。
+// attrs が無い・object でない・color が文字列でない、はすべて「通らない」。
+func inlineMarkColorAllowed(attrs json.RawMessage) bool {
+	if len(attrs) == 0 {
+		return false
+	}
+	var a struct {
+		Color any `json:"color"`
+	}
+	if err := json.Unmarshal(attrs, &a); err != nil {
+		return false
+	}
+	color, ok := a.Color.(string)
+	return ok && domain.IsInlineMarkColor(color)
+}
+
+func sameRawMessages(a, b []json.RawMessage) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !bytes.Equal(a[i], b[i]) {
+			return false
 		}
 	}
-	return nil
+	return true
+}
+
+// rewriteInlineNode はインラインノードの marks と content を差し替えた JSON を返す。
+// ほかのキー（text・attrs など）はそのまま写す。marks が空になったらキーごと外す
+// （tiptap はマークの無いノードに marks を書かないので、同じ形にそろえる）。
+func rewriteInlineNode(item json.RawMessage, marks, content []json.RawMessage) (json.RawMessage, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(item, &fields); err != nil {
+		return nil, fmt.Errorf("%w: content の要素が object ではありません: %w", ErrPageDocInvalid, err)
+	}
+	if len(marks) == 0 {
+		delete(fields, "marks")
+	} else {
+		encoded, err := json.Marshal(marks)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrPageDocInvalid, err)
+		}
+		fields["marks"] = encoded
+	}
+	if content != nil {
+		encoded, err := json.Marshal(content)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrPageDocInvalid, err)
+		}
+		fields["content"] = encoded
+	}
+	rewritten, err := json.Marshal(fields)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrPageDocInvalid, err)
+	}
+	return rewritten, nil
 }
 
 // flattenPageDoc はブロック木を保存用の行（文書順・親が先）へ平坦化する。
