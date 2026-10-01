@@ -10,7 +10,7 @@ import { LINK_MARK_NAME } from '@/shared/lib/linkSafety';
  * - insert: カーソル位置への挿入（水平線…）
  * - history: 取り消し/やり直し
  */
-export type EditorCommandGroup = 'mark' | 'turn' | 'insert' | 'history' | 'table';
+export type EditorCommandGroup = 'mark' | 'turn' | 'insert' | 'history' | 'table' | 'block';
 
 /**
  * EditorCommandIcon はコマンドを線のアイコンで出すときの指定。書式の記号（FormatIcon）か、
@@ -299,6 +299,45 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
     keywords: ['deletetable', 'removetable'],
     isEnabled: (editor) => editor.can().deleteTable(),
     run: (editor) => focused(editor).deleteTable().run(),
+  },
+  // --- ブロックの操作（いちばん外のブロック単位。取っ手のメニュー・'/'・Alt+↑↓ が同じ命令を呼ぶ） ---
+  {
+    id: 'moveBlockUp',
+    label: '上へ移動',
+    group: 'block',
+    glyph: '↑',
+    icon: { set: 'fs', name: 'arrow-up' },
+    keywords: ['moveup', 'up'],
+    isEnabled: (editor) => editor.can().moveBlockUp(),
+    run: (editor) => focused(editor).moveBlockUp().run(),
+  },
+  {
+    id: 'moveBlockDown',
+    label: '下へ移動',
+    group: 'block',
+    glyph: '↓',
+    icon: { set: 'fs', name: 'arrow-down' },
+    keywords: ['movedown', 'down'],
+    isEnabled: (editor) => editor.can().moveBlockDown(),
+    run: (editor) => focused(editor).moveBlockDown().run(),
+  },
+  {
+    id: 'duplicateBlock',
+    label: '複製',
+    group: 'block',
+    glyph: '複製',
+    keywords: ['duplicate', 'copy', 'clone'],
+    isEnabled: (editor) => editor.can().duplicateBlock(),
+    run: (editor) => focused(editor).duplicateBlock().run(),
+  },
+  {
+    id: 'deleteBlock',
+    label: 'ブロックを削除',
+    group: 'block',
+    glyph: '削除',
+    keywords: ['delete', 'remove', 'deleteblock'],
+    isEnabled: (editor) => editor.can().deleteBlock(),
+    run: (editor) => focused(editor).deleteBlock().run(),
   },
 ];
 

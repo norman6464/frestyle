@@ -628,3 +628,96 @@
 .rte-comment-badge:hover {
   filter: brightness(1.1);
 }
+
+/*
+ * ブロックの取っ手（BlockHandle）。本文の左の余白に、乗せたブロックの上端に合わせて出す。
+ * 器（.rte-content）を基準に絶対配置するので、器に position を持たせる。
+ */
+.rte-content {
+  position: relative;
+}
+
+.rte-block-handle {
+  position: absolute;
+  left: -1.75rem;
+  display: flex;
+  align-items: flex-start;
+}
+
+.rte-block-handle__grip {
+  display: inline-flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  cursor: grab;
+}
+
+.rte-block-handle__grip:hover,
+.rte-block-handle__grip[aria-expanded='true'] {
+  background: var(--color-surface-2);
+  color: var(--color-text-primary);
+}
+
+.rte-block-handle__grip:active {
+  cursor: grabbing;
+}
+
+.rte-block-handle__grip:focus-visible {
+  outline: 2px solid theme('colors.brand.600');
+  outline-offset: 1px;
+}
+
+/* 取っ手を押したときの小さなメニュー。書式の吹き出し（.rte-bubble）と同じ面の作り。 */
+.rte-block-menu {
+  position: absolute;
+  left: 0;
+  top: 1.75rem;
+  z-index: 50;
+  min-width: 11rem;
+  padding: 4px;
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-surface-3);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+}
+
+.rte-block-menu [role='menuitem'] {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--color-text-primary);
+  text-align: left;
+}
+
+.rte-block-menu [role='menuitem']:hover:not(:disabled),
+.rte-block-menu [role='menuitem']:focus-visible {
+  background: var(--color-surface-2);
+  outline: none;
+}
+
+.rte-block-menu [role='menuitem']:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/*
+ * 狭い画面には左の余白が無いので、編集中だけ本文を取っ手のぶん右へ寄せる
+ * （取っ手が文字に被らないように）。閲覧中は取っ手が無いので寄せない。
+ */
+@media (max-width: 640px) {
+  .rte-content.rte-with-handle {
+    padding-left: 1.75rem;
+  }
+
+  .rte-content.rte-with-handle .rte-block-handle {
+    left: 0;
+  }
+}
