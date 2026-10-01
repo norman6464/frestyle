@@ -85,15 +85,16 @@ const SLICE_PUBLIC_API_PATTERN = {
 };
 
 /*
- * shared/ui も公開口（`@/shared/ui`）から取る。例外は、公開口に載せない理由がある 2 つの
- * 下位の公開口だけ: 中身が重い（tiptap 一式）RichTextEditor と、読み込むだけで書体の CSS を
- * 効かせる inkwell。
+ * shared/ui も公開口（`@/shared/ui`）から取る。例外は、公開口に載せない理由がある 1 つの
+ * 下位の公開口だけ: 読み込むだけで書体の CSS を効かせる inkwell。
+ * （ナレッジの本文エディタはかつてここの例外だったが、pages/kb/ui/editor へ移した。
+ * pages 同士は import できないので、バックログから読めないことは層の決まりで保証される。）
  */
 const SHARED_UI_PUBLIC_API_PATTERN = {
-  regex: '^@/shared/ui/(?!(?:RichTextEditor|inkwell)$).+',
+  regex: '^@/shared/ui/(?!inkwell$).+',
   message:
     'shared/ui は公開口（@/shared/ui）から取ってください。公開口に無い部品は shared/ui/index.ts に足します' +
-    '（例外は @/shared/ui/RichTextEditor と @/shared/ui/inkwell）。',
+    '（例外は @/shared/ui/inkwell）。',
 };
 
 const ENTITY_SAME_LAYER_PATTERN = {

@@ -9,7 +9,8 @@ import KbPage from '../KbPage';
 import { KbFrameContext } from '@/widgets/kb-frame';
 import { KbFrameLocationContext } from '@/widgets/kb-frame/model/kbFrameLocation';
 import { emitKbTreeEvent, type KbResolvedPage } from '@/entities/kb';
-import type { CommentAnchor, CommentBadgeCounts, EditorCommand } from '@/shared/ui/RichTextEditor';
+import type { CommentAnchor } from '@/entities/kb';
+import type { CommentBadgeCounts, EditorCommand } from '../editor';
 
 function blockIdConflictError(): AxiosError {
   return new AxiosError('Conflict', 'ERR_BAD_REQUEST', undefined, undefined, {
@@ -157,8 +158,8 @@ vi.mock('react-router-dom', async (importOriginal) => {
 
 // エディタは重い（tiptap 実体）ので、渡された props を捕まえる薄い偽物に差し替える。
 // /page の run は本物の createSubpage を通る（そこが配線の検査対象）。
-vi.mock('@/shared/ui/RichTextEditor', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/shared/ui/RichTextEditor')>();
+vi.mock('../editor', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../editor')>();
   return {
     ...actual,
     RichTextEditor: (props: {

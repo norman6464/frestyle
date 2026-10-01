@@ -136,10 +136,11 @@ export { Modal } from './Modal';
 
 ### 例外: barrel に載せないもの
 
-**重いモジュールを抱えるものは barrel から出さない。** `RichTextEditor` は中身が
-tiptap / ProseMirror（数百 KB）で、`index.ts` で re-export すると `@/shared/ui` を
-import した全ページがエディタ一式を巻き込み、コード分割が壊れる。
-こういうものは深いパス（`@/shared/ui/RichTextEditor`）で直接 import する。
+**重いモジュールを抱えるものは shared に置かない／barrel から出さない。** ナレッジの本文エディタ
+（tiptap / ProseMirror で数百 KB）は `pages/kb/ui/editor` にあり、shared には無い。`index.ts` で
+re-export すると `@/shared/ui` を import した全ページがそれを巻き込み、コード分割が壊れるため。
+barrel に載せない例外として残っているのは、読み込むだけで書体の CSS を効かせる `inkwell` で、
+深いパス（`@/shared/ui/inkwell`）で直接 import する。
 
 ## 判断に迷った実例
 

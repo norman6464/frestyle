@@ -1,5 +1,4 @@
-import type { KbCommentThread } from '@/entities/kb';
-import type { CommentAnchor } from '@/shared/ui/RichTextEditor';
+import type { CommentAnchor, KbCommentThread } from '@/entities/kb';
 import KbCommentComposer from './KbCommentComposer';
 import KbCommentThreadCard from './KbCommentThreadCard';
 import { EmptyNotice, ErrorNotice, SkeletonRows } from '@/shared/ui';

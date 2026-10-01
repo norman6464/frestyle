@@ -10,7 +10,7 @@ import {
   type TicketType,
   type UpdateTicketInput,
 } from '@/entities/ticket';
-import { emptyRichDoc, isRichDoc } from '@/shared/ui/RichTextEditor';
+import { emptyRichDoc, isRichDoc } from '@/shared/lib/richDoc';
 import TicketDescriptionEditor from './TicketDescriptionEditor';
 import { useTicketEditor } from '../model/useTicketEditor';
 import { useTicketFieldWrites } from '../model/useTicketFieldWrites';

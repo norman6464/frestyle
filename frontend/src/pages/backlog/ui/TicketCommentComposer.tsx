@@ -3,8 +3,9 @@ import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/r
 import StarterKit from '@tiptap/starter-kit';
 import { Placeholder } from '@tiptap/extensions';
 import Link from '@tiptap/extension-link';
-import { isAllowedLinkHref, LinkUrlForm } from '@/shared/ui/RichTextEditor';
-import { FormatIcon, type FormatIconName } from '@/shared/ui';
+import { isAllowedLinkHref } from '@/shared/lib/linkSafety';
+import { LinkUrlForm, FormatIcon, type FormatIconName } from '@/shared/ui';
+
 import type { WorkspaceMember } from '@/entities/workspace';
 import type { TicketCommentBlock } from '@/entities/ticket';
 import { CommentComposerEnter, Mention, setMentionMembers } from './mentionExtension';
@@ -39,7 +40,7 @@ const MENTION_SUGGESTION_COUNT = 4;
 
 /**
  * 発言の入力欄。'@' に続けて日本語で打つと、ワークスペースに属する人の候補が出る
- * （tiptap の Suggestion。shared/ui/RichTextEditor の '/' コマンドと同じ仕組み）。
+ * （tiptap の Suggestion。ナレッジの本文エディタ（pages/kb/ui/editor）の '/' コマンドと同じ仕組み）。
  * 選ぶと名指しは 1 個の不可分な単位になり、Backspace で丸ごと消える。
  *
  * エディタのスキーマは本文エディタ（RichTextEditor）とは別で、design.pen の書式バーに

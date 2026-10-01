@@ -2,7 +2,7 @@ import axios from 'axios';
 import apiClient from '@/shared/api/axios';
 import { toArray } from '@/shared/lib/toArray';
 import { KB_API } from '@/shared/config/apiRoutes';
-import type { CommentAnchor } from '@/shared/ui/RichTextEditor';
+import type { CommentAnchor } from '../model/types';
 import type {
   KbComment,
   KbCommentThread,

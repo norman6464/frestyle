@@ -55,15 +55,11 @@ export { default as ContentSection } from './ContentSection';
 export { default as Disclosure } from './Disclosure';
 export { default as Toast } from './Toast';
 export type { ToastType } from './Toast';
+export { default as SaveStatusIndicator } from './SaveStatusIndicator';
 
-/*
- * RichTextEditor は **意図的にこの barrel から出さない**。
- *
- * 中身は tiptap / ProseMirror（数百 KB）で、ここで re-export すると `@/shared/ui` を
- * import した全ページがエディタ一式を巻き込みコード分割が壊れる。利用側は深いパス
- * `@/shared/ui/RichTextEditor`（サブ Slice の Public API）から直接 import し、
- * 必要なら lazy import で遅延ロードすること。
- *
- * 軽量ヘルパ（emptyRichDoc / isRichDoc / 型 RichDocContent）や保存状態表示
- * （SaveStatusIndicator / 型 SaveStatus）も、同じ Slice にまとまっているため深いパスから取る。
- */
+// --- 本文エディタで共有する小さな部品 ---
+// リンクの URL 入力欄。ナレッジ（pages/kb）とバックログ（pages/backlog）の本文エディタが同じ欄を使う。
+// 本文エディタそのもの（tiptap 一式・数百 KB）は shared に置かない（pages/kb/ui/editor にあり、
+// バックログの本文エディタとは別物）。ここに載せるのは、置く面を選ばない軽い部品だけ。
+export { default as LinkUrlForm } from './LinkUrlForm';
+export type { LinkUrlFormProps } from './LinkUrlForm';

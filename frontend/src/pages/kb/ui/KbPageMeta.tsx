@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { KbEditorRef, KbLabel } from '@/entities/kb';
 import { formatHourMinute, formatMonthDay } from '@/shared/lib/formatters';
 import { FsIcon, Avatar, LabelChip } from '@/shared/ui';
-import { SAVE_STATUS_LABEL, type SaveStatus } from '@/shared/ui/RichTextEditor';
+import { SAVE_STATUS_LABEL, type SaveStatus } from '@/shared/lib/saveStatus';
 
 export type KbPageVisibility = 'public' | 'space' | 'private';
 

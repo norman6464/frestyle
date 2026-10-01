@@ -11,7 +11,7 @@ import {
   type KbResolvedPage,
 } from '@/entities/kb';
 import { getApiError } from '@/shared/lib/classifyApiError';
-import type { SaveStatus } from '@/shared/ui/RichTextEditor';
+import type { SaveStatus } from '@/shared/lib/saveStatus';
 
 export interface KbPageDocState {
   data: KbResolvedPage | null;

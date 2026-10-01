@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { extractPlainText, isRichDoc } from '@/shared/ui/RichTextEditor';
+import { isRichDoc } from '@/shared/lib/richDoc';
+import { extractPlainText } from '../lib/docPlainText';
 import { extractHeadings, type DocHeading } from '../lib/docOutline';
 
 /** 読了時間の見積りに使う速さ（600 字/分・端数切り上げ）。API は無く手元で計算する。 */

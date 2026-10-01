@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Ticket, TicketPriority, UpdateTicketInput } from '@/entities/ticket';
-import type { SaveStatus } from '@/shared/ui/RichTextEditor';
+import type { SaveStatus } from '@/shared/lib/saveStatus';
 import { classifyWriteFailure, type WriteOutcome } from '../lib/writeOutcome';
 
 interface Draft {
