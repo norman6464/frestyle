@@ -1,18 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { getSchema } from '@tiptap/core';
 import type { NodeType } from '@tiptap/pm/model';
+import { contractPath } from '@/test/contracts';
 import { createSchemaExtensions, isBlockRowNodeType } from '../schemaExtensions';
 
 /**
  * 契約ファイルはリポジトリ直下。backend（internal/domain/block_contract_test.go）も同じファイルを読み、
  * 保存を許す種類と容器かどうかの表と突き合わせる。
- *
- * 場所は vitest の実行ディレクトリ（frontend/。設定ファイルの置き場）からの相対で引く。
- * `import.meta.url` から辿る形は、jsdom 環境では file: 形式にならず使えない。
  */
-const CONTRACT_PATH = resolve(process.cwd(), '..', 'contracts', 'kb-block-types.json');
+const CONTRACT_PATH = contractPath('kb-block-types.json');
 
 interface Contract {
   blockTypes: { type: string; container: boolean }[];

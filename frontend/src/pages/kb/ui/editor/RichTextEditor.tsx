@@ -6,6 +6,7 @@ import type { EditorCommand } from './editorCommands';
 import { buildSlashItems } from './slashItems';
 import { acceptedImageFiles, insertUploadedImages } from './imageInsertion';
 import { sanitizeDocLinks } from '@/shared/lib/linkSafety';
+import { sanitizeDocColors } from './inlineColors';
 import { openClickedLink } from './linkClick';
 import { fillMissingBlockIdsInDoc } from './stableBlockId';
 import BubbleFormatMenu from './BubbleFormatMenu';
@@ -268,7 +269,7 @@ export default function RichTextEditor({
   // 元の value 自体は書き換えていないので保存し直しても失われない）。
   const filledValue = useMemo(() => {
     try {
-      return fillMissingBlockIdsInDoc(sanitizeDocLinks(value));
+      return fillMissingBlockIdsInDoc(sanitizeDocColors(sanitizeDocLinks(value)));
     } catch {
       return emptyRichDoc();
     }
@@ -346,9 +347,9 @@ export default function RichTextEditor({
       onCreateRef.current?.(currentEditor);
     },
     onUpdate: ({ editor: currentEditor }) => {
-      // 保存側のリンク洗浄。表示のときだけ無害化する作りだと、DB には危険な href が残ったままになり、
-      // 別の読み手（別のクライアント・API 直叩き）に対して無防備なままになる。外へ出す値を洗う。
-      const next = sanitizeDocLinks(currentEditor.getJSON()) as RichDocContent;
+      // 保存側のリンクと色の洗浄。表示のときだけ無害化する作りだと、DB には危険な href や生の色が
+      // 残ったままになり、別の読み手（別のクライアント・API 直叩き）に対して無防備なままになる。外へ出す値を洗う。
+      const next = sanitizeDocColors(sanitizeDocLinks(currentEditor.getJSON())) as RichDocContent;
       const nextStr = stableDocString(next);
       // 内容が現在値と同じ（マウント時の空振り or 外部同期のエコー）なら通知しない。
       if (nextStr === lastValueRef.current) return;

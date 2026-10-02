@@ -58,6 +58,11 @@ function collectText(node: unknown, depth: number): string {
     text = node.text;
     const href = linkHrefOf(node);
     if (href !== null) text += ` (${href})`;
+    // 文字色・蛍光ペンは名前を添える。色だけを差し替える提案も差分に現れるようにする。
+    const color = markColorOf(node, 'textStyle');
+    if (color !== null) text += ` [色: ${color}]`;
+    const highlight = markColorOf(node, 'highlight');
+    if (highlight !== null) text += ` [蛍光ペン: ${highlight}]`;
   } else if (type === 'image') {
     text = `[image: ${imageSrcOf(node)}]`;
   } else if (type === 'pageRef') {
@@ -79,6 +84,17 @@ function linkHrefOf(node: Record<string, unknown>): string | null {
     if (!isPlainObject(mark) || mark.type !== 'link') continue;
     const attrs = isPlainObject(mark.attrs) ? mark.attrs : null;
     if (attrs && typeof attrs.href === 'string') return attrs.href;
+  }
+  return null;
+}
+
+/** markColorOf は text ノードの marks から、種類 markType の color を拾う。無ければ null。 */
+function markColorOf(node: Record<string, unknown>, markType: string): string | null {
+  if (!Array.isArray(node.marks)) return null;
+  for (const mark of node.marks) {
+    if (!isPlainObject(mark) || mark.type !== markType) continue;
+    const attrs = isPlainObject(mark.attrs) ? mark.attrs : null;
+    return attrs && typeof attrs.color === 'string' ? attrs.color : '';
   }
   return null;
 }

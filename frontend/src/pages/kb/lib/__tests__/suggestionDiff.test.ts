@@ -24,6 +24,22 @@ describe('extractPlainText', () => {
     expect(extractPlainText(doc)).toBe('[変更あり]\nok');
   });
 
+  it('文字色・蛍光ペンは名前を添えて出す（色だけ差し替えられても差分に現れる）', () => {
+    const doc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: '赤い', marks: [{ type: 'textStyle', attrs: { color: 'red' } }] },
+            { type: 'text', text: '強調', marks: [{ type: 'highlight', attrs: { color: 'yellow' } }] },
+          ],
+        },
+      ],
+    };
+    expect(extractPlainText(doc)).toBe('赤い [色: red]強調 [蛍光ペン: yellow]');
+  });
+
   it('テキストを持たないブロック（type だけ）は空行になる', () => {
     const doc = { type: 'doc', content: [{ type: 'horizontalRule' }] };
     expect(extractPlainText(doc)).toBe('');
@@ -85,6 +101,18 @@ describe('extractPlainText', () => {
 });
 
 describe('computeSuggestionDiff', () => {
+  it('本文が同じで文字色だけ違う 2 つの本文は、色の差分として現れる', () => {
+    const withColor = (color: string) => ({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: '赤い', marks: [{ type: 'textStyle', attrs: { color } }] }] }],
+    });
+    const diff = computeSuggestionDiff(withColor('red'), withColor('blue'));
+    expect(diff).toEqual([
+      { type: 'removed', text: '赤い [色: red]' },
+      { type: 'added', text: '赤い [色: blue]' },
+    ]);
+  });
+
   it('baseDoc が無ければ追加行だけの差分になる', () => {
     const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '新規の本文' }] }] };
     const diff = computeSuggestionDiff(undefined, doc);

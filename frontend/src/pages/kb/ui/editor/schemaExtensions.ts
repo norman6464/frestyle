@@ -14,6 +14,7 @@ import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table
 import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 import { sanitizeCodeBlockLanguage } from './codeBlockLanguages';
+import { HighlightMark, TextColorMark } from './colorMarks';
 import { isAllowedLinkHref, isInternalPageLinkHref, sanitizeLinkHref } from '@/shared/lib/linkSafety';
 /**
  * withBlockId は「blocks テーブルの1行になるノード」に安定した id attribute を足す。
@@ -326,8 +327,11 @@ export function createSchemaExtensions(
       horizontalRule: false,
     }),
     CombinableCode,
-    // リンク。href の許可スキームを明示した SafeLink（エディタと教材変換器で同じ判定を使う）。
+    // リンク。href の許可スキームを明示した SafeLink。
     SafeLink,
+    // 文字色・蛍光ペン。値は色の名前だけ（colorMarks.ts）。
+    TextColorMark,
+    HighlightMark,
     // 見出しは 1〜3 のみ（エディタ UI・教材の章構造とも 3 段で揃える）。
     withBlockId(Heading).configure({ levels: [1, 2, 3] }),
     // 構文ハイライト付きコードブロック。ノード名は 'codeBlock' のまま既存 doc と互換。
