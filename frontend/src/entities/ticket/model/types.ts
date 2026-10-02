@@ -147,6 +147,18 @@ export interface Ticket {
 /** チケットの表示キー（例 FRESTYLE-12）。projectKey + number から組み立てる（lib/ticketKey.ts）。 */
 export type TicketKey = string;
 
+/**
+ * ナレッジ本文の `#` の候補 1 件（GET .../tickets/search）。本文の ticketRef の attrs と同じ形で、
+ * 画面は候補の値をそのまま参照の写しに入れる（鍵はサーバーが組み立て済み）。
+ */
+export interface TicketRefCandidate {
+  id: string;
+  key: TicketKey;
+  title: string;
+  statusName: string;
+  statusCategory: TicketStatusCategory;
+}
+
 export interface TicketStatusWire {
   id: string;
   workspaceId: string;

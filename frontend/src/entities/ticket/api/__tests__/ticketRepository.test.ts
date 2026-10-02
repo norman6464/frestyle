@@ -523,3 +523,25 @@ describe('TicketRepository.deleteTicketAttachment', () => {
     expect(mockDelete).toHaveBeenCalledWith('/api/v2/workspaces/acme/tickets/t-1/attachments/at-1');
   });
 });
+
+describe('searchTicketRefs', () => {
+  it('ワークスペース横断の検索の口へ q と limit を渡し、候補をそのまま返す', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        tickets: [
+          { id: 't-1', key: 'ENG-12', title: 'ログインが落ちる', statusName: '進行中', statusCategory: 'in_progress' },
+        ],
+      },
+    });
+    const got = await TicketRepository.searchTicketRefs('ws', 'ログイン', 8);
+    expect(mockGet).toHaveBeenCalledWith('/api/v2/workspaces/ws/tickets/search', { params: { q: 'ログイン', limit: '8' } });
+    expect(got).toEqual([
+      { id: 't-1', key: 'ENG-12', title: 'ログインが落ちる', statusName: '進行中', statusCategory: 'in_progress' },
+    ]);
+  });
+
+  it('tickets が無い応答は空配列', async () => {
+    mockGet.mockResolvedValue({ data: {} });
+    await expect(TicketRepository.searchTicketRefs('ws', 'x', 8)).resolves.toEqual([]);
+  });
+});

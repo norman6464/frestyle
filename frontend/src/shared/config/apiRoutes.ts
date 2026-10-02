@@ -464,6 +464,15 @@ export const TICKET_API = {
   /** GET — /api/v2/workspaces/:slug/tickets/by-key/:key（例 FRESTYLE-12） */
   ticketByKey: (workspaceSlug: string, key: string) =>
     `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/by-key/${encodeURIComponent(key)}`,
+  /**
+   * GET — /api/v2/workspaces/:slug/tickets/search?q=&limit=
+   *
+   * ナレッジ本文の `#` の候補。表示キー（例 FRESTYLE-12）の前方一致か題名で、ワークスペース横断
+   * （プロジェクトを取らない）に現役のチケットを探す。応答は本文の ticketRef の attrs と同じ形
+   * （id / key / title / statusName / statusCategory）。limit は 1〜20、既定 8。
+   */
+  searchTicketRefs: (workspaceSlug: string) =>
+    `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/search`,
   /** GET(取得) / PUT(全置換) — /api/v2/workspaces/:slug/tickets/:ticketId */
   ticket: (workspaceSlug: string, ticketId: string) =>
     `${API_V2}/workspaces/${encodeURIComponent(workspaceSlug)}/tickets/${encodeURIComponent(ticketId)}`,

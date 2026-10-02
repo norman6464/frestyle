@@ -43,7 +43,7 @@ export function openClickedLink(
 }
 
 /**
- * 内部ページリンクなら /kb/{id} のパスを返す。相対の /kb/… に加え、
+ * 内部リンク（ページ /kb/{id}・チケット /tickets/{id}）ならそのパスを返す。相対のパスに加え、
  * 共有 URL の貼り付けで入る「同一オリジンの絶対 URL」も同じ扱いにする
  * （毎回別タブが開くと、アプリ内の行き来なのに窓が増え続ける）。
  */
@@ -58,11 +58,22 @@ function isSelectionCollapsed(): boolean {
   return selection.isCollapsed;
 }
 
+/**
+ * チケット参照の札（/tickets/{id}）もアプリ内遷移。ID の字面は pageRef と同じ UUID に固定する
+ * （schemaExtensions の TicketRef が同じ検証をして href を組み立てる）。
+ */
+const INTERNAL_TICKET_LINK_PATTERN =
+  /^\/tickets\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function isInternalPath(path: string): boolean {
+  return INTERNAL_PAGE_LINK_PATTERN.test(path) || INTERNAL_TICKET_LINK_PATTERN.test(path);
+}
+
 export function internalPagePath(href: string): string | null {
-  if (INTERNAL_PAGE_LINK_PATTERN.test(href)) return href;
+  if (isInternalPath(href)) return href;
   try {
     const url = new URL(href, window.location.origin);
-    if (url.origin === window.location.origin && INTERNAL_PAGE_LINK_PATTERN.test(url.pathname)) {
+    if (url.origin === window.location.origin && isInternalPath(url.pathname)) {
       return url.pathname;
     }
   } catch {

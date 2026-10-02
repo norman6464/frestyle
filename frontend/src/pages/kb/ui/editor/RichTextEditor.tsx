@@ -8,6 +8,7 @@ import { acceptedImageFiles, insertUploadedImages } from './imageInsertion';
 import { sanitizeDocLinks } from '@/shared/lib/linkSafety';
 import { sanitizeDocColors } from './inlineColors';
 import type { SearchPagesForRef } from './pageRefSuggestion';
+import type { SearchTicketsForRef } from './ticketRefSuggestion';
 import { openClickedLink } from './linkClick';
 import { fillMissingBlockIdsInDoc } from './stableBlockId';
 import BubbleFormatMenu from './BubbleFormatMenu';
@@ -72,6 +73,11 @@ export interface RichTextEditorProps {
    * （pageRef）が入る。渡さなければ `[[` は素の文字のまま。差し替えは即座に効く（storage 経由）。
    */
   searchPages?: SearchPagesForRef;
+  /**
+   * `#` に続けて打った鍵か題名でチケットを探す口。渡したときだけ候補が出て、選ぶとチケット参照
+   * （ticketRef）が入る。渡さなければ `#` は素の文字のまま。差し替えは即座に効く（storage 経由）。
+   */
+  searchTickets?: SearchTicketsForRef;
   /**
    * 選択範囲からコメントを作りたいときに呼ばれる（バブルメニューの「コメント」ボタン）。
    * 渡さなければボタン自体を出さない（CommentFormatControl 側の約束）。
@@ -188,6 +194,7 @@ export default function RichTextEditor({
   extraSlashCommands,
   onNavigateToPage,
   searchPages,
+  searchTickets,
   onRequestComment,
   canComment = false,
   commentBadgeCounts,
@@ -401,6 +408,12 @@ export default function RichTextEditor({
     if (!editor || editor.isDestroyed) return;
     editor.storage.pageRefSuggestion.searchPages = searchPages ?? null;
   }, [editor, searchPages]);
+
+  // `#` の候補も同じ作法（口が差し替わっても拡張一式を作り直さない）。
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.storage.ticketRefSuggestion.searchTickets = searchTickets ?? null;
+  }, [editor, searchTickets]);
 
   // 「増えたときだけ」フォーカスを移す。マウント時の値では動かない — ページを
   // 開き直しただけで本文が奪ってしまわないため（サイドバーの openSignal と同じ形）。

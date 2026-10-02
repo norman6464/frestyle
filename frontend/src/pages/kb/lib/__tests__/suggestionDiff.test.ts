@@ -74,6 +74,14 @@ describe('extractPlainText', () => {
     expect(extractPlainText(doc)).toBe('[page: p-target]');
   });
 
+  it('ticketRefの参照先idは疑似テキストとして本文に埋め込まれる（写しの題名は差分に出さない）', () => {
+    const doc = {
+      type: 'doc',
+      content: [{ type: 'ticketRef', attrs: { ticketId: 't-target', key: 'ENG-1', title: '表示用の題名', statusName: '進行中' } }],
+    };
+    expect(extractPlainText(doc)).toBe('[ticket: t-target]');
+  });
+
   it('codeBlockの言語は疑似テキストとして本文の前に埋め込まれる', () => {
     const doc = {
       type: 'doc',
