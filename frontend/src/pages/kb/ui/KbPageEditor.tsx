@@ -5,6 +5,7 @@ import {
   RichTextEditor,
   type CommentBadgeCounts,
   type EditorCommand,
+  type SearchMembersForMention,
   type SearchPagesForRef,
   type SearchTicketsForRef,
 } from './editor';
@@ -31,6 +32,8 @@ export interface KbPageEditorProps {
   searchPages: SearchPagesForRef | undefined;
   /** `#` でチケットを探す口（同じく編集できる形にだけ渡す）。 */
   searchTickets: SearchTicketsForRef | undefined;
+  /** `@` で人を探す口（同じく編集できる形にだけ渡す）。 */
+  searchMembers: SearchMembersForMention | undefined;
 }
 
 /**
@@ -57,6 +60,7 @@ function KbPageEditor({
   resolveImageSrc,
   searchPages,
   searchTickets,
+  searchMembers,
 }: KbPageEditorProps) {
   if (draftOpen) {
     // ドラフトモード中。value/onChange は useKbPageDoc の自動保存とは完全に
@@ -72,6 +76,7 @@ function KbPageEditor({
         resolveImageSrc={resolveImageSrc}
         searchPages={searchPages}
         searchTickets={searchTickets}
+        searchMembers={searchMembers}
       />
     );
   }
@@ -110,6 +115,7 @@ function KbPageEditor({
       resolveImageSrc={resolveImageSrc}
       searchPages={data.canEdit ? searchPages : undefined}
       searchTickets={data.canEdit ? searchTickets : undefined}
+      searchMembers={data.canEdit ? searchMembers : undefined}
     />
   );
 }

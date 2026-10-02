@@ -17,11 +17,13 @@ import { Button, FsIcon } from '@/shared/ui';
  * 確かめた種別:
  * - `ticket_mentioned` / `ticket_commented` — チケットの発言の作成 usecase
  * - `workspace_invitation` — ワークスペースへの招待の発行 usecase（既にアカウントがある宛先だけ）
+ * - `page_mentioned` — ナレッジの本文の保存 usecase（前の本文に無かった @名指しの相手へ）
  */
 const TYPE_LABELS: Record<string, string> = {
   ticket_mentioned: 'チケットで名指し',
   ticket_commented: '担当チケットにコメント',
   workspace_invitation: 'ワークスペースへの招待',
+  page_mentioned: 'ページで名指し',
 };
 
 interface NotificationItemProps {

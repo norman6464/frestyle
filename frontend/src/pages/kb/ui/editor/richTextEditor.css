@@ -280,6 +280,31 @@
   outline-offset: 1px;
 }
 
+/*
+ * 名指しの札（.rte-mention）。チケットの発言の名指しと同じ見た目（薄い下地に濃い字）。
+ * 押せる先は無いのでリンクにしない。写しが無い（解決されていない）札は灰色で出す。
+ */
+.rte-content .ProseMirror .rte-mention {
+  display: inline;
+  padding: 0 0.3em;
+  border-radius: 4px;
+  background: theme('colors.brand.50');
+  color: theme('colors.brand.700');
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rte-content .ProseMirror .rte-mention.is-unresolved {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.rte-content .ProseMirror .rte-mention.ProseMirror-selectednode {
+  outline: 2px solid var(--color-brand, #3b82f6);
+  outline-offset: 1px;
+}
+
 /* 候補一覧の鍵（TicketRefMenuList）。 */
 .rte-ticketref-key {
   flex-shrink: 0;

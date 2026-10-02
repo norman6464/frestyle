@@ -10,6 +10,7 @@ import CodeBlockView from './CodeBlockView';
 import ImageView from './ImageView';
 import { BlockOperations } from './blockOperations';
 import { ListNormalization } from './listNormalization';
+import { MentionSuggestion } from './mentionSuggestion';
 import { PageRefSuggestion } from './pageRefSuggestion';
 import { TicketRefSuggestion } from './ticketRefSuggestion';
 import { MarkdownShortcuts } from './markdownShortcuts';
@@ -136,6 +137,8 @@ export function createEditorExtensions(
     PageRefSuggestion,
     // `#` でチケットを探して参照を入れる（探す口は searchTickets。同じく storage 経由）。
     TicketRefSuggestion,
+    // `@` で人を探して名指しを入れる（探す口は searchMembers。同じく storage 経由）。
+    MentionSuggestion,
     // IME（日本語入力）確定でも効く ＃ 見出し・``` コードブロック変換。
     MarkdownShortcuts,
     Placeholder.configure({ placeholder }),

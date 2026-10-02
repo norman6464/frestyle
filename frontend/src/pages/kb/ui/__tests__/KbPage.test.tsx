@@ -45,6 +45,7 @@ const hoisted = vi.hoisted(() => ({
   createPage: vi.fn(),
   searchPages: vi.fn(),
   searchTicketRefs: vi.fn(),
+  fetchMembers: vi.fn(),
   listCommentThreads: vi.fn(),
   createCommentThread: vi.fn(),
   addComment: vi.fn(),
@@ -92,6 +93,7 @@ const hoisted = vi.hoisted(() => ({
       onCommentBadgeClick?: (blockId: string) => void;
       searchPages?: (query: string) => Promise<{ id: string; title: string }[]>;
       searchTickets?: (query: string) => Promise<{ id: string; key: string; title: string }[]>;
+      searchMembers?: (query: string) => Promise<{ userId: number; name: string }[]>;
     },
   },
 }));
@@ -142,7 +144,7 @@ vi.mock('@/entities/ticket/api/ticketRepository', () => ({
 }));
 
 vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
-  default: { fetchWorkspaces: hoisted.fetchWorkspaces },
+  default: { fetchWorkspaces: hoisted.fetchWorkspaces, fetchMembers: hoisted.fetchMembers },
 }));
 
 vi.mock('@/entities/kb', async (importOriginal) => {
@@ -187,6 +189,7 @@ vi.mock('../editor', async (importOriginal) => {
       onCommentBadgeClick?: (blockId: string) => void;
       searchPages?: (query: string) => Promise<{ id: string; title: string }[]>;
       searchTickets?: (query: string) => Promise<{ id: string; key: string; title: string }[]>;
+      searchMembers?: (query: string) => Promise<{ userId: number; name: string }[]>;
     }) => {
       hoisted.editorProps.current = props;
       hoisted.renders.editor += 1;
@@ -341,7 +344,7 @@ describe('KbPage の配線', () => {
     renderPage();
     await screen.findByTestId('editor');
     const commands = hoisted.editorProps.current?.extraSlashCommands;
-    expect(commands?.map((c) => c.id)).toEqual(['page', 'pageRef', 'ticketRef', 'template']);
+    expect(commands?.map((c) => c.id)).toEqual(['page', 'pageRef', 'ticketRef', 'mention', 'template']);
 
     // 成功: 作ったページへ遷移。
     hoisted.createPage.mockResolvedValue({
@@ -1985,5 +1988,47 @@ describe('# でチケットを探す口', () => {
     const focus = vi.fn(() => ({ insertContent }));
     item!.run({ chain: () => ({ focus }) } as unknown as Parameters<typeof item.run>[0]);
     expect(insertContent).toHaveBeenCalledWith('#');
+  });
+});
+
+describe('@ で人を探す口', () => {
+  it('いまのワークスペースの一員を名前で絞り、userId と名前だけを渡す', async () => {
+    hoisted.fetchMembers.mockResolvedValue([
+      { principalId: 'p-1', userId: 1, name: '田中 太郎' },
+      { principalId: 'p-2', userId: 2, name: '鈴木 一郎' },
+      { principalId: 'p-3', userId: 3, name: '' },
+    ]);
+    renderPage();
+    await screen.findByTestId('editor');
+    const search = hoisted.editorProps.current?.searchMembers;
+    expect(search).toBeDefined();
+    await expect(search!('田')).resolves.toEqual([{ userId: 1, name: '田中 太郎' }]);
+    expect(hoisted.fetchMembers).toHaveBeenCalledWith('w-3f2a9c');
+    // 2 回目は問い合わせの控えから（取りに行かない）。
+    hoisted.fetchMembers.mockClear();
+    await expect(search!('')).resolves.toEqual([
+      { userId: 1, name: '田中 太郎' },
+      { userId: 2, name: '鈴木 一郎' },
+    ]);
+    expect(hoisted.fetchMembers).not.toHaveBeenCalled();
+  });
+
+  it('編集できない人には探す口を渡さない（@ は素の文字のまま）', async () => {
+    hoisted.resolvePage.mockResolvedValue(resolved(false));
+    renderPage();
+    await screen.findByTestId('editor');
+    expect(hoisted.editorProps.current?.searchMembers).toBeUndefined();
+  });
+
+  it("'/' の「人を名指し」は @ を差し込む", async () => {
+    renderPage();
+    await screen.findByTestId('editor');
+    const item = hoisted.editorProps.current?.extraSlashCommands?.find((c) => c.id === 'mention');
+    expect(item).toBeDefined();
+    expect(item!.label).toBe('人を名指し');
+    const insertContent = vi.fn(() => ({ run: vi.fn() }));
+    const focus = vi.fn(() => ({ insertContent }));
+    item!.run({ chain: () => ({ focus }) } as unknown as Parameters<typeof item.run>[0]);
+    expect(insertContent).toHaveBeenCalledWith('@');
   });
 });

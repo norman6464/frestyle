@@ -5,10 +5,12 @@ import { useKbFrameLocation, useKbFrameSpace } from '@/widgets/kb-frame';
 import { KbSaveAsTemplateButton, KbTemplatePickerModal, useKbPageTemplates } from '@/features/kb-page-templates';
 import { emptyRichDoc, isRichDoc } from '@/shared/lib/richDoc';
 import {
+  MENTION_TRIGGER,
   PAGE_REF_TRIGGER,
   TICKET_REF_TRIGGER,
   type CommentBadgeCounts,
   type EditorCommand,
+  type MentionCandidate,
   type PageRefCandidate,
   type TicketRefCandidate,
 } from './editor';
@@ -31,6 +33,7 @@ import {
   type CommentAnchor,
 } from '@/entities/kb';
 import { TicketRepository } from '@/entities/ticket';
+import { filterMembersByName, workspaceMembersQuery } from '@/entities/workspace';
 import KbPageHeading from './KbPageHeading';
 import KbPageEditor from './KbPageEditor';
 import KbPageIconButton from './KbPageIconButton';
@@ -113,6 +116,9 @@ const RAIL_BUTTON_ACTIVE = 'bg-[var(--color-nav-active)] text-[var(--color-text-
 function ActionDivider() {
   return <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-surface-3" />;
 }
+
+/** `@` の候補に出す人数の上限（一覧は短く、名前を打って絞ってもらう）。 */
+const MENTION_CANDIDATE_LIMIT = 10;
 
 export default function KbPage() {
   const { pageId } = useParams<{ pageId: string }>();
@@ -645,6 +651,21 @@ export default function KbPage() {
     [refWorkspaceSlug],
   );
 
+  // `@` の候補。ワークスペースの一員の一覧（問い合わせの控えに乗る。初回だけ取りに行く）を
+  // 名前で絞る。誰に通知が届くかはサーバーが決める（前の本文に無かった人のうち見られる一員）。
+  const searchMembersForMention = useMemo(
+    () =>
+      refWorkspaceSlug
+        ? async (query: string): Promise<MentionCandidate[]> => {
+            const members = await queryClient.ensureQueryData(workspaceMembersQuery(refWorkspaceSlug));
+            return filterMembersByName(members, query)
+              .slice(0, MENTION_CANDIDATE_LIMIT)
+              .map((member) => ({ userId: member.userId, name: member.name }));
+          }
+        : undefined,
+    [refWorkspaceSlug, queryClient],
+  );
+
   const extraSlashCommands = useMemo<EditorCommand[]>(
     () => [
       {
@@ -682,6 +703,17 @@ export default function KbPage() {
         keywords: ['ticket', 'issue', 'ticketref', 'backlog'],
         run: (editor) => {
           editor.chain().focus().insertContent(TICKET_REF_TRIGGER).run();
+        },
+      },
+      {
+        id: 'mention',
+        label: '人を名指し',
+        group: 'insert',
+        // `@` を差し込むと、続けて打った名前で候補が出る（MentionSuggestion）。
+        glyph: '@',
+        keywords: ['mention', 'at', 'user', 'member', 'people'],
+        run: (editor) => {
+          editor.chain().focus().insertContent(MENTION_TRIGGER).run();
         },
       },
       {
@@ -943,6 +975,7 @@ export default function KbPage() {
                   resolveImageSrc={resolveImageSrc}
                   searchPages={searchPagesForRef}
                   searchTickets={searchTicketsForRef}
+                  searchMembers={searchMembersForMention}
                 />
               </div>
               {/*

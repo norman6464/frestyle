@@ -392,6 +392,69 @@ export const TicketRef = Node.create({
   },
 });
 
+/** mention の userId は users.id の 10 進文字列（サーバー・チケットの発言と同じ形）。 */
+const MENTION_USER_ID_PATTERN = /^[1-9][0-9]{0,19}$/;
+
+/**
+ * KbMention は「@名指し」— ワークスペースの一員を指すインラインの 1 要素（atom）。
+ *
+ * 文字を持たず、表示は attrs.name（**表示のための写し**）。正本は users にあり、サーバーが
+ * 読み出しのたびに現在の表示名へ差し替え、保存時には剥がす。写しが無い名指し（版のプレビュー・
+ * 提案の表示・無い人）は「@ユーザー」とだけ出す。押せる先は無いので常に span。
+ *
+ * 通知は保存（公開）のときにサーバーが決める（前の本文に無かった人のうち、ページを見られる
+ * 一員へだけ）。画面側は何も送らない。
+ */
+export const KbMention = Node.create({
+  name: 'mention',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      userId: { default: null },
+      name: { default: null },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-mention]',
+        getAttrs: (element) => {
+          const userId = element.getAttribute('data-user-id');
+          // 整数の字面でない値は名指しとして取り込まない（貼り付けは外部の HTML からも来る）。
+          if (userId === null || !MENTION_USER_ID_PATTERN.test(userId)) return false;
+          return { userId, name: nonEmptyString(element.getAttribute('data-name')) };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ node }) {
+    const userId = typeof node.attrs.userId === 'string' ? node.attrs.userId : null;
+    const name = nonEmptyString(node.attrs.name);
+    return [
+      'span',
+      {
+        'data-mention': 'true',
+        'data-user-id': userId ?? undefined,
+        'data-name': name ?? undefined,
+        class: `rte-mention${name === null ? ' is-unresolved' : ''}`,
+      },
+      name !== null ? `@${name}` : '@ユーザー',
+    ];
+  },
+
+  // editor.getText() やプレーンテキスト化で名指しが消えないよう、@名前 を文字として出す。
+  renderText({ node }) {
+    const name = nonEmptyString(node.attrs.name);
+    return name !== null ? `@${name}` : '@ユーザー';
+  },
+});
+
 /** createSchemaExtensions の組み立てオプション。 */
 export interface CreateSchemaExtensionsOptions {
   /** 画像ノードをスキーマに含めるか（既定 true）。 */
@@ -468,6 +531,8 @@ export function createSchemaExtensions(
     // id は不要（blocks テーブルの行にならない）。
     PageRef,
     TicketRef,
+    // @名指し（インラインの atom）。表示名はサーバーが読み出し時に解決する。
+    KbMention,
   ];
 
   if (image) {

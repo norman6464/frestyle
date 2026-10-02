@@ -25,6 +25,7 @@ export {
   grantRoleDescription,
 } from './model/roles';
 export { buildInviteUrl, readInviteToken } from './lib/invitationLink';
+export { filterMembersByName } from './lib/filterMembersByName';
 export type {
   Workspace,
   GrantRole,

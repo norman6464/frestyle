@@ -8,6 +8,7 @@ import { acceptedImageFiles, insertUploadedImages } from './imageInsertion';
 import { sanitizeDocLinks } from '@/shared/lib/linkSafety';
 import { sanitizeDocColors } from './inlineColors';
 import type { SearchPagesForRef } from './pageRefSuggestion';
+import type { SearchMembersForMention } from './mentionSuggestion';
 import type { SearchTicketsForRef } from './ticketRefSuggestion';
 import { openClickedLink } from './linkClick';
 import { fillMissingBlockIdsInDoc } from './stableBlockId';
@@ -78,6 +79,11 @@ export interface RichTextEditorProps {
    * （ticketRef）が入る。渡さなければ `#` は素の文字のまま。差し替えは即座に効く（storage 経由）。
    */
   searchTickets?: SearchTicketsForRef;
+  /**
+   * `@` に続けて打った名前でワークスペースの一員を探す口。渡したときだけ候補が出て、選ぶと
+   * 名指し（mention）が入る。渡さなければ `@` は素の文字のまま。差し替えは即座に効く（storage 経由）。
+   */
+  searchMembers?: SearchMembersForMention;
   /**
    * 選択範囲からコメントを作りたいときに呼ばれる（バブルメニューの「コメント」ボタン）。
    * 渡さなければボタン自体を出さない（CommentFormatControl 側の約束）。
@@ -195,6 +201,7 @@ export default function RichTextEditor({
   onNavigateToPage,
   searchPages,
   searchTickets,
+  searchMembers,
   onRequestComment,
   canComment = false,
   commentBadgeCounts,
@@ -414,6 +421,11 @@ export default function RichTextEditor({
     if (!editor || editor.isDestroyed) return;
     editor.storage.ticketRefSuggestion.searchTickets = searchTickets ?? null;
   }, [editor, searchTickets]);
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.storage.mentionSuggestion.searchMembers = searchMembers ?? null;
+  }, [editor, searchMembers]);
 
   // 「増えたときだけ」フォーカスを移す。マウント時の値では動かない — ページを
   // 開き直しただけで本文が奪ってしまわないため（サイドバーの openSignal と同じ形）。
