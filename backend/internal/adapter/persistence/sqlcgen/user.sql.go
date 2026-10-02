@@ -8,6 +8,7 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -266,6 +267,61 @@ func (q *Queries) InsertUserWithID(ctx context.Context, arg InsertUserWithIDPara
 	var i InsertUserWithIDRow
 	err := row.Scan(&i.ID, &i.CreatedAt, &i.UpdatedAt)
 	return i, err
+}
+
+const listUserDisplaysByIDs = `-- name: ListUserDisplaysByIDs :many
+SELECT u.id, u.name,
+       COALESCE(p.avatar_url, '') AS avatar_url,
+       COALESCE(p.status_emoji, '') AS status_emoji,
+       COALESCE(p.status_text, '') AS status_text,
+       p.status_expires_at AS status_expires_at
+FROM users u
+LEFT JOIN profiles p ON p.user_id = u.id
+WHERE u.id IN (SELECT value::bigint FROM json_array_elements_text($1::json))
+`
+
+type ListUserDisplaysByIDsRow struct {
+	ID              int64
+	Name            string
+	AvatarUrl       string
+	StatusEmoji     string
+	StatusText      string
+	StatusExpiresAt sql.NullTime
+}
+
+// GetUserDisplayByID の複数人版（ページ本文の @名指しの名前を 1 回の問い合わせで解決する）。
+// 線引きも同じ — 退会・停止していても返す（名指しされた記録を「誰か分からない」にしない）。
+// user_ids は json 配列（10 進文字列の users.id）。json_array_elements_text で展開して bigint へ
+// 落とす（IN 句のスライス展開を使わない理由は ListWorkspacePageViewFactsByIDs と同じ）。
+// 呼び出し側（Go）が 0 以下・int64 の範囲外を先に落とす。
+func (q *Queries) ListUserDisplaysByIDs(ctx context.Context, userIds json.RawMessage) ([]ListUserDisplaysByIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUserDisplaysByIDs, userIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUserDisplaysByIDsRow{}
+	for rows.Next() {
+		var i ListUserDisplaysByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.AvatarUrl,
+			&i.StatusEmoji,
+			&i.StatusText,
+			&i.StatusExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const softDeleteUser = `-- name: SoftDeleteUser :execrows

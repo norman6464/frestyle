@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -122,7 +123,7 @@ func newKbFixture(fallback domain.PagePermission, uid uint64) kbFixture {
 	notifications := newKbFakeNotifications()
 	mailer := &kbFakeMailer{}
 	registerKnowledgeBaseRoutesWith(
-		g, pages, perms, provisioner, users, comments, versions, views, favorites, templates, suggestions, tickets, tickets, fakeTxManager{}, presigner, tickets,
+		g, pages, perms, provisioner, users, users, comments, versions, views, favorites, templates, suggestions, tickets, tickets, fakeTxManager{}, presigner, tickets,
 		invitations, notifications, mailer, "http://localhost:5173",
 	)
 	// 認証不要のルート（招待の案内）は current user を注入しない group に張る。
@@ -1782,8 +1783,8 @@ func Test_ナレッジAPI_middlewareを通らないルートは成功しない(t
 		kb.NewMovePageUseCase(pages),
 		kb.NewArchivePageUseCase(pages),
 		kb.NewUnarchivePageUseCase(pages),
-		kb.NewReplacePageBlocksUseCase(pages, fakeTxManager{}, newKbFakePageVersions(pages)),
-		kb.NewResolvePageRefTitlesUseCase(perms, newTicketFakeRepo()),
+		kb.NewReplacePageBlocksUseCase(pages, fakeTxManager{}, newKbFakePageVersions(pages), perms, newKbFakeNotifications()),
+		kb.NewResolvePageRefTitlesUseCase(perms, newTicketFakeRepo(), users),
 		kb.NewListViewableAncestorsUseCase(pages, perms),
 		kb.NewDeletePageUseCase(pages),
 		kb.NewSetPageIconUseCase(pages),
@@ -2242,4 +2243,35 @@ func Test_チケットからの逆参照_ワークスペースが見えるとき
 			assert.JSONEq(t, `{"error":"invalid_limit"}`, w.Body.String())
 		}
 	})
+}
+
+// @名指しは本文の保存（公開）のときに、前の本文に無かった人のうちページを見られる一員へだけ
+// 通知し、読み出し時に現在の表示名へ差し替わる（名前の正本は users）。
+func Test_ナレッジAPI_本文の名指しは保存時に見られる一員へ通知し読み出し時に名前になる(t *testing.T) {
+	f := newKbFixture(kbCanEdit, kbUserID)
+	f.perms.addMember(kbWorkspaceID, 77)
+	f.users.setUserName(77, "田中")
+	base := "/api/v2/kb/workspaces/" + kbWorkspaceSlug + "/pages/" + kbChildPageID
+	// 77 は一員（見られる）・88 は一員でない・本人（kbUserID）には送らない。
+	doc := `{"type":"doc","content":[{"type":"paragraph","content":[` +
+		`{"type":"mention","attrs":{"userId":"77","name":"古い名前"}},` +
+		`{"type":"mention","attrs":{"userId":"88"}},` +
+		`{"type":"mention","attrs":{"userId":"` + strconv.FormatUint(kbUserID, 10) + `"}}]}]}`
+
+	saved := f.do(t, http.MethodPut, base+"/content", `{"doc":`+doc+`}`)
+	require.Equal(t, http.StatusOK, saved.Code, saved.Body.String())
+	require.Len(t, f.notifications.created, 1)
+	assert.Equal(t, uint64(77), f.notifications.created[0].UserID)
+	assert.Equal(t, domain.NotificationTypePageMentioned, f.notifications.created[0].Type)
+	assert.Equal(t, "/kb/"+kbChildPageID, f.notifications.created[0].LinkPath)
+
+	// 同じ名指しのまま保存し直しても、もう届かない（自動保存のたびに鳴らない）。
+	saved = f.do(t, http.MethodPut, base+"/content", `{"doc":`+doc+`}`)
+	require.Equal(t, http.StatusOK, saved.Code, saved.Body.String())
+	assert.Len(t, f.notifications.created, 1)
+
+	got := f.do(t, http.MethodGet, base, "")
+	require.Equal(t, http.StatusOK, got.Code)
+	assert.Contains(t, got.Body.String(), `"name":"田中"`)
+	assert.NotContains(t, got.Body.String(), "古い名前", "保存されていた写しは返さない")
 }

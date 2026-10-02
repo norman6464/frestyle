@@ -299,7 +299,7 @@ func Test_提案採用_ForceVersionは必ずtrue(t *testing.T) {
 	suggestions.On("Resolve", mock.Anything, kbWS, kbPage, "s1", domain.PageSuggestionStatusAccepted, kbEditorUserID, mock.Anything).
 		Return(resolved, nil)
 
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 	tx := &fakeTxManager{}
 	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, tx)
 
@@ -324,7 +324,7 @@ func Test_提案採用_既に解決済みなら本文を書き換えない(t *te
 	suggestions := &mockPageSuggestionRepo{}
 	already := &domain.PageSuggestion{ID: "s1", WorkspaceID: kbWS, PageID: kbPage, Status: domain.PageSuggestionStatusRejected}
 	suggestions.On("Get", mock.Anything, kbWS, kbPage, "s1").Return(already, nil)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.AcceptSuggestionInput{
@@ -346,7 +346,7 @@ func Test_提案採用_提案作成後にページが編集済みなら拒否(t 
 	versionRepo.On("LockPage", mock.Anything, kbWS, kbPage).Return(nil)
 	suggestions := &mockPageSuggestionRepo{}
 	suggestions.On("Get", mock.Anything, kbWS, kbPage, "s1").Return(kbOpenSuggestionForAccept(), nil)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.AcceptSuggestionInput{
@@ -368,7 +368,7 @@ func Test_提案採用_BaseRevisionが不明なら拒否(t *testing.T) {
 	kbRepo := &mockKnowledgeBaseRepo{}
 	kbRepo.On("FindPage", mock.Anything, kbWS, kbPage).
 		Return(kbActivePage(kbPage, kbSpace, nil), nil)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.AcceptSuggestionInput{
@@ -391,7 +391,7 @@ func Test_提案採用_Resolveが失敗すれば本文を書き換えない(t *t
 	suggestions.On("Get", mock.Anything, kbWS, kbPage, "s1").Return(kbOpenSuggestionForAccept(), nil)
 	suggestions.On("Resolve", mock.Anything, kbWS, kbPage, "s1", domain.PageSuggestionStatusAccepted, kbEditorUserID, mock.Anything).
 		Return(nil, domain.ErrPageSuggestionAlreadyResolved)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.AcceptSuggestionInput{
@@ -419,7 +419,7 @@ func Test_提案採用_本文書き換えが失敗すればエラーを返す(t 
 	resolved := &domain.PageSuggestion{ID: "s1", PageID: kbPage, Doc: kbSuggestionDoc}
 	suggestions.On("Resolve", mock.Anything, kbWS, kbPage, "s1", domain.PageSuggestionStatusAccepted, kbEditorUserID, mock.Anything).
 		Return(resolved, nil)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 	uc := kb.NewAcceptPageSuggestionUseCase(kbRepo, suggestions, versionRepo, replaceUC, &fakeTxManager{})
 
 	_, err := uc.Execute(context.Background(), kb.AcceptSuggestionInput{

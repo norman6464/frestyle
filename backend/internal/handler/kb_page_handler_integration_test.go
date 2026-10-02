@@ -41,6 +41,7 @@ type kbEnv struct {
 	permissions      repository.KnowledgeBasePermissionRepository
 	provisioner      repository.WorkspaceProvisioner
 	users            repository.UserRepository
+	userDisplays     repository.UserDisplayReader
 	comments         repository.CommentRepository
 	versions         repository.PageVersionRepository
 	views            repository.PageViewRepository
@@ -69,6 +70,7 @@ func newKbEnv(t *testing.T, sqlDB *sql.DB, slug string) *kbEnv {
 		permissions:      persistence.NewKnowledgeBasePermissionRepository(sqlDB),
 		provisioner:      persistence.NewWorkspaceProvisioner(sqlDB),
 		users:            persistence.NewUserRepository(sqlDB),
+		userDisplays:     persistence.NewUserDisplayReader(sqlDB),
 		comments:         persistence.NewCommentRepository(sqlDB),
 		versions:         persistence.NewPageVersionRepository(sqlDB),
 		views:            persistence.NewPageViewRepository(sqlDB),
@@ -99,7 +101,7 @@ func (e *kbEnv) as(userID uint64) *kbEnv {
 		c.Next()
 	})
 	registerKnowledgeBaseRoutesWith(
-		g, e.pages, e.permissions, e.provisioner, e.users, e.comments, e.versions, e.views, e.favorites,
+		g, e.pages, e.permissions, e.provisioner, e.users, e.userDisplays, e.comments, e.versions, e.views, e.favorites,
 		e.templates, e.suggestions, e.tickets, e.ticketRefs, e.txManager, e.kbImagePresigner, e.labels, e.invitations, e.notifications,
 		mail.Disabled{}, "http://localhost:5173",
 	)

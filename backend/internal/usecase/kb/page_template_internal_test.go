@@ -167,3 +167,12 @@ func Test_雛形保存時にチケット参照も取り除く(t *testing.T) {
 	require.Contains(t, got, "前 ")
 	require.Contains(t, got, " 後")
 }
+
+// @名指しは雛形に残す（pageRef・ticketRef と違い「特定の 1 件」ではなく人で、雛形の決まり文句
+// 「担当: @田中」として意味を持つ）。雛形から作った本文の保存で、通常どおり通知が走る。
+func Test_雛形保存時に名指しは残す(t *testing.T) {
+	doc := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"mention","attrs":{"userId":"5"}}]}]}`
+	got, err := stripPageRefAndImageNodesForTemplate(doc)
+	require.NoError(t, err)
+	require.Contains(t, got, `"mention"`)
+}

@@ -5,8 +5,10 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/norman6464/frestyle/backend/internal/adapter/persistence/sqlcgen"
@@ -287,4 +289,45 @@ func (r *userRepository) UpdateEmail(ctx context.Context, userID uint64, email s
 		return domain.ErrNotFound
 	}
 	return nil
+}
+
+// NewUserDisplayReader は [repository.UserDisplayReader] の実装を返す（実体は userRepository と
+// 同じ構造体。ナレッジ側へは表示情報の読み取り 1 口だけを渡す）。
+func NewUserDisplayReader(db *sql.DB) repository.UserDisplayReader {
+	return &userRepository{baseRepository{db: db}}
+}
+
+func (r *userRepository) ListUserDisplaysByIDs(ctx context.Context, ids []uint64) ([]domain.UserDisplay, error) {
+	// 0 と int64 の範囲外はここで落とす（SQL 側の ::bigint が失敗するとクエリ全体が落ち、
+	// 壊れた名指し 1 つでページの読み出しが死ぬため）。
+	valid := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id64, ok := toInt64ID(id); ok && id64 > 0 {
+			valid = append(valid, strconv.FormatInt(id64, 10))
+		}
+	}
+	if len(valid) == 0 {
+		return []domain.UserDisplay{}, nil
+	}
+	encoded, err := json.Marshal(valid)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.queries(ctx).ListUserDisplaysByIDs(ctx, encoded)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	out := make([]domain.UserDisplay, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domain.UserDisplay{
+			UserID:    uint64(row.ID),
+			Name:      row.Name,
+			AvatarURL: row.AvatarUrl,
+			StatusMessage: domain.ComposeStatusDisplay(
+				row.StatusEmoji, row.StatusText, nullTimePtr(row.StatusExpiresAt), now,
+			),
+		})
+	}
+	return out, nil
 }

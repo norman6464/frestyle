@@ -40,3 +40,12 @@ type UserRepository interface {
 	// 知るための口で、users の一意索引 uq_users_email_active と同じ式で引く。
 	FindActiveIDByEmail(ctx context.Context, email string) (id uint64, found bool, err error)
 }
+
+// UserDisplayReader は複数人の表示情報をまとめて引く読み取り口（ページ本文の @名指しの名前の
+// 解決）。UserRepository から分けるのは TicketRefReader と同じ理由 — 要るのはこの 1 口だけで、
+// UserRepository を要求するとナレッジ側の usecase が認証や退会の口まで握ってしまう。
+type UserDisplayReader interface {
+	// ListUserDisplaysByIDs は指定 ID 群のうち実在する人の表示情報を返す（退会・停止していても
+	// 返す。FindDisplayByID と同じ線引き）。無い ID は結果に現れない。順序は保証しない。
+	ListUserDisplaysByIDs(ctx context.Context, ids []uint64) ([]domain.UserDisplay, error)
+}

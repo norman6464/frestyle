@@ -252,7 +252,7 @@ func Test_雛形から作成_CreatePageとReplaceBlocksをこの順で正しい�
 		Return(false, nil, nil)
 
 	createPageUC := kb.NewCreatePageUseCase(kbRepo)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo)
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 	deleteUC := kb.NewDeletePageUseCase(kbRepo)
 	uc := kb.NewCreatePageFromTemplateUseCase(templates, kb.NewCheckSpacePermissionUseCase(&mockKBPermissionRepo{}), createPageUC, replaceUC, deleteUC)
 
@@ -287,7 +287,7 @@ func Test_雛形から作成_スペース限定の雛形は閲覧できなけれ
 
 	kbRepo := &mockKnowledgeBaseRepo{}
 	createPageUC := kb.NewCreatePageUseCase(kbRepo)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, &mockPageVersionRepo{})
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, &mockPageVersionRepo{}, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 	deleteUC := kb.NewDeletePageUseCase(kbRepo)
 	uc := kb.NewCreatePageFromTemplateUseCase(templates, kb.NewCheckSpacePermissionUseCase(perms), createPageUC, replaceUC, deleteUC)
 
@@ -318,7 +318,7 @@ func Test_雛形から作成_本文書き込み失敗時に空ページの削除
 	kbRepo.On("DeletePageSubtree", mock.Anything, kbWS, kbPage).Return(nil)
 
 	createPageUC := kb.NewCreatePageUseCase(kbRepo)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, &mockPageVersionRepo{})
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, &mockPageVersionRepo{}, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 	deleteUC := kb.NewDeletePageUseCase(kbRepo)
 	uc := kb.NewCreatePageFromTemplateUseCase(templates, kb.NewCheckSpacePermissionUseCase(&mockKBPermissionRepo{}), createPageUC, replaceUC, deleteUC)
 
@@ -347,7 +347,7 @@ func Test_雛形から作成_後始末の削除にも失敗したらエラーに
 	kbRepo.On("DeletePageSubtree", mock.Anything, kbWS, kbPage).Return(repository.ErrPageNotFound)
 
 	createPageUC := kb.NewCreatePageUseCase(kbRepo)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, &mockPageVersionRepo{})
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, &mockPageVersionRepo{}, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 	deleteUC := kb.NewDeletePageUseCase(kbRepo)
 	uc := kb.NewCreatePageFromTemplateUseCase(templates, kb.NewCheckSpacePermissionUseCase(&mockKBPermissionRepo{}), createPageUC, replaceUC, deleteUC)
 

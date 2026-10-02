@@ -2434,3 +2434,17 @@ func (f *kbFakeMailer) SendInvitation(_ context.Context, m repository.Invitation
 	f.sent = append(f.sent, m)
 	return nil
 }
+
+// ListUserDisplaysByIDs は repository.UserDisplayReader の偽物（names にある人だけ返す）。
+func (f *kbFakeUsers) ListUserDisplaysByIDs(_ context.Context, ids []uint64) ([]domain.UserDisplay, error) {
+	if f.failWith != nil {
+		return nil, f.failWith
+	}
+	out := []domain.UserDisplay{}
+	for _, id := range ids {
+		if name, ok := f.names[id]; ok {
+			out = append(out, domain.UserDisplay{UserID: id, Name: name})
+		}
+	}
+	return out, nil
+}
