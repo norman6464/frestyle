@@ -1481,11 +1481,12 @@ const kbTicketRefNodeType = "ticketRef"
 // 表示の飾りで、本文が開けることの方が重い）。ただし取得失敗の error は呼び出し側へ返し、
 // 握り潰す判断は handler に委ねる。
 type ResolvePageRefTitlesUseCase struct {
-	perms repository.KnowledgeBasePermissionRepository
+	perms   repository.KnowledgeBasePermissionRepository
+	tickets repository.TicketRefReader
 }
 
-func NewResolvePageRefTitlesUseCase(r repository.KnowledgeBasePermissionRepository) *ResolvePageRefTitlesUseCase {
-	return &ResolvePageRefTitlesUseCase{perms: r}
+func NewResolvePageRefTitlesUseCase(r repository.KnowledgeBasePermissionRepository, tickets repository.TicketRefReader) *ResolvePageRefTitlesUseCase {
+	return &ResolvePageRefTitlesUseCase{perms: r, tickets: tickets}
 }
 
 type ResolvePageRefTitlesInput struct {
@@ -1504,13 +1505,13 @@ func (u *ResolvePageRefTitlesUseCase) Execute(ctx context.Context, in ResolvePag
 	}
 	collector := newPageRefCollector()
 	collector.collect(root)
-	if len(collector.ids) == 0 {
+	if len(collector.ids) == 0 && len(collector.ticketIDs) == 0 {
 		return in.Doc, nil
 	}
-	// 参照があるなら、まず保存されている title を全部剥がす。保存側（StripPageRefTitles）も
-	// 剥がすが、それは新しい保存にしか効かず、それ以前に保存された doc には古い題名が
-	// 残ったままになる。読み出し側でも剥がすことで、返る題名は必ず**この読み手の**
-	// 可視判定を通った現在の値だけになる。
+	// 参照があるなら、まず保存されている title（チケット参照なら鍵・題名・状態の写し）を
+	// 全部剥がす。保存側（StripPageRefTitles）も剥がすが、それは新しい保存にしか効かず、
+	// それ以前に保存された doc には古い題名が残ったままになる。読み出し側でも剥がすことで、
+	// 返る題名は必ず**この読み手の**可視判定を通った現在の値だけになる。
 	stripped := stripPageRefTitlesNode(root)
 
 	render := func() (string, bool) {
@@ -1520,9 +1521,8 @@ func (u *ResolvePageRefTitlesUseCase) Execute(ctx context.Context, in ResolvePag
 		}
 		return string(out), true
 	}
-
-	rows, err := u.perms.ListWorkspacePageViewFactsByIDs(ctx, in.WorkspaceID, in.UserID, collector.ids)
-	if err != nil {
+	// 取得に失敗したら、剥がした本文とエラーを返す（古い写しを読み手へ返さない）。
+	fail := func(err error) (string, error) {
 		if stripped {
 			if out, ok := render(); ok {
 				return out, err
@@ -1530,18 +1530,47 @@ func (u *ResolvePageRefTitlesUseCase) Execute(ctx context.Context, in ResolvePag
 		}
 		return in.Doc, err
 	}
-	titles := make(map[string]string, len(rows))
-	for _, row := range rows {
-		// アーカイブ済みは題名に採らない（隠したページの現在の題名を本文へ映さない —
-		// 検索が現役だけを対象にするのと同じ線引き）。パンくず側は逆に含める。
-		if row.Page.ArchivedAt != nil {
-			continue
+
+	rewritten := false
+	if len(collector.ids) > 0 {
+		rows, err := u.perms.ListWorkspacePageViewFactsByIDs(ctx, in.WorkspaceID, in.UserID, collector.ids)
+		if err != nil {
+			return fail(err)
 		}
-		if domain.ResolvePageView(row.Role, row.Page.Visibility, row.Page.CreatedByUserID == in.UserID) {
-			titles[row.Page.ID] = row.Page.Title
+		titles := make(map[string]string, len(rows))
+		for _, row := range rows {
+			// アーカイブ済みは題名に採らない（隠したページの現在の題名を本文へ映さない —
+			// 検索が現役だけを対象にするのと同じ線引き）。パンくず側は逆に含める。
+			if row.Page.ArchivedAt != nil {
+				continue
+			}
+			if domain.ResolvePageView(row.Role, row.Page.Visibility, row.Page.CreatedByUserID == in.UserID) {
+				titles[row.Page.ID] = row.Page.Title
+			}
+		}
+		rewritten = rewritePageRefTitles(root, titles)
+	}
+	if len(collector.ticketIDs) > 0 {
+		// チケットにはページのような個別の可視判定が無く（ワークスペースの一員なら全チケットを
+		// 読める）、repository が同じワークスペースの削除されていない行だけを返す。
+		// アーカイブ済みも解決する — ページと違い、片づけたチケットは参照先として開ける。
+		facts, err := u.tickets.ListTicketRefFactsByIDs(ctx, in.WorkspaceID, collector.ticketIDs)
+		if err != nil {
+			return fail(err)
+		}
+		displays := make(map[string]ticketRefDisplay, len(facts))
+		for _, f := range facts {
+			if canonical, ok := canonicalPageRefID(f.ID); ok {
+				displays[canonical] = ticketRefDisplay{
+					key: domain.FormatTicketKey(f.ProjectKey, f.Number), title: f.Title,
+					statusName: f.StatusName, statusCategory: string(f.StatusCategory),
+				}
+			}
+		}
+		if rewriteTicketRefDisplays(root, displays) {
+			rewritten = true
 		}
 	}
-	rewritten := rewritePageRefTitles(root, titles)
 	if !stripped && !rewritten {
 		return in.Doc, nil
 	}
@@ -1552,12 +1581,14 @@ func (u *ResolvePageRefTitlesUseCase) Execute(ctx context.Context, in ResolvePag
 	return out, nil
 }
 
-// StripPageRefTitles は保存前の doc からページ参照の title を取り除く。
+// StripPageRefTitles は保存前の doc からページ参照の title と、チケット参照の表示の写し
+// （kbTicketRefDisplayAttrs）を取り除く。
 //
 // title は**読み手ごとに**読み出し時へ解決する派生値で、保存してはいけない。
 // 保存すると、閲覧できる編集者の画面で解決された現在の題名が、その人の通常の
 // 保存 1 回で本文へ焼き込まれ、閲覧できない読み手にもそのまま返ってしまう
-// （読み出し時の可視判定を素通りする抜け道になる）。
+// （読み出し時の可視判定を素通りする抜け道になる）。チケットの写しは可視判定こそ無いが、
+// 改名や状態の変化が本文に映らなくなる同じ種類の古さを持ち込むので、同じ扱いにする。
 //
 // 参照が無い・読めない doc は元のまま返す（読めない doc は保存経路の検証が弾く）。
 func StripPageRefTitles(doc string) string {
@@ -1575,15 +1606,29 @@ func StripPageRefTitles(doc string) string {
 	return string(out)
 }
 
+// kbTicketRefDisplayAttrs は ticketRef ノードの attrs のうち、読み出し時に解決して埋める
+// 表示用の写し（ticketId 以外）。保存時に剥がし、解決時に書き直す対象。
+var kbTicketRefDisplayAttrs = []string{"key", "title", "statusName", "statusCategory"}
+
 func stripPageRefTitlesNode(node any) bool {
 	changed := false
 	switch v := node.(type) {
 	case map[string]any:
-		if v["type"] == kbPageRefNodeType {
+		switch v["type"] {
+		case kbPageRefNodeType:
 			if attrs, ok := v["attrs"].(map[string]any); ok {
 				if _, has := attrs["title"]; has && attrs["title"] != nil {
 					attrs["title"] = nil
 					changed = true
+				}
+			}
+		case kbTicketRefNodeType:
+			if attrs, ok := v["attrs"].(map[string]any); ok {
+				for _, key := range kbTicketRefDisplayAttrs {
+					if _, has := attrs[key]; has && attrs[key] != nil {
+						attrs[key] = nil
+						changed = true
+					}
 				}
 			}
 		}
@@ -1601,12 +1646,13 @@ func stripPageRefTitlesNode(node any) bool {
 }
 
 // kbTemplateExcludedNodeTypes は「雛形として保存」で本文の木から丸ごと取り除くノードの type 名。
-// pageRef は特定の 1 ページへの固定参照で、雛形が複数のページに展開されると全展開先が
+// pageRef・ticketRef は特定の 1 件への固定参照で、雛形が複数のページに展開されると全展開先が
 // 同じ参照先を指してしまい意味をなさない。画像（domain.BlockTypeImage）はページ固有の
 // オブジェクトストレージ key（kbImageKeyPrefix）に紐づき、雛形経由で複製すると元ページの
-// 画像が消えたときにコピー側だけ宙に浮いた参照が残る。どちらも意図的に除外する。
+// 画像が消えたときにコピー側だけ宙に浮いた参照が残る。いずれも意図的に除外する。
 var kbTemplateExcludedNodeTypes = map[string]bool{
 	kbPageRefNodeType:             true,
+	kbTicketRefNodeType:           true,
 	string(domain.BlockTypeImage): true,
 }
 
@@ -1689,40 +1735,37 @@ func stripNodeIDs(node any) {
 	}
 }
 
-// pageRefCollector は doc を歩いて pageRef の pageId を文書順・重複なしで集める。
-// 重複判定は set（O(1)）、天井（kbPageRefMaxResolve）に達したら**収集自体を打ち切る**
-// （線形走査や収集後の切り詰めだと、参照を大量に並べた本文で CPU を燃やせてしまう）。
+// pageRefCollector は doc を歩いて pageRef の pageId（ids）と ticketRef の ticketId
+// （ticketIDs）を文書順・重複なしで集める。重複判定は set（O(1)）、天井（kbPageRefMaxResolve、
+// 種類ごと）に両方とも達したら**収集自体を打ち切る**（線形走査や収集後の切り詰めだと、
+// 参照を大量に並べた本文で CPU を燃やせてしまう）。
 // 辿るのは content 配列だけ（map の range だと順序が実行ごとに変わり天井の位置が不定になる）。
 type pageRefCollector struct {
-	ids  []string
-	seen map[string]struct{}
+	ids        []string
+	ticketIDs  []string
+	seen       map[string]struct{}
+	seenTicket map[string]struct{}
 }
 
 func newPageRefCollector() *pageRefCollector {
-	return &pageRefCollector{seen: map[string]struct{}{}}
+	return &pageRefCollector{seen: map[string]struct{}{}, seenTicket: map[string]struct{}{}}
+}
+
+func (c *pageRefCollector) full() bool {
+	return len(c.ids) >= kbPageRefMaxResolve && len(c.ticketIDs) >= kbPageRefMaxResolve
 }
 
 func (c *pageRefCollector) collect(node any) {
-	if len(c.ids) >= kbPageRefMaxResolve {
+	if c.full() {
 		return
 	}
 	switch v := node.(type) {
 	case map[string]any:
-		if v["type"] == kbPageRefNodeType {
-			if attrs, ok := v["attrs"].(map[string]any); ok {
-				if id, ok := attrs["pageId"].(string); ok {
-					// UUID の正規形（小文字・ハイフン区切り）へ寄せてから数える。
-					// repository も同じ正規化で照合するので、大文字や中括弧付きの
-					// 表記で保存された参照もここで揃えないと、行は引けたのに
-					// 題名の突き合わせだけが外れる。
-					if canonical, ok := canonicalPageRefID(id); ok {
-						if _, dup := c.seen[canonical]; !dup {
-							c.seen[canonical] = struct{}{}
-							c.ids = append(c.ids, canonical)
-						}
-					}
-				}
-			}
+		switch v["type"] {
+		case kbPageRefNodeType:
+			c.add(&c.ids, c.seen, v, "pageId")
+		case kbTicketRefNodeType:
+			c.add(&c.ticketIDs, c.seenTicket, v, "ticketId")
 		}
 		c.collect(v["content"])
 	case []any:
@@ -1730,6 +1773,73 @@ func (c *pageRefCollector) collect(node any) {
 			c.collect(child)
 		}
 	}
+}
+
+// add は参照ノードの attrs[idKey] を、その種類の一覧（天井つき）へ重複なしで足す。
+func (c *pageRefCollector) add(list *[]string, seen map[string]struct{}, node map[string]any, idKey string) {
+	if len(*list) >= kbPageRefMaxResolve {
+		return
+	}
+	attrs, ok := node["attrs"].(map[string]any)
+	if !ok {
+		return
+	}
+	id, ok := attrs[idKey].(string)
+	if !ok {
+		return
+	}
+	// UUID の正規形（小文字・ハイフン区切り）へ寄せてから数える。
+	// repository も同じ正規化で照合するので、大文字や中括弧付きの
+	// 表記で保存された参照もここで揃えないと、行は引けたのに
+	// 題名の突き合わせだけが外れる。
+	canonical, ok := canonicalPageRefID(id)
+	if !ok {
+		return
+	}
+	if _, dup := seen[canonical]; dup {
+		return
+	}
+	seen[canonical] = struct{}{}
+	*list = append(*list, canonical)
+}
+
+// ticketRefDisplay は ticketRef ノードへ書き込む表示の写し（kbTicketRefDisplayAttrs と対応）。
+type ticketRefDisplay struct {
+	key, title, statusName, statusCategory string
+}
+
+// rewriteTicketRefDisplays は解決できたチケット参照の表示の写しを書き込む。1 つでも書けば true。
+// 解決できなかった参照は剥がされたまま（ticketId だけ）残り、画面側が代替の見た目を出す。
+func rewriteTicketRefDisplays(node any, displays map[string]ticketRefDisplay) bool {
+	changed := false
+	switch v := node.(type) {
+	case map[string]any:
+		if v["type"] == kbTicketRefNodeType {
+			if attrs, ok := v["attrs"].(map[string]any); ok {
+				if id, ok := attrs["ticketId"].(string); ok {
+					if canonical, cok := canonicalPageRefID(id); cok {
+						if d, found := displays[canonical]; found {
+							attrs["key"] = d.key
+							attrs["title"] = d.title
+							attrs["statusName"] = d.statusName
+							attrs["statusCategory"] = d.statusCategory
+							changed = true
+						}
+					}
+				}
+			}
+		}
+		if rewriteTicketRefDisplays(v["content"], displays) {
+			changed = true
+		}
+	case []any:
+		for _, child := range v {
+			if rewriteTicketRefDisplays(child, displays) {
+				changed = true
+			}
+		}
+	}
+	return changed
 }
 
 // rewritePageRefTitles は解決できた参照の title を書き換える。1 つでも書き換えたら true。

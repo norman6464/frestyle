@@ -807,3 +807,28 @@ SELECT EXISTS (
   SELECT 1 FROM ticket_watchers
   WHERE workspace_id = $1 AND ticket_id = $2 AND user_id = $3
 ) AS watching;
+
+-- name: ListTicketRefFactsByIDs :many
+-- ページ本文のチケット参照（ticketRef）を表示へ解決するための事実を 1 回の問い合わせで返す。
+-- 表示キーの材料（projects.key・tickets.number）と状態（名前・枠）を JOIN で添える —
+-- 参照 1 つごとに GetTicket を呼ぶと、参照を大量に並べた本文で読み出しが参照数に比例して
+-- 遅くなる。
+--
+-- ticket_ids は json 配列（文字列の UUID）。json_array_elements_text で展開する理由と、
+-- 呼び出し側（Go）が UUID として読めない値を先に落とす理由は ListWorkspacePageViewFactsByIDs
+-- と同じ（ここで ::uuid が失敗するとクエリ全体が落ち、壊れた参照 1 つでページの読み出しが死ぬ）。
+--
+-- deleted_at IS NOT NULL は返さない（GetTicket と同じく「無い」扱い）。アーカイブ済みは返す —
+-- 完了して片づけたチケットも参照先として開けるので、鍵と題名を伏せる理由が無い
+-- （ページ参照がアーカイブ済みの題名を伏せるのとは線引きが違う）。
+-- チケットにプロジェクト単位の閲覧権限は無い（ワークスペースの一員なら全チケットを読める）
+-- ため、ワークスペースの一致だけで足りる。
+SELECT t.id, t.number, t.title,
+       p."key" AS project_key,
+       s.name AS status_name, s.category AS status_category
+FROM tickets t
+JOIN projects p ON p.workspace_id = t.workspace_id AND p.id = t.project_id
+JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
+WHERE t.workspace_id = sqlc.arg(workspace_id)
+  AND t.id IN (SELECT value::uuid FROM json_array_elements_text(sqlc.arg(ticket_ids)::json))
+  AND t.deleted_at IS NULL;

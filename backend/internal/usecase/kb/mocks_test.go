@@ -810,3 +810,12 @@ var _ repository.InvitationMailer = (*mockInvitationMailer)(nil)
 func (m *mockInvitationMailer) SendInvitation(ctx context.Context, in repository.InvitationMail) error {
 	return m.Called(ctx, in).Error(0)
 }
+
+// mockTicketRefReader は本文のチケット参照を解決する読み取り口の偽物。
+type mockTicketRefReader struct{ mock.Mock }
+
+func (m *mockTicketRefReader) ListTicketRefFactsByIDs(ctx context.Context, workspaceID string, ticketIDs []string) ([]repository.TicketRefFact, error) {
+	args := m.Called(ctx, workspaceID, ticketIDs)
+	rows, _ := args.Get(0).([]repository.TicketRefFact)
+	return rows, args.Error(1)
+}

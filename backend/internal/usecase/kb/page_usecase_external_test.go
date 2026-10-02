@@ -888,7 +888,7 @@ func Test_ページ参照の題名解決_閲覧できる参照だけを現在の
 			kbUnreachableFacts(unreachable, "届かないページの新題名"),
 		}, nil)
 
-	uc := kb.NewResolvePageRefTitlesUseCase(repo)
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
 		WorkspaceID: kbRefWS, UserID: 7, Doc: kbRefDoc(visible, unreachable),
 	})
@@ -908,7 +908,7 @@ func Test_ページ参照の題名解決_閲覧できる参照だけを現在の
 
 func Test_ページ参照の題名解決_参照が無ければ問い合わせず原文のまま(t *testing.T) {
 	repo := &mockKBPermissionRepo{}
-	uc := kb.NewResolvePageRefTitlesUseCase(repo)
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
 	doc := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"参照なし"}]}]}`
 
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
@@ -922,7 +922,7 @@ func Test_ページ参照の題名解決_参照が無ければ問い合わせず
 
 func Test_ページ参照の題名解決_壊れたdocや取得失敗では原文を返す(t *testing.T) {
 	repo := &mockKBPermissionRepo{}
-	uc := kb.NewResolvePageRefTitlesUseCase(repo)
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
 
 	broken := `{"type":"doc","content":[`
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
@@ -949,7 +949,7 @@ func Test_ページ参照の題名解決_同じ参照は1回だけ数える(t *t
 	dup := "00000000-0000-7000-8000-000000000001"
 	repo.On("ListWorkspacePageViewFactsByIDs", mock.Anything, kbRefWS, uint64(7), []string{dup}).
 		Return([]repository.PageWithViewFacts{kbViewableFacts(dup, "本題")}, nil)
-	uc := kb.NewResolvePageRefTitlesUseCase(repo)
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
 
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
 		WorkspaceID: kbRefWS, UserID: 7, Doc: kbRefDoc(dup, dup),
@@ -972,7 +972,7 @@ func Test_ページ参照の題名解決_解決数の天井は文書順の先頭
 	}
 	repo.On("ListWorkspacePageViewFactsByIDs", mock.Anything, kbRefWS, uint64(7), ids[:100]).
 		Return([]repository.PageWithViewFacts{}, nil)
-	uc := kb.NewResolvePageRefTitlesUseCase(repo)
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
 
 	_, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
 		WorkspaceID: kbRefWS, UserID: 7, Doc: kbRefDoc(ids...),
@@ -989,7 +989,7 @@ func Test_ページ参照の題名解決_pageIdの表記ゆれは正規形へ寄
 	canonical := "00000000-0000-7000-8000-0000000000ab"
 	repo.On("ListWorkspacePageViewFactsByIDs", mock.Anything, kbRefWS, uint64(7), []string{canonical}).
 		Return([]repository.PageWithViewFacts{kbViewableFacts(canonical, "正規形の題名")}, nil)
-	uc := kb.NewResolvePageRefTitlesUseCase(repo)
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
 
 	upper := "00000000-0000-7000-8000-0000000000AB"
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
@@ -1028,7 +1028,7 @@ func Test_ページ参照の題名解決_アーカイブ済みの参照は題名
 	}
 	repo.On("ListWorkspacePageViewFactsByIDs", mock.Anything, kbRefWS, uint64(7), []string{id}).
 		Return([]repository.PageWithViewFacts{archived}, nil)
-	uc := kb.NewResolvePageRefTitlesUseCase(repo)
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
 
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
 		WorkspaceID: kbRefWS, UserID: 7, Doc: kbRefDoc(id),
@@ -1364,4 +1364,94 @@ func Test_カバーURL解決_presignして返す(t *testing.T) {
 	assert.Equal(t, "file", got.Type)
 	assert.Equal(t, "https://example/dl", got.URL)
 	assert.Equal(t, 600, got.ExpiresIn)
+}
+
+// kbTicketRefDoc は ticketRef（表示の写し付き）だけを並べた本文。
+func kbTicketRefDoc(ids ...string) string {
+	content := ""
+	for i, id := range ids {
+		if i > 0 {
+			content += ","
+		}
+		content += fmt.Sprintf(`{"type":"ticketRef","attrs":{"ticketId":%q,"key":"OLD-1","title":"古い題名","statusName":"古い状態","statusCategory":"todo"}}`, id)
+	}
+	return `{"type":"doc","content":[{"type":"paragraph","content":[` + content + `]}]}`
+}
+
+func kbInlineAttrs(t *testing.T, doc string, index int) map[string]any {
+	t.Helper()
+	var root map[string]any
+	require.NoError(t, json.Unmarshal([]byte(doc), &root))
+	inline := root["content"].([]any)[0].(map[string]any)["content"].([]any)
+	return inline[index].(map[string]any)["attrs"].(map[string]any)
+}
+
+func Test_チケット参照の解決_見られるチケットは鍵と題名と状態になる(t *testing.T) {
+	perms := &mockKBPermissionRepo{}
+	tickets := &mockTicketRefReader{}
+	visible := "00000000-0000-7000-8000-0000000000b1"
+	gone := "00000000-0000-7000-8000-0000000000b2"
+	// gone は返ってこない（削除済み・他ワークスペース・存在しない、のどれも同じ）。
+	tickets.On("ListTicketRefFactsByIDs", mock.Anything, kbRefWS, []string{visible, gone}).
+		Return([]repository.TicketRefFact{
+			{ID: visible, ProjectKey: "ENG", Number: 12, Title: "ログインが落ちる", StatusName: "進行中", StatusCategory: domain.TicketStatusCategoryInProgress},
+		}, nil)
+
+	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets)
+	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
+		WorkspaceID: kbRefWS, UserID: 7, Doc: kbTicketRefDoc(visible, gone),
+	})
+	require.NoError(t, err)
+
+	first := kbInlineAttrs(t, got, 0)
+	assert.Equal(t, visible, first["ticketId"])
+	assert.Equal(t, "ENG-12", first["key"], "表示キーはプロジェクトの key と連番から組み立てる")
+	assert.Equal(t, "ログインが落ちる", first["title"])
+	assert.Equal(t, "進行中", first["statusName"])
+	assert.Equal(t, "in_progress", first["statusCategory"])
+
+	// 返ってこなかった参照は表示の写しをすべて剥がす（保存されていた古い値を読み手へ返さない）。
+	second := kbInlineAttrs(t, got, 1)
+	assert.Equal(t, gone, second["ticketId"])
+	for _, key := range []string{"key", "title", "statusName", "statusCategory"} {
+		assert.Nil(t, second[key], key)
+	}
+	perms.AssertNotCalled(t, "ListWorkspacePageViewFactsByIDs")
+	tickets.AssertExpectations(t)
+}
+
+func Test_チケット参照の解決_ページ参照と混ざっていても両方解決する(t *testing.T) {
+	perms := &mockKBPermissionRepo{}
+	tickets := &mockTicketRefReader{}
+	page := "00000000-0000-7000-8000-0000000000a1"
+	ticket := "00000000-0000-7000-8000-0000000000b1"
+	doc := `{"type":"doc","content":[{"type":"paragraph","content":[` +
+		fmt.Sprintf(`{"type":"pageRef","attrs":{"pageId":%q,"title":null}},`, page) +
+		fmt.Sprintf(`{"type":"ticketRef","attrs":{"ticketId":%q}}`, ticket) +
+		`]}]}`
+	perms.On("ListWorkspacePageViewFactsByIDs", mock.Anything, kbRefWS, uint64(7), []string{page}).
+		Return([]repository.PageWithViewFacts{kbViewableFacts(page, "設計メモ")}, nil)
+	tickets.On("ListTicketRefFactsByIDs", mock.Anything, kbRefWS, []string{ticket}).
+		Return([]repository.TicketRefFact{{ID: ticket, ProjectKey: "eng", Number: 3, Title: "表を直す", StatusName: "To Do", StatusCategory: domain.TicketStatusCategoryTodo}}, nil)
+
+	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets)
+	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{WorkspaceID: kbRefWS, UserID: 7, Doc: doc})
+	require.NoError(t, err)
+	assert.Equal(t, "設計メモ", kbInlineAttrs(t, got, 0)["title"])
+	assert.Equal(t, "ENG-3", kbInlineAttrs(t, got, 1)["key"], "鍵は大文字にそろえる")
+	assert.Equal(t, "表を直す", kbInlineAttrs(t, got, 1)["title"])
+}
+
+func Test_チケット参照の解決_取得に失敗したら剥がした本文とエラーを返す(t *testing.T) {
+	tickets := &mockTicketRefReader{}
+	id := "00000000-0000-7000-8000-0000000000b1"
+	tickets.On("ListTicketRefFactsByIDs", mock.Anything, kbRefWS, []string{id}).Return(nil, errors.New("db down"))
+
+	uc := kb.NewResolvePageRefTitlesUseCase(&mockKBPermissionRepo{}, tickets)
+	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{WorkspaceID: kbRefWS, UserID: 7, Doc: kbTicketRefDoc(id)})
+	assert.Error(t, err)
+	attrs := kbInlineAttrs(t, got, 0)
+	assert.Equal(t, id, attrs["ticketId"])
+	assert.Nil(t, attrs["title"], "失敗しても保存されていた古い写しは返さない")
+	assert.Nil(t, attrs["key"])
 }

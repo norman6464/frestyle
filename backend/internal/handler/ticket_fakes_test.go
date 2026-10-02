@@ -1464,3 +1464,9 @@ func (f *ticketFakeRepo) CountTickets(ctx context.Context, in repository.ListTic
 	}
 	return int64(list.Total), nil
 }
+
+// ListTicketRefFactsByIDs は repository.TicketRefReader の偽物（ナレッジの handler テストで
+// 本文のチケット参照は解決しない）。
+func (f *ticketFakeRepo) ListTicketRefFactsByIDs(_ context.Context, _ string, _ []string) ([]repository.TicketRefFact, error) {
+	return nil, nil
+}

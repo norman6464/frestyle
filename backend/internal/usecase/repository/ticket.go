@@ -289,3 +289,26 @@ type TicketRepository interface {
 	// ListTicketAncestors はパンくず用（根から順、自分自身は含まない）。
 	ListTicketAncestors(ctx context.Context, workspaceID, ticketID string) ([]domain.Ticket, error)
 }
+
+// TicketRefFact はページ本文のチケット参照（ticketRef インラインノード）を表示へ解決する
+// ための事実。表示キーは domain.FormatTicketKey(ProjectKey, Number) で組み立てる。
+// 題名と状態は保存せず読み出しのたびにここから引く（本文に写しを焼き込むと、改名や状態の
+// 変化が本文に映らない）。
+type TicketRefFact struct {
+	ID             string
+	ProjectKey     string
+	Number         int64
+	Title          string
+	StatusName     string
+	StatusCategory domain.TicketStatusCategory
+}
+
+// TicketRefReader は本文のチケット参照を解決する読み取り口。TicketRepository から分けるのは、
+// ナレッジ側の解決 usecase がチケットの書き込み口まで握らないようにするため（必要なのは
+// この 1 口だけで、TicketRepository を要求すると偽物やモックの実装面が無駄に広がる）。
+type TicketRefReader interface {
+	// ListTicketRefFactsByIDs は指定 ID 群のうち、同じワークスペースの削除されていない
+	// チケットを返す（アーカイブ済みは含む）。UUID として読めない ID は落とし、無い ID は
+	// 結果に現れない。順序は保証しない。
+	ListTicketRefFactsByIDs(ctx context.Context, workspaceID string, ticketIDs []string) ([]TicketRefFact, error)
+}

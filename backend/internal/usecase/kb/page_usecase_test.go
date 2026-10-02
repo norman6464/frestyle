@@ -605,3 +605,26 @@ func Test_doc分解_入れ子のインラインの中の色も検査する(t *te
 	require.NotContains(t, *tree[0].Inline, "highlight")
 	require.Contains(t, *tree[0].Inline, "内側")
 }
+
+// チケット参照の表示の写し（鍵・題名・状態）は読み手ごとに読み出し時へ解決する派生値で、
+// ページ参照の題名と同じ理由で保存しない。参照先の id だけを残す。
+func Test_StripPageRefTitles_チケット参照の表示の写しも剥がす(t *testing.T) {
+	doc := `{"type":"doc","content":[{"type":"paragraph","content":[` +
+		`{"type":"ticketRef","attrs":{"ticketId":"00000000-0000-7000-8000-0000000000b1","key":"ENG-1","title":"題名","statusName":"To Do","statusCategory":"todo"}},` +
+		`{"type":"text","text":"のあと"}]}]}`
+	got := StripPageRefTitles(doc)
+	var root map[string]any
+	require.NoError(t, json.Unmarshal([]byte(got), &root))
+	inline := root["content"].([]any)[0].(map[string]any)["content"].([]any)
+	attrs := inline[0].(map[string]any)["attrs"].(map[string]any)
+	require.Equal(t, "00000000-0000-7000-8000-0000000000b1", attrs["ticketId"])
+	for _, key := range []string{"key", "title", "statusName", "statusCategory"} {
+		require.Nil(t, attrs[key], key)
+	}
+	require.Equal(t, "のあと", inline[1].(map[string]any)["text"])
+}
+
+func Test_StripPageRefTitles_写しの無いチケット参照はそのまま(t *testing.T) {
+	doc := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"ticketRef","attrs":{"ticketId":"00000000-0000-7000-8000-0000000000b1"}}]}]}`
+	require.Equal(t, doc, StripPageRefTitles(doc))
+}
