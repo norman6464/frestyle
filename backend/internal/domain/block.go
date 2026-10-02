@@ -29,6 +29,43 @@ const (
 	BlockTypeTableCell      BlockType = "tableCell"
 	BlockTypeImage          BlockType = "image"
 	BlockTypeHorizontalRule BlockType = "horizontalRule"
+	// 容器（第 4 段）。注意書き・折りたたみ（要約は葉、中身は容器）・段組み（列は容器）。
+	BlockTypeCallout        BlockType = "callout"
+	BlockTypeDetails        BlockType = "details"
+	BlockTypeDetailsSummary BlockType = "detailsSummary"
+	BlockTypeDetailsContent BlockType = "detailsContent"
+	BlockTypeColumns        BlockType = "columns"
+	BlockTypeColumn         BlockType = "column"
+)
+
+// CalloutKind は注意書きの種類（見た目の色と印）。既定は info。
+type CalloutKind string
+
+const (
+	CalloutKindInfo    CalloutKind = "info"
+	CalloutKindWarning CalloutKind = "warning"
+	CalloutKindDanger  CalloutKind = "danger"
+	CalloutKindSuccess CalloutKind = "success"
+)
+
+// ValidCalloutKinds は保存を許す注意書きの種類。知らない値は保存側が CalloutKindInfo に落とす
+// （見た目の手がかりでしかなく、落とす理由にはしない。コードブロックの言語と同じ扱い）。
+var ValidCalloutKinds = []CalloutKind{CalloutKindInfo, CalloutKindWarning, CalloutKindDanger, CalloutKindSuccess}
+
+// IsCalloutKind は保存を許す注意書きの種類かを返す。
+func IsCalloutKind(kind string) bool {
+	for _, k := range ValidCalloutKinds {
+		if string(k) == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// 段組みの列数の範囲。狭い画面では縦に積むので、これ以上の列は読みづらくなるだけ。
+const (
+	ColumnsMinCount = 2
+	ColumnsMaxCount = 3
 )
 
 // blockTypeSpec は種類 1 つの定義。Container は「子がブロック行になる容器」かどうか。
@@ -62,6 +99,12 @@ var blockTypeSpecs = []blockTypeSpec{
 	{BlockTypeTableCell, true},
 	{BlockTypeImage, false},
 	{BlockTypeHorizontalRule, false},
+	{BlockTypeCallout, true},
+	{BlockTypeDetails, true},
+	{BlockTypeDetailsSummary, false},
+	{BlockTypeDetailsContent, true},
+	{BlockTypeColumns, true},
+	{BlockTypeColumn, true},
 }
 
 // ValidBlockTypes は保存を許すノード名の一覧。blockTypeSpecs から導く。

@@ -153,6 +153,20 @@ func Test_doc往復_分解して組み立てると同値(t *testing.T) {
 			]}`,
 		},
 		{
+			name: "注意書きと折りたたみと段組み",
+			doc: `{"type":"doc","content":[
+				{"type":"callout","attrs":{"kind":"warning"},"content":[{"type":"paragraph","content":[{"type":"text","text":"注意"}]}]},
+				{"type":"details","attrs":{"open":true},"content":[
+					{"type":"detailsSummary","content":[{"type":"text","text":"要約"}]},
+					{"type":"detailsContent","content":[{"type":"paragraph","content":[{"type":"text","text":"中身"}]}]}
+				]},
+				{"type":"columns","attrs":{"count":2},"content":[
+					{"type":"column","content":[{"type":"paragraph","content":[{"type":"text","text":"左"}]}]},
+					{"type":"column","content":[{"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"右"}]}]}
+				]}
+			]}`,
+		},
+		{
 			name: "画像と区切り線と引用",
 			doc: `{"type":"doc","content":[
 				{"type":"image","attrs":{"src":"kb/ws1/page1/1.bin","alt":"代替","title":null}},
@@ -637,4 +651,99 @@ func Test_StripPageRefTitles_名指しの名前も剥がす(t *testing.T) {
 	attrs := root["content"].([]any)[0].(map[string]any)["content"].([]any)[0].(map[string]any)["attrs"].(map[string]any)
 	require.Equal(t, "5", attrs["userId"])
 	require.Nil(t, attrs["name"])
+}
+
+// 容器を葉として登録してしまうと、保存は通るのに中の段落が丸ごと 1 行の inline に入り、
+// 検索・コメント・被リンクが黙って壊れる。第 4 段の容器が行の形でもそうなっていないことを固定する。
+func Test_doc分解_容器の中の段落は行になり容器自身のinlineはNULL(t *testing.T) {
+	cases := []struct {
+		name string
+		doc  string
+		// want は 文書順の (種類, 親の種類)。親が無ければ ""。
+		want [][2]domain.BlockType
+	}{
+		{
+			"注意書き",
+			`{"type":"doc","content":[{"type":"callout","attrs":{"kind":"info"},"content":[{"type":"paragraph","content":[{"type":"text","text":"a"}]}]}]}`,
+			[][2]domain.BlockType{{domain.BlockTypeCallout, ""}, {domain.BlockTypeParagraph, domain.BlockTypeCallout}},
+		},
+		{
+			"折りたたみ（要約は葉・中身は容器）",
+			`{"type":"doc","content":[{"type":"details","content":[` +
+				`{"type":"detailsSummary","content":[{"type":"text","text":"s"}]},` +
+				`{"type":"detailsContent","content":[{"type":"paragraph","content":[{"type":"text","text":"b"}]}]}]}]}`,
+			[][2]domain.BlockType{
+				{domain.BlockTypeDetails, ""},
+				{domain.BlockTypeDetailsSummary, domain.BlockTypeDetails},
+				{domain.BlockTypeDetailsContent, domain.BlockTypeDetails},
+				{domain.BlockTypeParagraph, domain.BlockTypeDetailsContent},
+			},
+		},
+		{
+			"段組み",
+			`{"type":"doc","content":[{"type":"columns","attrs":{"count":2},"content":[` +
+				`{"type":"column","content":[{"type":"paragraph","content":[{"type":"text","text":"l"}]}]},` +
+				`{"type":"column","content":[{"type":"paragraph","content":[{"type":"text","text":"r"}]}]}]}]}`,
+			[][2]domain.BlockType{
+				{domain.BlockTypeColumns, ""},
+				{domain.BlockTypeColumn, domain.BlockTypeColumns},
+				{domain.BlockTypeParagraph, domain.BlockTypeColumn},
+				{domain.BlockTypeColumn, domain.BlockTypeColumns},
+				{domain.BlockTypeParagraph, domain.BlockTypeColumn},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tree, err := parsePageDoc(tc.doc)
+			require.NoError(t, err)
+			rows, err := flattenPageDoc(tree)
+			require.NoError(t, err)
+			require.Len(t, rows, len(tc.want))
+			byID := map[string]repository.BlockWrite{}
+			for _, r := range rows {
+				byID[r.ID] = r
+			}
+			for i, r := range rows {
+				require.Equal(t, tc.want[i][0], r.Type, "行 %d の種類", i)
+				if tc.want[i][1] == "" {
+					require.Nil(t, r.ParentID, "行 %d は最上位", i)
+				} else {
+					require.NotNil(t, r.ParentID, "行 %d の親", i)
+					require.Equal(t, tc.want[i][1], byID[*r.ParentID].Type, "行 %d の親の種類", i)
+				}
+				if r.Type.IsContainer() {
+					require.Nil(t, r.Inline, "容器 %s の inline は NULL", r.Type)
+				} else {
+					require.NotNil(t, r.Inline, "葉 %s の inline は中身を持つ", r.Type)
+				}
+			}
+		})
+	}
+}
+
+func Test_doc分解_容器のattrsは許した形だけ残す(t *testing.T) {
+	cases := []struct {
+		name string
+		node string
+		want string // 正規化後の attrs（JSON）
+	}{
+		{"注意書きの kind は許可リストの値を残す", `{"type":"callout","attrs":{"kind":"danger"},"content":[{"type":"paragraph"}]}`, `{"kind":"danger"}`},
+		{"知らない kind は info に落とす", `{"type":"callout","attrs":{"kind":"neon"},"content":[{"type":"paragraph"}]}`, `{"kind":"info"}`},
+		{"文字列でない kind は info に落とす", `{"type":"callout","attrs":{"kind":3},"content":[{"type":"paragraph"}]}`, `{"kind":"info"}`},
+		{"kind が無ければ info を入れる", `{"type":"callout","content":[{"type":"paragraph"}]}`, `{"kind":"info"}`},
+		{"折りたたみの open は真偽を残す", `{"type":"details","attrs":{"open":true},"content":[{"type":"detailsSummary"}]}`, `{"open":true}`},
+		{"折りたたみの open が真偽でなければ外す", `{"type":"details","attrs":{"open":"yes"},"content":[{"type":"detailsSummary"}]}`, `{}`},
+		{"段組みの count は 2〜3 を残す", `{"type":"columns","attrs":{"count":3},"content":[{"type":"column"}]}`, `{"count":3}`},
+		{"段組みの count が範囲外なら外す", `{"type":"columns","attrs":{"count":5},"content":[{"type":"column"}]}`, `{}`},
+		{"段組みの count が整数でなければ外す", `{"type":"columns","attrs":{"count":"2"},"content":[{"type":"column"}]}`, `{}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tree, err := parsePageDoc(`{"type":"doc","content":[` + tc.node + `]}`)
+			require.NoError(t, err)
+			require.Len(t, tree, 1)
+			require.JSONEq(t, tc.want, tree[0].Attrs)
+		})
+	}
 }

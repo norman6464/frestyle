@@ -515,3 +515,41 @@ func TestKnowledgeBasePagesReferencingTicket_Integration(t *testing.T) {
 	assert.ElementsMatch(t, []string{visibleSource.ID}, ids,
 		"見える埋め込み元だけが出て、権限の無いスペースの埋め込み元は出ない")
 }
+
+// TestKnowledgeBaseContainersSearchAndLinks_Integration は第 4 段の容器（注意書き・折りたたみ・
+// 段組み）の中の文字が本文検索に載り、中の pageRef が被リンクに載ることを実 PostgreSQL で固定する。
+// 容器を葉として登録し忘れると、保存は通るのにここが黙って壊れる。
+func TestKnowledgeBaseContainersSearchAndLinks_Integration(t *testing.T) {
+	sqlDB := testsupport.OpenTestDB(t)
+	uc := newKbUseCases(sqlDB)
+	ctx := context.Background()
+
+	testsupport.TruncateAll(t, sqlDB, kbTables...)
+	ws := createWorkspace(t, sqlDB, "ws-containers")
+	space := createSpace(t, sqlDB, ws, "eng")
+	target := mustCreatePage(ctx, t, uc, ws, space, nil, "参照先")
+	page := mustCreatePage(ctx, t, uc, ws, space, nil, "容器のページ")
+
+	doc := `{"type":"doc","content":[` +
+		`{"type":"callout","attrs":{"kind":"warning"},"content":[{"type":"paragraph","content":[{"type":"text","text":"注意書きの中の文字"}]}]},` +
+		`{"type":"details","attrs":{"open":false},"content":[` +
+		`{"type":"detailsSummary","content":[{"type":"text","text":"折りたたみの要約"}]},` +
+		`{"type":"detailsContent","content":[{"type":"paragraph","content":[{"type":"text","text":"折りたたみの中身 "},{"type":"pageRef","attrs":{"pageId":"` + target.ID + `"}}]}]}]},` +
+		`{"type":"columns","attrs":{"count":2},"content":[` +
+		`{"type":"column","content":[{"type":"paragraph","content":[{"type":"text","text":"左の列"}]}]},` +
+		`{"type":"column","content":[{"type":"paragraph","content":[{"type":"text","text":"右の列"}]}]}]}` +
+		`]}`
+	_, err := uc.replace.Execute(ctx, kb.ReplacePageBlocksInput{WorkspaceID: ws, PageID: page.ID, Doc: doc, EditorUserID: 1})
+	require.NoError(t, err)
+
+	_, body, found := queryPageSearchRow(t, sqlDB, page.ID)
+	require.True(t, found)
+	for _, text := range []string{"注意書きの中の文字", "折りたたみの要約", "折りたたみの中身", "左の列", "右の列"} {
+		assert.Contains(t, body, text)
+	}
+	assert.Equal(t, 1, countPageLinksForPage(t, sqlDB, ws, page.ID), "折りたたみの中の pageRef が被リンクになる")
+
+	var rows int
+	require.NoError(t, sqlDB.QueryRow(`SELECT count(*) FROM blocks WHERE page_id = $1`, page.ID).Scan(&rows))
+	assert.Equal(t, 11, rows, "callout+p（2）, details+summary+content+p（4）, columns+column+p+column+p（5）")
+}

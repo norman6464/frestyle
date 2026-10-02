@@ -543,6 +543,28 @@ func normalizeBlockAttrs(t domain.BlockType, m map[string]json.RawMessage) error
 		if err := json.Unmarshal(raw, &lang); err != nil || !kbCodeBlockLanguages[lang] {
 			delete(m, "language")
 		}
+	case domain.BlockTypeCallout:
+		// kind は見た目の種類。知らない値・無い・文字列でないは既定（info）に落とす。
+		var kind string
+		if raw, ok := m["kind"]; !ok || json.Unmarshal(raw, &kind) != nil || !domain.IsCalloutKind(kind) {
+			m["kind"] = json.RawMessage(`"` + string(domain.CalloutKindInfo) + `"`)
+		}
+	case domain.BlockTypeDetails:
+		// open は真偽だけ。それ以外は外す（既定は閉じている。書いた人が決めた既定を保存する）。
+		if raw, ok := m["open"]; ok {
+			var open bool
+			if json.Unmarshal(raw, &open) != nil {
+				delete(m, "open")
+			}
+		}
+	case domain.BlockTypeColumns:
+		// count は列数（2〜3 の整数）。範囲外・整数でなければ外す（画面は列の数から決める）。
+		if raw, ok := m["count"]; ok {
+			var count int
+			if json.Unmarshal(raw, &count) != nil || count < domain.ColumnsMinCount || count > domain.ColumnsMaxCount {
+				delete(m, "count")
+			}
+		}
 	}
 	return nil
 }
