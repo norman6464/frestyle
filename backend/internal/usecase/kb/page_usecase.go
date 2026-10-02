@@ -967,21 +967,11 @@ func (u *ReplacePageBlocksUseCase) Execute(ctx context.Context, in ReplacePageBl
 	if page.ArchivedAt != nil {
 		return nil, ErrPageArchived
 	}
-	// @名指しの通知の材料。前の本文（snapshot）に無かった人だけに送るので、置き換える前に
-	// 読む。名指しが無ければ読まない（通常の保存に余計な問い合わせを足さない）。
+	// @名指しの通知の材料。前の本文（snapshot）に無かった人だけに送るので、置き換える前の本文が
+	// 要る — ただし読むのはトランザクションの中、ページ行をロックした後（下の DoInTx 参照）。
+	// 名指しが無ければ読まない（通常の保存に余計な問い合わせを足さない）。
 	mentioned := collectMentionUserIDs(in.Doc)
 	previouslyMentioned := map[uint64]struct{}{}
-	if len(mentioned) > 0 {
-		previous, err := u.repo.GetPageSnapshot(ctx, in.WorkspaceID, in.PageID)
-		if err != nil && !errors.Is(err, repository.ErrPageSnapshotNotFound) {
-			return nil, err
-		}
-		if previous != nil {
-			for _, id := range collectMentionUserIDs(previous.Doc) {
-				previouslyMentioned[id] = struct{}{}
-			}
-		}
-	}
 	// ページ参照の title は読み手ごとの派生値なので保存しない（StripPageRefTitles の
 	// コメント参照 — 保存すると、解決済みの題名が編集者の保存で本文へ焼き込まれ、
 	// 閲覧できない読み手にも返ってしまう）。
@@ -1022,6 +1012,20 @@ func (u *ReplacePageBlocksUseCase) Execute(ctx context.Context, in ReplacePageBl
 	if err := u.txManager.DoInTx(ctx, func(ctx context.Context) error {
 		if err := u.repo.TouchPageLastEditedBy(ctx, in.WorkspaceID, in.PageID, in.EditorUserID); err != nil {
 			return err
+		}
+		if len(mentioned) > 0 {
+			// 前の本文はページ行のロック（上の Touch）を取ってから読む。外で読むと、同じページへの
+			// 同時保存が同じ古い本文を基準にして、同じ相手へ 2 回通知する／消した名指しを基準に
+			// 誤って通知する、が起きる（自動保存は頻繁に走るので現実に起こる）。
+			previous, err := u.repo.GetPageSnapshot(ctx, in.WorkspaceID, in.PageID)
+			if err != nil && !errors.Is(err, repository.ErrPageSnapshotNotFound) {
+				return err
+			}
+			if previous != nil {
+				for _, id := range collectMentionUserIDs(previous.Doc) {
+					previouslyMentioned[id] = struct{}{}
+				}
+			}
 		}
 		if err := u.repo.ReplacePageBlocks(ctx, in.WorkspaceID, in.PageID, rows, normalized, page.Title, body, pageLinks, pageTicketLinks); err != nil {
 			return err
@@ -1954,6 +1958,11 @@ func mentionUserIDOf(v any) (uint64, bool) {
 
 // collectMentionUserIDs は本文（JSON 文字列）から @名指しの userId を文書順・重複なしで集める。
 // 読めない本文は「名指し無し」。
+//
+// 天井（kbPageRefMaxResolve = 100 人）は名前の解決だけでなく保存時の通知にも効く — これは意図した
+// 線引きで、1 回の保存で 100 人を超えて新しく名指しすることは運用上あり得ず、超過分は黙って
+// 対象外にする（チケットの発言の ExtractTicketCommentMentions と同じ判断。上限を外すと、本文の
+// 大きさに比例して保存のたびの権限確認が伸び、長い本文で保存を遅くできてしまう）。
 func collectMentionUserIDs(doc string) []uint64 {
 	var root any
 	if err := json.Unmarshal([]byte(doc), &root); err != nil {
