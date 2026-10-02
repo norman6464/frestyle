@@ -628,3 +628,13 @@ func Test_StripPageRefTitles_写しの無いチケット参照はそのまま(t 
 	doc := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"ticketRef","attrs":{"ticketId":"00000000-0000-7000-8000-0000000000b1"}}]}]}`
 	require.Equal(t, doc, StripPageRefTitles(doc))
 }
+
+func Test_StripPageRefTitles_名指しの名前も剥がす(t *testing.T) {
+	doc := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"mention","attrs":{"userId":"5","name":"田中"}}]}]}`
+	got := StripPageRefTitles(doc)
+	var root map[string]any
+	require.NoError(t, json.Unmarshal([]byte(got), &root))
+	attrs := root["content"].([]any)[0].(map[string]any)["content"].([]any)[0].(map[string]any)["attrs"].(map[string]any)
+	require.Equal(t, "5", attrs["userId"])
+	require.Nil(t, attrs["name"])
+}

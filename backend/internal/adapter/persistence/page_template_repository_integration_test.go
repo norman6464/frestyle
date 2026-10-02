@@ -160,7 +160,7 @@ func TestCreatePageFromTemplate_TwoPagesDoNotCollide_Integration(t *testing.T) {
 	templateRepo := persistence.NewPageTemplateRepository(sqlDB)
 	checkSpace := kb.NewCheckSpacePermissionUseCase(persistence.NewKnowledgeBasePermissionRepository(sqlDB))
 
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, txManager, versionRepo)
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, txManager, versionRepo, persistence.NewKnowledgeBasePermissionRepository(sqlDB), persistence.NewNotificationRepository(sqlDB))
 	createPageUC := kb.NewCreatePageUseCase(kbRepo)
 	deletePageUC := kb.NewDeletePageUseCase(kbRepo)
 	createTemplateUC := kb.NewCreateTemplateFromPageUseCase(kbRepo, templateRepo, checkSpace)
@@ -229,7 +229,7 @@ func TestCreateTemplateFromPage_StripsPageRefAndImage_Integration(t *testing.T) 
 	txManager := persistence.NewTxManager(sqlDB)
 	versionRepo := persistence.NewPageVersionRepository(sqlDB)
 	templateRepo := persistence.NewPageTemplateRepository(sqlDB)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, txManager, versionRepo)
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, txManager, versionRepo, persistence.NewKnowledgeBasePermissionRepository(sqlDB), persistence.NewNotificationRepository(sqlDB))
 	checkSpace := kb.NewCheckSpacePermissionUseCase(persistence.NewKnowledgeBasePermissionRepository(sqlDB))
 	createTemplateUC := kb.NewCreateTemplateFromPageUseCase(kbRepo, templateRepo, checkSpace)
 

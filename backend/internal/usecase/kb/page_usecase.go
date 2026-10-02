@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -919,16 +921,22 @@ func BuildPageTree(pages []domain.Page, policy PageTreeOrphanPolicy) []*PageTree
 // でも崩さないため。本文の保存に続けて versionRepo.CreateVersionIfDue を同じトランザクションで
 // 呼ぶ（版と履歴）。通常の自動保存は 10 分規則で間引かれ、Input.ForceVersion が true のとき
 // （「版を残す」・復元）だけ必ず 1 件切る。
+// 本文の保存は @名指しの「公開」でもある。前の本文（snapshot）に無かった名指しだけを対象に、
+// ページを見られる一員へ page_mentioned 通知を送る（本人は除く）。通知の作成に失敗しても
+// 保存は失敗させない（既に書き終えているため。チケットの発言と同じ）。
 type ReplacePageBlocksUseCase struct {
 	repo        repository.KnowledgeBaseRepository
 	txManager   repository.TxManager
 	versionRepo repository.PageVersionRepository
+	perms       repository.KnowledgeBasePermissionRepository
+	notifs      repository.NotificationRepository
 }
 
 func NewReplacePageBlocksUseCase(
 	r repository.KnowledgeBaseRepository, txManager repository.TxManager, versionRepo repository.PageVersionRepository,
+	perms repository.KnowledgeBasePermissionRepository, notifs repository.NotificationRepository,
 ) *ReplacePageBlocksUseCase {
-	return &ReplacePageBlocksUseCase{repo: r, txManager: txManager, versionRepo: versionRepo}
+	return &ReplacePageBlocksUseCase{repo: r, txManager: txManager, versionRepo: versionRepo, perms: perms, notifs: notifs}
 }
 
 type ReplacePageBlocksInput struct {
@@ -958,6 +966,21 @@ func (u *ReplacePageBlocksUseCase) Execute(ctx context.Context, in ReplacePageBl
 	}
 	if page.ArchivedAt != nil {
 		return nil, ErrPageArchived
+	}
+	// @名指しの通知の材料。前の本文（snapshot）に無かった人だけに送るので、置き換える前に
+	// 読む。名指しが無ければ読まない（通常の保存に余計な問い合わせを足さない）。
+	mentioned := collectMentionUserIDs(in.Doc)
+	previouslyMentioned := map[uint64]struct{}{}
+	if len(mentioned) > 0 {
+		previous, err := u.repo.GetPageSnapshot(ctx, in.WorkspaceID, in.PageID)
+		if err != nil && !errors.Is(err, repository.ErrPageSnapshotNotFound) {
+			return nil, err
+		}
+		if previous != nil {
+			for _, id := range collectMentionUserIDs(previous.Doc) {
+				previouslyMentioned[id] = struct{}{}
+			}
+		}
 	}
 	// ページ参照の title は読み手ごとの派生値なので保存しない（StripPageRefTitles の
 	// コメント参照 — 保存すると、解決済みの題名が編集者の保存で本文へ焼き込まれ、
@@ -1010,7 +1033,52 @@ func (u *ReplacePageBlocksUseCase) Execute(ctx context.Context, in ReplacePageBl
 	}); err != nil {
 		return nil, err
 	}
+	if len(mentioned) > 0 {
+		u.notifyNewMentions(ctx, page, mentioned, previouslyMentioned, in.EditorUserID)
+	}
 	return u.repo.GetPageSnapshot(ctx, in.WorkspaceID, in.PageID)
+}
+
+// notifyNewMentions は本文に新しく現れた @名指しの相手へ page_mentioned 通知を送る。
+// 前の本文にいた人・保存した本人は対象外。相手がページを見られるか（一員で、役割と公開範囲が
+// 許すか）は 1 人ずつ PagePermissionFactsForUser で確かめる — 新しく増える名指しは 1 回の保存で
+// 数人までで、ページ単位の可視判定に一括の口は無い。失敗はログに残して保存は成功のままにする。
+func (u *ReplacePageBlocksUseCase) notifyNewMentions(
+	ctx context.Context, page *domain.Page, mentioned []uint64, previouslyMentioned map[uint64]struct{}, editorUserID uint64,
+) {
+	var notifs []domain.Notification
+	for _, userID := range mentioned {
+		if userID == editorUserID {
+			continue
+		}
+		if _, already := previouslyMentioned[userID]; already {
+			continue
+		}
+		facts, err := u.perms.PagePermissionFactsForUser(ctx, page.WorkspaceID, page.ID, userID)
+		if err != nil {
+			slog.WarnContext(ctx, "page mention: permission check failed", "err", err, "pageId", page.ID, "userId", userID)
+			continue
+		}
+		if !domain.ResolvePagePermission(*facts).CanView {
+			continue
+		}
+		notifs = append(notifs, domain.Notification{
+			UserID: userID, Type: domain.NotificationTypePageMentioned,
+			Title: "ページで名指しされました", Body: page.Title,
+			LinkPath: pageLinkPath(page.ID),
+		})
+	}
+	if len(notifs) == 0 {
+		return
+	}
+	if err := u.notifs.CreateMany(ctx, notifs); err != nil {
+		slog.WarnContext(ctx, "page mention: notification create failed", "err", err, "pageId", page.ID)
+	}
+}
+
+// pageLinkPath は通知からページへ飛ぶためのアプリ内パス。フロントの /kb/:pageId と一致させる。
+func pageLinkPath(pageID string) string {
+	return "/kb/" + pageID
 }
 
 // SetPageIconUseCase はページのアイコンを設定・解除する（Input.Icon が nil なら解除）。
@@ -1470,6 +1538,10 @@ const kbPageRefMaxResolve = 100
 // （page_ticket_links）の両方で同じノード型を使い回す。
 const kbTicketRefNodeType = "ticketRef"
 
+// kbMentionNodeType は本文中の「@名指し」インラインノードの type 名。attrs.userId は users.id の
+// 10 進文字列（チケットの発言の mention と同じ）、attrs.name は表示のための写し（保存しない）。
+const kbMentionNodeType = "mention"
+
 // ResolvePageRefTitlesUseCase は本文（ProseMirror doc）中のページ参照の題名を、
 // 読み手にとっての「いまの題名」へ差し替える。
 //
@@ -1483,10 +1555,13 @@ const kbTicketRefNodeType = "ticketRef"
 type ResolvePageRefTitlesUseCase struct {
 	perms   repository.KnowledgeBasePermissionRepository
 	tickets repository.TicketRefReader
+	users   repository.UserDisplayReader
 }
 
-func NewResolvePageRefTitlesUseCase(r repository.KnowledgeBasePermissionRepository, tickets repository.TicketRefReader) *ResolvePageRefTitlesUseCase {
-	return &ResolvePageRefTitlesUseCase{perms: r, tickets: tickets}
+func NewResolvePageRefTitlesUseCase(
+	r repository.KnowledgeBasePermissionRepository, tickets repository.TicketRefReader, users repository.UserDisplayReader,
+) *ResolvePageRefTitlesUseCase {
+	return &ResolvePageRefTitlesUseCase{perms: r, tickets: tickets, users: users}
 }
 
 type ResolvePageRefTitlesInput struct {
@@ -1505,7 +1580,7 @@ func (u *ResolvePageRefTitlesUseCase) Execute(ctx context.Context, in ResolvePag
 	}
 	collector := newPageRefCollector()
 	collector.collect(root)
-	if len(collector.ids) == 0 && len(collector.ticketIDs) == 0 {
+	if len(collector.ids) == 0 && len(collector.ticketIDs) == 0 && len(collector.mentionIDs) == 0 {
 		return in.Doc, nil
 	}
 	// 参照があるなら、まず保存されている title（チケット参照なら鍵・題名・状態の写し）を
@@ -1579,6 +1654,22 @@ func (u *ResolvePageRefTitlesUseCase) Execute(ctx context.Context, in ResolvePag
 			}
 		}
 	}
+	if len(collector.mentionIDs) > 0 {
+		// 名指しの名前には閲覧の判定を挟まない — 本文を書いた人が意図して置いた相手の表示名で、
+		// ページを読める人なら見てよい情報。退会・停止していても解決する（記録を「誰か分からない」
+		// にしない。FindDisplayByID と同じ線引き）。無い ID は剥がしたまま残る。
+		displays, err := u.users.ListUserDisplaysByIDs(ctx, collector.mentionIDs)
+		if err != nil {
+			return fail(err)
+		}
+		names := make(map[uint64]string, len(displays))
+		for _, d := range displays {
+			names[d.UserID] = d.Name
+		}
+		if rewriteMentionNames(root, names) {
+			rewritten = true
+		}
+	}
 	if !stripped && !rewritten {
 		return in.Doc, nil
 	}
@@ -1589,8 +1680,8 @@ func (u *ResolvePageRefTitlesUseCase) Execute(ctx context.Context, in ResolvePag
 	return out, nil
 }
 
-// StripPageRefTitles は保存前の doc からページ参照の title と、チケット参照の表示の写し
-// （kbTicketRefDisplayAttrs）を取り除く。
+// StripPageRefTitles は保存前の doc からページ参照の title・チケット参照の表示の写し
+// （kbTicketRefDisplayAttrs）・@名指しの name を取り除く。
 //
 // title は**読み手ごとに**読み出し時へ解決する派生値で、保存してはいけない。
 // 保存すると、閲覧できる編集者の画面で解決された現在の題名が、その人の通常の
@@ -1637,6 +1728,13 @@ func stripPageRefTitlesNode(node any) bool {
 						attrs[key] = nil
 						changed = true
 					}
+				}
+			}
+		case kbMentionNodeType:
+			if attrs, ok := v["attrs"].(map[string]any); ok {
+				if _, has := attrs["name"]; has && attrs["name"] != nil {
+					attrs["name"] = nil
+					changed = true
 				}
 			}
 		}
@@ -1749,18 +1847,24 @@ func stripNodeIDs(node any) {
 // 参照を大量に並べた本文で CPU を燃やせてしまう）。
 // 辿るのは content 配列だけ（map の range だと順序が実行ごとに変わり天井の位置が不定になる）。
 type pageRefCollector struct {
-	ids        []string
-	ticketIDs  []string
-	seen       map[string]struct{}
-	seenTicket map[string]struct{}
+	ids         []string
+	ticketIDs   []string
+	mentionIDs  []uint64
+	seen        map[string]struct{}
+	seenTicket  map[string]struct{}
+	seenMention map[uint64]struct{}
 }
 
 func newPageRefCollector() *pageRefCollector {
-	return &pageRefCollector{seen: map[string]struct{}{}, seenTicket: map[string]struct{}{}}
+	return &pageRefCollector{
+		seen: map[string]struct{}{}, seenTicket: map[string]struct{}{}, seenMention: map[uint64]struct{}{},
+	}
 }
 
 func (c *pageRefCollector) full() bool {
-	return len(c.ids) >= kbPageRefMaxResolve && len(c.ticketIDs) >= kbPageRefMaxResolve
+	return len(c.ids) >= kbPageRefMaxResolve &&
+		len(c.ticketIDs) >= kbPageRefMaxResolve &&
+		len(c.mentionIDs) >= kbPageRefMaxResolve
 }
 
 func (c *pageRefCollector) collect(node any) {
@@ -1774,6 +1878,8 @@ func (c *pageRefCollector) collect(node any) {
 			c.add(&c.ids, c.seen, v, "pageId")
 		case kbTicketRefNodeType:
 			c.add(&c.ticketIDs, c.seenTicket, v, "ticketId")
+		case kbMentionNodeType:
+			c.addMention(v)
 		}
 		c.collect(v["content"])
 	case []any:
@@ -1809,6 +1915,81 @@ func (c *pageRefCollector) add(list *[]string, seen map[string]struct{}, node ma
 	}
 	seen[canonical] = struct{}{}
 	*list = append(*list, canonical)
+}
+
+// addMention は @名指しノードの attrs.userId を、天井つき・重複なしで mentionIDs へ足す。
+// 不正な値（数値でない・0）は黙って無視する（保存を落とす理由にはしない — チケットの発言の
+// ExtractTicketCommentMentions と同じ扱い）。
+func (c *pageRefCollector) addMention(node map[string]any) {
+	if len(c.mentionIDs) >= kbPageRefMaxResolve {
+		return
+	}
+	attrs, ok := node["attrs"].(map[string]any)
+	if !ok {
+		return
+	}
+	id, ok := mentionUserIDOf(attrs["userId"])
+	if !ok {
+		return
+	}
+	if _, dup := c.seenMention[id]; dup {
+		return
+	}
+	c.seenMention[id] = struct{}{}
+	c.mentionIDs = append(c.mentionIDs, id)
+}
+
+// mentionUserIDOf は attrs.userId（users.id の 10 進文字列）を読む。
+func mentionUserIDOf(v any) (uint64, bool) {
+	raw, ok := v.(string)
+	if !ok {
+		return 0, false
+	}
+	id, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil || id == 0 {
+		return 0, false
+	}
+	return id, true
+}
+
+// collectMentionUserIDs は本文（JSON 文字列）から @名指しの userId を文書順・重複なしで集める。
+// 読めない本文は「名指し無し」。
+func collectMentionUserIDs(doc string) []uint64 {
+	var root any
+	if err := json.Unmarshal([]byte(doc), &root); err != nil {
+		return nil
+	}
+	collector := newPageRefCollector()
+	collector.collect(root)
+	return collector.mentionIDs
+}
+
+// rewriteMentionNames は解決できた名指しの name を書き込む。1 つでも書けば true。
+func rewriteMentionNames(node any, names map[uint64]string) bool {
+	changed := false
+	switch v := node.(type) {
+	case map[string]any:
+		if v["type"] == kbMentionNodeType {
+			if attrs, ok := v["attrs"].(map[string]any); ok {
+				if id, ok := mentionUserIDOf(attrs["userId"]); ok {
+					if name, found := names[id]; found && attrs["name"] != name {
+						attrs["name"] = name
+						changed = true
+					}
+				}
+			}
+		}
+		if rewriteMentionNames(v["content"], names) {
+			changed = true
+		}
+	case []any:
+		for _, child := range v {
+			if rewriteMentionNames(child, names) {
+				changed = true
+			}
+		}
+	}
+	return changed
 }
 
 // ticketRefDisplay は ticketRef ノードへ書き込む表示の写し（kbTicketRefDisplayAttrs と対応）。

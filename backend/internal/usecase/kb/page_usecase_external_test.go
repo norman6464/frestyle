@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -413,7 +414,7 @@ func Test_本文書き換え_docを行に分解して全入れ替えする(t *te
 			gotForce = args.Bool(6)
 		}).
 		Return(false, nil, nil)
-	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, versionRepo)
+	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 
 	out, err := uc.Execute(context.Background(), kb.ReplacePageBlocksInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: doc, EditorUserID: kbEditorUserID,
@@ -447,7 +448,7 @@ func Test_本文書き換え_ブロック置換と最終編集者の記録と版
 		"CreateVersionIfDue", mock.MatchedBy(inTx), kbWS, kbPage, mock.Anything, kbEditorUserID, (*string)(nil), false,
 	).Return(false, nil, nil)
 	tx := &fakeTxManager{}
-	uc := kb.NewReplacePageBlocksUseCase(repo, tx, versionRepo)
+	uc := kb.NewReplacePageBlocksUseCase(repo, tx, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 
 	_, err := uc.Execute(context.Background(), kb.ReplacePageBlocksInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: doc, EditorUserID: kbEditorUserID,
@@ -475,7 +476,7 @@ func Test_本文書き換え_版の記録に失敗したら本文の書き込み
 	versionRepo := &mockPageVersionRepo{}
 	versionRepo.On("CreateVersionIfDue", mock.Anything, kbWS, kbPage, mock.Anything, kbEditorUserID, (*string)(nil), false).
 		Return(false, nil, versionRepoErr)
-	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, versionRepo)
+	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 
 	out, err := uc.Execute(context.Background(), kb.ReplacePageBlocksInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: doc, EditorUserID: kbEditorUserID,
@@ -493,7 +494,7 @@ func Test_本文書き換え_最終編集者の記録に失敗したら本文を
 	repo.On("TouchPageLastEditedBy", mock.Anything, kbWS, kbPage, kbEditorUserID).
 		Return(repository.ErrPageNotFound)
 	versionRepo := &mockPageVersionRepo{}
-	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, versionRepo)
+	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 
 	_, err := uc.Execute(context.Background(), kb.ReplacePageBlocksInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: `{"type":"doc","content":[]}`, EditorUserID: kbEditorUserID,
@@ -509,7 +510,7 @@ func Test_本文書き換え_最終編集者の記録に失敗したら本文を
 // 一切呼ばずに拒否することを固定する。
 func Test_本文書き換え_編集者が未指定なら拒否(t *testing.T) {
 	repo := &mockKnowledgeBaseRepo{}
-	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, &mockPageVersionRepo{})
+	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, &mockPageVersionRepo{}, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 
 	_, err := uc.Execute(context.Background(), kb.ReplacePageBlocksInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: `{"type":"doc","content":[]}`,
@@ -521,7 +522,7 @@ func Test_本文書き換え_編集者が未指定なら拒否(t *testing.T) {
 func Test_本文書き換え_不正なdocは保存せず失敗(t *testing.T) {
 	repo := &mockKnowledgeBaseRepo{}
 	repo.On("FindPage", mock.Anything, kbWS, kbPage).Return(kbActivePage(kbPage, kbSpace, nil), nil)
-	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, &mockPageVersionRepo{})
+	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, &mockPageVersionRepo{}, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 
 	_, err := uc.Execute(context.Background(), kb.ReplacePageBlocksInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: `{"type":"doc","content":[{"type":"iframe"}]}`, EditorUserID: kbEditorUserID,
@@ -533,7 +534,7 @@ func Test_本文書き換え_不正なdocは保存せず失敗(t *testing.T) {
 func Test_本文書き換え_アーカイブ済みページは拒否(t *testing.T) {
 	repo := &mockKnowledgeBaseRepo{}
 	repo.On("FindPage", mock.Anything, kbWS, kbPage).Return(kbArchivedPage(kbPage, kbSpace, nil), nil)
-	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, &mockPageVersionRepo{})
+	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, &mockPageVersionRepo{}, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 
 	_, err := uc.Execute(context.Background(), kb.ReplacePageBlocksInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: `{"type":"doc","content":[]}`, EditorUserID: kbEditorUserID,
@@ -544,7 +545,7 @@ func Test_本文書き換え_アーカイブ済みページは拒否(t *testing.
 func Test_本文書き換え_無いページはそのまま失敗(t *testing.T) {
 	repo := &mockKnowledgeBaseRepo{}
 	repo.On("FindPage", mock.Anything, kbWS, kbPage).Return(nil, repository.ErrPageNotFound)
-	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, &mockPageVersionRepo{})
+	uc := kb.NewReplacePageBlocksUseCase(repo, &fakeTxManager{}, &mockPageVersionRepo{}, &mockKBPermissionRepo{}, &mockNotificationRepo{})
 
 	_, err := uc.Execute(context.Background(), kb.ReplacePageBlocksInput{
 		WorkspaceID: kbWS, PageID: kbPage, Doc: `{"type":"doc","content":[]}`, EditorUserID: kbEditorUserID,
@@ -888,7 +889,7 @@ func Test_ページ参照の題名解決_閲覧できる参照だけを現在の
 			kbUnreachableFacts(unreachable, "届かないページの新題名"),
 		}, nil)
 
-	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{}, &mockUserDisplayReader{})
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
 		WorkspaceID: kbRefWS, UserID: 7, Doc: kbRefDoc(visible, unreachable),
 	})
@@ -908,7 +909,7 @@ func Test_ページ参照の題名解決_閲覧できる参照だけを現在の
 
 func Test_ページ参照の題名解決_参照が無ければ問い合わせず原文のまま(t *testing.T) {
 	repo := &mockKBPermissionRepo{}
-	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{}, &mockUserDisplayReader{})
 	doc := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"参照なし"}]}]}`
 
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
@@ -922,7 +923,7 @@ func Test_ページ参照の題名解決_参照が無ければ問い合わせず
 
 func Test_ページ参照の題名解決_壊れたdocや取得失敗では原文を返す(t *testing.T) {
 	repo := &mockKBPermissionRepo{}
-	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{}, &mockUserDisplayReader{})
 
 	broken := `{"type":"doc","content":[`
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
@@ -949,7 +950,7 @@ func Test_ページ参照の題名解決_同じ参照は1回だけ数える(t *t
 	dup := "00000000-0000-7000-8000-000000000001"
 	repo.On("ListWorkspacePageViewFactsByIDs", mock.Anything, kbRefWS, uint64(7), []string{dup}).
 		Return([]repository.PageWithViewFacts{kbViewableFacts(dup, "本題")}, nil)
-	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{}, &mockUserDisplayReader{})
 
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
 		WorkspaceID: kbRefWS, UserID: 7, Doc: kbRefDoc(dup, dup),
@@ -972,7 +973,7 @@ func Test_ページ参照の題名解決_解決数の天井は文書順の先頭
 	}
 	repo.On("ListWorkspacePageViewFactsByIDs", mock.Anything, kbRefWS, uint64(7), ids[:100]).
 		Return([]repository.PageWithViewFacts{}, nil)
-	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{}, &mockUserDisplayReader{})
 
 	_, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
 		WorkspaceID: kbRefWS, UserID: 7, Doc: kbRefDoc(ids...),
@@ -989,7 +990,7 @@ func Test_ページ参照の題名解決_pageIdの表記ゆれは正規形へ寄
 	canonical := "00000000-0000-7000-8000-0000000000ab"
 	repo.On("ListWorkspacePageViewFactsByIDs", mock.Anything, kbRefWS, uint64(7), []string{canonical}).
 		Return([]repository.PageWithViewFacts{kbViewableFacts(canonical, "正規形の題名")}, nil)
-	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{}, &mockUserDisplayReader{})
 
 	upper := "00000000-0000-7000-8000-0000000000AB"
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
@@ -1028,7 +1029,7 @@ func Test_ページ参照の題名解決_アーカイブ済みの参照は題名
 	}
 	repo.On("ListWorkspacePageViewFactsByIDs", mock.Anything, kbRefWS, uint64(7), []string{id}).
 		Return([]repository.PageWithViewFacts{archived}, nil)
-	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{})
+	uc := kb.NewResolvePageRefTitlesUseCase(repo, &mockTicketRefReader{}, &mockUserDisplayReader{})
 
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
 		WorkspaceID: kbRefWS, UserID: 7, Doc: kbRefDoc(id),
@@ -1399,7 +1400,7 @@ func Test_チケット参照の解決_見られるチケットは鍵と題名と
 			{ID: visible, ProjectKey: "ENG", Number: 12, Title: "ログインが落ちる", StatusName: "進行中", StatusCategory: domain.TicketStatusCategoryInProgress},
 		}, nil)
 
-	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets)
+	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets, &mockUserDisplayReader{})
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{
 		WorkspaceID: kbRefWS, UserID: 7, Doc: kbTicketRefDoc(visible, gone),
 	})
@@ -1438,7 +1439,7 @@ func Test_チケット参照の解決_ページ参照と混ざっていても両
 	tickets.On("ListTicketRefFactsByIDs", mock.Anything, kbRefWS, []string{ticket}).
 		Return([]domain.TicketRefFact{{ID: ticket, ProjectKey: "eng", Number: 3, Title: "表を直す", StatusName: "To Do", StatusCategory: domain.TicketStatusCategoryTodo}}, nil)
 
-	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets)
+	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets, &mockUserDisplayReader{})
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{WorkspaceID: kbRefWS, UserID: 7, Doc: doc})
 	require.NoError(t, err)
 	assert.Equal(t, "設計メモ", kbInlineAttrs(t, got, 0)["title"])
@@ -1454,7 +1455,7 @@ func Test_チケット参照の解決_取得に失敗したら剥がした本文
 		Return(&domain.ScopeFacts{Roles: []domain.GrantRole{domain.GrantRoleViewer}}, nil)
 	tickets.On("ListTicketRefFactsByIDs", mock.Anything, kbRefWS, []string{id}).Return(nil, errors.New("db down"))
 
-	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets)
+	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets, &mockUserDisplayReader{})
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{WorkspaceID: kbRefWS, UserID: 7, Doc: kbTicketRefDoc(id)})
 	assert.Error(t, err)
 	attrs := kbInlineAttrs(t, got, 0)
@@ -1472,7 +1473,7 @@ func Test_チケット参照の解決_バックログを見られない読み手
 	perms.On("WorkspacePermissionFactsForUser", mock.Anything, kbRefWS, uint64(7)).
 		Return(&domain.ScopeFacts{}, nil)
 
-	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets)
+	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets, &mockUserDisplayReader{})
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{WorkspaceID: kbRefWS, UserID: 7, Doc: kbTicketRefDoc(id)})
 	require.NoError(t, err)
 	attrs := kbInlineAttrs(t, got, 0)
@@ -1481,4 +1482,147 @@ func Test_チケット参照の解決_バックログを見られない読み手
 		assert.Nil(t, attrs[key], key)
 	}
 	tickets.AssertNotCalled(t, "ListTicketRefFactsByIDs")
+}
+
+func kbMentionDoc(ids ...string) string {
+	content := ""
+	for i, id := range ids {
+		if i > 0 {
+			content += ","
+		}
+		content += fmt.Sprintf(`{"type":"mention","attrs":{"userId":%q,"name":"古い名前"}}`, id)
+	}
+	return `{"type":"doc","content":[{"type":"paragraph","content":[` + content + `]}]}`
+}
+
+func Test_名指しの解決_実在する人の名前が入り無い人は剥がしたまま(t *testing.T) {
+	users := &mockUserDisplayReader{}
+	users.On("ListUserDisplaysByIDs", mock.Anything, []uint64{5, 6}).
+		Return([]domain.UserDisplay{{UserID: 5, Name: "田中"}}, nil)
+
+	uc := kb.NewResolvePageRefTitlesUseCase(&mockKBPermissionRepo{}, &mockTicketRefReader{}, users)
+	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{WorkspaceID: kbRefWS, UserID: 7, Doc: kbMentionDoc("5", "6")})
+	require.NoError(t, err)
+	assert.Equal(t, "田中", kbInlineAttrs(t, got, 0)["name"])
+	assert.Equal(t, "5", kbInlineAttrs(t, got, 0)["userId"])
+	assert.Nil(t, kbInlineAttrs(t, got, 1)["name"], "無い人は保存されていた古い写しも返さない")
+	users.AssertExpectations(t)
+}
+
+func Test_名指しの解決_不正なuserIdは数えず問い合わせもしない(t *testing.T) {
+	users := &mockUserDisplayReader{}
+	doc := `{"type":"doc","content":[{"type":"paragraph","content":[` +
+		`{"type":"mention","attrs":{"userId":"abc","name":"x"}},{"type":"mention","attrs":{"userId":"0"}}]}]}`
+	uc := kb.NewResolvePageRefTitlesUseCase(&mockKBPermissionRepo{}, &mockTicketRefReader{}, users)
+	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{WorkspaceID: kbRefWS, UserID: 7, Doc: doc})
+	require.NoError(t, err)
+	// 参照として数えない以上、解決の対象が無い本文としてそのまま返る（保存側は ID の形に
+	// 関わらず剥がすので、こうした写しは新しい保存からは消える。pageRef の不正な ID と同じ扱い）。
+	assert.Equal(t, doc, got)
+	users.AssertNotCalled(t, "ListUserDisplaysByIDs")
+}
+
+// replaceWithMentionsFixture は本文の保存の土台（既存の保存テストと同じモック）に、
+// 名指しの通知に要る権限と通知のモックを添える。
+type replaceWithMentionsFixture struct {
+	repo        *mockKnowledgeBaseRepo
+	versionRepo *mockPageVersionRepo
+	perms       *mockKBPermissionRepo
+	notifs      *mockNotificationRepo
+	created     []domain.Notification
+}
+
+func newReplaceWithMentionsFixture(t *testing.T, previous *domain.PageSnapshot, previousErr error) *replaceWithMentionsFixture {
+	t.Helper()
+	f := &replaceWithMentionsFixture{
+		repo: &mockKnowledgeBaseRepo{}, versionRepo: &mockPageVersionRepo{},
+		perms: &mockKBPermissionRepo{}, notifs: &mockNotificationRepo{},
+	}
+	f.repo.On("FindPage", mock.Anything, kbWS, kbPage).Return(kbActivePage(kbPage, kbSpace, nil), nil)
+	f.repo.On("TouchPageLastEditedBy", mock.Anything, kbWS, kbPage, kbEditorUserID).Return(nil)
+	f.repo.On("ReplacePageBlocks", mock.Anything, kbWS, kbPage, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	// 1 回目は置き換える前の本文（通知の差分の材料）、2 回目は保存後の返却。
+	f.repo.On("GetPageSnapshot", mock.Anything, kbWS, kbPage).Return(previous, previousErr).Once()
+	f.repo.On("GetPageSnapshot", mock.Anything, kbWS, kbPage).Return(&domain.PageSnapshot{PageID: kbPage, Doc: "{}"}, nil)
+	f.versionRepo.On("CreateVersionIfDue", mock.Anything, kbWS, kbPage, mock.Anything, kbEditorUserID, (*string)(nil), false).Return(false, nil, nil)
+	f.notifs.On("CreateMany", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		f.created = append(f.created, args.Get(1).([]domain.Notification)...)
+	}).Return(nil).Maybe()
+	return f
+}
+
+func (f *replaceWithMentionsFixture) allowView(userID uint64) {
+	role := domain.GrantRoleViewer
+	f.perms.On("PagePermissionFactsForUser", mock.Anything, kbWS, kbPage, userID).
+		Return(&domain.PagePermissionFacts{Member: true, Role: &role}, nil)
+}
+
+func (f *replaceWithMentionsFixture) denyView(userID uint64) {
+	f.perms.On("PagePermissionFactsForUser", mock.Anything, kbWS, kbPage, userID).
+		Return(&domain.PagePermissionFacts{}, nil)
+}
+
+func (f *replaceWithMentionsFixture) save(t *testing.T, doc string) {
+	t.Helper()
+	uc := kb.NewReplacePageBlocksUseCase(f.repo, &fakeTxManager{}, f.versionRepo, f.perms, f.notifs)
+	_, err := uc.Execute(context.Background(), kb.ReplacePageBlocksInput{
+		WorkspaceID: kbWS, PageID: kbPage, Doc: doc, EditorUserID: kbEditorUserID,
+	})
+	require.NoError(t, err)
+}
+
+func Test_名指しの通知_新しく名指しされた見られる一員にだけ届き本人と前からいた人と見られない人には届かない(t *testing.T) {
+	self := strconv.FormatUint(kbEditorUserID, 10)
+	f := newReplaceWithMentionsFixture(t, &domain.PageSnapshot{PageID: kbPage, Doc: kbMentionDoc("5")}, nil)
+	f.allowView(6)
+	f.denyView(8)
+
+	// 5 は前の本文にもいる・6 は新しく見られる・8 は新しいが見られない・本人は常に対象外。
+	f.save(t, kbMentionDoc("5", "6", "8", self))
+
+	require.Len(t, f.created, 1)
+	got := f.created[0]
+	assert.Equal(t, uint64(6), got.UserID)
+	assert.Equal(t, domain.NotificationTypePageMentioned, got.Type)
+	assert.Equal(t, "ページで名指しされました", got.Title)
+	assert.Equal(t, kbActivePage(kbPage, kbSpace, nil).Title, got.Body, "本文は題名")
+	assert.Equal(t, "/kb/"+kbPage, got.LinkPath)
+	f.perms.AssertNotCalled(t, "PagePermissionFactsForUser", mock.Anything, kbWS, kbPage, uint64(5))
+	f.perms.AssertNotCalled(t, "PagePermissionFactsForUser", mock.Anything, kbWS, kbPage, kbEditorUserID)
+}
+
+func Test_名指しの通知_前の本文がまだ無ければ名指し全員が新しい(t *testing.T) {
+	f := newReplaceWithMentionsFixture(t, nil, repository.ErrPageSnapshotNotFound)
+	f.allowView(5)
+	f.allowView(6)
+	f.save(t, kbMentionDoc("5", "6"))
+	require.Len(t, f.created, 2)
+}
+
+func Test_名指しの通知_通知の作成に失敗しても保存は成功する(t *testing.T) {
+	f := newReplaceWithMentionsFixture(t, nil, repository.ErrPageSnapshotNotFound)
+	f.notifs.ExpectedCalls = nil
+	f.notifs.On("CreateMany", mock.Anything, mock.Anything).Return(errors.New("db down"))
+	f.allowView(5)
+	f.save(t, kbMentionDoc("5"))
+	f.notifs.AssertExpectations(t)
+}
+
+func Test_名指しの通知_名指しが無ければ前の本文も権限も読まない(t *testing.T) {
+	f := newReplaceWithMentionsFixture(t, nil, nil)
+	f.save(t, `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"ただの本文"}]}]}`)
+	f.repo.AssertNumberOfCalls(t, "GetPageSnapshot", 1)
+	f.perms.AssertNotCalled(t, "PagePermissionFactsForUser")
+	f.notifs.AssertNotCalled(t, "CreateMany")
+	assert.Empty(t, f.created)
+}
+
+func Test_名指しの通知_前の本文を読めなければ保存ごと失敗する(t *testing.T) {
+	f := newReplaceWithMentionsFixture(t, nil, errors.New("db down"))
+	uc := kb.NewReplacePageBlocksUseCase(f.repo, &fakeTxManager{}, f.versionRepo, f.perms, f.notifs)
+	_, err := uc.Execute(context.Background(), kb.ReplacePageBlocksInput{
+		WorkspaceID: kbWS, PageID: kbPage, Doc: kbMentionDoc("5"), EditorUserID: kbEditorUserID,
+	})
+	assert.Error(t, err)
+	f.repo.AssertNotCalled(t, "ReplacePageBlocks", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }

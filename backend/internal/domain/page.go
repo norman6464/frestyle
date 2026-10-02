@@ -11,6 +11,10 @@ import (
 // 兄弟の並び順は整数の連番ではなく分数インデックス（internal/pkg/fracindex が採番する文字列キー）
 // で持つ。1 行動かすたびに後続を振り直す UPDATE を避けるため。DB 側は position 列を
 // COLLATE "C" に固定し、Go のバイト比較と ORDER BY を一致させる。
+// NotificationTypePageMentioned は本文で @名指しされた人への通知の種類。本文の保存（公開）の
+// たびに、前の本文に無かった名指しだけを対象に、ページを見られる一員へ届ける（本人は除く）。
+const NotificationTypePageMentioned = "page_mentioned"
+
 type Page struct {
 	ID string `json:"id"`
 	// WorkspaceID はテナント境界。space / 親ページとの複合 FK に使い、テナント越えの親子を

@@ -47,6 +47,7 @@ func registerKnowledgeBaseRoutes(g *gin.RouterGroup, deps *routeDeps) {
 		persistence.NewKnowledgeBasePermissionRepository(deps.db),
 		persistence.NewWorkspaceProvisioner(deps.db),
 		persistence.NewUserRepository(deps.db),
+		persistence.NewUserDisplayReader(deps.db),
 		persistence.NewCommentRepository(deps.db),
 		persistence.NewPageVersionRepository(deps.db),
 		persistence.NewPageViewRepository(deps.db),
@@ -99,6 +100,7 @@ func registerKnowledgeBaseRoutesWith(
 	permissions repository.KnowledgeBasePermissionRepository,
 	provisioner repository.WorkspaceProvisioner,
 	users repository.UserRepository,
+	userDisplays repository.UserDisplayReader,
 	comments repository.CommentRepository,
 	versions repository.PageVersionRepository,
 	views repository.PageViewRepository,
@@ -118,7 +120,7 @@ func registerKnowledgeBaseRoutesWith(
 	// ReplacePageBlocksUseCase は本文保存の成功直後に versionRepo.CreateVersionIfDue を同じ
 	// トランザクションで呼ぶので、PageVersionHandler と同じ 1 つの
 	// インスタンスを共有する（RestorePageVersionUseCase もこれをそのまま呼ぶ）。
-	replaceBlocks := kb.NewReplacePageBlocksUseCase(pages, txManager, versions)
+	replaceBlocks := kb.NewReplacePageBlocksUseCase(pages, txManager, versions, permissions, notifications)
 	h := NewKnowledgeBasePageHandler(
 		kb.NewCheckPagePermissionUseCase(permissions),
 		kb.NewCheckWorkspacePermissionUseCase(permissions),
@@ -134,7 +136,7 @@ func registerKnowledgeBaseRoutesWith(
 		kb.NewArchivePageUseCase(pages),
 		kb.NewUnarchivePageUseCase(pages),
 		replaceBlocks,
-		kb.NewResolvePageRefTitlesUseCase(permissions, ticketRefs),
+		kb.NewResolvePageRefTitlesUseCase(permissions, ticketRefs, userDisplays),
 		kb.NewListViewableAncestorsUseCase(pages, permissions),
 		kb.NewDeletePageUseCase(pages),
 		kb.NewSetPageIconUseCase(pages),

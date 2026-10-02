@@ -825,3 +825,12 @@ func (m *mockTicketRefReader) SearchTicketRefFacts(ctx context.Context, workspac
 	rows, _ := args.Get(0).([]domain.TicketRefFact)
 	return rows, args.Error(1)
 }
+
+// mockUserDisplayReader は本文の @名指しの名前を解決する読み取り口の偽物。
+type mockUserDisplayReader struct{ mock.Mock }
+
+func (m *mockUserDisplayReader) ListUserDisplaysByIDs(ctx context.Context, ids []uint64) ([]domain.UserDisplay, error) {
+	args := m.Called(ctx, ids)
+	rows, _ := args.Get(0).([]domain.UserDisplay)
+	return rows, args.Error(1)
+}

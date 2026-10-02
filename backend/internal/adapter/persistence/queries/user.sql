@@ -113,3 +113,18 @@ SELECT id FROM users
 WHERE lower(btrim(email, E'\t\n\x0B\x0C\r ')) = $1
   AND deleted_at IS NULL
   AND btrim(email, E'\t\n\x0B\x0C\r ') <> '';
+
+-- name: ListUserDisplaysByIDs :many
+-- GetUserDisplayByID の複数人版（ページ本文の @名指しの名前を 1 回の問い合わせで解決する）。
+-- 線引きも同じ — 退会・停止していても返す（名指しされた記録を「誰か分からない」にしない）。
+-- user_ids は json 配列（10 進文字列の users.id）。json_array_elements_text で展開して bigint へ
+-- 落とす（IN 句のスライス展開を使わない理由は ListWorkspacePageViewFactsByIDs と同じ）。
+-- 呼び出し側（Go）が 0 以下・int64 の範囲外を先に落とす。
+SELECT u.id, u.name,
+       COALESCE(p.avatar_url, '') AS avatar_url,
+       COALESCE(p.status_emoji, '') AS status_emoji,
+       COALESCE(p.status_text, '') AS status_text,
+       p.status_expires_at AS status_expires_at
+FROM users u
+LEFT JOIN profiles p ON p.user_id = u.id
+WHERE u.id IN (SELECT value::bigint FROM json_array_elements_text(sqlc.arg(user_ids)::json));
