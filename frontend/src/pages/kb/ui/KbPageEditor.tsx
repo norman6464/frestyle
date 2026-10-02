@@ -1,7 +1,13 @@
 import { memo } from 'react';
 import type { CommentAnchor, KbResolvedPage } from '@/entities/kb';
 import { emptyRichDoc, isRichDoc } from '@/shared/lib/richDoc';
-import { RichTextEditor, type CommentBadgeCounts, type EditorCommand, type SearchPagesForRef } from './editor';
+import {
+  RichTextEditor,
+  type CommentBadgeCounts,
+  type EditorCommand,
+  type SearchPagesForRef,
+  type SearchTicketsForRef,
+} from './editor';
 import type { KbSelectedVersionState } from '../model/useKbPageVersions';
 
 export interface KbPageEditorProps {
@@ -23,6 +29,8 @@ export interface KbPageEditorProps {
   resolveImageSrc: (src: string) => Promise<string>;
   /** `[[` でページを探す口（編集できる形にだけ渡す）。 */
   searchPages: SearchPagesForRef | undefined;
+  /** `#` でチケットを探す口（同じく編集できる形にだけ渡す）。 */
+  searchTickets: SearchTicketsForRef | undefined;
 }
 
 /**
@@ -48,6 +56,7 @@ function KbPageEditor({
   onImageUpload,
   resolveImageSrc,
   searchPages,
+  searchTickets,
 }: KbPageEditorProps) {
   if (draftOpen) {
     // ドラフトモード中。value/onChange は useKbPageDoc の自動保存とは完全に
@@ -62,6 +71,7 @@ function KbPageEditor({
         onNavigateToPage={onNavigateToPage}
         resolveImageSrc={resolveImageSrc}
         searchPages={searchPages}
+        searchTickets={searchTickets}
       />
     );
   }
@@ -99,6 +109,7 @@ function KbPageEditor({
       onImageUpload={onImageUpload}
       resolveImageSrc={resolveImageSrc}
       searchPages={data.canEdit ? searchPages : undefined}
+      searchTickets={data.canEdit ? searchTickets : undefined}
     />
   );
 }

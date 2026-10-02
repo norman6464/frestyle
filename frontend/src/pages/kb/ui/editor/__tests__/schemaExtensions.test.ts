@@ -56,12 +56,12 @@ describe('createSchemaExtensions', () => {
 });
 
 describe('isBlockRowNodeType', () => {
-  it('withBlockId を付けた種類だけが blocks の行になる（pageRef・text・hardBreak・doc は行にならない）', () => {
+  it('withBlockId を付けた種類だけが blocks の行になる（pageRef・ticketRef・text・hardBreak・doc は行にならない）', () => {
     const schema = getSchema(createSchemaExtensions());
     for (const name of ['paragraph', 'heading', 'listItem', 'tableCell', 'image', 'horizontalRule']) {
       expect(isBlockRowNodeType(schema.nodes[name]), name).toBe(true);
     }
-    for (const name of ['doc', 'text', 'hardBreak', 'pageRef']) {
+    for (const name of ['doc', 'text', 'hardBreak', 'pageRef', 'ticketRef']) {
       expect(isBlockRowNodeType(schema.nodes[name]), name).toBe(false);
     }
   });

@@ -44,6 +44,7 @@ const hoisted = vi.hoisted(() => ({
   clearPageCover: vi.fn(),
   createPage: vi.fn(),
   searchPages: vi.fn(),
+  searchTicketRefs: vi.fn(),
   listCommentThreads: vi.fn(),
   createCommentThread: vi.fn(),
   addComment: vi.fn(),
@@ -90,6 +91,7 @@ const hoisted = vi.hoisted(() => ({
       commentBadgeCounts?: CommentBadgeCounts;
       onCommentBadgeClick?: (blockId: string) => void;
       searchPages?: (query: string) => Promise<{ id: string; title: string }[]>;
+      searchTickets?: (query: string) => Promise<{ id: string; key: string; title: string }[]>;
     },
   },
 }));
@@ -132,6 +134,13 @@ vi.mock('@/entities/kb/api/kbRepository', () => ({
     removeFavorite: hoisted.removeFavorite,
   },
 }));
+// `#` の候補の取り元（ワークスペース横断のチケット検索）。KbPage が entities/ticket から使うのはこれだけ。
+vi.mock('@/entities/ticket/api/ticketRepository', () => ({
+  default: {
+    searchTicketRefs: hoisted.searchTicketRefs,
+  },
+}));
+
 vi.mock('@/entities/workspace/api/workspaceRepository', () => ({
   default: { fetchWorkspaces: hoisted.fetchWorkspaces },
 }));
@@ -177,6 +186,7 @@ vi.mock('../editor', async (importOriginal) => {
       commentBadgeCounts?: CommentBadgeCounts;
       onCommentBadgeClick?: (blockId: string) => void;
       searchPages?: (query: string) => Promise<{ id: string; title: string }[]>;
+      searchTickets?: (query: string) => Promise<{ id: string; key: string; title: string }[]>;
     }) => {
       hoisted.editorProps.current = props;
       hoisted.renders.editor += 1;
@@ -331,7 +341,7 @@ describe('KbPage の配線', () => {
     renderPage();
     await screen.findByTestId('editor');
     const commands = hoisted.editorProps.current?.extraSlashCommands;
-    expect(commands?.map((c) => c.id)).toEqual(['page', 'pageRef', 'template']);
+    expect(commands?.map((c) => c.id)).toEqual(['page', 'pageRef', 'ticketRef', 'template']);
 
     // 成功: 作ったページへ遷移。
     hoisted.createPage.mockResolvedValue({
@@ -1935,5 +1945,45 @@ describe('[[ でページを探す口', () => {
     renderPage();
     await screen.findByTestId('editor');
     expect(hoisted.editorProps.current?.searchPages).toBeUndefined();
+  });
+});
+
+describe('# でチケットを探す口', () => {
+  it('いまのワークスペースのチケット検索を使い、候補をそのまま渡す', async () => {
+    renderPage();
+    await screen.findByTestId('editor');
+    const search = hoisted.editorProps.current?.searchTickets;
+    expect(search).toBeDefined();
+    const candidate = { id: 't-1', key: 'ENG-12', title: 'ログインが落ちる', statusName: '進行中', statusCategory: 'in_progress' };
+    hoisted.searchTicketRefs.mockResolvedValue([candidate]);
+    await expect(search!('ログイン')).resolves.toEqual([candidate]);
+    expect(hoisted.searchTicketRefs).toHaveBeenCalledWith('w-3f2a9c', 'ログイン', 8);
+  });
+
+  it('空の語では探しに行かない', async () => {
+    renderPage();
+    await screen.findByTestId('editor');
+    hoisted.searchTicketRefs.mockClear();
+    await expect(hoisted.editorProps.current!.searchTickets!('  ')).resolves.toEqual([]);
+    expect(hoisted.searchTicketRefs).not.toHaveBeenCalled();
+  });
+
+  it('編集できない人には探す口を渡さない（# は素の文字のまま）', async () => {
+    hoisted.resolvePage.mockResolvedValue(resolved(false));
+    renderPage();
+    await screen.findByTestId('editor');
+    expect(hoisted.editorProps.current?.searchTickets).toBeUndefined();
+  });
+
+  it("'/' の「チケットを参照」は # を差し込む", async () => {
+    renderPage();
+    await screen.findByTestId('editor');
+    const item = hoisted.editorProps.current?.extraSlashCommands?.find((c) => c.id === 'ticketRef');
+    expect(item).toBeDefined();
+    expect(item!.label).toBe('チケットを参照');
+    const insertContent = vi.fn(() => ({ run: vi.fn() }));
+    const focus = vi.fn(() => ({ insertContent }));
+    item!.run({ chain: () => ({ focus }) } as unknown as Parameters<typeof item.run>[0]);
+    expect(insertContent).toHaveBeenCalledWith('#');
   });
 });

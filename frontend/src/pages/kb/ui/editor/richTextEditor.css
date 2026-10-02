@@ -203,6 +203,92 @@
   cursor: pointer;
 }
 
+/*
+ * チケット参照の札（.rte-ticket-ref）。鍵（等幅・控えめ）・題名・状態の順で 1 つの札にする。
+ * リンクの下線と色は打ち消す（札そのものが押せる形。文中のリンクと見分けがつくように枠で囲む）。
+ * 状態の印は枠ごとの形（未着手＝空の輪・進行中＝輪の中に点・完了＝塗った輪）で、
+ * バックログの TicketStatusPill と同じ読み方（色に頼らない）。
+ */
+.rte-content .ProseMirror .rte-ticket-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  max-width: 100%;
+  vertical-align: baseline;
+  padding: 0 0.45em;
+  border: 1px solid var(--color-surface-3);
+  border-radius: 6px;
+  background: var(--color-surface-1);
+  color: var(--color-text-primary);
+  font-size: 0.9em;
+  line-height: 1.6;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.rte-content .ProseMirror a.rte-ticket-ref:hover {
+  border-color: var(--color-text-muted);
+}
+
+.rte-content .ProseMirror .rte-ticket-ref.is-unresolved {
+  border-style: dashed;
+  color: var(--color-text-muted);
+}
+
+.rte-content .ProseMirror .rte-ticket-ref-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+}
+
+.rte-content .ProseMirror .rte-ticket-ref-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rte-content .ProseMirror .rte-ticket-ref-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 0.8em;
+  color: var(--color-text-secondary, var(--color-text-primary));
+}
+
+.rte-content .ProseMirror .rte-ticket-ref-status::before {
+  content: '';
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.rte-content .ProseMirror .rte-ticket-ref-status.is-in_progress::before {
+  background: radial-gradient(circle, currentColor 0 35%, transparent 36%);
+}
+
+.rte-content .ProseMirror .rte-ticket-ref-status.is-done::before {
+  background: currentColor;
+}
+
+/* 選択時の枠（atom は文字を持たないので、選ばれたことを枠で示す）。 */
+.rte-content .ProseMirror .rte-ticket-ref.ProseMirror-selectednode {
+  outline: 2px solid var(--color-brand, #3b82f6);
+  outline-offset: 1px;
+}
+
+/* 候補一覧の鍵（TicketRefMenuList）。 */
+.rte-ticketref-key {
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
 /* 画像（@tiptap/extension-image）。はみ出さず角丸で表示する。 */
 .rte-content .ProseMirror img {
   max-width: 100%;

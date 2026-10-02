@@ -282,6 +282,116 @@ export const PageRef = Node.create({
   },
 });
 
+/** ticketRef の状態の枠（domain.TicketStatusCategory と同じ 3 値）。 */
+export const TICKET_REF_STATUS_CATEGORIES = ['todo', 'in_progress', 'done'] as const;
+export type TicketRefStatusCategory = (typeof TICKET_REF_STATUS_CATEGORIES)[number];
+
+function ticketRefStatusCategory(value: unknown): TicketRefStatusCategory | null {
+  return (TICKET_REF_STATUS_CATEGORIES as readonly string[]).includes(value as string)
+    ? (value as TicketRefStatusCategory)
+    : null;
+}
+
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/**
+ * TicketRef は「チケット参照」— バックログのチケットを指すインラインの 1 要素（atom）。
+ *
+ * 文字を持たず、表示は attrs の key・title・statusName・statusCategory（**表示のための写し**）。
+ * 正本はチケット側にあり、サーバーが読み出しのたびに「読み手がバックログを見られるときだけ」
+ * 現在の値へ差し替え、保存時には剥がす。写しが無い参照（見られない読み手・版のプレビュー・
+ * 提案の表示）は「チケット」とだけ出し、押しても 404 になる先へは誘わない（リンクにしない）。
+ *
+ * href は ticketId から組み立てる。pageRef と同じく UUID の字面を検証し、通らなければ
+ * リンクにしない。
+ */
+export const TicketRef = Node.create({
+  name: 'ticketRef',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      ticketId: { default: null },
+      key: { default: null },
+      title: { default: null },
+      statusName: { default: null },
+      statusCategory: { default: null },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'a[data-ticket-ref]',
+        // SafeLink の a[href] 規則より先に効かせる（PageRef と同じ理由）。
+        priority: 100,
+        getAttrs: (element) => {
+          const ticketId = element.getAttribute('data-ticket-id');
+          if (ticketId === null || !PAGE_REF_UUID_PATTERN.test(ticketId)) return false;
+          return {
+            ticketId,
+            key: nonEmptyString(element.getAttribute('data-ticket-key')),
+            title: nonEmptyString(element.getAttribute('data-ticket-title')),
+            statusName: nonEmptyString(element.getAttribute('data-ticket-status')),
+            statusCategory: ticketRefStatusCategory(element.getAttribute('data-ticket-category')),
+          };
+        },
+      },
+    ];
+  },
+
+  renderHTML({ node }) {
+    const ticketId = typeof node.attrs.ticketId === 'string' ? node.attrs.ticketId : '';
+    const key = nonEmptyString(node.attrs.key);
+    const title = nonEmptyString(node.attrs.title);
+    const statusName = nonEmptyString(node.attrs.statusName);
+    const category = ticketRefStatusCategory(node.attrs.statusCategory);
+    const resolved = key !== null && title !== null;
+    if (!resolved) {
+      return ['span', { 'data-ticket-ref': 'true', class: 'rte-ticket-ref is-unresolved' }, 'チケット'];
+    }
+    const children: Array<string | unknown[]> = [
+      ['span', { class: 'rte-ticket-ref-key' }, key],
+      ['span', { class: 'rte-ticket-ref-title' }, title],
+    ];
+    if (statusName !== null) {
+      children.push([
+        'span',
+        { class: `rte-ticket-ref-status${category ? ` is-${category}` : ''}` },
+        statusName,
+      ]);
+    }
+    const dataAttributes = {
+      'data-ticket-ref': 'true',
+      'data-ticket-key': key,
+      'data-ticket-title': title,
+      'data-ticket-status': statusName ?? undefined,
+      'data-ticket-category': category ?? undefined,
+    };
+    if (!PAGE_REF_UUID_PATTERN.test(ticketId)) {
+      return ['span', { ...dataAttributes, class: 'rte-ticket-ref' }, ...children];
+    }
+    // 同一アプリ内の遷移なので _blank や rel の束は付けない（PageRef と同じ扱い）。
+    return [
+      'a',
+      { ...dataAttributes, 'data-ticket-id': ticketId, href: `/tickets/${ticketId}`, class: 'rte-ticket-ref' },
+      ...children,
+    ];
+  },
+
+  // editor.getText() やプレーンテキスト化で参照が消えないよう、鍵と題名を文字として出す。
+  renderText({ node }) {
+    const key = nonEmptyString(node.attrs.key);
+    const title = nonEmptyString(node.attrs.title);
+    return key !== null && title !== null ? `${key} ${title}` : 'チケット';
+  },
+});
+
 /** createSchemaExtensions の組み立てオプション。 */
 export interface CreateSchemaExtensionsOptions {
   /** 画像ノードをスキーマに含めるか（既定 true）。 */
@@ -354,9 +464,10 @@ export function createSchemaExtensions(
     // タスクリスト（チェックボックス）。教材のチェックリスト章とナレッジの TODO で使う。
     withBlockId(TaskList),
     withBlockId(TaskItem).configure({ nested: true }),
-    // ページ参照（インラインの atom）。題名はサーバーが読み出し時に解決する。id は不要
-    // （blocks テーブルの行にならない）。
+    // ページ参照・チケット参照（インラインの atom）。題名はサーバーが読み出し時に解決する。
+    // id は不要（blocks テーブルの行にならない）。
     PageRef,
+    TicketRef,
   ];
 
   if (image) {

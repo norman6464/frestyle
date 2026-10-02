@@ -32,7 +32,7 @@ const DIFF_TIMEOUT_MS = 2_000;
  * 差分に一切現れず、コメント権限しか持たない投稿者がそこだけ差し替えても採用者に気づかれない
  * （コメント権限で本文以外を実質書き換えられてしまう）。そのため、これらは本文の文字列へ
  * 疑似テキストとして埋め込む — リンクは「本文 (href)」、画像は「[image: src]」、
- * ページ参照は「[page: pageId]」、コードブロックは「[code: language]」の形にする。
+ * ページ参照は「[page: pageId]」、チケット参照は「[ticket: ticketId]」、コードブロックは「[code: language]」の形にする。
  *
  * ブロックが object でない・type を持たない等パースできない形は `[変更あり]` という
  * プレースホルダ行にする（何が起きたか分かる程度の情報は残しつつ、例外は投げない）。
@@ -67,6 +67,8 @@ function collectText(node: unknown, depth: number): string {
     text = `[image: ${imageSrcOf(node)}]`;
   } else if (type === 'pageRef') {
     text = `[page: ${pageRefIdOf(node)}]`;
+  } else if (type === 'ticketRef') {
+    text = `[ticket: ${attrStringOf(node, 'ticketId')}]`;
   } else if (type === 'codeBlock') {
     text = `[code: ${codeBlockLanguageOf(node)}]`;
   }
@@ -107,6 +109,12 @@ function imageSrcOf(node: Record<string, unknown>): string {
 function pageRefIdOf(node: Record<string, unknown>): string {
   const attrs = isPlainObject(node.attrs) ? node.attrs : null;
   return attrs && typeof attrs.pageId === 'string' ? attrs.pageId : '';
+}
+
+function attrStringOf(node: Record<string, unknown>, name: string): string {
+  const attrs = isPlainObject(node.attrs) ? node.attrs : null;
+  const value = attrs ? attrs[name] : undefined;
+  return typeof value === 'string' ? value : '';
 }
 
 function codeBlockLanguageOf(node: Record<string, unknown>): string {

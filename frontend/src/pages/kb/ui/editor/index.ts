@@ -12,3 +12,5 @@ export type { EditorCommand } from './editorCommands';
 export type { CommentBadgeCounts } from './commentBadges';
 export { PAGE_REF_TRIGGER } from './pageRefSuggestion';
 export type { PageRefCandidate, SearchPagesForRef } from './pageRefSuggestion';
+export { TICKET_REF_TRIGGER } from './ticketRefSuggestion';
+export type { TicketRefCandidate, SearchTicketsForRef } from './ticketRefSuggestion';

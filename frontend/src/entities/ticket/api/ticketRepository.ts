@@ -34,6 +34,7 @@ import type {
   TicketType,
   TicketTypeWire,
   TicketWire,
+  TicketRefCandidate,
 } from '../model/types';
 
 /**
@@ -393,6 +394,17 @@ const TicketRepository = {
   async fetchTicketByKey(workspaceSlug: string, key: string): Promise<Ticket> {
     const res = await apiClient.get<TicketWire>(TICKET_API.ticketByKey(workspaceSlug, key));
     return normalizeTicket(res.data);
+  },
+
+  /**
+   * ナレッジ本文の `#` の候補。表示キーの前方一致か題名で、ワークスペース横断に現役のチケットを
+   * 探す（limit は 1〜20）。空の語はサーバーが空で返す（呼び出し側で先に省くのが筋）。
+   */
+  async searchTicketRefs(workspaceSlug: string, q: string, limit: number): Promise<TicketRefCandidate[]> {
+    const res = await apiClient.get<{ tickets: TicketRefCandidate[] }>(TICKET_API.searchTicketRefs(workspaceSlug), {
+      params: { q, limit: String(limit) },
+    });
+    return toArray<TicketRefCandidate>(res.data?.tickets);
   },
 
   async resolveTicket(ticketId: string): Promise<ResolvedTicket> {

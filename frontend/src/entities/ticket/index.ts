@@ -74,4 +74,5 @@ export type {
   TicketKey,
   ResolvedTicket,
   EnableTicketsResult,
+  TicketRefCandidate,
 } from './model/types';

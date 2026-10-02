@@ -4,7 +4,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useKbFrameLocation, useKbFrameSpace } from '@/widgets/kb-frame';
 import { KbSaveAsTemplateButton, KbTemplatePickerModal, useKbPageTemplates } from '@/features/kb-page-templates';
 import { emptyRichDoc, isRichDoc } from '@/shared/lib/richDoc';
-import { PAGE_REF_TRIGGER, type CommentBadgeCounts, type EditorCommand, type PageRefCandidate } from './editor';
+import {
+  PAGE_REF_TRIGGER,
+  TICKET_REF_TRIGGER,
+  type CommentBadgeCounts,
+  type EditorCommand,
+  type PageRefCandidate,
+  type TicketRefCandidate,
+} from './editor';
 import { FsIcon, fsIcon, Loading, EmptyState, ConfirmModal } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
@@ -23,6 +30,7 @@ import {
   type KbIcon,
   type CommentAnchor,
 } from '@/entities/kb';
+import { TicketRepository } from '@/entities/ticket';
 import KbPageHeading from './KbPageHeading';
 import KbPageEditor from './KbPageEditor';
 import KbPageIconButton from './KbPageIconButton';
@@ -624,6 +632,19 @@ export default function KbPage() {
     [refWorkspaceSlug, refSelfPageId],
   );
 
+  // `#` の候補。ワークスペース横断のチケット検索（鍵の前方一致か題名）を包む。見られるかの判定は
+  // サーバー側（候補は閲覧権限、解決は読み手ごと）。ワークスペースが決まるまでは口を渡さない。
+  const searchTicketsForRef = useMemo(
+    () =>
+      refWorkspaceSlug
+        ? async (query: string): Promise<TicketRefCandidate[]> => {
+            if (query.trim() === '') return [];
+            return TicketRepository.searchTicketRefs(refWorkspaceSlug, query, 8);
+          }
+        : undefined,
+    [refWorkspaceSlug],
+  );
+
   const extraSlashCommands = useMemo<EditorCommand[]>(
     () => [
       {
@@ -650,6 +671,17 @@ export default function KbPage() {
         keywords: ['ref', 'pageref', 'link', 'wiki', 'mention'],
         run: (editor) => {
           editor.chain().focus().insertContent(PAGE_REF_TRIGGER).run();
+        },
+      },
+      {
+        id: 'ticketRef',
+        label: 'チケットを参照',
+        group: 'insert',
+        // `#` を差し込むと、続けて打った鍵か題名で候補が出る（TicketRefSuggestion）。
+        glyph: '#',
+        keywords: ['ticket', 'issue', 'ticketref', 'backlog'],
+        run: (editor) => {
+          editor.chain().focus().insertContent(TICKET_REF_TRIGGER).run();
         },
       },
       {
@@ -910,6 +942,7 @@ export default function KbPage() {
                   onImageUpload={handleImageUpload}
                   resolveImageSrc={resolveImageSrc}
                   searchPages={searchPagesForRef}
+                  searchTickets={searchTicketsForRef}
                 />
               </div>
               {/*
