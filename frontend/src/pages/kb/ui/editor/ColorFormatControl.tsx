@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { type Editor, useEditorState } from '@tiptap/react';
 import { INLINE_MARK_COLORS, INLINE_MARK_COLOR_LABELS, isInlineMarkColor, type InlineMarkColor } from './inlineColors';
 
@@ -66,6 +66,23 @@ export default function ColorFormatControl({ editor }: { editor: Editor }) {
     }),
   });
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const paletteRef = useRef<HTMLDivElement>(null);
+
+  // 開いたら最初の見本へ焦点を移す（Escape・矢印キーがパレットに届くように。
+  // 「色」ボタンは押下で本文の選択を外さないため、焦点は本文に残ったままになっている）。
+  // 開いている間は、パレットの外を押したら閉じる。
+  useEffect(() => {
+    if (!open) return undefined;
+    paletteRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const onPointerDown = (event: MouseEvent) => {
+      if (rootRef.current && event.target instanceof Node && !rootRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [open]);
 
   const close = () => {
     setOpen(false);
@@ -80,7 +97,7 @@ export default function ColorFormatControl({ editor }: { editor: Editor }) {
   };
 
   return (
-    <div className="rte-color-control">
+    <div ref={rootRef} className="rte-color-control">
       <button
         type="button"
         title="文字色・蛍光ペン"
@@ -107,7 +124,7 @@ export default function ColorFormatControl({ editor }: { editor: Editor }) {
       </button>
 
       {open && (
-        <div className="rte-color-palette" onKeyDown={onKeyDown}>
+        <div ref={paletteRef} className="rte-color-palette" onKeyDown={onKeyDown}>
           <ColorRow
             label="文字色"
             current={textColor}

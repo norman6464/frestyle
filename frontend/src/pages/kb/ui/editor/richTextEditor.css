@@ -724,18 +724,20 @@
 
 /*
  * 文字色・蛍光ペン。本文には色の名前（data-color）だけが入り、色そのものはここで決める。
- * 文字色は白地で 4.5:1 以上になる濃さ（Tailwind の 700。灰だけ 600）、蛍光ペンは本文の文字が
- * そのまま読める淡さ（100）。吹き出し（body 直下に浮く）からも引けるよう、変数は :root に置く。
+ * 文字色は Tailwind の 800（灰だけ 700）、蛍光ペンは 100。文字色と蛍光ペンは同じ文字に重ねられる
+ * ので、8×8 の全組み合わせで 4.5:1 以上になる濃さを計算で選んだ（最も薄い組で 5.6:1。
+ * 700 だと 18 通りが基準を割る）。本文の文字（ink）はどの蛍光ペンの上でも 14:1 以上。
+ * 吹き出し（body 直下に浮く）からも引けるよう、変数は :root に置く。
  */
 :root {
-  --rte-text-red: theme('colors.red.700');
-  --rte-text-orange: theme('colors.orange.700');
-  --rte-text-yellow: theme('colors.yellow.700');
-  --rte-text-green: theme('colors.green.700');
-  --rte-text-blue: theme('colors.blue.700');
-  --rte-text-purple: theme('colors.purple.700');
-  --rte-text-pink: theme('colors.pink.700');
-  --rte-text-gray: theme('colors.gray.600');
+  --rte-text-red: theme('colors.red.800');
+  --rte-text-orange: theme('colors.orange.800');
+  --rte-text-yellow: theme('colors.yellow.800');
+  --rte-text-green: theme('colors.green.800');
+  --rte-text-blue: theme('colors.blue.800');
+  --rte-text-purple: theme('colors.purple.800');
+  --rte-text-pink: theme('colors.pink.800');
+  --rte-text-gray: theme('colors.gray.700');
   --rte-mark-red: theme('colors.red.100');
   --rte-mark-orange: theme('colors.orange.100');
   --rte-mark-yellow: theme('colors.yellow.100');
@@ -743,7 +745,7 @@
   --rte-mark-blue: theme('colors.blue.100');
   --rte-mark-purple: theme('colors.purple.100');
   --rte-mark-pink: theme('colors.pink.100');
-  --rte-mark-gray: theme('colors.gray.200');
+  --rte-mark-gray: theme('colors.gray.100');
 }
 
 .rte-color-red { color: var(--rte-text-red); }
@@ -810,11 +812,12 @@ mark.rte-highlight {
   color: var(--color-text-muted);
 }
 
+/* 見本の枠は本文の控えめな文字色（白地で 5.8:1）。蛍光ペンの淡い色は白いパレットと見分けにくいため。 */
 .rte-color-swatch {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 9999px;
-  border: 1px solid rgb(0 0 0 / 15%);
+  border: 1px solid var(--color-text-muted);
 }
 
 .rte-color-swatch[aria-pressed='true'],

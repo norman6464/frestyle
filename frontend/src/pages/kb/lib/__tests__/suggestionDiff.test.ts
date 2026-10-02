@@ -101,6 +101,18 @@ describe('extractPlainText', () => {
 });
 
 describe('computeSuggestionDiff', () => {
+  it('本文が同じで文字色だけ違う 2 つの本文は、色の差分として現れる', () => {
+    const withColor = (color: string) => ({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: '赤い', marks: [{ type: 'textStyle', attrs: { color } }] }] }],
+    });
+    const diff = computeSuggestionDiff(withColor('red'), withColor('blue'));
+    expect(diff).toEqual([
+      { type: 'removed', text: '赤い [色: red]' },
+      { type: 'added', text: '赤い [色: blue]' },
+    ]);
+  });
+
   it('baseDoc が無ければ追加行だけの差分になる', () => {
     const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '新規の本文' }] }] };
     const diff = computeSuggestionDiff(undefined, doc);

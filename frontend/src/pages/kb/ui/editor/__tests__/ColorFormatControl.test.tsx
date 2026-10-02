@@ -58,11 +58,28 @@ describe('ColorFormatControl', () => {
     await waitFor(() => expect(firstTextMarks(editor!)).toEqual([{ type: 'highlight', attrs: { color: 'yellow' } }]));
   });
 
-  it('Escape で閉じる', async () => {
+  it('開くと最初の見本に焦点が移り、その場で Escape を押すと閉じる', async () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: '色' }));
     const text = await screen.findByRole('group', { name: '文字色' });
-    fireEvent.keyDown(text, { key: 'Escape' });
+    await waitFor(() => expect(document.activeElement).toBe(within(text).getByRole('button', { name: '赤' })));
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('group', { name: '文字色' })).toBeNull());
+  });
+
+  it('パレットの外を押すと閉じる', async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: '色' }));
+    await screen.findByRole('group', { name: '文字色' });
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(screen.queryByRole('group', { name: '文字色' })).toBeNull());
+  });
+
+  it('パレットの中を押しても閉じない', async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: '色' }));
+    const text = await screen.findByRole('group', { name: '文字色' });
+    fireEvent.mouseDown(within(text).getByRole('button', { name: '青' }));
+    expect(screen.getByRole('group', { name: '文字色' })).toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { contractPath } from '@/test/contracts';
 import {
   COLORED_MARK_TYPES,
   INLINE_MARK_COLORS,
@@ -9,7 +9,7 @@ import {
   sanitizeDocColors,
 } from '../inlineColors';
 
-const CONTRACT_PATH = resolve(process.cwd(), '..', 'contracts', 'kb-inline-attrs.json');
+const CONTRACT_PATH = contractPath('kb-inline-attrs.json');
 
 interface Contract {
   marks: Record<string, { color: string[] }>;
