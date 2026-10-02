@@ -2873,6 +2873,87 @@ func (q *Queries) RestoreTicketType(ctx context.Context, arg RestoreTicketTypePa
 	return result.RowsAffected()
 }
 
+const searchTicketRefFacts = `-- name: SearchTicketRefFacts :many
+SELECT t.id, t.number, t.title,
+       p."key" AS project_key,
+       s.name AS status_name, s.category AS status_category
+FROM tickets t
+JOIN projects p ON p.workspace_id = t.workspace_id AND p.id = t.project_id
+JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
+WHERE t.workspace_id = $1
+  AND t.deleted_at IS NULL
+  AND t.archived_at IS NULL
+  AND (
+    upper(p."key" || '-' || t.number::text) LIKE upper($2::text) || '%'
+    OR t.title ILIKE '%' || $2::text || '%'
+    OR word_similarity($3::text, t.title) > 0.6
+  )
+ORDER BY (upper(p."key" || '-' || t.number::text) LIKE upper($2::text) || '%') DESC,
+         t.updated_at DESC, t.id
+LIMIT $4
+`
+
+type SearchTicketRefFactsParams struct {
+	WorkspaceID uuid.UUID
+	QLike       string
+	Q           string
+	RowLimit    int32
+}
+
+type SearchTicketRefFactsRow struct {
+	ID             uuid.UUID
+	Number         int64
+	Title          string
+	ProjectKey     string
+	StatusName     string
+	StatusCategory string
+}
+
+// 本文エディタの `#` の候補。題名の部分一致（ILIKE）・あいまい一致（word_similarity。閾値は
+// ListTickets と同じ）に加え、表示キー（PRJ-12 の形）の前方一致で探す。ワークスペース横断
+// （プロジェクトを取らない）なのは、本文を書いている人がどのプロジェクトのチケットを指すか
+// 決め打ちできないため。
+//
+// 候補はこれから新しく参照する先なので、アーカイブ済み・削除済みは出さない
+// （解決＝ListTicketRefFactsByIDs がアーカイブ済みを返すのとは役割が違う）。
+// 表示キーが一致したものを先に、あとは更新の新しい順。q_like は LIKE のメタ文字を
+// 逃がした値、q は逃がす前の値（word_similarity に逃がした値を渡すと、足した
+// バックスラッシュがトライグラムに混じって打ち間違い検索が鈍る — ListTickets と同じ理由）。
+func (q *Queries) SearchTicketRefFacts(ctx context.Context, arg SearchTicketRefFactsParams) ([]SearchTicketRefFactsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchTicketRefFacts,
+		arg.WorkspaceID,
+		arg.QLike,
+		arg.Q,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchTicketRefFactsRow{}
+	for rows.Next() {
+		var i SearchTicketRefFactsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.Title,
+			&i.ProjectKey,
+			&i.StatusName,
+			&i.StatusCategory,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setTicketStatusInitial = `-- name: SetTicketStatusInitial :execrows
 UPDATE ticket_statuses
 SET is_initial = true, updated_at = now()

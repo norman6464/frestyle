@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -60,7 +61,7 @@ func newTicketFixture(uid uint64, role domain.GrantRole) ticketFixture {
 			c.Next()
 		})
 	}
-	registerTicketRoutesWith(g, tickets, tickets, tickets, tickets, tickets, perms, pages, users, &fakeNotifRepo{}, fakeTxManager{}, ticketAttachmentFakePresigner{})
+	registerTicketRoutesWith(g, tickets, tickets, tickets, tickets, tickets, tickets, perms, pages, users, &fakeNotifRepo{}, fakeTxManager{}, ticketAttachmentFakePresigner{})
 	return ticketFixture{tickets: tickets, pages: pages, perms: perms, router: r}
 }
 
@@ -862,4 +863,55 @@ func Test_チケット一覧_実効権限は載せない(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.NotContains(t, w.Body.String(), `"permission"`)
+}
+
+type ticketRefSearchBody struct {
+	Tickets []struct {
+		ID             string `json:"id"`
+		Key            string `json:"key"`
+		Title          string `json:"title"`
+		StatusName     string `json:"statusName"`
+		StatusCategory string `json:"statusCategory"`
+	} `json:"tickets"`
+}
+
+func Test_チケット参照の候補_鍵の前方一致と題名の部分一致で返る(t *testing.T) {
+	f := newTicketFixture(kbUserID, domain.GrantRoleViewer)
+	status := f.tickets.addStatus(domain.TicketStatus{
+		ID: "st-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, Name: "進行中", Category: domain.TicketStatusCategoryInProgress,
+	})
+	f.tickets.addTicket(domain.Ticket{ID: "ticket-1", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, StatusID: status.ID, Title: "ログインが落ちる", Number: 1})
+	f.tickets.addTicket(domain.Ticket{ID: "ticket-2", WorkspaceID: kbWorkspaceID, ProjectID: tkProjectID, StatusID: status.ID, Title: "表を直す", Number: 2})
+
+	w := f.do(t, http.MethodGet, ticketAPIBase+"/tickets/search?q="+url.QueryEscape("ログイン"), "")
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	got := decodeJSON[ticketRefSearchBody](t, w)
+	require.Len(t, got.Tickets, 1)
+	assert.Equal(t, "ticket-1", got.Tickets[0].ID)
+	assert.Equal(t, strings.ToUpper(tkProjectID)+"-1", got.Tickets[0].Key, "表示キーはサーバーが組み立てる")
+	assert.Equal(t, "進行中", got.Tickets[0].StatusName)
+	assert.Equal(t, "in_progress", got.Tickets[0].StatusCategory)
+
+	w = f.do(t, http.MethodGet, ticketAPIBase+"/tickets/search?q="+url.QueryEscape(strings.ToLower(tkProjectID)+"-2"), "")
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	got = decodeJSON[ticketRefSearchBody](t, w)
+	require.Len(t, got.Tickets, 1)
+	assert.Equal(t, "表を直す", got.Tickets[0].Title)
+
+	// 空の語は 200 で空（全件は返さない）。
+	w = f.do(t, http.MethodGet, ticketAPIBase+"/tickets/search?q=%20", "")
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.JSONEq(t, `{"tickets":[]}`, w.Body.String())
+
+	// 件数の範囲外は 400。
+	for _, limit := range []string{"0", "x", "21"} {
+		w = f.do(t, http.MethodGet, ticketAPIBase+"/tickets/search?q=a&limit="+limit, "")
+		assert.Equal(t, http.StatusBadRequest, w.Code, "limit=%s", limit)
+	}
+}
+
+func Test_チケット参照の候補_ワークスペースを見られなければ404(t *testing.T) {
+	f := newTicketFixture(kbUserID, "")
+	w := f.do(t, http.MethodGet, ticketAPIBase+"/tickets/search?q=a", "")
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }

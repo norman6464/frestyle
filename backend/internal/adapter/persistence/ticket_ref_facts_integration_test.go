@@ -67,12 +67,48 @@ func TestTicketRefFacts_Integration(t *testing.T) {
 		assert.Equal(t, domain.TicketStatusCategoryInProgress, facts[0].StatusCategory)
 	})
 
-	t.Run("アーカイブ済みも返す（削除とは違い、参照先として開ける）", func(t *testing.T) {
+	another := mk("ログインの表示を直す")
+
+	t.Run("候補の検索: 題名の部分一致で現役だけが返り、削除済みとよそのワークスペースは返らない", func(t *testing.T) {
+		facts, err := reader.SearchTicketRefFacts(ctx, ws, "ログイン", 8)
+		require.NoError(t, err)
+		require.Len(t, facts, 2)
+		assert.ElementsMatch(t, []string{alive.ID, another.ID}, []string{facts[0].ID, facts[1].ID})
+		assert.Equal(t, "eng", facts[0].ProjectKey)
+		assert.Equal(t, "進行中", facts[0].StatusName)
+	})
+
+	t.Run("候補の検索: 表示キーの前方一致（大文字小文字を問わない）が先に並ぶ", func(t *testing.T) {
+		facts, err := reader.SearchTicketRefFacts(ctx, ws, "eng-1", 8)
+		require.NoError(t, err)
+		require.NotEmpty(t, facts)
+		assert.Equal(t, alive.ID, facts[0].ID)
+		assert.EqualValues(t, 1, facts[0].Number)
+	})
+
+	t.Run("候補の検索: LIKE のメタ文字は文字として扱う", func(t *testing.T) {
+		facts, err := reader.SearchTicketRefFacts(ctx, ws, "%", 8)
+		require.NoError(t, err)
+		assert.Empty(t, facts, "% を含む題名は無いので何も返らない（ワイルドカードにならない）")
+	})
+
+	t.Run("候補の検索: limit で切る", func(t *testing.T) {
+		facts, err := reader.SearchTicketRefFacts(ctx, ws, "ログイン", 1)
+		require.NoError(t, err)
+		assert.Len(t, facts, 1)
+	})
+
+	t.Run("アーカイブ済みは解決では返り、候補の検索では出ない", func(t *testing.T) {
 		require.NoError(t, repo.ArchiveTicket(ctx, ws, alive.ID))
 		facts, err := reader.ListTicketRefFactsByIDs(ctx, ws, []string{alive.ID})
 		require.NoError(t, err)
 		require.Len(t, facts, 1)
 		assert.Equal(t, "ログインが落ちる", facts[0].Title)
+
+		found, err := reader.SearchTicketRefFacts(ctx, ws, "ログイン", 8)
+		require.NoError(t, err)
+		require.Len(t, found, 1)
+		assert.Equal(t, another.ID, found[0].ID)
 	})
 
 	t.Run("ID が 1 つも無ければ問い合わせずに空", func(t *testing.T) {

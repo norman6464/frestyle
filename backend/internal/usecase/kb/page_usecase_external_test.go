@@ -1391,9 +1391,11 @@ func Test_チケット参照の解決_見られるチケットは鍵と題名と
 	tickets := &mockTicketRefReader{}
 	visible := "00000000-0000-7000-8000-0000000000b1"
 	gone := "00000000-0000-7000-8000-0000000000b2"
+	perms.On("WorkspacePermissionFactsForUser", mock.Anything, kbRefWS, uint64(7)).
+		Return(&domain.ScopeFacts{Roles: []domain.GrantRole{domain.GrantRoleViewer}}, nil)
 	// gone は返ってこない（削除済み・他ワークスペース・存在しない、のどれも同じ）。
 	tickets.On("ListTicketRefFactsByIDs", mock.Anything, kbRefWS, []string{visible, gone}).
-		Return([]repository.TicketRefFact{
+		Return([]domain.TicketRefFact{
 			{ID: visible, ProjectKey: "ENG", Number: 12, Title: "ログインが落ちる", StatusName: "進行中", StatusCategory: domain.TicketStatusCategoryInProgress},
 		}, nil)
 
@@ -1429,10 +1431,12 @@ func Test_チケット参照の解決_ページ参照と混ざっていても両
 		fmt.Sprintf(`{"type":"pageRef","attrs":{"pageId":%q,"title":null}},`, page) +
 		fmt.Sprintf(`{"type":"ticketRef","attrs":{"ticketId":%q}}`, ticket) +
 		`]}]}`
+	perms.On("WorkspacePermissionFactsForUser", mock.Anything, kbRefWS, uint64(7)).
+		Return(&domain.ScopeFacts{Roles: []domain.GrantRole{domain.GrantRoleViewer}}, nil)
 	perms.On("ListWorkspacePageViewFactsByIDs", mock.Anything, kbRefWS, uint64(7), []string{page}).
 		Return([]repository.PageWithViewFacts{kbViewableFacts(page, "設計メモ")}, nil)
 	tickets.On("ListTicketRefFactsByIDs", mock.Anything, kbRefWS, []string{ticket}).
-		Return([]repository.TicketRefFact{{ID: ticket, ProjectKey: "eng", Number: 3, Title: "表を直す", StatusName: "To Do", StatusCategory: domain.TicketStatusCategoryTodo}}, nil)
+		Return([]domain.TicketRefFact{{ID: ticket, ProjectKey: "eng", Number: 3, Title: "表を直す", StatusName: "To Do", StatusCategory: domain.TicketStatusCategoryTodo}}, nil)
 
 	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets)
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{WorkspaceID: kbRefWS, UserID: 7, Doc: doc})
@@ -1443,15 +1447,38 @@ func Test_チケット参照の解決_ページ参照と混ざっていても両
 }
 
 func Test_チケット参照の解決_取得に失敗したら剥がした本文とエラーを返す(t *testing.T) {
+	perms := &mockKBPermissionRepo{}
 	tickets := &mockTicketRefReader{}
 	id := "00000000-0000-7000-8000-0000000000b1"
+	perms.On("WorkspacePermissionFactsForUser", mock.Anything, kbRefWS, uint64(7)).
+		Return(&domain.ScopeFacts{Roles: []domain.GrantRole{domain.GrantRoleViewer}}, nil)
 	tickets.On("ListTicketRefFactsByIDs", mock.Anything, kbRefWS, []string{id}).Return(nil, errors.New("db down"))
 
-	uc := kb.NewResolvePageRefTitlesUseCase(&mockKBPermissionRepo{}, tickets)
+	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets)
 	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{WorkspaceID: kbRefWS, UserID: 7, Doc: kbTicketRefDoc(id)})
 	assert.Error(t, err)
 	attrs := kbInlineAttrs(t, got, 0)
 	assert.Equal(t, id, attrs["ticketId"])
 	assert.Nil(t, attrs["title"], "失敗しても保存されていた古い写しは返さない")
 	assert.Nil(t, attrs["key"])
+}
+
+func Test_チケット参照の解決_バックログを見られない読み手には写しを返さない(t *testing.T) {
+	// ページは共有リンクや個別の付与で見られても、チケットの閲覧はワークスペースの役割で決まる
+	// （CheckTicketPermissionUseCase と同じ事実・同じ規則）。役割が無ければ問い合わせもしない。
+	perms := &mockKBPermissionRepo{}
+	tickets := &mockTicketRefReader{}
+	id := "00000000-0000-7000-8000-0000000000b1"
+	perms.On("WorkspacePermissionFactsForUser", mock.Anything, kbRefWS, uint64(7)).
+		Return(&domain.ScopeFacts{}, nil)
+
+	uc := kb.NewResolvePageRefTitlesUseCase(perms, tickets)
+	got, err := uc.Execute(context.Background(), kb.ResolvePageRefTitlesInput{WorkspaceID: kbRefWS, UserID: 7, Doc: kbTicketRefDoc(id)})
+	require.NoError(t, err)
+	attrs := kbInlineAttrs(t, got, 0)
+	assert.Equal(t, id, attrs["ticketId"], "参照そのものは残る（画面は「チケット」とだけ出す）")
+	for _, key := range []string{"key", "title", "statusName", "statusCategory"} {
+		assert.Nil(t, attrs[key], key)
+	}
+	tickets.AssertNotCalled(t, "ListTicketRefFactsByIDs")
 }

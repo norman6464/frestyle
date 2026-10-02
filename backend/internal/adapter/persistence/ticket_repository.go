@@ -1934,10 +1934,10 @@ func NewTicketRefReader(db *sql.DB) repository.TicketRefReader {
 	return &ticketRepository{baseRepository{db: db}}
 }
 
-func (r *ticketRepository) ListTicketRefFactsByIDs(ctx context.Context, workspaceID string, ticketIDs []string) ([]repository.TicketRefFact, error) {
+func (r *ticketRepository) ListTicketRefFactsByIDs(ctx context.Context, workspaceID string, ticketIDs []string) ([]domain.TicketRefFact, error) {
 	wsID, ok := kbParseID(workspaceID)
 	if !ok {
-		return []repository.TicketRefFact{}, nil
+		return []domain.TicketRefFact{}, nil
 	}
 	// UUID として読めない ID はここで落とす（ListWorkspacePageViewFactsByIDs と同じ理由 —
 	// SQL 側の ::uuid が失敗するとクエリ全体が落ち、壊れた参照 1 つでページの読み出しが死ぬ）。
@@ -1948,7 +1948,7 @@ func (r *ticketRepository) ListTicketRefFactsByIDs(ctx context.Context, workspac
 		}
 	}
 	if len(valid) == 0 {
-		return []repository.TicketRefFact{}, nil
+		return []domain.TicketRefFact{}, nil
 	}
 	encoded, err := json.Marshal(valid)
 	if err != nil {
@@ -1960,9 +1960,38 @@ func (r *ticketRepository) ListTicketRefFactsByIDs(ctx context.Context, workspac
 	if err != nil {
 		return nil, err
 	}
-	out := make([]repository.TicketRefFact, 0, len(rows))
+	out := make([]domain.TicketRefFact, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, repository.TicketRefFact{
+		out = append(out, domain.TicketRefFact{
+			ID:             row.ID.String(),
+			ProjectKey:     row.ProjectKey,
+			Number:         row.Number,
+			Title:          row.Title,
+			StatusName:     row.StatusName,
+			StatusCategory: domain.TicketStatusCategory(row.StatusCategory),
+		})
+	}
+	return out, nil
+}
+
+func (r *ticketRepository) SearchTicketRefFacts(ctx context.Context, workspaceID, q string, limit int) ([]domain.TicketRefFact, error) {
+	wsID, ok := kbParseID(workspaceID)
+	if !ok {
+		return []domain.TicketRefFact{}, nil
+	}
+	rowLimit, lok := toInt32(limit)
+	if !lok || rowLimit < 1 {
+		return []domain.TicketRefFact{}, nil
+	}
+	rows, err := r.queries(ctx).SearchTicketRefFacts(ctx, sqlcgen.SearchTicketRefFactsParams{
+		WorkspaceID: wsID, QLike: escapeLike(q), Q: q, RowLimit: rowLimit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.TicketRefFact, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domain.TicketRefFact{
 			ID:             row.ID.String(),
 			ProjectKey:     row.ProjectKey,
 			Number:         row.Number,

@@ -1551,24 +1551,32 @@ func (u *ResolvePageRefTitlesUseCase) Execute(ctx context.Context, in ResolvePag
 		rewritten = rewritePageRefTitles(root, titles)
 	}
 	if len(collector.ticketIDs) > 0 {
-		// チケットにはページのような個別の可視判定が無く（ワークスペースの一員なら全チケットを
-		// 読める）、repository が同じワークスペースの削除されていない行だけを返す。
-		// アーカイブ済みも解決する — ページと違い、片づけたチケットは参照先として開ける。
-		facts, err := u.tickets.ListTicketRefFactsByIDs(ctx, in.WorkspaceID, collector.ticketIDs)
+		// チケットの閲覧判定はワークスペース単位（CheckTicketPermissionUseCase と同じ事実から
+		// 同じ規則で決める。チケットには pages のような個票の権限が無い）。見られない読み手
+		// （役割の無い人・共有リンクで来た人）には写しを剥がしたまま返し、画面は「チケット」
+		// とだけ出す。見られるなら repository が同じワークスペースの削除されていない行だけを
+		// 返す。アーカイブ済みも解決する — ページと違い、片づけたチケットは参照先として開ける。
+		scope, err := u.perms.WorkspacePermissionFactsForUser(ctx, in.WorkspaceID, in.UserID)
 		if err != nil {
 			return fail(err)
 		}
-		displays := make(map[string]ticketRefDisplay, len(facts))
-		for _, f := range facts {
-			if canonical, ok := canonicalPageRefID(f.ID); ok {
-				displays[canonical] = ticketRefDisplay{
-					key: domain.FormatTicketKey(f.ProjectKey, f.Number), title: f.Title,
-					statusName: f.StatusName, statusCategory: string(f.StatusCategory),
+		if domain.ResolveScopePermission(*scope).CanView {
+			facts, err := u.tickets.ListTicketRefFactsByIDs(ctx, in.WorkspaceID, collector.ticketIDs)
+			if err != nil {
+				return fail(err)
+			}
+			displays := make(map[string]ticketRefDisplay, len(facts))
+			for _, f := range facts {
+				if canonical, ok := canonicalPageRefID(f.ID); ok {
+					displays[canonical] = ticketRefDisplay{
+						key: domain.FormatTicketKey(f.ProjectKey, f.Number), title: f.Title,
+						statusName: f.StatusName, statusCategory: string(f.StatusCategory),
+					}
 				}
 			}
-		}
-		if rewriteTicketRefDisplays(root, displays) {
-			rewritten = true
+			if rewriteTicketRefDisplays(root, displays) {
+				rewritten = true
+			}
 		}
 	}
 	if !stripped && !rewritten {

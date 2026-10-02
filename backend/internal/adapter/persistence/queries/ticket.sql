@@ -832,3 +832,32 @@ JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
 WHERE t.workspace_id = sqlc.arg(workspace_id)
   AND t.id IN (SELECT value::uuid FROM json_array_elements_text(sqlc.arg(ticket_ids)::json))
   AND t.deleted_at IS NULL;
+
+-- name: SearchTicketRefFacts :many
+-- 本文エディタの `#` の候補。題名の部分一致（ILIKE）・あいまい一致（word_similarity。閾値は
+-- ListTickets と同じ）に加え、表示キー（PRJ-12 の形）の前方一致で探す。ワークスペース横断
+-- （プロジェクトを取らない）なのは、本文を書いている人がどのプロジェクトのチケットを指すか
+-- 決め打ちできないため。
+--
+-- 候補はこれから新しく参照する先なので、アーカイブ済み・削除済みは出さない
+-- （解決＝ListTicketRefFactsByIDs がアーカイブ済みを返すのとは役割が違う）。
+-- 表示キーが一致したものを先に、あとは更新の新しい順。q_like は LIKE のメタ文字を
+-- 逃がした値、q は逃がす前の値（word_similarity に逃がした値を渡すと、足した
+-- バックスラッシュがトライグラムに混じって打ち間違い検索が鈍る — ListTickets と同じ理由）。
+SELECT t.id, t.number, t.title,
+       p."key" AS project_key,
+       s.name AS status_name, s.category AS status_category
+FROM tickets t
+JOIN projects p ON p.workspace_id = t.workspace_id AND p.id = t.project_id
+JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
+WHERE t.workspace_id = sqlc.arg(workspace_id)
+  AND t.deleted_at IS NULL
+  AND t.archived_at IS NULL
+  AND (
+    upper(p."key" || '-' || t.number::text) LIKE upper(sqlc.arg(q_like)::text) || '%'
+    OR t.title ILIKE '%' || sqlc.arg(q_like)::text || '%'
+    OR word_similarity(sqlc.arg(q)::text, t.title) > 0.6
+  )
+ORDER BY (upper(p."key" || '-' || t.number::text) LIKE upper(sqlc.arg(q_like)::text) || '%') DESC,
+         t.updated_at DESC, t.id
+LIMIT sqlc.arg(row_limit);

@@ -873,3 +873,21 @@ func (m *mockTicketSavedFilterRepo) CountTicketSavedFilters(ctx context.Context,
 	n, _ := args.Get(0).(int64)
 	return n, args.Error(1)
 }
+
+// mockTicketRefReader は repository.TicketRefReader の testify/mock 実装（本文のチケット参照の
+// 解決・候補の検索だけを持つ読み取り口）。
+type mockTicketRefReader struct{ mock.Mock }
+
+var _ repository.TicketRefReader = (*mockTicketRefReader)(nil)
+
+func (m *mockTicketRefReader) ListTicketRefFactsByIDs(ctx context.Context, workspaceID string, ticketIDs []string) ([]domain.TicketRefFact, error) {
+	args := m.Called(ctx, workspaceID, ticketIDs)
+	rows, _ := args.Get(0).([]domain.TicketRefFact)
+	return rows, args.Error(1)
+}
+
+func (m *mockTicketRefReader) SearchTicketRefFacts(ctx context.Context, workspaceID, q string, limit int) ([]domain.TicketRefFact, error) {
+	args := m.Called(ctx, workspaceID, q, limit)
+	rows, _ := args.Get(0).([]domain.TicketRefFact)
+	return rows, args.Error(1)
+}

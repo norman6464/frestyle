@@ -814,8 +814,14 @@ func (m *mockInvitationMailer) SendInvitation(ctx context.Context, in repository
 // mockTicketRefReader は本文のチケット参照を解決する読み取り口の偽物。
 type mockTicketRefReader struct{ mock.Mock }
 
-func (m *mockTicketRefReader) ListTicketRefFactsByIDs(ctx context.Context, workspaceID string, ticketIDs []string) ([]repository.TicketRefFact, error) {
+func (m *mockTicketRefReader) ListTicketRefFactsByIDs(ctx context.Context, workspaceID string, ticketIDs []string) ([]domain.TicketRefFact, error) {
 	args := m.Called(ctx, workspaceID, ticketIDs)
-	rows, _ := args.Get(0).([]repository.TicketRefFact)
+	rows, _ := args.Get(0).([]domain.TicketRefFact)
+	return rows, args.Error(1)
+}
+
+func (m *mockTicketRefReader) SearchTicketRefFacts(ctx context.Context, workspaceID, q string, limit int) ([]domain.TicketRefFact, error) {
+	args := m.Called(ctx, workspaceID, q, limit)
+	rows, _ := args.Get(0).([]domain.TicketRefFact)
 	return rows, args.Error(1)
 }
