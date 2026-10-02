@@ -21,7 +21,7 @@ let listboxSeq = 0;
  * ポップアップの生成は ReactRenderer、位置決めは Suggestion 内蔵の mount（floating-ui）が担う。
  *
  * DOM フォーカスは editor（textbox）に残るため、メニュー表示中は textbox に
- * aria-expanded / aria-controls / aria-activedescendant を付与して、選択中の候補を
+ * aria-controls / aria-activedescendant を付与して、選択中の候補を
  * スクリーンリーダーへ伝える（WAI-ARIA の listbox + activedescendant パターン）。
  */
 export const SlashCommand = Extension.create<SlashCommandOptions>({
@@ -57,12 +57,12 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
           let listboxId = '';
 
           // textbox（ProseMirror の contenteditable）へのメニュー用 aria 属性の付け外し。
+          // textbox に付けられるのは aria-controls（どの要素でも可）と aria-activedescendant だけ。
+          // aria-expanded は textbox の役割では許されない（axe の aria-allowed-attr）。
           const setMenuAria = (dom: HTMLElement) => {
-            dom.setAttribute('aria-expanded', 'true');
             dom.setAttribute('aria-controls', listboxId);
           };
           const clearMenuAria = (dom: HTMLElement) => {
-            dom.removeAttribute('aria-expanded');
             dom.removeAttribute('aria-controls');
             dom.removeAttribute('aria-activedescendant');
           };

@@ -146,11 +146,12 @@ describe('スラッシュコマンド（統合）', () => {
   it('メニュー表示中は textbox に aria 属性が付き、矢印キーで aria-activedescendant が追従する', async () => {
     const { editor } = await setup();
     const textbox = editor.view.dom;
-    expect(textbox.getAttribute('aria-expanded')).toBeNull();
+    expect(textbox.getAttribute('aria-controls')).toBeNull();
 
     await typeSlash(editor);
     const listboxId = textbox.getAttribute('aria-controls');
-    expect(textbox.getAttribute('aria-expanded')).toBe('true');
+    // aria-expanded は textbox には付けられない（axe の aria-allowed-attr）ので、つながりは aria-controls で見る。
+    expect(textbox.getAttribute('aria-expanded')).toBeNull();
     expect(listboxId).toBeTruthy();
     expect(document.getElementById(listboxId!)).toHaveAttribute('role', 'listbox');
     // 初期状態は先頭 option を指す。

@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import type { CommentAnchor, KbResolvedPage } from '@/entities/kb';
 import { emptyRichDoc, isRichDoc } from '@/shared/lib/richDoc';
-import { RichTextEditor, type CommentBadgeCounts, type EditorCommand } from './editor';
+import { RichTextEditor, type CommentBadgeCounts, type EditorCommand, type SearchPagesForRef } from './editor';
 import type { KbSelectedVersionState } from '../model/useKbPageVersions';
 
 export interface KbPageEditorProps {
@@ -21,6 +21,8 @@ export interface KbPageEditorProps {
   focusSignal: number;
   onImageUpload: ((file: File) => Promise<string>) | undefined;
   resolveImageSrc: (src: string) => Promise<string>;
+  /** `[[` でページを探す口（編集できる形にだけ渡す）。 */
+  searchPages: SearchPagesForRef | undefined;
 }
 
 /**
@@ -45,6 +47,7 @@ function KbPageEditor({
   focusSignal,
   onImageUpload,
   resolveImageSrc,
+  searchPages,
 }: KbPageEditorProps) {
   if (draftOpen) {
     // ドラフトモード中。value/onChange は useKbPageDoc の自動保存とは完全に
@@ -58,6 +61,7 @@ function KbPageEditor({
         ariaLabel={`${data.page.title} の本文（提案を編集中）`}
         onNavigateToPage={onNavigateToPage}
         resolveImageSrc={resolveImageSrc}
+        searchPages={searchPages}
       />
     );
   }
@@ -94,6 +98,7 @@ function KbPageEditor({
       focusSignal={focusSignal}
       onImageUpload={onImageUpload}
       resolveImageSrc={resolveImageSrc}
+      searchPages={data.canEdit ? searchPages : undefined}
     />
   );
 }

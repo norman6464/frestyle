@@ -10,3 +10,5 @@ export { default as RichTextEditor } from './RichTextEditor';
 export type { RichTextEditorProps } from './RichTextEditor';
 export type { EditorCommand } from './editorCommands';
 export type { CommentBadgeCounts } from './commentBadges';
+export { PAGE_REF_TRIGGER } from './pageRefSuggestion';
+export type { PageRefCandidate, SearchPagesForRef } from './pageRefSuggestion';

@@ -43,6 +43,7 @@ const hoisted = vi.hoisted(() => ({
   setPageCover: vi.fn(),
   clearPageCover: vi.fn(),
   createPage: vi.fn(),
+  searchPages: vi.fn(),
   listCommentThreads: vi.fn(),
   createCommentThread: vi.fn(),
   addComment: vi.fn(),
@@ -88,6 +89,7 @@ const hoisted = vi.hoisted(() => ({
       canComment?: boolean;
       commentBadgeCounts?: CommentBadgeCounts;
       onCommentBadgeClick?: (blockId: string) => void;
+      searchPages?: (query: string) => Promise<{ id: string; title: string }[]>;
     },
   },
 }));
@@ -105,6 +107,7 @@ vi.mock('@/entities/kb/api/kbRepository', () => ({
     setPageCover: hoisted.setPageCover,
     clearPageCover: hoisted.clearPageCover,
     createPage: hoisted.createPage,
+    searchPages: hoisted.searchPages,
     listCommentThreads: hoisted.listCommentThreads,
     createCommentThread: hoisted.createCommentThread,
     addComment: hoisted.addComment,
@@ -173,6 +176,7 @@ vi.mock('../editor', async (importOriginal) => {
       canComment?: boolean;
       commentBadgeCounts?: CommentBadgeCounts;
       onCommentBadgeClick?: (blockId: string) => void;
+      searchPages?: (query: string) => Promise<{ id: string; title: string }[]>;
     }) => {
       hoisted.editorProps.current = props;
       hoisted.renders.editor += 1;
@@ -327,7 +331,7 @@ describe('KbPage の配線', () => {
     renderPage();
     await screen.findByTestId('editor');
     const commands = hoisted.editorProps.current?.extraSlashCommands;
-    expect(commands?.map((c) => c.id)).toEqual(['page', 'template']);
+    expect(commands?.map((c) => c.id)).toEqual(['page', 'pageRef', 'template']);
 
     // 成功: 作ったページへ遷移。
     hoisted.createPage.mockResolvedValue({
@@ -1900,5 +1904,36 @@ describe('KbPage の描き直しの範囲', () => {
 
     expect(hoisted.renders).toEqual({ editor: 0, title: 0 });
     expect(hoisted.metaRenders).toBe(0);
+  });
+});
+
+describe('[[ でページを探す口', () => {
+  it('いまのワークスペースの題名検索を使い、自分自身は候補から外す', async () => {
+    renderPage();
+    await screen.findByTestId('editor');
+    const search = hoisted.editorProps.current?.searchPages;
+    expect(search).toBeDefined();
+    const self = resolved(true).page.id;
+    hoisted.searchPages.mockResolvedValue([
+      { id: self, title: '自分' },
+      { id: 'other-1', title: 'ほかのページ' },
+    ]);
+    await expect(search!('ほか')).resolves.toEqual([{ id: 'other-1', title: 'ほかのページ' }]);
+    expect(hoisted.searchPages).toHaveBeenCalledWith('w-3f2a9c', 'ほか', 8);
+  });
+
+  it('空の題名では探しに行かない', async () => {
+    renderPage();
+    await screen.findByTestId('editor');
+    hoisted.searchPages.mockClear();
+    await expect(hoisted.editorProps.current!.searchPages!('  ')).resolves.toEqual([]);
+    expect(hoisted.searchPages).not.toHaveBeenCalled();
+  });
+
+  it('編集できない人には探す口を渡さない（[[ は素の文字のまま）', async () => {
+    hoisted.resolvePage.mockResolvedValue(resolved(false));
+    renderPage();
+    await screen.findByTestId('editor');
+    expect(hoisted.editorProps.current?.searchPages).toBeUndefined();
   });
 });
