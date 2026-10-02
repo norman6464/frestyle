@@ -38,6 +38,7 @@ func registerTicketRoutes(g *gin.RouterGroup, deps *routeDeps) {
 	registerTicketRoutesWith(
 		g,
 		persistence.NewTicketRepository(deps.db),
+		persistence.NewTicketRefReader(deps.db),
 		persistence.NewTicketCommentRepository(deps.db),
 		persistence.NewLabelRepository(deps.db),
 		persistence.NewTicketAttachmentRepository(deps.db),
@@ -72,6 +73,7 @@ func newTicketAttachmentPresignerOrFallback(deps *routeDeps) repository.TicketAt
 func registerTicketRoutesWith(
 	g *gin.RouterGroup,
 	tickets repository.TicketRepository,
+	ticketRefs repository.TicketRefReader,
 	comments repository.TicketCommentRepository,
 	labels repository.LabelRepository,
 	attachments repository.TicketAttachmentRepository,
@@ -120,6 +122,7 @@ func registerTicketRoutesWith(
 		ticket.NewListTicketAncestorsUseCase(tickets),
 		kb.NewListPagesReferencingTicketUseCase(permissions),
 		user.NewLookupUserDisplayUseCase(users),
+		ticket.NewSearchTicketRefsUseCase(ticketRefs),
 	)
 	sh := NewTicketStatusHandler(
 		checkWorkspace,
@@ -212,6 +215,9 @@ func registerTicketRoutesWith(
 	// （domain.ParseTicketKey が最後のハイフンで割る）ので URL 側にプロジェクトを取らない。
 	// /tickets/:ticketId と衝突しないよう /tickets/by-key/:key に独立させる。
 	tkGroup.GET("/workspaces/:workspaceSlug/tickets/by-key/:key", h.ResolveByKey)
+	// 本文エディタの `#` の候補（表示キーか題名。ワークスペース横断なので URL にプロジェクトを
+	// 取らない）。by-key と同じく /tickets/:ticketId と衝突しないよう独立させる。
+	tkGroup.GET("/workspaces/:workspaceSlug/tickets/search", h.SearchRefs)
 	tkGroup.GET("/workspaces/:workspaceSlug/tickets/:ticketId", h.Get)
 	// 直下の子の一覧（孫は含まない）。
 	tkGroup.GET("/workspaces/:workspaceSlug/tickets/:ticketId/children", h.ListChildren)

@@ -1464,3 +1464,39 @@ func (f *ticketFakeRepo) CountTickets(ctx context.Context, in repository.ListTic
 	}
 	return int64(list.Total), nil
 }
+
+// ListTicketRefFactsByIDs は repository.TicketRefReader の偽物（ナレッジの handler テストで
+// 本文のチケット参照は解決しない）。
+func (f *ticketFakeRepo) ListTicketRefFactsByIDs(_ context.Context, _ string, _ []string) ([]domain.TicketRefFact, error) {
+	return nil, nil
+}
+
+// SearchTicketRefFacts は `#` の候補の偽物。本番の SQL と同じ線引き（現役だけ・表示キーの
+// 前方一致か題名の部分一致・鍵の一致を先に）。projectKey は ResolveTicketIDByKey と同じく
+// projectID と同一視する。
+func (f *ticketFakeRepo) SearchTicketRefFacts(_ context.Context, workspaceID, q string, limit int) ([]domain.TicketRefFact, error) {
+	needle := strings.ToUpper(q)
+	var keyed, titled []domain.TicketRefFact
+	for _, t := range f.tickets {
+		if t.WorkspaceID != workspaceID || t.ArchivedAt != nil || t.DeletedAt != nil {
+			continue
+		}
+		fact := domain.TicketRefFact{ID: t.ID, ProjectKey: t.ProjectID, Number: t.Number, Title: t.Title}
+		if s, ok := f.statuses[t.StatusID]; ok {
+			fact.StatusName, fact.StatusCategory = s.Name, s.Category
+		}
+		switch {
+		case strings.HasPrefix(domain.FormatTicketKey(t.ProjectID, t.Number), needle):
+			keyed = append(keyed, fact)
+		case strings.Contains(strings.ToUpper(t.Title), needle):
+			titled = append(titled, fact)
+		}
+	}
+	sort.Slice(keyed, func(i, j int) bool { return keyed[i].ID < keyed[j].ID })
+	sort.Slice(titled, func(i, j int) bool { return titled[i].ID < titled[j].ID })
+	out := append(keyed, titled...)
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}

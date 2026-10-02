@@ -1927,3 +1927,78 @@ func (r *ticketRepository) ListTicketsReferencingTicket(ctx context.Context, wor
 	}
 	return out, nil
 }
+
+// NewTicketRefReader は [repository.TicketRefReader] の実装を返す。実体は ticketRepository と
+// 同じ構造体（同じ表を読む）で、ナレッジ側へは読み取りの 1 口だけを渡す。
+func NewTicketRefReader(db *sql.DB) repository.TicketRefReader {
+	return &ticketRepository{baseRepository{db: db}}
+}
+
+func (r *ticketRepository) ListTicketRefFactsByIDs(ctx context.Context, workspaceID string, ticketIDs []string) ([]domain.TicketRefFact, error) {
+	wsID, ok := kbParseID(workspaceID)
+	if !ok {
+		return []domain.TicketRefFact{}, nil
+	}
+	// UUID として読めない ID はここで落とす（ListWorkspacePageViewFactsByIDs と同じ理由 —
+	// SQL 側の ::uuid が失敗するとクエリ全体が落ち、壊れた参照 1 つでページの読み出しが死ぬ）。
+	valid := make([]string, 0, len(ticketIDs))
+	for _, id := range ticketIDs {
+		if tid, tok := kbParseID(id); tok {
+			valid = append(valid, tid.String())
+		}
+	}
+	if len(valid) == 0 {
+		return []domain.TicketRefFact{}, nil
+	}
+	encoded, err := json.Marshal(valid)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.queries(ctx).ListTicketRefFactsByIDs(ctx, sqlcgen.ListTicketRefFactsByIDsParams{
+		WorkspaceID: wsID, TicketIds: encoded,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.TicketRefFact, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domain.TicketRefFact{
+			ID:             row.ID.String(),
+			ProjectKey:     row.ProjectKey,
+			Number:         row.Number,
+			Title:          row.Title,
+			StatusName:     row.StatusName,
+			StatusCategory: domain.TicketStatusCategory(row.StatusCategory),
+		})
+	}
+	return out, nil
+}
+
+func (r *ticketRepository) SearchTicketRefFacts(ctx context.Context, workspaceID, q string, limit int) ([]domain.TicketRefFact, error) {
+	wsID, ok := kbParseID(workspaceID)
+	if !ok {
+		return []domain.TicketRefFact{}, nil
+	}
+	rowLimit, lok := toInt32(limit)
+	if !lok || rowLimit < 1 {
+		return []domain.TicketRefFact{}, nil
+	}
+	rows, err := r.queries(ctx).SearchTicketRefFacts(ctx, sqlcgen.SearchTicketRefFactsParams{
+		WorkspaceID: wsID, QLike: escapeLike(q), Q: q, RowLimit: rowLimit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.TicketRefFact, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domain.TicketRefFact{
+			ID:             row.ID.String(),
+			ProjectKey:     row.ProjectKey,
+			Number:         row.Number,
+			Title:          row.Title,
+			StatusName:     row.StatusName,
+			StatusCategory: domain.TicketStatusCategory(row.StatusCategory),
+		})
+	}
+	return out, nil
+}

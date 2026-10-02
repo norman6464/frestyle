@@ -152,3 +152,18 @@ func Test_雛形からのブロックID再採番(t *testing.T) {
 		}
 	})
 }
+
+// チケット参照も特定の 1 件への固定参照なので、pageRef と同じく雛形には残さない
+// （雛形から作った複数のページが同じチケットを指しても意味をなさない）。
+func Test_雛形保存時にチケット参照も取り除く(t *testing.T) {
+	doc := `{"type":"doc","content":[{"type":"paragraph","content":[` +
+		`{"type":"text","text":"前 "},` +
+		`{"type":"ticketRef","attrs":{"ticketId":"00000000-0000-7000-8000-0000000000b1","title":"隠す"}},` +
+		`{"type":"text","text":" 後"}]}]}`
+	got, err := stripPageRefAndImageNodesForTemplate(doc)
+	require.NoError(t, err)
+	require.NotContains(t, got, "ticketRef")
+	require.NotContains(t, got, "隠す")
+	require.Contains(t, got, "前 ")
+	require.Contains(t, got, " 後")
+}

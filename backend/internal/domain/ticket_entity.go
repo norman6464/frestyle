@@ -178,6 +178,19 @@ type TicketReference struct {
 	Title      string
 }
 
+// TicketRefFact はページ本文のチケット参照（ticketRef インラインノード）を表示へ解決する
+// ための事実。表示キーは FormatTicketKey(ProjectKey, Number) で組み立てる。題名と状態は
+// 本文に保存せず読み出しのたびにここから引く（写しを焼き込むと、改名や状態の変化が本文に
+// 映らない）。本文エディタの `#` の候補（検索）も同じ形で返す。
+type TicketRefFact struct {
+	ID             string
+	ProjectKey     string
+	Number         int64
+	Title          string
+	StatusName     string
+	StatusCategory TicketStatusCategory
+}
+
 // AssignedTicketSummary は全ワークスペース横断の「自分の担当」の 1 行（ホームの短い一覧）。
 //
 // AssignedTicket（1 ワークスペースの担当画面）と違い、どのワークスペースの仕事かを見分ける

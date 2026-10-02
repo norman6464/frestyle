@@ -122,7 +122,7 @@ func newKbFixture(fallback domain.PagePermission, uid uint64) kbFixture {
 	notifications := newKbFakeNotifications()
 	mailer := &kbFakeMailer{}
 	registerKnowledgeBaseRoutesWith(
-		g, pages, perms, provisioner, users, comments, versions, views, favorites, templates, suggestions, tickets, fakeTxManager{}, presigner, tickets,
+		g, pages, perms, provisioner, users, comments, versions, views, favorites, templates, suggestions, tickets, tickets, fakeTxManager{}, presigner, tickets,
 		invitations, notifications, mailer, "http://localhost:5173",
 	)
 	// 認証不要のルート（招待の案内）は current user を注入しない group に張る。
@@ -1783,7 +1783,7 @@ func Test_ナレッジAPI_middlewareを通らないルートは成功しない(t
 		kb.NewArchivePageUseCase(pages),
 		kb.NewUnarchivePageUseCase(pages),
 		kb.NewReplacePageBlocksUseCase(pages, fakeTxManager{}, newKbFakePageVersions(pages)),
-		kb.NewResolvePageRefTitlesUseCase(perms),
+		kb.NewResolvePageRefTitlesUseCase(perms, newTicketFakeRepo()),
 		kb.NewListViewableAncestorsUseCase(pages, perms),
 		kb.NewDeletePageUseCase(pages),
 		kb.NewSetPageIconUseCase(pages),

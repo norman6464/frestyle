@@ -289,3 +289,17 @@ type TicketRepository interface {
 	// ListTicketAncestors はパンくず用（根から順、自分自身は含まない）。
 	ListTicketAncestors(ctx context.Context, workspaceID, ticketID string) ([]domain.Ticket, error)
 }
+
+// TicketRefReader は本文のチケット参照を解決・検索する読み取り口。TicketRepository から
+// 分けるのは、ナレッジ側の解決 usecase がチケットの書き込み口まで握らないようにするため
+// （必要なのはこの 2 口だけで、TicketRepository を要求すると偽物やモックの実装面が無駄に広がる）。
+type TicketRefReader interface {
+	// ListTicketRefFactsByIDs は指定 ID 群のうち、同じワークスペースの削除されていない
+	// チケットを返す（アーカイブ済みは含む）。UUID として読めない ID は落とし、無い ID は
+	// 結果に現れない。順序は保証しない。
+	ListTicketRefFactsByIDs(ctx context.Context, workspaceID string, ticketIDs []string) ([]domain.TicketRefFact, error)
+	// SearchTicketRefFacts は題名の部分一致・あいまい一致、または表示キー（PRJ-12）の前方一致で、
+	// 同じワークスペースの現役（アーカイブも削除もされていない）チケットを limit 件まで返す。
+	// 表示キーが一致したものを先に、あとは更新の新しい順。q は空でないこと（呼び出し側が守る）。
+	SearchTicketRefFacts(ctx context.Context, workspaceID, q string, limit int) ([]domain.TicketRefFact, error)
+}

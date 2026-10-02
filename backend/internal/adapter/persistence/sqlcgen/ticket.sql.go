@@ -2177,6 +2177,76 @@ func (q *Queries) ListTicketParentChain(ctx context.Context, arg ListTicketParen
 	return items, nil
 }
 
+const listTicketRefFactsByIDs = `-- name: ListTicketRefFactsByIDs :many
+SELECT t.id, t.number, t.title,
+       p."key" AS project_key,
+       s.name AS status_name, s.category AS status_category
+FROM tickets t
+JOIN projects p ON p.workspace_id = t.workspace_id AND p.id = t.project_id
+JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
+WHERE t.workspace_id = $1
+  AND t.id IN (SELECT value::uuid FROM json_array_elements_text($2::json))
+  AND t.deleted_at IS NULL
+`
+
+type ListTicketRefFactsByIDsParams struct {
+	WorkspaceID uuid.UUID
+	TicketIds   json.RawMessage
+}
+
+type ListTicketRefFactsByIDsRow struct {
+	ID             uuid.UUID
+	Number         int64
+	Title          string
+	ProjectKey     string
+	StatusName     string
+	StatusCategory string
+}
+
+// ページ本文のチケット参照（ticketRef）を表示へ解決するための事実を 1 回の問い合わせで返す。
+// 表示キーの材料（projects.key・tickets.number）と状態（名前・枠）を JOIN で添える —
+// 参照 1 つごとに GetTicket を呼ぶと、参照を大量に並べた本文で読み出しが参照数に比例して
+// 遅くなる。
+//
+// ticket_ids は json 配列（文字列の UUID）。json_array_elements_text で展開する理由と、
+// 呼び出し側（Go）が UUID として読めない値を先に落とす理由は ListWorkspacePageViewFactsByIDs
+// と同じ（ここで ::uuid が失敗するとクエリ全体が落ち、壊れた参照 1 つでページの読み出しが死ぬ）。
+//
+// deleted_at IS NOT NULL は返さない（GetTicket と同じく「無い」扱い）。アーカイブ済みは返す —
+// 完了して片づけたチケットも参照先として開けるので、鍵と題名を伏せる理由が無い
+// （ページ参照がアーカイブ済みの題名を伏せるのとは線引きが違う）。
+// チケットにプロジェクト単位の閲覧権限は無い（ワークスペースの一員なら全チケットを読める）
+// ため、ワークスペースの一致だけで足りる。
+func (q *Queries) ListTicketRefFactsByIDs(ctx context.Context, arg ListTicketRefFactsByIDsParams) ([]ListTicketRefFactsByIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTicketRefFactsByIDs, arg.WorkspaceID, arg.TicketIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTicketRefFactsByIDsRow{}
+	for rows.Next() {
+		var i ListTicketRefFactsByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.Title,
+			&i.ProjectKey,
+			&i.StatusName,
+			&i.StatusCategory,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTicketStatuses = `-- name: ListTicketStatuses :many
 SELECT id, workspace_id, project_id, name, name_lower, category, color, position, is_initial, archived_at, deleted_at, created_at, updated_at FROM ticket_statuses
 WHERE workspace_id = $1 AND project_id = $2
@@ -2801,6 +2871,87 @@ func (q *Queries) RestoreTicketType(ctx context.Context, arg RestoreTicketTypePa
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const searchTicketRefFacts = `-- name: SearchTicketRefFacts :many
+SELECT t.id, t.number, t.title,
+       p."key" AS project_key,
+       s.name AS status_name, s.category AS status_category
+FROM tickets t
+JOIN projects p ON p.workspace_id = t.workspace_id AND p.id = t.project_id
+JOIN ticket_statuses s ON s.workspace_id = t.workspace_id AND s.id = t.status_id
+WHERE t.workspace_id = $1
+  AND t.deleted_at IS NULL
+  AND t.archived_at IS NULL
+  AND (
+    upper(p."key" || '-' || t.number::text) LIKE upper($2::text) || '%'
+    OR t.title ILIKE '%' || $2::text || '%'
+    OR word_similarity($3::text, t.title) > 0.6
+  )
+ORDER BY (upper(p."key" || '-' || t.number::text) LIKE upper($2::text) || '%') DESC,
+         t.updated_at DESC, t.id
+LIMIT $4
+`
+
+type SearchTicketRefFactsParams struct {
+	WorkspaceID uuid.UUID
+	QLike       string
+	Q           string
+	RowLimit    int32
+}
+
+type SearchTicketRefFactsRow struct {
+	ID             uuid.UUID
+	Number         int64
+	Title          string
+	ProjectKey     string
+	StatusName     string
+	StatusCategory string
+}
+
+// 本文エディタの `#` の候補。題名の部分一致（ILIKE）・あいまい一致（word_similarity。閾値は
+// ListTickets と同じ）に加え、表示キー（PRJ-12 の形）の前方一致で探す。ワークスペース横断
+// （プロジェクトを取らない）なのは、本文を書いている人がどのプロジェクトのチケットを指すか
+// 決め打ちできないため。
+//
+// 候補はこれから新しく参照する先なので、アーカイブ済み・削除済みは出さない
+// （解決＝ListTicketRefFactsByIDs がアーカイブ済みを返すのとは役割が違う）。
+// 表示キーが一致したものを先に、あとは更新の新しい順。q_like は LIKE のメタ文字を
+// 逃がした値、q は逃がす前の値（word_similarity に逃がした値を渡すと、足した
+// バックスラッシュがトライグラムに混じって打ち間違い検索が鈍る — ListTickets と同じ理由）。
+func (q *Queries) SearchTicketRefFacts(ctx context.Context, arg SearchTicketRefFactsParams) ([]SearchTicketRefFactsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchTicketRefFacts,
+		arg.WorkspaceID,
+		arg.QLike,
+		arg.Q,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchTicketRefFactsRow{}
+	for rows.Next() {
+		var i SearchTicketRefFactsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.Title,
+			&i.ProjectKey,
+			&i.StatusName,
+			&i.StatusCategory,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setTicketStatusInitial = `-- name: SetTicketStatusInitial :execrows

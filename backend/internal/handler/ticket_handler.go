@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/norman6464/frestyle/backend/internal/domain"
+	"github.com/norman6464/frestyle/backend/internal/handler/dto"
 	"github.com/norman6464/frestyle/backend/internal/handler/middleware"
 	"github.com/norman6464/frestyle/backend/internal/usecase/kb"
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
@@ -77,6 +78,7 @@ type TicketHandler struct {
 	ancestors              *ticket.ListTicketAncestorsUseCase
 	pagesReferencingTicket *kb.ListPagesReferencingTicketUseCase
 	userDisplay            *user.LookupUserDisplayUseCase
+	searchRefs             *ticket.SearchTicketRefsUseCase
 }
 
 func NewTicketHandler(
@@ -111,6 +113,7 @@ func NewTicketHandler(
 	ancestors *ticket.ListTicketAncestorsUseCase,
 	pagesReferencingTicket *kb.ListPagesReferencingTicketUseCase,
 	userDisplay *user.LookupUserDisplayUseCase,
+	searchRefs *ticket.SearchTicketRefsUseCase,
 ) *TicketHandler {
 	return &TicketHandler{
 		checkWorkspace: checkWorkspace, checkTicket: checkTicket, resolveKey: resolveKey,
@@ -122,7 +125,7 @@ func NewTicketHandler(
 		changeParent: changeParent, assign: assign, unassign: unassign, history: history,
 		labels: labels, labelsByIDs: labelsByIDs,
 		ancestors: ancestors, pagesReferencingTicket: pagesReferencingTicket,
-		userDisplay: userDisplay,
+		userDisplay: userDisplay, searchRefs: searchRefs,
 	}
 }
 
@@ -406,6 +409,41 @@ func (h *TicketHandler) Get(c *gin.Context) {
 		Labels: h.fetchLabels(c, scope, ticketID), Ancestors: h.fetchAncestors(c, scope, ticketID),
 		Permission: perm, CreatedBy: h.fetchCreatedBy(c, found.Ticket.CreatedByUserID),
 	})
+}
+
+// SearchRefs は本文エディタの `#` の候補（表示キーか題名で探す。ワークスペース横断）。
+// ワークスペースの閲覧権限が要る（一覧と同じ）。空の語は 200 で空（打った語で絞る口）。
+func (h *TicketHandler) SearchRefs(c *gin.Context) {
+	scope, ok := kbScope(c)
+	if !ok {
+		return
+	}
+	if !h.requireTicketWorkspacePermission(c, scope, domain.CapabilityView) {
+		return
+	}
+	query, ok := searchQueryParam(c)
+	if !ok {
+		return
+	}
+	limit, ok := pageQuery(c, "limit")
+	if !ok {
+		return
+	}
+	if limit == 0 {
+		limit = ticket.DefaultTicketRefSearchLimit
+	}
+	rows, err := h.searchRefs.Execute(c.Request.Context(), ticket.SearchTicketRefsInput{
+		WorkspaceID: scope.workspaceID, Query: query, Limit: limit,
+	})
+	if errors.Is(err, ticket.ErrInvalidTicketRefSearchLimit) {
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_request"})
+		return
+	}
+	if err != nil {
+		respondTicketErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, dto.TicketRefCandidateListFromDomain(rows))
 }
 
 // ResolveByKey は表示キー（例 FRESTYLE-12）からチケット 1 件を返す（閲覧権限が要る）。

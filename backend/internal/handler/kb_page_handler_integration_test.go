@@ -48,6 +48,7 @@ type kbEnv struct {
 	templates        repository.PageTemplateRepository
 	suggestions      repository.PageSuggestionRepository
 	tickets          repository.TicketRepository
+	ticketRefs       repository.TicketRefReader
 	txManager        repository.TxManager
 	kbImagePresigner repository.KbImagePresigner
 	labels           repository.LabelRepository
@@ -75,6 +76,7 @@ func newKbEnv(t *testing.T, sqlDB *sql.DB, slug string) *kbEnv {
 		templates:        persistence.NewPageTemplateRepository(sqlDB),
 		suggestions:      persistence.NewPageSuggestionRepository(sqlDB),
 		tickets:          persistence.NewTicketRepository(sqlDB),
+		ticketRefs:       persistence.NewTicketRefReader(sqlDB),
 		txManager:        persistence.NewTxManager(sqlDB),
 		kbImagePresigner: persistence.NewStubKbImagePresigner("stub-bucket"),
 		labels:           persistence.NewLabelRepository(sqlDB),
@@ -98,7 +100,7 @@ func (e *kbEnv) as(userID uint64) *kbEnv {
 	})
 	registerKnowledgeBaseRoutesWith(
 		g, e.pages, e.permissions, e.provisioner, e.users, e.comments, e.versions, e.views, e.favorites,
-		e.templates, e.suggestions, e.tickets, e.txManager, e.kbImagePresigner, e.labels, e.invitations, e.notifications,
+		e.templates, e.suggestions, e.tickets, e.ticketRefs, e.txManager, e.kbImagePresigner, e.labels, e.invitations, e.notifications,
 		mail.Disabled{}, "http://localhost:5173",
 	)
 	// 認証不要のルート（招待の案内）は current user を注入しない group に張る。
