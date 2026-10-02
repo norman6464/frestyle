@@ -10,6 +10,7 @@ import CodeBlockView from './CodeBlockView';
 import ImageView from './ImageView';
 import { BlockOperations } from './blockOperations';
 import { ListNormalization } from './listNormalization';
+import { PageRefSuggestion } from './pageRefSuggestion';
 import { MarkdownShortcuts } from './markdownShortcuts';
 import { createSchemaExtensions } from './schemaExtensions';
 import { SlashCommand } from './slashCommandExtension';
@@ -129,6 +130,9 @@ export function createEditorExtensions(
     ListNormalization,
     // いちばん外のブロック単位の上下移動・複製・削除（取っ手のメニュー・'/'・Alt+↑↓）。
     BlockOperations,
+    // `[[` でページを探して参照を入れる。探す口（searchPages）は画面側が実行時に storage へ入れる
+    // （拡張一式は生成時に固定されるため）。口が無ければ `[[` は素の文字のまま。
+    PageRefSuggestion,
     // IME（日本語入力）確定でも効く ＃ 見出し・``` コードブロック変換。
     MarkdownShortcuts,
     Placeholder.configure({ placeholder }),

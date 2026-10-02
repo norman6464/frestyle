@@ -7,6 +7,7 @@ import { buildSlashItems } from './slashItems';
 import { acceptedImageFiles, insertUploadedImages } from './imageInsertion';
 import { sanitizeDocLinks } from '@/shared/lib/linkSafety';
 import { sanitizeDocColors } from './inlineColors';
+import type { SearchPagesForRef } from './pageRefSuggestion';
 import { openClickedLink } from './linkClick';
 import { fillMissingBlockIdsInDoc } from './stableBlockId';
 import BubbleFormatMenu from './BubbleFormatMenu';
@@ -66,6 +67,11 @@ export interface RichTextEditorProps {
    * （渡さなければ素の遷移）。外部リンクは常に新しいタブで開く。
    */
   onNavigateToPage?: (path: string) => void;
+  /**
+   * `[[` に続けて打った題名でページを探す口。渡したときだけ候補が出て、選ぶとページ参照
+   * （pageRef）が入る。渡さなければ `[[` は素の文字のまま。差し替えは即座に効く（storage 経由）。
+   */
+  searchPages?: SearchPagesForRef;
   /**
    * 選択範囲からコメントを作りたいときに呼ばれる（バブルメニューの「コメント」ボタン）。
    * 渡さなければボタン自体を出さない（CommentFormatControl 側の約束）。
@@ -181,6 +187,7 @@ export default function RichTextEditor({
   onCreate,
   extraSlashCommands,
   onNavigateToPage,
+  searchPages,
   onRequestComment,
   canComment = false,
   commentBadgeCounts,
@@ -387,6 +394,13 @@ export default function RichTextEditor({
     if (!editor || editor.isDestroyed) return;
     editor.setEditable(editable);
   }, [editor, editable]);
+
+  // `[[` の候補を探す口は拡張の storage に入れる（拡張一式は生成時に固定されるので、
+  // 口が差し替わっても作り直さずに済む）。無ければ null で、候補は開かない。
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.storage.pageRefSuggestion.searchPages = searchPages ?? null;
+  }, [editor, searchPages]);
 
   // 「増えたときだけ」フォーカスを移す。マウント時の値では動かない — ページを
   // 開き直しただけで本文が奪ってしまわないため（サイドバーの openSignal と同じ形）。

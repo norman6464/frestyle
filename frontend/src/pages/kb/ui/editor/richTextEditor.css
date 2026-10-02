@@ -195,7 +195,9 @@
  * SafeLink 参照）ため、ここで色が付くのは安全と判定できたリンクだけになる。
  */
 .rte-content .ProseMirror a {
-  color: var(--color-brand, #3b82f6);
+  /* 白地で 5.2:1。brand-500（--color-brand）は 3.7:1 で読みやすさの基準（4.5:1）に届かない
+     （主ボタンと同じ理由で 600 から始める）。ページ参照（.rte-page-ref）もこの色。 */
+  color: theme('colors.brand.600');
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;

@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useKbFrameLocation, useKbFrameSpace } from '@/widgets/kb-frame';
 import { KbSaveAsTemplateButton, KbTemplatePickerModal, useKbPageTemplates } from '@/features/kb-page-templates';
 import { emptyRichDoc, isRichDoc } from '@/shared/lib/richDoc';
-import type { CommentBadgeCounts, EditorCommand } from './editor';
+import { PAGE_REF_TRIGGER, type CommentBadgeCounts, type EditorCommand, type PageRefCandidate } from './editor';
 import { FsIcon, fsIcon, Loading, EmptyState, ConfirmModal } from '@/shared/ui';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { useMediaQuery } from '@/shared/lib/hooks/useMediaQuery';
@@ -608,6 +608,22 @@ export default function KbPage() {
     [uploadWorkspaceSlug, uploadPageId],
   );
 
+  // `[[` の候補。いまのワークスペースの題名検索を包み、自分自身は候補から外す（自己参照を防ぐ）。
+  // ワークスペースが決まるまでは口を渡さない（`[[` は素の文字のまま）。
+  const refWorkspaceSlug = data?.workspaceSlug;
+  const refSelfPageId = data?.page.id;
+  const searchPagesForRef = useMemo(
+    () =>
+      refWorkspaceSlug
+        ? async (query: string): Promise<PageRefCandidate[]> => {
+            if (query.trim() === '') return [];
+            const results = await KbRepository.searchPages(refWorkspaceSlug, query, 8);
+            return results.filter((page) => page.id !== refSelfPageId).map((page) => ({ id: page.id, title: page.title }));
+          }
+        : undefined,
+    [refWorkspaceSlug, refSelfPageId],
+  );
+
   const extraSlashCommands = useMemo<EditorCommand[]>(
     () => [
       {
@@ -623,6 +639,17 @@ export default function KbPage() {
           void createSubpage(editor, ctx.data, ctx.queryClient)
             .then((path) => ctx.navigate(path))
             .catch(() => ctx.showToast('error', '子ページを作成できませんでした'));
+        },
+      },
+      {
+        id: 'pageRef',
+        label: 'ページを参照',
+        group: 'insert',
+        // `[[` を差し込むと、続けて打った題名で候補が出る（PageRefSuggestion）。
+        glyph: '[[',
+        keywords: ['ref', 'pageref', 'link', 'wiki', 'mention'],
+        run: (editor) => {
+          editor.chain().focus().insertContent(PAGE_REF_TRIGGER).run();
         },
       },
       {
@@ -882,6 +909,7 @@ export default function KbPage() {
                   focusSignal={bodyFocusSignal}
                   onImageUpload={handleImageUpload}
                   resolveImageSrc={resolveImageSrc}
+                  searchPages={searchPagesForRef}
                 />
               </div>
               {/*
