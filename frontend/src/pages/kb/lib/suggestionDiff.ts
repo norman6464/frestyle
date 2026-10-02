@@ -24,8 +24,9 @@ const DIFF_TIMEOUT_MS = 2_000;
 /**
  * ProseMirror doc から差分用の平文を作る。
  *
- * トップレベルの各ブロック（paragraph・heading・listItem 等）ごとに、そのブロック配下の
- * text ノードを連結した 1 行を作り、ブロックを改行で繋ぐ。backend の extractPageBodyText
+ * トップレベルの各ブロック（paragraph・heading 等）ごとに、そのブロック配下の text ノードを
+ * 連結した行を作り、ブロックを改行で繋ぐ。容器（注意書き・折りたたみ・段組み・リスト）の中の
+ * ブロックも 1 つずつ行にする（1 行に連結しない）。backend の extractPageBodyText
  * （Go 実装）と同じ発想の抜き出しだが、あちらは流用できないためフロント側に別実装として持つ。
  *
  * 文字だけを拾うと、リンクの href・画像の src・pageRef の参照先・コードブロックの言語は
@@ -77,9 +78,21 @@ function collectText(node: unknown, depth: number): string {
   }
 
   if (Array.isArray(node.content)) {
-    for (const child of node.content) text += collectText(child, depth + 1);
+    node.content.forEach((child, index) => {
+      // 容器（注意書き・折りたたみ・列・リストの項目）の子は、ブロックごとに改行で区切る。
+      // 1 行に連結すると、どのブロックが変わったか差分で読めない。
+      if (index > 0 && isBlockNode(child)) text += '\n';
+      text += collectText(child, depth + 1);
+    });
   }
   return text;
+}
+
+/** 文字の並びを作るインラインのノード。これ以外の子はブロックとして行を分ける。 */
+const INLINE_NODE_TYPES = new Set(['text', 'hardBreak', 'pageRef', 'ticketRef', 'mention']);
+
+function isBlockNode(node: unknown): boolean {
+  return isPlainObject(node) && typeof node.type === 'string' && !INLINE_NODE_TYPES.has(node.type);
 }
 
 /** linkHrefOf は text ノードの marks から link マークの href を拾う。無ければ null。 */

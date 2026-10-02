@@ -9,8 +9,11 @@ import { LINK_MARK_NAME } from '@/shared/lib/linkSafety';
  * - turn: 現在ブロックの種類変換（見出し・リスト・引用・コードブロック）
  * - insert: カーソル位置への挿入（水平線…）
  * - history: 取り消し/やり直し
+ * - table: 表の中でだけ使える表の操作
+ * - block: いちばん外のブロック単位の操作（取っ手のメニュー）
+ * - callout: 注意書きの中でだけ使える種類の切り替え（取っ手のメニュー・'/'）
  */
-export type EditorCommandGroup = 'mark' | 'turn' | 'insert' | 'history' | 'table' | 'block';
+export type EditorCommandGroup = 'mark' | 'turn' | 'insert' | 'history' | 'table' | 'block' | 'callout';
 
 /**
  * EditorCommandIcon はコマンドを線のアイコンで出すときの指定。書式の記号（FormatIcon）か、
@@ -193,6 +196,70 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
     keywords: ['hr', 'rule', 'divider', 'separator'],
     run: (editor) => focused(editor).setHorizontalRule().run(),
   },
+  // --- 容器（第 4 段）。注意書きは 4 種類を '/' に並べる（種類の名前で探せるように）。 ---
+  {
+    id: 'callout',
+    label: '注意書き',
+    group: 'insert',
+    glyph: '！',
+    icon: { set: 'fs', name: 'info' },
+    keywords: ['callout', 'note', 'info', 'admonition', 'box'],
+    run: (editor) => focused(editor).setCallout({ kind: 'info' }).run(),
+  },
+  {
+    id: 'calloutWarning',
+    label: '注意書き（注意）',
+    group: 'insert',
+    glyph: '！',
+    icon: { set: 'fs', name: 'alert-triangle' },
+    keywords: ['warning', 'caution', 'callout'],
+    run: (editor) => focused(editor).setCallout({ kind: 'warning' }).run(),
+  },
+  {
+    id: 'calloutDanger',
+    label: '注意書き（危険）',
+    group: 'insert',
+    glyph: '！',
+    icon: { set: 'fs', name: 'alert-circle' },
+    keywords: ['danger', 'error', 'callout'],
+    run: (editor) => focused(editor).setCallout({ kind: 'danger' }).run(),
+  },
+  {
+    id: 'calloutSuccess',
+    label: '注意書き（成功）',
+    group: 'insert',
+    glyph: '✓',
+    icon: { set: 'fs', name: 'check-circle' },
+    keywords: ['success', 'tip', 'callout'],
+    run: (editor) => focused(editor).setCallout({ kind: 'success' }).run(),
+  },
+  {
+    id: 'details',
+    label: '折りたたみ',
+    group: 'insert',
+    glyph: '▸',
+    icon: { set: 'fs', name: 'chevron-right' },
+    keywords: ['details', 'toggle', 'collapse', 'fold', 'accordion'],
+    run: (editor) => focused(editor).setDetails().run(),
+  },
+  {
+    id: 'columns2',
+    label: '2 列',
+    group: 'insert',
+    glyph: '2列',
+    keywords: ['columns', 'column', '2columns', 'col2'],
+    isEnabled: (editor) => editor.can().insertColumns(2),
+    run: (editor) => focused(editor).insertColumns(2).run(),
+  },
+  {
+    id: 'columns3',
+    label: '3 列',
+    group: 'insert',
+    glyph: '3列',
+    keywords: ['columns', 'column', '3columns', 'col3'],
+    isEnabled: (editor) => editor.can().insertColumns(3),
+    run: (editor) => focused(editor).insertColumns(3).run(),
+  },
   // --- 履歴 ---
   {
     id: 'undo',
@@ -338,6 +405,51 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
     keywords: ['delete', 'remove', 'deleteblock'],
     isEnabled: (editor) => editor.can().deleteBlock(),
     run: (editor) => focused(editor).deleteBlock().run(),
+  },
+  // --- 注意書きの種類（注意書きの中でだけ。取っ手のメニューと '/' に出る） ---
+  {
+    id: 'calloutKindInfo',
+    label: '種類: 情報',
+    group: 'callout',
+    glyph: 'i',
+    icon: { set: 'fs', name: 'info' },
+    keywords: ['kindinfo', 'info'],
+    isActive: (editor) => editor.isActive('callout', { kind: 'info' }),
+    isEnabled: (editor) => editor.can().setCalloutKind('info'),
+    run: (editor) => focused(editor).setCalloutKind('info').run(),
+  },
+  {
+    id: 'calloutKindWarning',
+    label: '種類: 注意',
+    group: 'callout',
+    glyph: '！',
+    icon: { set: 'fs', name: 'alert-triangle' },
+    keywords: ['kindwarning', 'warning'],
+    isActive: (editor) => editor.isActive('callout', { kind: 'warning' }),
+    isEnabled: (editor) => editor.can().setCalloutKind('warning'),
+    run: (editor) => focused(editor).setCalloutKind('warning').run(),
+  },
+  {
+    id: 'calloutKindDanger',
+    label: '種類: 危険',
+    group: 'callout',
+    glyph: '！',
+    icon: { set: 'fs', name: 'alert-circle' },
+    keywords: ['kinddanger', 'danger'],
+    isActive: (editor) => editor.isActive('callout', { kind: 'danger' }),
+    isEnabled: (editor) => editor.can().setCalloutKind('danger'),
+    run: (editor) => focused(editor).setCalloutKind('danger').run(),
+  },
+  {
+    id: 'calloutKindSuccess',
+    label: '種類: 成功',
+    group: 'callout',
+    glyph: '✓',
+    icon: { set: 'fs', name: 'check-circle' },
+    keywords: ['kindsuccess', 'success'],
+    isActive: (editor) => editor.isActive('callout', { kind: 'success' }),
+    isEnabled: (editor) => editor.can().setCalloutKind('success'),
+    run: (editor) => focused(editor).setCalloutKind('success').run(),
   },
 ];
 

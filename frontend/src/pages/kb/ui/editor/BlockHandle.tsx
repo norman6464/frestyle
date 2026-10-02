@@ -5,7 +5,8 @@ import { getEditorCommands } from './editorCommands';
 import { selectionForBlock, topLevelBlockOf } from './blockOperations';
 import EditorCommandGlyph from './EditorCommandGlyph';
 
-const BLOCK_MENU_COMMANDS = getEditorCommands('block');
+// 注意書きの種類（callout 群）は、乗せたブロックが注意書きのときだけ出す（ほかは常に出して無効にする）。
+const BLOCK_MENU_COMMANDS = getEditorCommands('block', 'callout');
 
 /** 乗せているブロックの位置（doc 上の pos）と、本文の器の中での縦位置。 */
 interface Hovered {
@@ -192,12 +193,13 @@ export default function BlockHandle({ editor, containerRef }: { editor: Editor; 
       </button>
       {menuOpen && (
         <div ref={menuRef} role="menu" aria-label="ブロックの操作" className="rte-block-menu" onKeyDown={onMenuKeyDown}>
-          {BLOCK_MENU_COMMANDS.map((command, index) => (
+          {BLOCK_MENU_COMMANDS.map((command, index) => (command.group === 'callout' && !enabled[index] ? null : (
             <button
               key={command.id}
               type="button"
               role="menuitem"
               disabled={!enabled[index]}
+              aria-current={command.isActive?.(editor) ? 'true' : undefined}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 command.run(editor);
@@ -208,7 +210,7 @@ export default function BlockHandle({ editor, containerRef }: { editor: Editor; 
               {command.icon ? <EditorCommandGlyph command={command} /> : <span aria-hidden="true" className="w-4" />}
               <span>{command.label}</span>
             </button>
-          ))}
+          )))}
         </div>
       )}
     </div>

@@ -79,4 +79,26 @@ describe('BlockHandle（ブロックの取っ手）', () => {
     // 消えたメニューの項目に焦点が残っていないことまでを見る。戻ること自体は見本（Storybook）で確かめる。
     expect(document.activeElement).not.toBe(firstItem);
   });
+
+  it('注意書きに乗せたときだけ「種類: …」が出て、選ぶと種類が変わる', async () => {
+    const changes: JSONContent[] = [];
+    const calloutDoc = {
+      type: 'doc' as const,
+      content: [{ type: 'callout', attrs: { kind: 'info' }, content: [paragraph('注意の中')] }, paragraph('外')],
+    };
+    const { container } = render(<RichTextEditor value={calloutDoc} editable onChange={(next) => changes.push(next)} />);
+    await screen.findByText('外');
+    fireEvent.mouseOver(blockElementOf(container, '外'));
+    fireEvent.click(await screen.findByRole('button', { name: 'ブロックの操作' }));
+    await screen.findByRole('menu', { name: 'ブロックの操作' });
+    expect(screen.queryByRole('menuitem', { name: '種類: 注意' })).toBeNull();
+    fireEvent.keyDown(screen.getByRole('menu', { name: 'ブロックの操作' }), { key: 'Escape' });
+
+    fireEvent.mouseOver(blockElementOf(container, '注意の中'));
+    fireEvent.click(await screen.findByRole('button', { name: 'ブロックの操作' }));
+    const current = await screen.findByRole('menuitem', { name: '種類: 情報' });
+    expect(current).toHaveAttribute('aria-current', 'true');
+    fireEvent.click(screen.getByRole('menuitem', { name: '種類: 注意' }));
+    await waitFor(() => expect(changes.at(-1)?.content?.[0]?.attrs?.kind).toBe('warning'));
+  });
 });
