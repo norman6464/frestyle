@@ -82,6 +82,11 @@ describe('extractPlainText', () => {
     expect(extractPlainText(doc)).toBe('[ticket: t-target]');
   });
 
+  it('mentionの相手のuserIdは疑似テキストとして本文に埋め込まれる（写しの名前は差分に出さない）', () => {
+    const doc = { type: 'doc', content: [{ type: 'mention', attrs: { userId: '42', name: '表示用の名前' } }] };
+    expect(extractPlainText(doc)).toBe('[mention: 42]');
+  });
+
   it('codeBlockの言語は疑似テキストとして本文の前に埋め込まれる', () => {
     const doc = {
       type: 'doc',

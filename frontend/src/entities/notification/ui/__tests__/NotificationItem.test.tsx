@@ -55,6 +55,15 @@ describe('NotificationItem', () => {
    * 種別がまだ無いため）。したがって、どの種別で来ても種別文字列がそのまま出るのが正。
    * 対応表に実在の種別を足したときは、その種別のラベルを確かめるテストをここに足す。
    */
+  it('page_mentioned は「ページで名指し」のラベルで、飛び先のページへのリンクを出す', () => {
+    renderItem({ type: 'page_mentioned', title: 'ページで名指しされました', linkPath: '/kb/0198a000-0000-7000-8000-000000000004' });
+    expect(screen.getByText('ページで名指し')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /ページで名指しされました/ })).toHaveAttribute(
+      'href',
+      '/kb/0198a000-0000-7000-8000-000000000004',
+    );
+  });
+
   it('ラベルの無い種別は種別文字列をそのまま表示する', () => {
     renderItem({ type: 'unknown_type' });
 

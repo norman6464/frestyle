@@ -14,3 +14,5 @@ export { PAGE_REF_TRIGGER } from './pageRefSuggestion';
 export type { PageRefCandidate, SearchPagesForRef } from './pageRefSuggestion';
 export { TICKET_REF_TRIGGER } from './ticketRefSuggestion';
 export type { TicketRefCandidate, SearchTicketsForRef } from './ticketRefSuggestion';
+export { MENTION_TRIGGER } from './mentionSuggestion';
+export type { MentionCandidate, SearchMembersForMention } from './mentionSuggestion';

@@ -2,8 +2,7 @@ import { Node, mergeAttributes, type Editor } from '@tiptap/core';
 import { Extension, ReactRenderer } from '@tiptap/react';
 import Suggestion, { type SuggestionProps, type SuggestionKeyDownProps } from '@tiptap/suggestion';
 import { PluginKey } from '@tiptap/pm/state';
-import type { WorkspaceMember } from '@/entities/workspace';
-import { filterMentionCandidates } from '../lib/filterMentionCandidates';
+import { filterMembersByName, type WorkspaceMember } from '@/entities/workspace';
 import MentionMenuList, { type MentionMenuListHandle, type MentionMenuListProps } from './MentionMenuList';
 
 /**
@@ -113,7 +112,7 @@ export const Mention = Node.create<MentionOptions, MentionStorage>({
         startOfLine: false,
         allowSpaces: false,
         pluginKey: mentionPluginKey,
-        items: ({ query }) => filterMentionCandidates(this.storage.members, query),
+        items: ({ query }) => filterMembersByName(this.storage.members, query),
         command: ({ editor: currentEditor, range, props: member }) => {
           currentEditor
             .chain()
