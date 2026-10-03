@@ -116,7 +116,7 @@ func TestPageVersionRepository_ExplicitVersion_Integration(t *testing.T) {
 	kbRepo := persistence.NewKnowledgeBaseRepository(sqlDB)
 	txManager := persistence.NewTxManager(sqlDB)
 	versionRepo := persistence.NewPageVersionRepository(sqlDB)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, txManager, versionRepo, persistence.NewKnowledgeBasePermissionRepository(sqlDB), persistence.NewNotificationRepository(sqlDB))
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, txManager, versionRepo, persistence.NewKnowledgeBasePermissionRepository(sqlDB), persistence.NewNotificationRepository(sqlDB), nil)
 	createVersionUC := kb.NewCreateExplicitPageVersionUseCase(versionRepo, kbRepo, txManager)
 
 	doc := `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"本文"}]}]}`
@@ -154,7 +154,7 @@ func TestPageVersionRepository_Restore_Integration(t *testing.T) {
 	kbRepo := persistence.NewKnowledgeBaseRepository(sqlDB)
 	txManager := persistence.NewTxManager(sqlDB)
 	versionRepo := persistence.NewPageVersionRepository(sqlDB)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, txManager, versionRepo, persistence.NewKnowledgeBasePermissionRepository(sqlDB), persistence.NewNotificationRepository(sqlDB))
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, txManager, versionRepo, persistence.NewKnowledgeBasePermissionRepository(sqlDB), persistence.NewNotificationRepository(sqlDB), nil)
 	restoreUC := kb.NewRestorePageVersionUseCase(versionRepo, replaceUC)
 	getUC := kb.NewGetPageUseCase(kbRepo)
 	listUC := kb.NewListPageVersionsUseCase(versionRepo)

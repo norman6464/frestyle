@@ -52,6 +52,7 @@ type kbEnv struct {
 	ticketRefs       repository.TicketRefReader
 	txManager        repository.TxManager
 	kbImagePresigner repository.KbImagePresigner
+	pageAttachments  repository.PageAttachmentRepository
 	labels           repository.LabelRepository
 	invitations      repository.InvitationRepository
 	notifications    repository.NotificationRepository
@@ -81,6 +82,7 @@ func newKbEnv(t *testing.T, sqlDB *sql.DB, slug string) *kbEnv {
 		ticketRefs:       persistence.NewTicketRefReader(sqlDB),
 		txManager:        persistence.NewTxManager(sqlDB),
 		kbImagePresigner: persistence.NewStubKbImagePresigner("stub-bucket"),
+		pageAttachments:  persistence.NewPageAttachmentRepository(sqlDB),
 		labels:           persistence.NewLabelRepository(sqlDB),
 		invitations:      persistence.NewInvitationRepository(sqlDB),
 		notifications:    persistence.NewNotificationRepository(sqlDB),
@@ -102,7 +104,8 @@ func (e *kbEnv) as(userID uint64) *kbEnv {
 	})
 	registerKnowledgeBaseRoutesWith(
 		g, e.pages, e.permissions, e.provisioner, e.users, e.userDisplays, e.comments, e.versions, e.views, e.favorites,
-		e.templates, e.suggestions, e.tickets, e.ticketRefs, e.txManager, e.kbImagePresigner, e.labels, e.invitations, e.notifications,
+		e.templates, e.suggestions, e.tickets, e.ticketRefs, e.txManager, e.kbImagePresigner,
+		e.pageAttachments, persistence.NewStubPageAttachmentPresigner("stub-bucket"), e.labels, e.invitations, e.notifications,
 		mail.Disabled{}, "http://localhost:5173",
 	)
 	// 認証不要のルート（招待の案内）は current user を注入しない group に張る。

@@ -52,7 +52,7 @@ func registerTicketRoutes(g *gin.RouterGroup, deps *routeDeps) {
 	)
 }
 
-// newTicketAttachmentPresignerOrFallback は newKbImagePresignerOrFallback と同じ判断——
+// newTicketAttachmentPresignerOrFallback は newKbPresignersOrFallback と同じ判断——
 // IMAGES_BUCKET 未設定なら stub、設定済みで初期化に失敗すれば起動を止める。添付は kb ページ
 // 画像・rich-text 画像と同じバケットを tickets/ prefix で共有する（新しいバケットを増やさない）。
 func newTicketAttachmentPresignerOrFallback(deps *routeDeps) repository.TicketAttachmentPresigner {

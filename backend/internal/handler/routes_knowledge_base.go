@@ -41,6 +41,7 @@ const (
 // ワークスペースは URL の slug から middleware が解決するので、ルートはすべて
 // /kb/workspaces/:workspaceSlug 以下に置き、その middleware を通す group に登録する。
 func registerKnowledgeBaseRoutes(g *gin.RouterGroup, deps *routeDeps) {
+	kbImagePresigner, pageAttachmentPresigner := newKbPresignersOrFallback(deps)
 	registerKnowledgeBaseRoutesWith(
 		g,
 		persistence.NewKnowledgeBaseRepository(deps.db),
@@ -57,7 +58,9 @@ func registerKnowledgeBaseRoutes(g *gin.RouterGroup, deps *routeDeps) {
 		persistence.NewTicketRepository(deps.db),
 		persistence.NewTicketRefReader(deps.db),
 		persistence.NewTxManager(deps.db),
-		newKbImagePresignerOrFallback(deps),
+		kbImagePresigner,
+		persistence.NewPageAttachmentRepository(deps.db),
+		pageAttachmentPresigner,
 		persistence.NewLabelRepository(deps.db),
 		persistence.NewInvitationRepository(deps.db),
 		persistence.NewNotificationRepository(deps.db),
@@ -66,21 +69,24 @@ func registerKnowledgeBaseRoutes(g *gin.RouterGroup, deps *routeDeps) {
 	)
 }
 
-// newKbImagePresignerOrFallback は IMAGES_BUCKET 未設定なら stub にフォールバックする
-// （明示的にローカル開発用と分かる状態なので安全）。bucket が設定されているのに
-// infraGCS.NewPresigner が失敗する場合は fallback せず起動を失敗させる — 黙って stub
-// （未署名 URL）へ倒すと、クライアントは成功と誤認したままアップロード PUT だけが失敗する。
-func newKbImagePresignerOrFallback(deps *routeDeps) repository.KbImagePresigner {
+// newKbPresignersOrFallback はページ画像と添付の presigner を組み立てる。IMAGES_BUCKET 未設定なら
+// stub にフォールバックする（明示的にローカル開発用と分かる状態なので安全）。bucket が設定されているのに
+// infraGCS.NewPresigner が失敗する場合は fallback せず起動を失敗させる — 黙って stub（未署名 URL）へ
+// 倒すと、クライアントは成功と誤認したままアップロード PUT だけが失敗する。
+//
+// 画像と添付は同じバケットを接頭辞（kb/<ws>/<page>/ と その下の att/）で分けて使うので、GCS の
+// presigner（storage と IAM の client を抱える）は 1 つ作って両方の adapter に渡す。
+func newKbPresignersOrFallback(deps *routeDeps) (repository.KbImagePresigner, repository.PageAttachmentPresigner) {
 	bucket := deps.cfg.Images.Bucket
 	if bucket == "" {
-		log.Printf("[kb-image] IMAGES_BUCKET unset — using stub presigner (DEV)")
-		return persistence.NewStubKbImagePresigner("stub-bucket")
+		log.Printf("[kb-image] IMAGES_BUCKET unset — using stub presigners (DEV)")
+		return persistence.NewStubKbImagePresigner("stub-bucket"), persistence.NewStubPageAttachmentPresigner("stub-bucket")
 	}
 	pre, err := infraGCS.NewPresigner(context.Background(), bucket)
 	if err != nil {
 		log.Fatalf("[kb-image] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v — %s", bucket, err, imagesBucketHint)
 	}
-	return persistence.NewKbImagePresigner(pre)
+	return persistence.NewKbImagePresigner(pre), persistence.NewPageAttachmentPresigner(pre)
 }
 
 // registerKnowledgeBasePublicRoutes は認証不要のナレッジエンドポイントを登録する。
@@ -111,6 +117,8 @@ func registerKnowledgeBaseRoutesWith(
 	ticketRefs repository.TicketRefReader,
 	txManager repository.TxManager,
 	kbImagePresigner repository.KbImagePresigner,
+	pageAttachments repository.PageAttachmentRepository,
+	pageAttachmentPresigner repository.PageAttachmentPresigner,
 	labels repository.LabelRepository,
 	invitations repository.InvitationRepository,
 	notifications repository.NotificationRepository,
@@ -120,7 +128,7 @@ func registerKnowledgeBaseRoutesWith(
 	// ReplacePageBlocksUseCase は本文保存の成功直後に versionRepo.CreateVersionIfDue を同じ
 	// トランザクションで呼ぶので、PageVersionHandler と同じ 1 つの
 	// インスタンスを共有する（RestorePageVersionUseCase もこれをそのまま呼ぶ）。
-	replaceBlocks := kb.NewReplacePageBlocksUseCase(pages, txManager, versions, permissions, notifications)
+	replaceBlocks := kb.NewReplacePageBlocksUseCase(pages, txManager, versions, permissions, notifications, pageAttachments)
 	h := NewKnowledgeBasePageHandler(
 		kb.NewCheckPagePermissionUseCase(permissions),
 		kb.NewCheckWorkspacePermissionUseCase(permissions),
@@ -202,7 +210,7 @@ func registerKnowledgeBaseRoutesWith(
 	// 揃わなくなるため）。
 	sgh := NewPageSuggestionHandler(
 		kb.NewCheckPagePermissionUseCase(permissions),
-		kb.NewCreateSuggestionUseCase(pages, versions, suggestions, txManager),
+		kb.NewCreateSuggestionUseCase(pages, versions, suggestions, txManager, pageAttachments),
 		kb.NewListOpenPageSuggestionsUseCase(suggestions),
 		kb.NewAcceptPageSuggestionUseCase(pages, suggestions, versions, replaceBlocks, txManager),
 		kb.NewRejectPageSuggestionUseCase(suggestions),
@@ -344,6 +352,17 @@ func registerKnowledgeBaseRoutesWith(
 	// ページに閉じた画像の読み取り経路。
 	kbGroup.POST("/kb/workspaces/:workspaceSlug/pages/:pageId/images/upload-url", h.IssueImageUploadURL)
 	kbGroup.GET("/kb/workspaces/:workspaceSlug/pages/:pageId/images/download-url", h.IssueImageDownloadURL)
+	// ページに閉じた添付ファイル。アップロードは 2 段（URL の発行 → 記録）、ダウンロードは
+	// 元のファイル名で保存させる URL を都度発行する。
+	ah := NewPageAttachmentHandler(
+		kb.NewCheckPagePermissionUseCase(permissions),
+		kb.NewIssuePageAttachmentUploadURLUseCase(pages, pageAttachmentPresigner),
+		kb.NewCreatePageAttachmentUseCase(pages, pageAttachments),
+		kb.NewIssuePageAttachmentDownloadURLUseCase(pageAttachments, pageAttachmentPresigner),
+	)
+	kbGroup.POST("/kb/workspaces/:workspaceSlug/pages/:pageId/attachments/upload-url", ah.IssueUploadURL)
+	kbGroup.POST("/kb/workspaces/:workspaceSlug/pages/:pageId/attachments", ah.Create)
+	kbGroup.GET("/kb/workspaces/:workspaceSlug/pages/:pageId/attachments/:attachmentId/download-url", ah.IssueDownloadURL)
 	kbGroup.PUT("/kb/workspaces/:workspaceSlug/pages/:pageId/cover", h.SetCover)
 	kbGroup.DELETE("/kb/workspaces/:workspaceSlug/pages/:pageId/cover", h.ClearCover)
 	// 逆リンク: このページを参照しているページの一覧。

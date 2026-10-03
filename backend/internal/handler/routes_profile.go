@@ -42,7 +42,7 @@ func registerProfileRoutes(g *gin.RouterGroup, deps *routeDeps) {
 // newProfileImagePresignerOrFallback は IMAGES_BUCKET 未設定なら stub にフォールバックする
 // （明示的にローカル開発用と分かる状態なので安全）。bucket が設定されているのに
 // infraGCS.NewPresigner が失敗する場合は fallback しない
-// （kb_page_handler 側の newKbImagePresignerOrFallback の doc も参照）。
+// （kb_page_handler 側の newKbPresignersOrFallback の doc も参照）。
 func newProfileImagePresignerOrFallback(deps *routeDeps) repository.ProfileImagePresigner {
 	bucket := deps.cfg.Images.Bucket
 	if bucket == "" {

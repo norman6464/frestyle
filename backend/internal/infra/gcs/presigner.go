@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
@@ -134,6 +135,23 @@ func (p *Presigner) PresignPut(ctx context.Context, key, contentType string, con
 
 // PresignGet は指定 key からの GET ダウンロード用 V4 signed URL を返す。
 func (p *Presigner) PresignGet(ctx context.Context, key string) (string, time.Duration, error) {
+	return p.presignGet(ctx, key, nil)
+}
+
+// PresignGetAsAttachment は PresignGet と同じ GET 用 URL に、応答の Content-Disposition を
+// contentDisposition で上書きさせる指定（response-content-disposition）を載せて返す。
+// 保管庫の名前（数字.bin）ではなく元のファイル名で保存させるために使う。
+//
+// 指定は query に載り、V4 署名の対象に入る（URL を受け取った人が保存名を書き換えると署名が
+// 合わなくなる）。値の組み立て（ファイル名の符号化）は呼び出し側が行う。
+func (p *Presigner) PresignGetAsAttachment(ctx context.Context, key, contentDisposition string) (string, time.Duration, error) {
+	if contentDisposition == "" {
+		return "", 0, fmt.Errorf("gcs: content disposition is required")
+	}
+	return p.presignGet(ctx, key, url.Values{"response-content-disposition": {contentDisposition}})
+}
+
+func (p *Presigner) presignGet(ctx context.Context, key string, query url.Values) (string, time.Duration, error) {
 	if key == "" {
 		return "", 0, fmt.Errorf("gcs: key is required")
 	}
@@ -143,14 +161,15 @@ func (p *Presigner) PresignGet(ctx context.Context, key string) (string, time.Du
 		SignBytes: func(b []byte) ([]byte, error) {
 			return p.signBytes(ctx, b)
 		},
-		Scheme:  storage.SigningSchemeV4,
-		Method:  http.MethodGet,
-		Expires: time.Now().Add(p.ttl),
+		Scheme:          storage.SigningSchemeV4,
+		Method:          http.MethodGet,
+		Expires:         time.Now().Add(p.ttl),
+		QueryParameters: query,
 	}
 
-	url, err := p.bucket.SignedURL(key, opts)
+	signed, err := p.bucket.SignedURL(key, opts)
 	if err != nil {
 		return "", 0, fmt.Errorf("gcs: presign get: %w", err)
 	}
-	return url, p.ttl, nil
+	return signed, p.ttl, nil
 }

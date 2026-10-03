@@ -129,3 +129,35 @@ func Test_Close_設定していなければ何もしない(t *testing.T) {
 	p := &Presigner{}
 	assert.NoError(t, p.Close())
 }
+
+// 保存名の指定は SignedURLOptions.QueryParameters で渡す。storage パッケージはこれを正規リクエストの
+// query に含めて署名するので、URL を受け取った人が保存名を書き換えると署名が合わなくなる
+// （署名後に URL へ足す書き方にすると、ここは通っても書き換えが効いてしまう）。
+func Test_PresignGetAsAttachment_保存名の指定をqueryに載せる(t *testing.T) {
+	p := newTestPresigner(t, nil)
+	disposition := `attachment; filename*=utf-8''%E8%B3%87%E6%96%99.pdf`
+
+	got, ttl, err := p.PresignGetAsAttachment(context.Background(), "kb/w/p/att/1.bin", disposition)
+
+	require.NoError(t, err)
+	assert.Equal(t, 10*time.Minute, ttl)
+	u, err := url.Parse(got)
+	require.NoError(t, err)
+	assert.Contains(t, u.Path, "kb/w/p/att/1.bin")
+	assert.Equal(t, disposition, u.Query().Get("response-content-disposition"))
+}
+
+func Test_PresignGetAsAttachment_保存名の指定が空なら拒否する(t *testing.T) {
+	p := newTestPresigner(t, nil)
+	_, _, err := p.PresignGetAsAttachment(context.Background(), "kb/w/p/att/1.bin", "")
+	assert.Error(t, err)
+}
+
+func Test_PresignGet_保存名の指定を載せない(t *testing.T) {
+	p := newTestPresigner(t, nil)
+	got, _, err := p.PresignGet(context.Background(), "kb/w/p/1.bin")
+	require.NoError(t, err)
+	u, err := url.Parse(got)
+	require.NoError(t, err)
+	assert.False(t, u.Query().Has("response-content-disposition"))
+}

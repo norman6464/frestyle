@@ -31,9 +31,11 @@ const (
 	kbRootPageID         = "0198a000-0000-7000-8000-000000000003"
 	kbChildPageID        = "0198a000-0000-7000-8000-000000000004"
 	kbDestPageID         = "0198a000-0000-7000-8000-000000000005"
-	kbUserID             = uint64(42)
-	kbLabelID            = "0198a000-0000-7000-8000-000000000006"
-	kbOtherWsLabelID     = "0198a000-0000-7000-8000-000000000007"
+	// kbAttachmentID は子ページ（kbChildPageID）の添付。表（kbEndpoints）のダウンロード URL 発行が使う。
+	kbAttachmentID   = "0198a000-0000-7000-8000-0000000000a1"
+	kbUserID         = uint64(42)
+	kbLabelID        = "0198a000-0000-7000-8000-000000000006"
+	kbOtherWsLabelID = "0198a000-0000-7000-8000-000000000007"
 )
 
 const kbValidDoc = `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"本文"}]}]}`
@@ -57,6 +59,7 @@ type kbFixture struct {
 	templates     *kbFakePageTemplates
 	suggestions   *kbFakePageSuggestions
 	presigner     *kbFakeImagePresigner
+	attachments   *kbFakePageAttachments
 	tickets       *ticketFakeRepo
 	invitations   *kbFakeInvitations
 	notifications *kbFakeNotifications
@@ -109,6 +112,12 @@ func newKbFixture(fallback domain.PagePermission, uid uint64) kbFixture {
 	templates := newKbFakePageTemplates()
 	suggestions := newKbFakePageSuggestions()
 	presigner := &kbFakeImagePresigner{}
+	attachments := newKbFakePageAttachments()
+	attachments.add(domain.PageAttachment{
+		ID: kbAttachmentID, WorkspaceID: kbWorkspaceID, PageID: kbChildPageID,
+		Key:      "kb/" + kbWorkspaceID + "/" + kbChildPageID + "/att/1.bin",
+		Filename: "議事録.pdf", ContentType: "application/pdf", SizeBytes: 2048, UploadedByUserID: kbUserID,
+	})
 	tickets := newTicketFakeRepo()
 	// ラベル付け外しの endpoint（kbEndpoints）が使う実在のラベル。語彙はワークスペース単位。
 	tickets.labels[kbLabelID] = &domain.Label{
@@ -123,7 +132,8 @@ func newKbFixture(fallback domain.PagePermission, uid uint64) kbFixture {
 	notifications := newKbFakeNotifications()
 	mailer := &kbFakeMailer{}
 	registerKnowledgeBaseRoutesWith(
-		g, pages, perms, provisioner, users, users, comments, versions, views, favorites, templates, suggestions, tickets, tickets, fakeTxManager{}, presigner, tickets,
+		g, pages, perms, provisioner, users, users, comments, versions, views, favorites, templates, suggestions, tickets, tickets, fakeTxManager{}, presigner,
+		attachments, kbFakeAttachmentPresigner{}, tickets,
 		invitations, notifications, mailer, "http://localhost:5173",
 	)
 	// 認証不要のルート（招待の案内）は current user を注入しない group に張る。
@@ -134,7 +144,7 @@ func newKbFixture(fallback domain.PagePermission, uid uint64) kbFixture {
 		pages: pages, perms: perms, provisioner: provisioner, users: users,
 		comments: comments, versions: versions, views: views, favorites: favorites,
 		templates: templates, suggestions: suggestions,
-		presigner: presigner, tickets: tickets, invitations: invitations, notifications: notifications, mailer: mailer, router: r,
+		presigner: presigner, attachments: attachments, tickets: tickets, invitations: invitations, notifications: notifications, mailer: mailer, router: r,
 	}
 }
 
@@ -261,6 +271,24 @@ var kbEndpoints = []kbEndpoint{
 		capability: domain.CapabilityView, okStatus: http.StatusOK,
 	},
 	{
+		name: "添付アップロードURL発行", method: http.MethodPost,
+		path:       "/api/v2/kb/workspaces/{slug}/pages/{page}/attachments/upload-url",
+		body:       `{"contentType":"application/pdf","size":1024}`,
+		capability: domain.CapabilityEdit, okStatus: http.StatusOK,
+	},
+	{
+		name: "添付の記録", method: http.MethodPost,
+		path:       "/api/v2/kb/workspaces/{slug}/pages/{page}/attachments",
+		body:       `{"key":"kb/` + kbWorkspaceID + `/{page}/att/1.bin","filename":"a.pdf","contentType":"application/pdf","sizeBytes":1024}`,
+		capability: domain.CapabilityEdit, okStatus: http.StatusCreated,
+	},
+	{
+		// 添付は子ページ（kbChildPageID）のもの。表は {page} に子ページを入れて回す。
+		name: "添付ダウンロードURL発行", method: http.MethodGet,
+		path:       "/api/v2/kb/workspaces/{slug}/pages/{page}/attachments/" + kbAttachmentID + "/download-url",
+		capability: domain.CapabilityView, okStatus: http.StatusOK,
+	},
+	{
 		name: "カバー設定", method: http.MethodPut,
 		path:       "/api/v2/kb/workspaces/{slug}/pages/{page}/cover",
 		body:       `{"type":"file","key":"kb/` + kbWorkspaceID + `/{page}/test.bin"}`,
@@ -332,6 +360,7 @@ func kbRoutePattern(p string) string {
 		"{seq}", ":seq",
 		kbSpaceID, ":spaceId",
 		kbLabelID, ":labelId",
+		kbAttachmentID, ":attachmentId",
 	).Replace(p)
 }
 
@@ -1783,7 +1812,7 @@ func Test_ナレッジAPI_middlewareを通らないルートは成功しない(t
 		kb.NewMovePageUseCase(pages),
 		kb.NewArchivePageUseCase(pages),
 		kb.NewUnarchivePageUseCase(pages),
-		kb.NewReplacePageBlocksUseCase(pages, fakeTxManager{}, newKbFakePageVersions(pages), perms, newKbFakeNotifications()),
+		kb.NewReplacePageBlocksUseCase(pages, fakeTxManager{}, newKbFakePageVersions(pages), perms, newKbFakeNotifications(), nil),
 		kb.NewResolvePageRefTitlesUseCase(perms, newTicketFakeRepo(), users),
 		kb.NewListViewableAncestorsUseCase(pages, perms),
 		kb.NewDeletePageUseCase(pages),

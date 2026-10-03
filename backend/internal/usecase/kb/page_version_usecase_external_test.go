@@ -189,7 +189,7 @@ func Test_復元_ForceVersionは必ずtrue(t *testing.T) {
 		}).
 		Return(true, &domain.PageVersion{PageID: kbPage, Seq: 4, AuthorUserID: kbEditorUserID}, nil)
 
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{}, nil)
 	uc := kb.NewRestorePageVersionUseCase(versionRepo, replaceUC)
 
 	_, err := uc.Execute(context.Background(), kb.RestorePageVersionInput{
@@ -209,7 +209,7 @@ func Test_復元_対象の版が無ければ本文は書き換えない(t *testi
 	versionRepo := &mockPageVersionRepo{}
 	versionRepo.On("GetVersion", mock.Anything, kbWS, kbPage, int64(99)).
 		Return(nil, domain.ErrPageVersionNotFound)
-	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{})
+	replaceUC := kb.NewReplacePageBlocksUseCase(kbRepo, &fakeTxManager{}, versionRepo, &mockKBPermissionRepo{}, &mockNotificationRepo{}, nil)
 	uc := kb.NewRestorePageVersionUseCase(versionRepo, replaceUC)
 
 	_, err := uc.Execute(context.Background(), kb.RestorePageVersionInput{

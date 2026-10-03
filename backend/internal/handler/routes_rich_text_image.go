@@ -22,7 +22,7 @@ func registerRichTextImageRoutes(g *gin.RouterGroup, deps *routeDeps) {
 // newRichTextImagePresignerOrFallback は IMAGES_BUCKET 未設定なら stub にフォールバックする
 // （明示的にローカル開発用と分かる状態なので安全）。bucket が設定されているのに
 // infraGCS.NewPresigner が失敗する場合は fallback しない
-// （kb_page_handler 側の newKbImagePresignerOrFallback の doc も参照）— 黙って stub
+// （kb_page_handler 側の newKbPresignersOrFallback の doc も参照）— 黙って stub
 // （未署名 URL）へ倒すと呼び出し元は 200 を返し続け、クライアントは成功と誤認したまま
 // アップロード PUT だけが失敗するため、起動を失敗させる。
 func newRichTextImagePresignerOrFallback(deps *routeDeps) repository.RichTextImagePresigner {

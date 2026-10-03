@@ -92,6 +92,10 @@
     {
       "type": "diagram",
       "container": false
+    },
+    {
+      "type": "attachment",
+      "container": false
     }
   ]
 }

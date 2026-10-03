@@ -51,7 +51,7 @@ func newKbUseCases(sqlDB *sql.DB) kbUseCases {
 		move:      kb.NewMovePageUseCase(repo),
 		archive:   kb.NewArchivePageUseCase(repo),
 		unarchive: kb.NewUnarchivePageUseCase(repo),
-		replace:   kb.NewReplacePageBlocksUseCase(repo, txManager, versions, persistence.NewKnowledgeBasePermissionRepository(sqlDB), persistence.NewNotificationRepository(sqlDB)),
+		replace:   kb.NewReplacePageBlocksUseCase(repo, txManager, versions, persistence.NewKnowledgeBasePermissionRepository(sqlDB), persistence.NewNotificationRepository(sqlDB), persistence.NewPageAttachmentRepository(sqlDB)),
 		setIcon:   kb.NewSetPageIconUseCase(repo),
 		repo:      repo,
 		txManager: txManager,

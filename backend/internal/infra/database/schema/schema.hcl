@@ -4124,6 +4124,86 @@ table "ticket_attachments" {
   }
 }
 
+# page_attachments: ナレッジのページ本文に置く添付ファイルのメタデータ。本体は Cloud Storage
+# （key で指す）。本文の attachment ノードは attrs.attachmentId でこの行を指し、key は本文に持たない
+# （本文は版・提案・雛形として複製されるので、保管庫の名前を本文へ散らさない）。
+# 行は消さない（削除の経路を持たない。ページを消したときだけ外部キーの CASCADE で消える）。
+# ファイル名・大きさ・種類は後から変わらないので、本文の保存時にサーバーがこの行から attrs へ写す。
+table "page_attachments" {
+  schema = schema.public
+  column "id" {
+    null = false
+    type = uuid
+  }
+  column "workspace_id" {
+    null = false
+    type = uuid
+  }
+  column "page_id" {
+    null = false
+    type = uuid
+  }
+  # Cloud Storage のオブジェクトキー（kb/<workspaceId>/<pageId>/att/<epochNs>.bin）。ファイル名を
+  # そのままキーへ使わない（経路の組み立て・特殊文字を避けるため。ticket_attachments と同じ流儀）。
+  column "key" {
+    null = false
+    type = text
+  }
+  column "filename" {
+    null = false
+    type = character_varying(255)
+  }
+  column "content_type" {
+    null = false
+    type = text
+  }
+  column "size_bytes" {
+    null = false
+    type = bigint
+  }
+  # アップロード者（users.id）。記録なので FK は RESTRICT（ticket_attachments と同じ）。
+  column "uploaded_by_user_id" {
+    null = false
+    type = bigint
+  }
+  column "created_at" {
+    null    = false
+    type    = timestamptz
+    default = sql("now()")
+  }
+  primary_key {
+    columns = [column.id]
+  }
+  # ページとの結びつきは (workspace_id, page_id) の複合で張る。ワークスペースをまたいだ行を
+  # 型で作れなくする（pages の uq_pages_workspace_id を参照する他の表と同じ）。
+  foreign_key "fk_page_attachments_page" {
+    columns     = [column.workspace_id, column.page_id]
+    ref_columns = [table.pages.column.workspace_id, table.pages.column.id]
+    on_update   = NO_ACTION
+    on_delete   = CASCADE
+  }
+  foreign_key "fk_page_attachments_uploaded_by" {
+    columns     = [column.uploaded_by_user_id]
+    ref_columns = [table.users.column.id]
+    on_update   = NO_ACTION
+    on_delete   = RESTRICT
+  }
+  # 本文の保存時に「このページの添付か」を ID の集まりで引く（ListPageAttachmentsByIDs）・
+  # ページの削除で CASCADE する、の両方がページで絞る。
+  index "idx_page_attachments_page" {
+    columns = [column.workspace_id, column.page_id]
+  }
+  check "ck_page_attachments_filename_not_empty" {
+    expr = "btrim((filename)::text) <> ''::text"
+  }
+  check "ck_page_attachments_content_type_not_empty" {
+    expr = "content_type <> ''::text"
+  }
+  check "ck_page_attachments_size_positive" {
+    expr = "size_bytes > 0"
+  }
+}
+
 # ticket_paths: チケット親子（tickets.parent_id）の閉包表。page_paths と同じ設計
 # （祖先・子孫の全組み合わせを depth 付きで持つ派生表。正本は tickets.parent_id、
 # 壊れても parent_id から作り直せる）。tickets 側は最大深さ 3 なので ListTicketParentChain
