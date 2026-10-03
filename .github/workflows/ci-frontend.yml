@@ -91,6 +91,11 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 
+      # 数式（KaTeX）と図（mermaid）が本文エディタと一緒に読まれないこと（使うページでだけ読む）。
+      # `import katex from 'katex'` のような書き方は画面もテストも通るので、成果物で止める。
+      - name: 数式と図を使うページでだけ読むこと
+        run: node scripts/check-lazy-renderers.mjs
+
       - name: 認可の設定が無くてもビルドできる
         env:
           VITE_API_BASE_URL: https://example.invalid

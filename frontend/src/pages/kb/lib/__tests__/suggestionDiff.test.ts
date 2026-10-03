@@ -82,6 +82,44 @@ describe('extractPlainText', () => {
     expect(extractPlainText(doc)).toBe('[ticket: t-target]');
   });
 
+  it('容器の中のブロックは 1 行に連結せず、ブロックごとに行を分ける', () => {
+    const p = (text: string) => ({ type: 'paragraph', content: [{ type: 'text', text }] });
+    const doc = {
+      type: 'doc',
+      content: [
+        { type: 'callout', attrs: { kind: 'info' }, content: [p('一'), p('二')] },
+        {
+          type: 'details',
+          content: [
+            { type: 'detailsSummary', content: [{ type: 'text', text: '要約' }] },
+            { type: 'detailsContent', content: [p('中身')] },
+          ],
+        },
+        {
+          type: 'columns',
+          attrs: { count: 2 },
+          content: [
+            { type: 'column', content: [p('左')] },
+            { type: 'column', content: [p('右')] },
+          ],
+        },
+      ],
+    };
+    expect(extractPlainText(doc)).toBe('一\n二\n要約\n中身\n左\n右');
+  });
+
+  it('数式は latex を疑似テキストとして埋め込み、図は本文の文字がそのまま出る', () => {
+    const doc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '式 ' }, { type: 'inlineMath', attrs: { latex: 'a^2' } }] },
+        { type: 'blockMath', attrs: { latex: '\\sum i' } },
+        { type: 'diagram', attrs: { engine: 'mermaid' }, content: [{ type: 'text', text: 'graph TD; A-->B' }] },
+      ],
+    };
+    expect(extractPlainText(doc)).toBe('式 [math: a^2]\n[math: \\sum i]\ngraph TD; A-->B');
+  });
+
   it('mentionの相手のuserIdは疑似テキストとして本文に埋め込まれる（写しの名前は差分に出さない）', () => {
     const doc = { type: 'doc', content: [{ type: 'mention', attrs: { userId: '42', name: '表示用の名前' } }] };
     expect(extractPlainText(doc)).toBe('[mention: 42]');

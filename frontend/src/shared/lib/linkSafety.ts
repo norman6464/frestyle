@@ -233,7 +233,7 @@ function sanitizeContent(content: JSONContent[] | undefined, depth: number): JSO
       next.push(sanitized);
       continue;
     }
-    const sanitized = sanitizeDocLinks(sanitizeContainerAttrs(child as JSONContent), depth);
+    const sanitized = sanitizeDocLinks(sanitizeKnownNodeAttrs(child as JSONContent), depth);
     if (sanitized !== child) changed = true;
     next.push(sanitized);
   }
@@ -276,18 +276,32 @@ function sanitizeMarks(marks: DocMark[] | undefined): DocMark[] | undefined {
   return next.length > 0 ? next : undefined;
 }
 
+/** 図の書式の許可リスト（backend の domain.ValidDiagramEngines と同じ）。 */
+const DIAGRAM_ENGINES: readonly string[] = ['mermaid'];
+
 /** 注意書きの種類の許可リスト（backend の domain.ValidCalloutKinds と同じ）。 */
 const CALLOUT_KINDS: readonly string[] = ['info', 'warning', 'danger', 'success'];
 /** 段組みの列数の範囲（backend の ColumnsMinCount / ColumnsMaxCount と同じ）。 */
 const COLUMNS_COUNT_RANGE = { min: 2, max: 3 };
 
 /**
- * sanitizeContainerAttrs は容器（注意書き・折りたたみ・段組み）の attrs を許した形に直す。
+ * sanitizeKnownNodeAttrs は容器（注意書き・折りたたみ・段組み）と数式・図の attrs を許した形に直す。
  * 保存側（normalizeBlockAttrs）と同じ規則 — kind は許可リスト（知らない値は info）、open は
- * 真偽だけ、count は 2〜3 の整数だけ。見た目の手がかりなので落とす理由にはせず、直して通す。
- * 変更が無ければ入力と同じ参照を返す。
+ * 真偽だけ、count は 2〜3 の整数だけ、数式の latex は文字列（でなければ空の式）、図の engine は
+ * 許可リスト（知らない値は mermaid）。見た目の手がかりなので落とす理由にはせず、直して通す。
+ * 数式の長さはここでは切らない（黙って切ると式が壊れる。上限超えは保存側が断り、入力欄は
+ * maxLength で、貼り付けは parseHTML で止める）。変更が無ければ入力と同じ参照を返す。
  */
-function sanitizeContainerAttrs(node: JSONContent): JSONContent {
+function sanitizeKnownNodeAttrs(node: JSONContent): JSONContent {
+  if (node.type === 'blockMath' || node.type === 'inlineMath') {
+    if (typeof node.attrs?.latex === 'string') return node;
+    return { ...node, attrs: { ...node.attrs, latex: '' } };
+  }
+  if (node.type === 'diagram') {
+    const engine = node.attrs?.engine;
+    if (typeof engine === 'string' && DIAGRAM_ENGINES.includes(engine)) return node;
+    return { ...node, attrs: { ...node.attrs, engine: 'mermaid' } };
+  }
   if (node.type === 'callout') {
     const kind = node.attrs?.kind;
     if (typeof kind === 'string' && CALLOUT_KINDS.includes(kind)) return node;

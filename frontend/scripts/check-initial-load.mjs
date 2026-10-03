@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import { staticClosure } from './static-imports.mjs';
 
 /** 予算（gzip）。超えたら失敗にする（CI では知らせるだけ）。 */
 const BUDGET_KB = 150;
@@ -25,20 +26,8 @@ if (entries.length === 0) {
   process.exit(1);
 }
 
-// 静的な import だけを拾う（`import{a as b}from"./x.js"` と `import"./x.js"`）。
-const STATIC_IMPORT = /(?:^|[;\n}])\s*import\s*(?:[^'"()]*?from\s*)?["'](\.\/[^"']+\.js)["']/g;
-
-const seen = new Set();
-const queue = [...entries];
-while (queue.length > 0) {
-  const file = queue.shift();
-  if (seen.has(file)) continue;
-  seen.add(file);
-  const source = readFileSync(path.join(dist, file), 'utf8');
-  for (const match of source.matchAll(STATIC_IMPORT)) {
-    queue.push(path.posix.join(path.posix.dirname(file), match[1]));
-  }
-}
+// 静的な import だけをたどる（scripts/static-imports.mjs）。
+const seen = staticClosure(dist, entries);
 
 const rows = [...seen]
   .map((file) => ({ file, gzip: gzipSync(readFileSync(path.join(dist, file))).length }))

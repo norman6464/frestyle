@@ -7,13 +7,16 @@ import { Placeholder } from '@tiptap/extensions';
 import { ReactNodeViewRenderer, textblockTypeInputRule } from '@tiptap/react';
 import type { EditorCommand } from './editorCommands';
 import CodeBlockView from './CodeBlockView';
+import DiagramView from './DiagramView';
 import ImageView from './ImageView';
+import MathView from './MathView';
 import { BlockOperations } from './blockOperations';
 import { ListNormalization } from './listNormalization';
 import { MentionSuggestion } from './mentionSuggestion';
 import { PageRefSuggestion } from './pageRefSuggestion';
 import { TicketRefSuggestion } from './ticketRefSuggestion';
 import { MarkdownShortcuts } from './markdownShortcuts';
+import { MathAndDiagram } from './mathAndDiagram';
 import { createSchemaExtensions } from './schemaExtensions';
 import { SlashCommand } from './slashCommandExtension';
 import { StableBlockId } from './stableBlockId';
@@ -121,6 +124,14 @@ export function createEditorExtensions(
     if (extension.name === 'codeBlock') {
       return withCodeBlockView(extension as typeof CodeBlockLowlight);
     }
+    if (extension.name === 'inlineMath' || extension.name === 'blockMath') {
+      // 数式は KaTeX で描く NodeView（KaTeX は初めて描くときにだけ読む。lazyRenderers.ts）。
+      return extension.extend({ addNodeView: () => ReactNodeViewRenderer(MathView) });
+    }
+    if (extension.name === 'diagram') {
+      // 図は元の文字と描いた図を並べる NodeView（mermaid は図が画面に入ったときにだけ読む）。
+      return extension.extend({ addNodeView: () => ReactNodeViewRenderer(DiagramView) });
+    }
     if (extension.name === 'image') {
       return withImageView(extension as typeof Image, resolveImageSrc);
     }
@@ -139,6 +150,8 @@ export function createEditorExtensions(
     TicketRefSuggestion,
     // `@` で人を探して名指しを入れる（探す口は searchMembers。同じく storage 経由）。
     MentionSuggestion,
+    // 数式と図の命令・入力規則（`$…$`・`$$`）・Enter で数式の入力欄を開く。
+    MathAndDiagram,
     // IME（日本語入力）確定でも効く ＃ 見出し・``` コードブロック変換。
     MarkdownShortcuts,
     Placeholder.configure({ placeholder }),

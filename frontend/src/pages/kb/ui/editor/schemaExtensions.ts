@@ -653,6 +653,10 @@ function latexOf(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function withinLatexLimit(element: HTMLElement): boolean {
+  return [...(element.getAttribute('data-latex') ?? '')].length <= MATH_LATEX_MAX_LENGTH;
+}
+
 /**
  * InlineMath は「行内の数式」— 文中に置くインラインの 1 要素（atom）。式は attrs.latex。
  * 描画（KaTeX）は使うページでだけ読み込む NodeView が担い、ここ（スキーマ）は形だけを決める。
@@ -676,7 +680,9 @@ export const InlineMath = Node.create({
   },
 
   parseHTML() {
-    return [{ tag: 'span[data-inline-math]' }];
+    // 上限を超える式は数式として取り込まない（素の文字に落ちる）。黙って切ると式が壊れ、
+    // そのまま保存すると backend が断って自動保存が止まり続けるため。
+    return [{ tag: 'span[data-inline-math]', getAttrs: (element) => (withinLatexLimit(element) ? null : false) }];
   },
 
   renderHTML({ node, HTMLAttributes }) {
@@ -709,7 +715,7 @@ export const BlockMath = Node.create({
   },
 
   parseHTML() {
-    return [{ tag: 'div[data-block-math]' }];
+    return [{ tag: 'div[data-block-math]', getAttrs: (element) => (withinLatexLimit(element) ? null : false) }];
   },
 
   renderHTML({ node, HTMLAttributes }) {
