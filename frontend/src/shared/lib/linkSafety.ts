@@ -233,7 +233,7 @@ function sanitizeContent(content: JSONContent[] | undefined, depth: number): JSO
       next.push(sanitized);
       continue;
     }
-    const sanitized = sanitizeDocLinks(child as JSONContent, depth);
+    const sanitized = sanitizeDocLinks(sanitizeContainerAttrs(child as JSONContent), depth);
     if (sanitized !== child) changed = true;
     next.push(sanitized);
   }
@@ -274,4 +274,43 @@ function sanitizeMarks(marks: DocMark[] | undefined): DocMark[] | undefined {
   // マークが 1 つも残らなかったら marks 自体を落とす。tiptap の getJSON も空の marks は書かないので、
   // 空配列を残すと「同じ内容なのに JSON が違う」状態になり、保存の差分検出や往復比較が濁る。
   return next.length > 0 ? next : undefined;
+}
+
+/** 注意書きの種類の許可リスト（backend の domain.ValidCalloutKinds と同じ）。 */
+const CALLOUT_KINDS: readonly string[] = ['info', 'warning', 'danger', 'success'];
+/** 段組みの列数の範囲（backend の ColumnsMinCount / ColumnsMaxCount と同じ）。 */
+const COLUMNS_COUNT_RANGE = { min: 2, max: 3 };
+
+/**
+ * sanitizeContainerAttrs は容器（注意書き・折りたたみ・段組み）の attrs を許した形に直す。
+ * 保存側（normalizeBlockAttrs）と同じ規則 — kind は許可リスト（知らない値は info）、open は
+ * 真偽だけ、count は 2〜3 の整数だけ。見た目の手がかりなので落とす理由にはせず、直して通す。
+ * 変更が無ければ入力と同じ参照を返す。
+ */
+function sanitizeContainerAttrs(node: JSONContent): JSONContent {
+  if (node.type === 'callout') {
+    const kind = node.attrs?.kind;
+    if (typeof kind === 'string' && CALLOUT_KINDS.includes(kind)) return node;
+    return { ...node, attrs: { ...node.attrs, kind: 'info' } };
+  }
+  if (node.type === 'details') {
+    const open = node.attrs?.open;
+    if (open === undefined || typeof open === 'boolean') return node;
+    const attrs = { ...node.attrs };
+    delete attrs.open;
+    return { ...node, attrs };
+  }
+  if (node.type === 'columns') {
+    const count = node.attrs?.count;
+    if (
+      count === undefined ||
+      (typeof count === 'number' && Number.isInteger(count) && count >= COLUMNS_COUNT_RANGE.min && count <= COLUMNS_COUNT_RANGE.max)
+    ) {
+      return node;
+    }
+    const attrs = { ...node.attrs };
+    delete attrs.count;
+    return { ...node, attrs };
+  }
+  return node;
 }

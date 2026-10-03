@@ -47,6 +47,38 @@ describe('extractHeadings', () => {
     expect(extractHeadings(doc)).toEqual([{ id: undefined, level: 1, text: '題', index: 0 }]);
   });
 
+  it('容器（注意書き・折りたたみ・段組み）の中の見出しも文書の順に拾う', () => {
+    const doc = {
+      type: 'doc',
+      content: [
+        { type: 'callout', attrs: { kind: 'info' }, content: [heading(2, '注意書きの中', 'h-1')] },
+        {
+          type: 'details',
+          attrs: { open: false },
+          content: [
+            { type: 'detailsSummary', content: [{ type: 'text', text: '要約' }] },
+            { type: 'detailsContent', content: [heading(3, '閉じた折りたたみの中', 'h-2')] },
+          ],
+        },
+        {
+          type: 'columns',
+          attrs: { count: 2 },
+          content: [
+            { type: 'column', content: [heading(2, '左の列', 'h-3')] },
+            { type: 'column', content: [{ type: 'paragraph', content: [{ type: 'text', text: '右' }] }] },
+          ],
+        },
+        heading(2, '最上段', 'h-4'),
+      ],
+    };
+    expect(extractHeadings(doc).map((h) => [h.text, h.index])).toEqual([
+      ['注意書きの中', 0],
+      ['閉じた折りたたみの中', 1],
+      ['左の列', 2],
+      ['最上段', 3],
+    ]);
+  });
+
   it('本文が無い・形が違うときは空', () => {
     expect(extractHeadings(null)).toEqual([]);
     expect(extractHeadings({ type: 'doc' })).toEqual([]);

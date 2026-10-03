@@ -314,6 +314,200 @@
   color: var(--color-text-muted);
 }
 
+/*
+ * 容器（第 4 段）。段組みの縦積みは画面幅ではなく本文の器の幅で決める（サイドバーや右の欄が
+ * あると本文は画面より狭い）ため、.rte-content を container にして @container で切り替える。
+ */
+.rte-content {
+  container-type: inline-size;
+  container-name: rte;
+}
+
+/* 注意書き。左に種類の印、地は種類ごとの淡い色。文字色は本文のまま（色に頼らず印と地で読む）。 */
+.rte-content .ProseMirror .rte-callout {
+  position: relative;
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem 0.75rem 2.75rem;
+  border: 1px solid var(--rte-callout-border);
+  border-radius: 10px;
+  background: var(--rte-callout-bg);
+  --rte-callout-bg: theme('colors.brand.50');
+  --rte-callout-border: theme('colors.brand.200');
+  --rte-callout-ink: theme('colors.brand.700');
+}
+
+.rte-content .ProseMirror .rte-callout[data-kind='warning'] {
+  --rte-callout-bg: var(--fs-warning-soft);
+  --rte-callout-border: var(--fs-warning-border);
+  --rte-callout-ink: var(--fs-warning);
+}
+
+.rte-content .ProseMirror .rte-callout[data-kind='danger'] {
+  --rte-callout-bg: var(--fs-danger-soft);
+  --rte-callout-border: var(--fs-danger-border);
+  --rte-callout-ink: var(--fs-danger-ink);
+}
+
+.rte-content .ProseMirror .rte-callout[data-kind='success'] {
+  --rte-callout-bg: var(--fs-success-soft);
+  --rte-callout-border: var(--fs-success-border);
+  --rte-callout-ink: var(--fs-success);
+}
+
+/* 種類の印（線のアイコン）。色は種類の文字色、形は mask で描く（絵文字は使わない）。 */
+.rte-content .ProseMirror .rte-callout::before {
+  content: '';
+  position: absolute;
+  left: 1rem;
+  top: 0.9rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  background: var(--rte-callout-ink);
+  mask: var(--rte-callout-icon) center / contain no-repeat;
+  --rte-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v5'/%3E%3Ccircle cx='12' cy='7.5' r='1' fill='%23000' stroke='none'/%3E%3C/svg%3E");
+}
+
+.rte-content .ProseMirror .rte-callout[data-kind='warning']::before {
+  --rte-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3.5 2.5 20h19z'/%3E%3Cpath d='M12 9.5v4.5'/%3E%3Ccircle cx='12' cy='17' r='1' fill='%23000' stroke='none'/%3E%3C/svg%3E");
+}
+
+.rte-content .ProseMirror .rte-callout[data-kind='danger']::before {
+  --rte-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7.5v5'/%3E%3Ccircle cx='12' cy='16.5' r='1' fill='%23000' stroke='none'/%3E%3C/svg%3E");
+}
+
+.rte-content .ProseMirror .rte-callout[data-kind='success']::before {
+  --rte-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='m8.5 12 2.5 2.5 4.5-5'/%3E%3C/svg%3E");
+}
+
+.rte-content .ProseMirror .rte-callout > :first-child {
+  margin-top: 0;
+}
+
+.rte-content .ProseMirror .rte-callout > :last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * 折りたたみ（@tiptap/extension-details）。開閉のボタンは拡張が作る空の <button>（名前は
+ * aria-label）。印は mask の山形で、開いているときは下を向く。中身は閉じているときだけ隠す。
+ */
+.rte-content .ProseMirror [data-type='details'] {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-surface-3);
+  border-radius: 10px;
+}
+
+.rte-content .ProseMirror [data-type='details'] > button {
+  flex: 0 0 1.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.1rem;
+  border-radius: 6px;
+  color: var(--color-text-secondary, var(--color-text-primary));
+  cursor: pointer;
+}
+
+.rte-content .ProseMirror [data-type='details'] > button::before {
+  content: '';
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  margin: 0.25rem;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9.5 6 6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: transform 120ms ease;
+}
+
+.rte-content .ProseMirror [data-type='details'] > button:hover,
+.rte-content .ProseMirror [data-type='details'] > button:focus-visible {
+  background: var(--color-surface-2);
+  outline: none;
+}
+
+.rte-content .ProseMirror [data-type='details'].is-open > button::before {
+  transform: rotate(90deg);
+}
+
+.rte-content .ProseMirror [data-type='details'] > div {
+  flex: 1;
+  min-width: 0;
+}
+
+/*
+ * 要約は <summary> 要素で描かれる（data-type を持たない）。本物の <details> の外にあるので、
+ * ブラウザ既定の list-item の印（黒丸）が開閉ボタンの下に重なって出る。印を消して太字にする。
+ */
+.rte-content .ProseMirror [data-type='details'] summary {
+  display: block;
+  list-style: none;
+  font-weight: 600;
+}
+
+.rte-content .ProseMirror [data-type='details'] summary::marker {
+  content: '';
+}
+
+.rte-content .ProseMirror [data-type='details'] summary::-webkit-details-marker {
+  display: none;
+}
+
+.rte-content .ProseMirror [data-type='details']:not(.is-open) [data-type='detailsContent'] {
+  display: none;
+}
+
+.rte-content .ProseMirror [data-type='detailsContent'] > :first-child {
+  margin-top: 0.5rem;
+}
+
+.rte-content .ProseMirror [data-type='detailsContent'] > :last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * 段組み。列数は data-count。本文の器が 600px 未満なら縦に積む（@container）。しきい値は
+ * ナレッジの本文の最大幅（742px）で 3 列が 1 列あたり約 230px を保てるところから決めた —
+ * 画面幅の 860px で切ると、本文が常に 860px より狭いので段組みが一度も横に並ばない。
+ */
+.rte-content .ProseMirror .rte-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0.75rem 0;
+}
+
+.rte-content .ProseMirror .rte-columns[data-count='3'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rte-content .ProseMirror .rte-column {
+  min-width: 0;
+}
+
+.rte-content .ProseMirror .rte-column > :first-child {
+  margin-top: 0;
+}
+
+.rte-content .ProseMirror .rte-column > :last-child {
+  margin-bottom: 0;
+}
+
+/* 編集中は列の境を薄い点線で見せる（読むときは消す）。 */
+.rte-with-handle .ProseMirror .rte-column {
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--color-surface-3);
+  border-radius: 8px;
+}
+
+@container rte (max-width: 599px) {
+  .rte-content .ProseMirror .rte-columns,
+  .rte-content .ProseMirror .rte-columns[data-count='3'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* 画像（@tiptap/extension-image）。はみ出さず角丸で表示する。 */
 .rte-content .ProseMirror img {
   max-width: 100%;

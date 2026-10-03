@@ -1,6 +1,6 @@
 import { getSchema, mergeAttributes, Node } from '@tiptap/core';
 import type { AnyExtension, Extensions } from '@tiptap/core';
-import type { NodeType } from '@tiptap/pm/model';
+import type { NodeType, ResolvedPos } from '@tiptap/pm/model';
 import Blockquote from '@tiptap/extension-blockquote';
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details';
 import Code from '@tiptap/extension-code';
@@ -456,6 +456,29 @@ export const KbMention = Node.create({
   },
 });
 
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    callout: {
+      /** いまのブロックを注意書きで包む（選択が空なら空の段落を持つ注意書きになる）。 */
+      setCallout: (attrs?: { kind?: CalloutKind }) => ReturnType;
+      /** カーソルを含む注意書きの種類を変える。注意書きの外では何もしない（false）。 */
+      setCalloutKind: (kind: CalloutKind) => ReturnType;
+    };
+    columns: {
+      /** 段組み（count 列。各列に空の段落）を入れる。段組みの中では何もしない（false）。 */
+      insertColumns: (count: number) => ReturnType;
+    };
+  }
+}
+
+/** 位置 $pos を含む祖先に、名前 name のノードがあるか（容器の入れ子を断る判定）。 */
+function isInsideNodeNamed($pos: ResolvedPos, name: string): boolean {
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    if ($pos.node(depth).type.name === name) return true;
+  }
+  return false;
+}
+
 /** 注意書きの種類（domain.CalloutKind と同じ 4 値。既定は info）。 */
 export const CALLOUT_KINDS = ['info', 'warning', 'danger', 'success'] as const;
 export type CalloutKind = (typeof CALLOUT_KINDS)[number];
@@ -490,6 +513,33 @@ export const Callout = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     return ['div', mergeAttributes({ 'data-callout': '', class: 'rte-callout' }, HTMLAttributes), 0];
+  },
+
+  addCommands() {
+    return {
+      setCallout:
+        (attrs = {}) =>
+        ({ state, commands }) => {
+          // 段組みの列の中には入れない。列の content 式は注意書きを直接は許さないが、wrapIn は
+          // 引用やリストを間に挟む包み方（column → blockquote → callout）を見つけてしまうので、
+          // 命令の側で先に断る（insertColumns と同じ）。
+          if (isInsideNodeNamed(state.selection.$from, 'column')) return false;
+          return commands.wrapIn(this.name, { kind: calloutKind(attrs.kind) });
+        },
+      setCalloutKind:
+        (kind) =>
+        ({ state, tr, dispatch }) => {
+          // カーソルに最も近い注意書き（入れ子なら内側）の種類を変える。
+          const { $from } = state.selection;
+          for (let depth = $from.depth; depth > 0; depth -= 1) {
+            const node = $from.node(depth);
+            if (node.type !== this.type) continue;
+            if (dispatch) tr.setNodeMarkup($from.before(depth), undefined, { ...node.attrs, kind: calloutKind(kind) });
+            return true;
+          }
+          return false;
+        },
+    };
   },
 });
 
@@ -531,6 +581,24 @@ export const Columns = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     return ['div', mergeAttributes({ 'data-columns': '', class: 'rte-columns' }, HTMLAttributes), 0];
+  },
+
+  addCommands() {
+    return {
+      insertColumns:
+        (count) =>
+        ({ state, commands }) => {
+          // 段組みの中に段組みは入れない（列の content 式でも閉じているが、命令の側でも断る —
+          // insertContent はスキーマに合う場所を探して外へ逃がすので、黙って別の場所に入るのを防ぐ）。
+          if (isInsideNodeNamed(state.selection.$from, this.name)) return false;
+          const n = columnsCount(count);
+          return commands.insertContent({
+            type: this.name,
+            attrs: { count: n },
+            content: Array.from({ length: n }, () => ({ type: 'column', content: [{ type: 'paragraph' }] })),
+          });
+        },
+    };
   },
 });
 
@@ -649,7 +717,14 @@ export function createSchemaExtensions(
     // 容器（第 4 段）: 注意書き・折りたたみ（要約は葉、中身は容器）・段組み。
     // 折りたたみは公式拡張。開閉の状態（open）は本文に保存する（書いた人が既定を決める）。
     withBlockId(Callout),
-    withBlockId(Details).configure({ persist: true }),
+    withBlockId(Details).configure({
+      persist: true,
+      // 開閉のボタンの名前（既定は英語）。開閉は閲覧モードでもできる（保存されないだけ）。
+      renderToggleButton: ({ element, isOpen }) => {
+        element.setAttribute('aria-label', isOpen ? '折りたたみを閉じる' : '折りたたみを開く');
+        element.setAttribute('aria-expanded', String(isOpen));
+      },
+    }),
     withBlockId(DetailsSummary),
     withBlockId(DetailsContent),
     withBlockId(Columns),
