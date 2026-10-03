@@ -484,13 +484,13 @@ func parseBlockNode(raw json.RawMessage, depth int, budget *kbDocBudget) (*kbDoc
 		node.Children = children
 		return node, nil
 	}
-	// 添付は中身を持たない葉（画面のスキーマは content を持たない atom）。content を持つ形は画面では
-	// 作れないので断る（黙って inline に保存すると、本文の正本が画面の読めない形になる）。空の配列は
-	// 中身なしとして通す。
-	if t == domain.BlockTypeAttachment && len(rn.Content) > 0 && string(rn.Content) != "null" {
+	// 添付・埋め込みは中身を持たない葉（画面のスキーマは content を持たない atom）。content を持つ形は
+	// 画面では作れないので断る（黙って inline に保存すると、本文の正本が画面の読めない形になる）。
+	// 空の配列は中身なしとして通す。
+	if kbContentlessBlockTypes[t] && len(rn.Content) > 0 && string(rn.Content) != "null" {
 		var items []json.RawMessage
 		if err := json.Unmarshal(rn.Content, &items); err != nil || len(items) > 0 {
-			return nil, fmt.Errorf("%w: 添付は中身を持てません", ErrPageDocInvalid)
+			return nil, fmt.Errorf("%w: %s は中身を持てません", ErrPageDocInvalid, t)
 		}
 	}
 	// 葉ノード: content はインライン内容として丸ごと inline に持つ。
@@ -516,6 +516,14 @@ func parseBlockNode(raw json.RawMessage, depth int, budget *kbDocBudget) (*kbDoc
 		}
 	}
 	return node, nil
+}
+
+// kbContentlessBlockTypes は中身（content）を持てない葉の種類。画面のスキーマで content を持たない
+// atom として定義したもので、保存側でも中身を持つ形を断る（画像・区切り線・行の数式は以前から
+// 中身の有無を問わずに通しており、ここには入れていない）。
+var kbContentlessBlockTypes = map[domain.BlockType]bool{
+	domain.BlockTypeAttachment: true,
+	domain.BlockTypeEmbed:      true,
 }
 
 // kbInlineImageKeyPrefix は本文に置ける画像 src の唯一の形。実体は
@@ -584,6 +592,8 @@ func normalizeBlockAttrs(t domain.BlockType, m map[string]json.RawMessage) error
 	case domain.BlockTypeAttachment:
 		// attachmentId だけを受け取る（表示の値は bindPageAttachments が添付の行から書き直す）。
 		return normalizeAttachmentAttrs(m)
+	case domain.BlockTypeEmbed:
+		return normalizeEmbedAttrs(m)
 	case domain.BlockTypeColumns:
 		// count は列数（2〜3 の整数）。範囲外・整数でなければ外す（画面は列の数から決める）。
 		if raw, ok := m["count"]; ok {
@@ -592,6 +602,50 @@ func normalizeBlockAttrs(t domain.BlockType, m map[string]json.RawMessage) error
 				delete(m, "count")
 			}
 		}
+	}
+	return nil
+}
+
+// normalizeEmbedAttrs は埋め込みの attrs を検査し、provider・videoId・title だけを残す。
+//
+// provider は許可リスト、videoId は提供元ごとの形（domain.ValidEmbedVideo）で、通らなければ断る
+// （見た目の手がかりではなく、読み手のブラウザがどこへ繋ぐかを決める値なので、直して通さない）。
+// 生の URL は受け取らない — URL を保存すると、書いた人が選んだ相手へ読み手を繋げてしまう。
+// title は書いた人が入れる飾りの文字で、文字列なら上限（domain.EmbedTitleMaxRunes）まで受け付ける。
+// 空・null は外す。文字列でなければ断る。
+func normalizeEmbedAttrs(m map[string]json.RawMessage) error {
+	var provider, videoID *string
+	if raw, ok := m["provider"]; !ok || json.Unmarshal(raw, &provider) != nil || provider == nil {
+		return fmt.Errorf("%w: 埋め込みの provider が文字列ではありません", ErrPageDocInvalid)
+	}
+	if raw, ok := m["videoId"]; !ok || json.Unmarshal(raw, &videoID) != nil || videoID == nil {
+		return fmt.Errorf("%w: 埋め込みの videoId が文字列ではありません", ErrPageDocInvalid)
+	}
+	if !domain.ValidEmbedVideo(*provider, *videoID) {
+		return fmt.Errorf("%w: 埋め込みの提供元か動画の ID が許した形ではありません", ErrPageDocInvalid)
+	}
+	var title *string
+	if raw, ok := m["title"]; ok && string(raw) != "null" {
+		if err := json.Unmarshal(raw, &title); err != nil || title == nil {
+			return fmt.Errorf("%w: 埋め込みの題名が文字列ではありません", ErrPageDocInvalid)
+		}
+		if utf8.RuneCountInString(*title) > domain.EmbedTitleMaxRunes {
+			return fmt.Errorf("%w: 埋め込みの題名が長すぎます（上限 %d 文字）", ErrPageDocInvalid, domain.EmbedTitleMaxRunes)
+		}
+	}
+	for k := range m {
+		delete(m, k)
+	}
+	values := map[string]string{"provider": *provider, "videoId": *videoID}
+	if title != nil && *title != "" {
+		values["title"] = *title
+	}
+	for k, v := range values {
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrPageDocInvalid, err)
+		}
+		m[k] = encoded
 	}
 	return nil
 }
