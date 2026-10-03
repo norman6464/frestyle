@@ -41,6 +41,7 @@ const (
 // ワークスペースは URL の slug から middleware が解決するので、ルートはすべて
 // /kb/workspaces/:workspaceSlug 以下に置き、その middleware を通す group に登録する。
 func registerKnowledgeBaseRoutes(g *gin.RouterGroup, deps *routeDeps) {
+	kbImagePresigner, pageAttachmentPresigner := newKbPresignersOrFallback(deps)
 	registerKnowledgeBaseRoutesWith(
 		g,
 		persistence.NewKnowledgeBaseRepository(deps.db),
@@ -57,9 +58,9 @@ func registerKnowledgeBaseRoutes(g *gin.RouterGroup, deps *routeDeps) {
 		persistence.NewTicketRepository(deps.db),
 		persistence.NewTicketRefReader(deps.db),
 		persistence.NewTxManager(deps.db),
-		newKbImagePresignerOrFallback(deps),
+		kbImagePresigner,
 		persistence.NewPageAttachmentRepository(deps.db),
-		newPageAttachmentPresignerOrFallback(deps),
+		pageAttachmentPresigner,
 		persistence.NewLabelRepository(deps.db),
 		persistence.NewInvitationRepository(deps.db),
 		persistence.NewNotificationRepository(deps.db),
@@ -68,37 +69,24 @@ func registerKnowledgeBaseRoutes(g *gin.RouterGroup, deps *routeDeps) {
 	)
 }
 
-// newKbImagePresignerOrFallback は IMAGES_BUCKET 未設定なら stub にフォールバックする
-// （明示的にローカル開発用と分かる状態なので安全）。bucket が設定されているのに
-// infraGCS.NewPresigner が失敗する場合は fallback せず起動を失敗させる — 黙って stub
-// （未署名 URL）へ倒すと、クライアントは成功と誤認したままアップロード PUT だけが失敗する。
-func newKbImagePresignerOrFallback(deps *routeDeps) repository.KbImagePresigner {
+// newKbPresignersOrFallback はページ画像と添付の presigner を組み立てる。IMAGES_BUCKET 未設定なら
+// stub にフォールバックする（明示的にローカル開発用と分かる状態なので安全）。bucket が設定されているのに
+// infraGCS.NewPresigner が失敗する場合は fallback せず起動を失敗させる — 黙って stub（未署名 URL）へ
+// 倒すと、クライアントは成功と誤認したままアップロード PUT だけが失敗する。
+//
+// 画像と添付は同じバケットを接頭辞（kb/<ws>/<page>/ と その下の att/）で分けて使うので、GCS の
+// presigner（storage と IAM の client を抱える）は 1 つ作って両方の adapter に渡す。
+func newKbPresignersOrFallback(deps *routeDeps) (repository.KbImagePresigner, repository.PageAttachmentPresigner) {
 	bucket := deps.cfg.Images.Bucket
 	if bucket == "" {
-		log.Printf("[kb-image] IMAGES_BUCKET unset — using stub presigner (DEV)")
-		return persistence.NewStubKbImagePresigner("stub-bucket")
+		log.Printf("[kb-image] IMAGES_BUCKET unset — using stub presigners (DEV)")
+		return persistence.NewStubKbImagePresigner("stub-bucket"), persistence.NewStubPageAttachmentPresigner("stub-bucket")
 	}
 	pre, err := infraGCS.NewPresigner(context.Background(), bucket)
 	if err != nil {
 		log.Fatalf("[kb-image] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v — %s", bucket, err, imagesBucketHint)
 	}
-	return persistence.NewKbImagePresigner(pre)
-}
-
-// newPageAttachmentPresignerOrFallback は newKbImagePresignerOrFallback と同じ判断 —
-// IMAGES_BUCKET 未設定なら stub、設定済みで初期化に失敗すれば起動を止める。添付はページ画像と同じ
-// バケットを kb/<ws>/<page>/att/ の接頭辞で共有する（バケットを増やさない。チケット添付と同じ）。
-func newPageAttachmentPresignerOrFallback(deps *routeDeps) repository.PageAttachmentPresigner {
-	bucket := deps.cfg.Images.Bucket
-	if bucket == "" {
-		log.Printf("[kb-attachment] IMAGES_BUCKET unset — using stub presigner (DEV)")
-		return persistence.NewStubPageAttachmentPresigner("stub-bucket")
-	}
-	pre, err := infraGCS.NewPresigner(context.Background(), bucket)
-	if err != nil {
-		log.Fatalf("[kb-attachment] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v — %s", bucket, err, imagesBucketHint)
-	}
-	return persistence.NewPageAttachmentPresigner(pre)
+	return persistence.NewKbImagePresigner(pre), persistence.NewPageAttachmentPresigner(pre)
 }
 
 // registerKnowledgeBasePublicRoutes は認証不要のナレッジエンドポイントを登録する。

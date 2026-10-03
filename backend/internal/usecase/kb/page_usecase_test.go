@@ -825,6 +825,14 @@ func Test_本文の分解_添付のattrs(t *testing.T) {
 		require.Nil(t, tree[0].Inline, "添付は中身を持たない")
 	})
 
+	t.Run("content が空の配列・null なら中身なしとして通す", func(t *testing.T) {
+		for _, content := range []string{`[]`, `null`} {
+			tree, err := parsePageDoc(`{"type":"doc","content":[{"type":"attachment","attrs":{"attachmentId":"` + id + `"},"content":` + content + `}]}`)
+			require.NoError(t, err, content)
+			require.Nil(t, tree[0].Inline, content)
+		}
+	})
+
 	invalid := []struct {
 		name string
 		doc  string
@@ -834,6 +842,8 @@ func Test_本文の分解_添付のattrs(t *testing.T) {
 		{"attachmentId が null", `{"type":"doc","content":[{"type":"attachment","attrs":{"attachmentId":null}}]}`},
 		{"attachmentId が文字列でない", `{"type":"doc","content":[{"type":"attachment","attrs":{"attachmentId":42}}]}`},
 		{"attachmentId が UUID でない", `{"type":"doc","content":[{"type":"attachment","attrs":{"attachmentId":"kb/ws/page/att/1.bin"}}]}`},
+		{"中身（content）を持つ", `{"type":"doc","content":[{"type":"attachment","attrs":{"attachmentId":"` + id + `"},"content":[{"type":"text","text":"x"}]}]}`},
+		{"content が配列でない", `{"type":"doc","content":[{"type":"attachment","attrs":{"attachmentId":"` + id + `"},"content":"x"}]}`},
 	}
 	for _, tc := range invalid {
 		t.Run(tc.name+"なら断る", func(t *testing.T) {

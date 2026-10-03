@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getSchema } from '@tiptap/core';
+import { generateHTML, generateJSON, getSchema, getText, getTextSerializersFromSchema } from '@tiptap/core';
 import { blockRowNodeTypeNames, createSchemaExtensions, isBlockRowNodeType } from '../schemaExtensions';
 import { createEditorExtensions } from '../editorExtensions';
 
@@ -72,5 +72,66 @@ describe('isBlockRowNodeType', () => {
     for (const type of Object.values(schema.nodes)) {
       expect(names.has(type.name), type.name).toBe(isBlockRowNodeType(type));
     }
+  });
+});
+
+describe('Attachment（添付）のスキーマ', () => {
+  const extensions = createSchemaExtensions();
+  const id = '0198a000-0000-7000-8000-0000000000c1';
+  const parse = (html: string) => generateJSON(html, extensions).content ?? [];
+
+  it('貼り付けた HTML から添付を読み、表示の写しを attrs に戻す', () => {
+    const [node] = parse(
+      `<div data-attachment data-attachment-id="${id}" data-page-id="p1" data-filename="議事録.pdf" data-content-type="application/pdf" data-size="2048">議事録.pdf</div>`,
+    );
+    expect(node).toMatchObject({
+      type: 'attachment',
+      attrs: { attachmentId: id, pageId: 'p1', filename: '議事録.pdf', contentType: 'application/pdf', size: 2048 },
+    });
+  });
+
+  it.each([
+    ['UUID でない', 'kb/ws/page/att/1.bin'],
+    ['大文字の UUID', id.toUpperCase()],
+    ['空', ''],
+  ])('添付の ID が %s なら添付として取り込まない', (_name, attachmentId) => {
+    const nodes = parse(`<div data-attachment data-attachment-id="${attachmentId}">a.pdf</div>`);
+    expect(nodes.some((n) => n.type === 'attachment')).toBe(false);
+  });
+
+  it('添付の ID が無ければ添付として取り込まない', () => {
+    const nodes = parse('<div data-attachment>a.pdf</div>');
+    expect(nodes.some((n) => n.type === 'attachment')).toBe(false);
+  });
+
+  it.each([
+    ['0', 0],
+    [String(Number.MAX_SAFE_INTEGER), Number.MAX_SAFE_INTEGER],
+    [String(Number.MAX_SAFE_INTEGER + 2), null],
+    ['-1', null],
+    ['1.5', null],
+    ['abc', null],
+  ])('大きさ %s は %s として読む（安全な整数だけ）', (raw, expected) => {
+    const [node] = parse(`<div data-attachment data-attachment-id="${id}" data-size="${raw}"></div>`);
+    expect(node.attrs?.size).toBe(expected);
+  });
+
+  it('ファイル名が無ければ「添付ファイル」と描き、文字にもそう出す', () => {
+    const html = generateHTML({ type: 'doc', content: [{ type: 'attachment', attrs: { attachmentId: id } }] }, extensions);
+    expect(html).toContain('>添付ファイル<');
+    expect(html).toContain(`data-attachment-id="${id}"`);
+    expect(html).not.toContain('data-filename');
+    const schema = getSchema(extensions);
+    const doc = schema.nodeFromJSON({ type: 'doc', content: [{ type: 'attachment', attrs: { attachmentId: id } }] });
+    expect(getText(doc, { textSerializers: getTextSerializersFromSchema(schema) })).toBe('添付ファイル');
+  });
+
+  it('ファイル名があれば名前を描く', () => {
+    const html = generateHTML(
+      { type: 'doc', content: [{ type: 'attachment', attrs: { attachmentId: id, filename: '見積.xlsx', size: 10 } }] },
+      extensions,
+    );
+    expect(html).toContain('>見積.xlsx<');
+    expect(html).toContain('data-size="10"');
   });
 });

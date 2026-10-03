@@ -484,6 +484,15 @@ func parseBlockNode(raw json.RawMessage, depth int, budget *kbDocBudget) (*kbDoc
 		node.Children = children
 		return node, nil
 	}
+	// 添付は中身を持たない葉（画面のスキーマは content を持たない atom）。content を持つ形は画面では
+	// 作れないので断る（黙って inline に保存すると、本文の正本が画面の読めない形になる）。空の配列は
+	// 中身なしとして通す。
+	if t == domain.BlockTypeAttachment && len(rn.Content) > 0 && string(rn.Content) != "null" {
+		var items []json.RawMessage
+		if err := json.Unmarshal(rn.Content, &items); err != nil || len(items) > 0 {
+			return nil, fmt.Errorf("%w: 添付は中身を持てません", ErrPageDocInvalid)
+		}
+	}
 	// 葉ノード: content はインライン内容として丸ごと inline に持つ。
 	if len(rn.Content) > 0 && string(rn.Content) != "null" {
 		// 配列であることの検証を兼ねて要素単位で読み直し、空白差を吸収した形で持ち直す
