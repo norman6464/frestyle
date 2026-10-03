@@ -10,7 +10,7 @@ import type { RichDocContent } from '@/shared/lib/richDoc';
  * - 注意書きは左に印、地は種類ごとの淡い色（info は brand、success / danger / warning は状態色）。
  *   種類の切り替えは取っ手のメニューから
  * - 折りたたみは閲覧モードでも開閉できる（保存されるのは書いた人が決めた既定の open だけ）
- * - 段組みは 2〜3 列。狭い画面（860px 未満）では縦に積む。列の中に容器は入れ子にしない
+ * - 段組みは 2〜3 列。本文の器が 600px 未満（狭い画面）では縦に積む。列の中に容器は入れ子にしない
  * - 容器の中の段落にもコメントが付く（ブロックの id は中の段落に付いている）
  */
 const meta: Meta<typeof RichTextEditor> = {
@@ -123,9 +123,9 @@ export const 注意書きの種類を切り替える: Story = {
   },
 };
 
-/** 狭い画面（600px）では段組みが縦に積まれる。 */
+/** 狭い画面（本文の器 480px）では段組みが縦に積まれる。 */
 export const 狭い画面では縦積み: Story = {
-  render: () => <Harness width={600} />,
+  render: () => <Harness width={480} />,
   play: async ({ canvasElement }) => {
     const columns = canvasElement.querySelector('.rte-columns') as HTMLElement;
     await waitFor(async () => {
@@ -135,9 +135,9 @@ export const 狭い画面では縦積み: Story = {
   },
 };
 
-/** 広い画面（900px）では 2 列に並ぶ。 */
+/** ナレッジの本文の最大幅（742px）では 2 列に並ぶ。 */
 export const 広い画面では横並び: Story = {
-  render: () => <Harness width={900} />,
+  render: () => <Harness width={742} />,
   play: async ({ canvasElement }) => {
     const columns = canvasElement.querySelector('.rte-columns') as HTMLElement;
     await waitFor(async () => {

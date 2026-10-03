@@ -315,8 +315,8 @@
 }
 
 /*
- * 容器（第 4 段）。段組みの縦積みは画面幅ではなく本文の器の幅で決める（右の欄があると
- * 本文は画面より狭い）ため、.rte-content を container にして @container で切り替える。
+ * 容器（第 4 段）。段組みの縦積みは画面幅ではなく本文の器の幅で決める（サイドバーや右の欄が
+ * あると本文は画面より狭い）ため、.rte-content を container にして @container で切り替える。
  */
 .rte-content {
   container-type: inline-size;
@@ -436,19 +436,41 @@
   min-width: 0;
 }
 
-.rte-content .ProseMirror [data-type='detailsSummary'] {
+/*
+ * 要約は <summary> 要素で描かれる（data-type を持たない）。本物の <details> の外にあるので、
+ * ブラウザ既定の list-item の印（黒丸）が開閉ボタンの下に重なって出る。印を消して太字にする。
+ */
+.rte-content .ProseMirror [data-type='details'] summary {
+  display: block;
+  list-style: none;
   font-weight: 600;
+}
+
+.rte-content .ProseMirror [data-type='details'] summary::marker {
+  content: '';
+}
+
+.rte-content .ProseMirror [data-type='details'] summary::-webkit-details-marker {
+  display: none;
 }
 
 .rte-content .ProseMirror [data-type='details']:not(.is-open) [data-type='detailsContent'] {
   display: none;
 }
 
+.rte-content .ProseMirror [data-type='detailsContent'] > :first-child {
+  margin-top: 0.5rem;
+}
+
 .rte-content .ProseMirror [data-type='detailsContent'] > :last-child {
   margin-bottom: 0;
 }
 
-/* 段組み。列数は data-count。本文の器が 860px 未満なら縦に積む（@container）。 */
+/*
+ * 段組み。列数は data-count。本文の器が 600px 未満なら縦に積む（@container）。しきい値は
+ * ナレッジの本文の最大幅（742px）で 3 列が 1 列あたり約 230px を保てるところから決めた —
+ * 画面幅の 860px で切ると、本文が常に 860px より狭いので段組みが一度も横に並ばない。
+ */
 .rte-content .ProseMirror .rte-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -464,14 +486,22 @@
   min-width: 0;
 }
 
+.rte-content .ProseMirror .rte-column > :first-child {
+  margin-top: 0;
+}
+
+.rte-content .ProseMirror .rte-column > :last-child {
+  margin-bottom: 0;
+}
+
 /* 編集中は列の境を薄い点線で見せる（読むときは消す）。 */
 .rte-with-handle .ProseMirror .rte-column {
-  padding: 0.25rem 0.5rem;
+  padding: 0.5rem 0.75rem;
   border: 1px dashed var(--color-surface-3);
   border-radius: 8px;
 }
 
-@container rte (max-width: 859px) {
+@container rte (max-width: 599px) {
   .rte-content .ProseMirror .rte-columns,
   .rte-content .ProseMirror .rte-columns[data-count='3'] {
     grid-template-columns: minmax(0, 1fr);
