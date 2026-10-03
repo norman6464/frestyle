@@ -120,6 +120,17 @@ describe('extractPlainText', () => {
     expect(extractPlainText(doc)).toBe('式 [math: a^2]\n[math: \\sum i]\ngraph TD; A-->B');
   });
 
+  it('埋め込みは提供元と動画の ID を疑似テキストとして埋め込み、題名を添える', () => {
+    const doc = {
+      type: 'doc',
+      content: [
+        { type: 'embed', attrs: { provider: 'youtube', videoId: 'dQw4w9WgXcQ', title: '説明会' } },
+        { type: 'embed', attrs: { provider: 'youtube', videoId: 'aaaaaaaaaaa' } },
+      ],
+    };
+    expect(extractPlainText(doc)).toBe('[embed: youtube dQw4w9WgXcQ] 説明会\n[embed: youtube aaaaaaaaaaa]');
+  });
+
   it('添付はファイル名と ID を疑似テキストとして埋め込む（同じ名前の別の添付へ差し替えても差分に出る）', () => {
     const before = { type: 'doc', content: [{ type: 'attachment', attrs: { attachmentId: 'a1', filename: '議事録.pdf' } }] };
     const after = { type: 'doc', content: [{ type: 'attachment', attrs: { attachmentId: 'a2', filename: '議事録.pdf' } }] };

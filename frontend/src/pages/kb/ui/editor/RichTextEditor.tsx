@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { ACCEPTED_IMAGE_ACCEPT_ATTR } from '@/shared/config/imageUpload';
 import { ACCEPTED_ATTACHMENT_ACCEPT_ATTR } from '@/shared/config/attachmentUpload';
@@ -13,6 +13,7 @@ import {
   type AttachmentUploader,
 } from './attachmentInsertion';
 import type { DownloadAttachment } from './AttachmentView';
+import EmbedUrlForm from './EmbedUrlForm';
 import { sanitizeDocLinks } from '@/shared/lib/linkSafety';
 import { sanitizeDocColors } from './inlineColors';
 import type { SearchPagesForRef } from './pageRefSuggestion';
@@ -279,6 +280,9 @@ export default function RichTextEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   // '/file' から開くファイル選択（添付）。
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  // '/embed' から開く URL の欄の位置（null なら閉じている）。カーソルの下に浮かせる。
+  const [embedFormStyle, setEmbedFormStyle] = useState<CSSProperties | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   // 本文の器。ブロックの取っ手（BlockHandle）がこの中で位置を決める。
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -386,6 +390,22 @@ export default function RichTextEditor({
         run: () => fileInputRef.current?.click(),
       });
     }
+    extra.push({
+      id: 'embed',
+      label: '埋め込み',
+      group: 'insert',
+      glyph: '埋込',
+      icon: { set: 'fs', name: 'link' },
+      keywords: ['embed', 'youtube', 'video', 'movie'],
+      run: (currentEditor) => {
+        // 欄はカーソルの直下に出す（長いページでも、打っていた場所の近くに現れる）。
+        const root = rootRef.current;
+        if (!root) return;
+        const caret = currentEditor.view.coordsAtPos(currentEditor.state.selection.from);
+        const box = root.getBoundingClientRect();
+        setEmbedFormStyle({ top: caret.bottom - box.top + 6, left: Math.max(0, caret.left - box.left) });
+      },
+    });
     if (hasAttachmentUpload) {
       extra.push({
         id: 'file',
@@ -537,6 +557,7 @@ export default function RichTextEditor({
     // preventDefault は読み取り専用の素の <a> の既定遷移（全画面リロード）を止めるため。
     // キーボードは別経路が既にある: <a> 上の Enter はブラウザが click として発火する。
     <div
+      ref={rootRef}
       className={`rte-root ${className}`}
       onClick={(event) => {
         if (openClickedLink(event.nativeEvent, onNavigateToPage, { editable })) {
@@ -544,6 +565,13 @@ export default function RichTextEditor({
         }
       }}
     >
+      {embedFormStyle && editor && editable && (
+        // 外枠の左上を基準にした高さ 0 の箱。欄の位置（カーソルの直下）はこの箱から測る
+        // （外枠そのものに position を付けると、吹き出しメニューの位置の基準まで変わるため）。
+        <div className="rte-embed-form-anchor">
+          <EmbedUrlForm editor={editor} style={embedFormStyle} onClose={() => setEmbedFormStyle(null)} />
+        </div>
+      )}
       <div ref={contentRef} className={`rte-content prose max-w-none${editable ? ' rte-with-handle' : ''}`}>
         <EditorContent editor={editor} />
         {/* ブロックの取っ手。本文の左の余白に、乗せたブロックの高さで出る（編集できるときだけ）。 */}

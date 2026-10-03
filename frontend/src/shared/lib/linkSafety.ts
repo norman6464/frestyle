@@ -1,4 +1,5 @@
 import type { JSONContent } from '@tiptap/core';
+import { EMBED_TITLE_MAX_LENGTH, isValidEmbedVideo } from '@/shared/config/embedProviders';
 
 /**
  * linkSafety は「リンクの href として安全か」を判定・修復する純関数だけを置くモジュール。
@@ -206,8 +207,9 @@ export function sanitizeDocLinks<T extends JSONContent>(node: T, depth = 0): T {
 /**
  * sanitizeContent は content 配列を歩く。3 つの仕事をする:
  * 1. object でない要素（null・数値など。壊れた doc や敵対的な入力が混じりうる）を落とす
- * 2. 画像ノードで許可できない src を持つもの、添付ノードで attachmentId が UUID でないものを
- *    ノードごと落とす（添付は ID だけが本文の正本。形の崩れた ID は保存側も断る）
+ * 2. 画像ノードで許可できない src を持つもの、添付ノードで attachmentId が UUID でないもの、
+ *    埋め込みノードで提供元か動画の ID が許した形でないものをノードごと落とす（どれも保存側が断る
+ *    形。埋め込みは読み手のブラウザの繋ぎ先を決める値なので、直して通さない）
  * 3. 残りを再帰的に sanitizeDocLinks へ通す
  */
 function sanitizeContent(content: JSONContent[] | undefined, depth: number): JSONContent[] | undefined {
@@ -220,6 +222,13 @@ function sanitizeContent(content: JSONContent[] | undefined, depth: number): JSO
       continue;
     }
     if (child.type === 'attachment' && !isAttachmentId((child as JSONContent).attrs?.attachmentId)) {
+      changed = true;
+      continue;
+    }
+    if (
+      child.type === 'embed' &&
+      !isValidEmbedVideo((child as JSONContent).attrs?.provider, (child as JSONContent).attrs?.videoId)
+    ) {
       changed = true;
       continue;
     }
@@ -305,6 +314,16 @@ const COLUMNS_COUNT_RANGE = { min: 2, max: 3 };
  * maxLength で、貼り付けは parseHTML で止める）。変更が無ければ入力と同じ参照を返す。
  */
 function sanitizeKnownNodeAttrs(node: JSONContent): JSONContent {
+  if (node.type === 'embed') {
+    // 題名は書いた人が入れる飾り。文字列で上限以内でなければ外す（埋め込み自体は残す）。
+    const title = node.attrs?.title;
+    if (title === undefined || title === null || (typeof title === 'string' && [...title].length <= EMBED_TITLE_MAX_LENGTH)) {
+      return node;
+    }
+    const attrs = { ...node.attrs };
+    delete attrs.title;
+    return { ...node, attrs };
+  }
   if (node.type === 'blockMath' || node.type === 'inlineMath') {
     if (typeof node.attrs?.latex === 'string') return node;
     return { ...node, attrs: { ...node.attrs, latex: '' } };

@@ -34,7 +34,8 @@ const DIFF_TIMEOUT_MS = 2_000;
  * （コメント権限で本文以外を実質書き換えられてしまう）。そのため、これらは本文の文字列へ
  * 疑似テキストとして埋め込む — リンクは「本文 (href)」、画像は「[image: src]」、
  * ページ参照は「[page: pageId]」、チケット参照は「[ticket: ticketId]」、名指しは「[mention: userId]」、
- * 数式は「[math: latex]」、コードブロックは「[code: language]」、添付は「[file: ファイル名 (attachmentId)]」の
+ * 数式は「[math: latex]」、コードブロックは「[code: language]」、添付は「[file: ファイル名 (attachmentId)]」、
+ * 埋め込みは「[embed: 提供元 動画の ID]」（題名は書いた人の飾りなので添えるだけ）の
  * 形にする（図は本文の文字がそのまま出る）。添付に ID を添えるのは、同じ名前の別の添付（版を上げて
  * 送り直したファイルなど）へ差し替えても差分に出るようにするため。
  *
@@ -81,6 +82,9 @@ function collectText(node: unknown, depth: number): string {
     text = `[code: ${codeBlockLanguageOf(node)}]`;
   } else if (type === 'attachment') {
     text = `[file: ${attrStringOf(node, 'filename')} (${attrStringOf(node, 'attachmentId')})]`;
+  } else if (type === 'embed') {
+    const title = attrStringOf(node, 'title');
+    text = `[embed: ${attrStringOf(node, 'provider')} ${attrStringOf(node, 'videoId')}]${title === '' ? '' : ` ${title}`}`;
   }
 
   if (Array.isArray(node.content)) {

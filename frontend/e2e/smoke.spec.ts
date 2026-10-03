@@ -48,4 +48,19 @@ test.describe('FreStyle smoke', () => {
     expect(html).toContain('upgrade-insecure-requests');
   });
 
+  test('CSP の frame-src は決めた相手だけ（Google サインインとナレッジの埋め込み）', async ({ request }) => {
+    const res = await request.get('/');
+    const html = await res.text();
+    const csp = /<meta http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(html)?.[1] ?? '';
+    const frameSrc = csp
+      .split(';')
+      .map((directive) => directive.trim())
+      .find((directive) => directive.startsWith('frame-src '));
+    // 値そのものを固定する。足すときは backend の埋め込みの許可リスト・frontend の認識と一緒に変える
+    // （index.html の冒頭の解説を参照）。
+    expect(frameSrc).toBe(
+      'frame-src https://frestyle-507912.firebaseapp.com https://apis.google.com https://www.youtube-nocookie.com',
+    );
+  });
+
 });
