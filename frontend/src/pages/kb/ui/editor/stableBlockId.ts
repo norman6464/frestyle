@@ -3,6 +3,7 @@ import { Extension } from '@tiptap/react';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { Transaction } from '@tiptap/pm/state';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { Mapping } from '@tiptap/pm/transform';
 import { blockRowNodeTypeNames, isBlockRowNodeType } from './schemaExtensions';
 
 // どの種類が blocks テーブルの行になるか（＝ id を振る対象か）は、ここに一覧を持たず
@@ -22,14 +23,62 @@ function hasStableId(id: unknown): boolean {
  * 通らなければ新規採番へ回す最終防衛線を持つ。ここでの役目は「保存の瞬間には
  * 各ブロックが id を持っている」ことだけを保証すること。
  */
-function fillMissingBlockIds(doc: ProseMirrorNode, tr: Transaction): Transaction | null {
-  let changed = false;
+function fillMissingBlockIds(
+  doc: ProseMirrorNode,
+  tr: Transaction,
+  recoverLostIds: (missing: ReadonlySet<number>) => ReadonlyMap<number, string> = () => new Map(),
+): Transaction | null {
+  const missing = new Set<number>();
   doc.descendants((node, pos) => {
-    if (!isBlockRowNodeType(node.type) || hasStableId(node.attrs.id)) return;
-    tr.setNodeMarkup(pos, undefined, { ...node.attrs, id: crypto.randomUUID() });
-    changed = true;
+    if (isBlockRowNodeType(node.type) && !hasStableId(node.attrs.id)) missing.add(pos);
   });
-  return changed ? tr : null;
+  if (missing.size === 0) return null;
+  const recovered = recoverLostIds(missing);
+  for (const pos of missing) {
+    const node = doc.nodeAt(pos);
+    if (!node) continue;
+    tr.setNodeMarkup(pos, undefined, { ...node.attrs, id: recovered.get(pos) ?? crypto.randomUUID() });
+  }
+  return tr;
+}
+
+/**
+ * lostIdRecoverer は「属性だけを置き換えて id を落とした」ブロックに、元の id を戻すための
+ * 対応表を作る関数を返す（id の無いブロックが見つかったときだけ呼ばれる）。
+ *
+ * 公式の拡張には、attrs を丸ごと渡し直して既存の属性を消すものがある（折りたたみの開閉は
+ * setNodeMarkup(pos, undefined, { open }) で、id を渡さない）。そのまま新しい id を振ると、
+ * 開閉のたびにブロックの行が作り直され、コメントの紐付けが外れる。
+ *
+ * 戻すのは、直前の文書の同じ種類のノードが位置の対応（mapping）で同じ場所にあり、中身が
+ * 完全に同じときだけ — 中身ごと別のブロックに置き換えた（貼り付けで上書きした等）ときに、
+ * 消えたブロックのコメントを新しいブロックへ移さないため。今の文書のどこかで既に使われている
+ * id も戻さない（同じ id が 2 つになる）。
+ */
+function lostIdRecoverer(transactions: readonly Transaction[], oldDoc: ProseMirrorNode, newDoc: ProseMirrorNode) {
+  return (missing: ReadonlySet<number>): ReadonlyMap<number, string> => {
+    const mapping = new Mapping();
+    for (const transaction of transactions) mapping.appendMapping(transaction.mapping);
+    const used = new Set<string>();
+    newDoc.descendants((node) => {
+      if (hasStableId(node.attrs.id)) used.add(node.attrs.id as string);
+    });
+    const recovered = new Map<number, string>();
+    oldDoc.descendants((oldNode, oldPos) => {
+      if (!isBlockRowNodeType(oldNode.type) || !hasStableId(oldNode.attrs.id)) return;
+      const id = oldNode.attrs.id as string;
+      if (used.has(id)) return;
+      // -1: ノードの開始位置を、置き換えられた開きタグの手前へ寄せて写す（setNodeMarkup の
+      // 置き換えは開きタグ 1 つ分なので、開始位置は同じ値のまま残る）。
+      const newPos = mapping.map(oldPos, -1);
+      if (!missing.has(newPos) || recovered.has(newPos)) return;
+      const newNode = newDoc.nodeAt(newPos);
+      if (!newNode || newNode.type !== oldNode.type || !newNode.content.eq(oldNode.content)) return;
+      recovered.set(newPos, id);
+      used.add(id);
+    });
+    return recovered;
+  };
 }
 
 /**
@@ -92,6 +141,9 @@ function fillContentIds(content: JSONContent[] | undefined, depth: number): JSON
  * 限り DB 上の行（と将来のコメントの紐付け）が保たれるので、フロント側は「保存される瞬間には
  * 各ブロックが id を持っている」ことだけ保証すればよい（id の中身自体を厳密に管理する必要は無い）。
  *
+ * 属性だけを置き換えて id を落とす変更（公式の折りたたみの開閉など）では、新しい id ではなく
+ * 元の id を戻す（lostIdRecoverer 参照）。
+ *
  * doc が変わるトランザクションでだけ動く（tr.docChanged のチェックで無駄な処理を避ける。
  * selection-only の変更で doc が変わらずスキップしても、id の無いノードは次に doc が
  * 変わるトランザクションで拾われるので放置される心配は無い）。
@@ -103,9 +155,13 @@ export const StableBlockId = Extension.create({
     return [
       new Plugin({
         key: new PluginKey('stableBlockId'),
-        appendTransaction: (transactions, _oldState, newState) => {
+        appendTransaction: (transactions, oldState, newState) => {
           if (!transactions.some((transaction) => transaction.docChanged)) return null;
-          return fillMissingBlockIds(newState.doc, newState.tr);
+          return fillMissingBlockIds(
+            newState.doc,
+            newState.tr,
+            lostIdRecoverer(transactions, oldState.doc, newState.doc),
+          );
         },
       }),
     ];

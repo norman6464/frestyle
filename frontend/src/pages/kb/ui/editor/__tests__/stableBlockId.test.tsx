@@ -145,6 +145,69 @@ describe('StableBlockId: 編集時', () => {
   });
 });
 
+describe('StableBlockId: 属性だけを置き換えて id を落とす変更', () => {
+  const detailsId = '22222222-2222-4222-8222-222222222222';
+  const summaryId = '33333333-3333-4333-8333-333333333333';
+  const contentId = '44444444-4444-4444-8444-444444444444';
+  const paragraphId = '55555555-5555-4555-8555-555555555555';
+  const detailsDoc: RichDocContent = {
+    type: 'doc',
+    content: [
+      {
+        type: 'details',
+        attrs: { id: detailsId, open: false },
+        content: [
+          { type: 'detailsSummary', attrs: { id: summaryId }, content: [{ type: 'text', text: '要約' }] },
+          {
+            type: 'detailsContent',
+            attrs: { id: contentId },
+            content: [{ type: 'paragraph', attrs: { id: paragraphId }, content: [{ type: 'text', text: '中身' }] }],
+          },
+        ],
+      },
+    ],
+  };
+
+  it('setNodeMarkup で attrs を丸ごと置き換えても（公式の折りたたみの開閉と同じ）、元の id に戻す', async () => {
+    const e = await mountAndGetEditor(detailsDoc);
+    act(() => {
+      // 公式の Details の開閉は tr.setNodeMarkup(pos, undefined, { open }) — 既存の id を渡さない。
+      e.view.dispatch(e.state.tr.setNodeMarkup(0, undefined, { open: true }));
+    });
+    const details = e.getJSON().content?.[0];
+    expect(details?.attrs).toMatchObject({ id: detailsId, open: true });
+    // 中のブロックの id もそのまま（末尾に自動で足される空の段落は比べない）。
+    expect(collectBlockNodes(details!).map((b) => b.attrs?.id)).toEqual([summaryId, contentId, paragraphId]);
+  });
+
+  it('開閉のボタンを押しても、折りたたみの id は変わらない', async () => {
+    const e = await mountAndGetEditor(detailsDoc);
+    const toggle = e.view.dom.querySelector<HTMLButtonElement>('[data-type="details"] > button');
+    expect(toggle).not.toBeNull();
+    act(() => {
+      toggle!.click();
+    });
+    await waitFor(() => expect(e.getJSON().content?.[0]?.attrs?.open).toBe(true));
+    expect(e.getJSON().content?.[0]?.attrs?.id).toBe(detailsId);
+  });
+
+  it('中身ごと別のブロックに置き換えたときは、元の id を引き継がない（コメントの紐付けを移さない）', async () => {
+    const original = '66666666-6666-4666-8666-666666666666';
+    const e = await mountAndGetEditor({
+      type: 'doc',
+      content: [{ type: 'paragraph', attrs: { id: original }, content: [{ type: 'text', text: '元の段落' }] }],
+    });
+    act(() => {
+      const replacement = e.schema.nodes.paragraph.create(null, e.schema.text('別の段落'));
+      e.view.dispatch(e.state.tr.replaceWith(0, e.state.doc.child(0).nodeSize, replacement));
+    });
+    const [paragraph] = collectBlockNodes(e.getJSON());
+    expect(paragraph.content?.[0]?.text).toBe('別の段落');
+    expect(paragraph.attrs?.id).toMatch(UUID_RE);
+    expect(paragraph.attrs?.id).not.toBe(original);
+  });
+});
+
 describe('fillMissingBlockIdsInDoc: 入れ子の段数に上限がある', () => {
   /** nestedDoc は blockquote を levels 段だけ入れ子にした doc を返す。 */
   function nestedDoc(levels: number): JSONContent {

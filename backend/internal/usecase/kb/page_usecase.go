@@ -551,9 +551,11 @@ func normalizeBlockAttrs(t domain.BlockType, m map[string]json.RawMessage) error
 		}
 	case domain.BlockTypeDetails:
 		// open は真偽だけ。それ以外は外す（既定は閉じている。書いた人が決めた既定を保存する）。
+		// *bool で読むのは null を弾くため — json.Unmarshal は null を bool へ読んでもエラーに
+		// しない（ゼロ値のまま）ので、bool で読むと {"open":null} が素通りで保存される。
 		if raw, ok := m["open"]; ok {
-			var open bool
-			if json.Unmarshal(raw, &open) != nil {
+			var open *bool
+			if json.Unmarshal(raw, &open) != nil || open == nil {
 				delete(m, "open")
 			}
 		}
