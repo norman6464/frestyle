@@ -305,6 +305,170 @@
   outline-offset: 1px;
 }
 
+/*
+ * 数式（第 5 段）。描いた式は KaTeX の CSS（使うページでだけ読む）が整える。ここは枠と入力欄だけ。
+ * 行内の数式は文の高さに収め、選んだときだけ枠を出す。
+ */
+.rte-content .ProseMirror .rte-math-inline {
+  position: relative;
+  display: inline-block;
+  padding: 0 0.15em;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.rte-content .ProseMirror .rte-math-block {
+  position: relative;
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  text-align: center;
+  overflow-x: auto;
+  cursor: pointer;
+}
+
+/* 選んだ枠は本文に焦点があるときだけ（本文の最初が数式だと、触る前から最初の選択がその数式になる）。 */
+.rte-content .ProseMirror-focused .rte-math-inline.is-selected,
+.rte-content .ProseMirror-focused .rte-math-block.is-selected {
+  outline: 2px solid var(--color-brand, #3b82f6);
+  outline-offset: 1px;
+}
+
+.rte-content .ProseMirror .rte-math-placeholder,
+.rte-content .ProseMirror .rte-math-loading {
+  color: var(--color-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.rte-content .ProseMirror .rte-math-error {
+  color: var(--fs-danger-ink);
+  background: var(--fs-danger-soft);
+  border-radius: 4px;
+  padding: 0 0.3em;
+  font-size: 0.9em;
+}
+
+.rte-content .ProseMirror div.rte-math-error {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.rte-content .ProseMirror .rte-math-error-message {
+  margin-right: 0.4em;
+}
+
+.rte-content .ProseMirror div.rte-math-error .rte-math-error-message {
+  display: block;
+  margin: 0 0 0.25rem;
+}
+
+/* 入力欄。行の数式は式の下に、行内の数式は式の下に浮かべる。 */
+.rte-content .ProseMirror .rte-math-editor {
+  display: block;
+  margin-top: 0.5rem;
+  text-align: left;
+}
+
+.rte-content .ProseMirror .rte-math-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 16rem;
+  padding: 6px;
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-surface-3);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+}
+
+.rte-content .ProseMirror .rte-math-editor textarea,
+.rte-content .ProseMirror .rte-math-popover input {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-surface-3);
+  border-radius: 6px;
+  background: var(--color-surface-1);
+  color: var(--color-text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+.rte-content .ProseMirror .rte-math-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/*
+ * 図（第 5 段）。編集中は左に元の文字・右に描いた図、閲覧モードは図だけ。本文の器が狭ければ縦に積む。
+ */
+.rte-content .ProseMirror .rte-diagram-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-surface-3);
+  border-radius: 10px;
+}
+
+.rte-content .ProseMirror .rte-diagram-view.is-editable {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rte-content .ProseMirror .rte-diagram-view:not(.is-editable) .rte-diagram-source {
+  display: none;
+}
+
+.rte-content .ProseMirror .rte-diagram-source {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: var(--color-surface-2);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+}
+
+.rte-content .ProseMirror .rte-diagram-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 4rem;
+  overflow-x: auto;
+}
+
+.rte-content .ProseMirror .rte-diagram-svg svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.rte-content .ProseMirror .rte-diagram-placeholder {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.rte-content .ProseMirror .rte-diagram-error {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  color: var(--fs-danger-ink);
+  background: var(--fs-danger-soft);
+  font-size: 0.85rem;
+}
+
+@container rte (max-width: 599px) {
+  .rte-content .ProseMirror .rte-diagram-view.is-editable {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* 候補一覧の鍵（TicketRefMenuList）。 */
 .rte-ticketref-key {
   flex-shrink: 0;

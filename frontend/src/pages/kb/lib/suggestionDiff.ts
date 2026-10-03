@@ -34,7 +34,7 @@ const DIFF_TIMEOUT_MS = 2_000;
  * （コメント権限で本文以外を実質書き換えられてしまう）。そのため、これらは本文の文字列へ
  * 疑似テキストとして埋め込む — リンクは「本文 (href)」、画像は「[image: src]」、
  * ページ参照は「[page: pageId]」、チケット参照は「[ticket: ticketId]」、名指しは「[mention: userId]」、
- * コードブロックは「[code: language]」の形にする。
+ * 数式は「[math: latex]」、コードブロックは「[code: language]」の形にする（図は本文の文字がそのまま出る）。
  *
  * ブロックが object でない・type を持たない等パースできない形は `[変更あり]` という
  * プレースホルダ行にする（何が起きたか分かる程度の情報は残しつつ、例外は投げない）。
@@ -71,6 +71,8 @@ function collectText(node: unknown, depth: number): string {
     text = `[page: ${pageRefIdOf(node)}]`;
   } else if (type === 'ticketRef') {
     text = `[ticket: ${attrStringOf(node, 'ticketId')}]`;
+  } else if (type === 'blockMath' || type === 'inlineMath') {
+    text = `[math: ${attrStringOf(node, 'latex')}]`;
   } else if (type === 'mention') {
     text = `[mention: ${attrStringOf(node, 'userId')}]`;
   } else if (type === 'codeBlock') {
@@ -89,7 +91,7 @@ function collectText(node: unknown, depth: number): string {
 }
 
 /** 文字の並びを作るインラインのノード。これ以外の子はブロックとして行を分ける。 */
-const INLINE_NODE_TYPES = new Set(['text', 'hardBreak', 'pageRef', 'ticketRef', 'mention']);
+const INLINE_NODE_TYPES = new Set(['text', 'hardBreak', 'pageRef', 'ticketRef', 'mention', 'inlineMath']);
 
 function isBlockNode(node: unknown): boolean {
   return isPlainObject(node) && typeof node.type === 'string' && !INLINE_NODE_TYPES.has(node.type);

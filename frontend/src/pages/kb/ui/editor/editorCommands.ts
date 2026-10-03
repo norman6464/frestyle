@@ -260,6 +260,34 @@ export const EDITOR_COMMANDS: EditorCommand[] = [
     isEnabled: (editor) => editor.can().insertColumns(3),
     run: (editor) => focused(editor).insertColumns(3).run(),
   },
+  // --- 数式と図（第 5 段）。描く道具（KaTeX・mermaid）は描くときにだけ読む。 ---
+  {
+    id: 'math',
+    label: '数式',
+    group: 'insert',
+    glyph: '∑',
+    keywords: ['math', 'latex', 'equation', 'formula', 'katex', 'blockmath'],
+    isEnabled: (editor) => editor.can().insertBlockMath(),
+    run: (editor) => focused(editor).insertBlockMath().run(),
+  },
+  {
+    id: 'inlineMath',
+    label: '行内の数式',
+    group: 'insert',
+    glyph: 'x²',
+    keywords: ['inlinemath', 'imath', 'latex', 'math'],
+    isEnabled: (editor) => editor.can().insertInlineMath(),
+    run: (editor) => focused(editor).insertInlineMath().run(),
+  },
+  {
+    id: 'diagram',
+    label: '図',
+    group: 'insert',
+    glyph: '図',
+    keywords: ['diagram', 'mermaid', 'chart', 'flowchart', 'graph', 'sequence'],
+    isEnabled: (editor) => editor.can().insertDiagram(),
+    run: (editor) => focused(editor).insertDiagram().run(),
+  },
   // --- 履歴 ---
   {
     id: 'undo',
