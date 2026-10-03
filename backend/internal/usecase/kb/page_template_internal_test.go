@@ -176,3 +176,16 @@ func Test_雛形保存時に名指しは残す(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, got, `"mention"`)
 }
+
+// 添付は元ページの添付の行を指すので、雛形から作った別のページの本文にそのまま入れると、そのページの
+// 保存が断られる（このページの添付ではない）。画像と同じく雛形には残さない。
+func Test_雛形保存時に添付も取り除く(t *testing.T) {
+	doc := `{"type":"doc","content":[` +
+		`{"type":"paragraph","content":[{"type":"text","text":"本文"}]},` +
+		`{"type":"attachment","attrs":{"attachmentId":"00000000-0000-7000-8000-0000000000c1","filename":"見積.pdf"}}]}`
+	got, err := stripPageRefAndImageNodesForTemplate(doc)
+	require.NoError(t, err)
+	require.NotContains(t, got, `"attachment"`)
+	require.NotContains(t, got, "見積.pdf")
+	require.Contains(t, got, "本文")
+}

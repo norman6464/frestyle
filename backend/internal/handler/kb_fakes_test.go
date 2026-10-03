@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/norman6464/frestyle/backend/internal/domain"
 	"github.com/norman6464/frestyle/backend/internal/usecase/repository"
 )
@@ -2447,4 +2449,63 @@ func (f *kbFakeUsers) ListUserDisplaysByIDs(_ context.Context, ids []uint64) ([]
 		}
 	}
 	return out, nil
+}
+
+// kbFakePageAttachments は repository.PageAttachmentRepository の in-memory fake。
+// 鍵は (workspaceID, pageID, id) の組（本物と同じく、別ページの ID では見つからない）。
+type kbFakePageAttachments struct {
+	rows map[string]domain.PageAttachment
+}
+
+var _ repository.PageAttachmentRepository = (*kbFakePageAttachments)(nil)
+
+func newKbFakePageAttachments() *kbFakePageAttachments {
+	return &kbFakePageAttachments{rows: map[string]domain.PageAttachment{}}
+}
+
+func kbFakeAttachmentKey(workspaceID, pageID, id string) string {
+	return workspaceID + "/" + pageID + "/" + id
+}
+
+func (f *kbFakePageAttachments) add(a domain.PageAttachment) {
+	f.rows[kbFakeAttachmentKey(a.WorkspaceID, a.PageID, a.ID)] = a
+}
+
+func (f *kbFakePageAttachments) CreatePageAttachment(_ context.Context, a *domain.PageAttachment) error {
+	a.ID = uuid.Must(uuid.NewV7()).String()
+	a.CreatedAt = time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC)
+	f.add(*a)
+	return nil
+}
+
+func (f *kbFakePageAttachments) FindPageAttachment(_ context.Context, workspaceID, pageID, id string) (*domain.PageAttachment, error) {
+	a, ok := f.rows[kbFakeAttachmentKey(workspaceID, pageID, id)]
+	if !ok {
+		return nil, repository.ErrPageAttachmentNotFound
+	}
+	return &a, nil
+}
+
+func (f *kbFakePageAttachments) ListPageAttachmentsByIDs(_ context.Context, workspaceID, pageID string, ids []string) ([]domain.PageAttachment, error) {
+	out := []domain.PageAttachment{}
+	for _, id := range ids {
+		if a, ok := f.rows[kbFakeAttachmentKey(workspaceID, pageID, id)]; ok {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+// kbFakeAttachmentPresigner は repository.PageAttachmentPresigner の fake。ダウンロードの URL に
+// 渡された保存名をそのまま載せる（handler が行のファイル名を渡しているかを応答から見るため）。
+type kbFakeAttachmentPresigner struct{}
+
+var _ repository.PageAttachmentPresigner = (*kbFakeAttachmentPresigner)(nil)
+
+func (kbFakeAttachmentPresigner) PresignUpload(_ context.Context, key, _ string, _ int64) (string, int, error) {
+	return "https://storage.googleapis.com/example/" + key + "?upload=1", 600, nil
+}
+
+func (kbFakeAttachmentPresigner) PresignDownload(_ context.Context, key, filename string) (string, int, error) {
+	return "https://storage.googleapis.com/example/" + key + "?download=1&filename=" + url.QueryEscape(filename), 600, nil
 }

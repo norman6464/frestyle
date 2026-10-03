@@ -39,6 +39,8 @@ const (
 	// 数式と図（第 5 段）。行の数式は中身を持たず式を attrs.latex に、図は本文を text として持つ。
 	BlockTypeBlockMath BlockType = "blockMath"
 	BlockTypeDiagram   BlockType = "diagram"
+	// 添付（第 6 段）。中身を持たず、attrs.attachmentId で page_attachments の行を指す。
+	BlockTypeAttachment BlockType = "attachment"
 )
 
 // MathLatexMaxRunes は数式（行の数式・行内の数式）の latex の上限（文字数）。数式は描画の
@@ -134,6 +136,7 @@ var blockTypeSpecs = []blockTypeSpec{
 	{BlockTypeColumn, true},
 	{BlockTypeBlockMath, false},
 	{BlockTypeDiagram, false},
+	{BlockTypeAttachment, false},
 }
 
 // ValidBlockTypes は保存を許すノード名の一覧。blockTypeSpecs から導く。

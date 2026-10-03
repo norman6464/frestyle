@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 )
 
@@ -24,4 +25,9 @@ func (s *stubPresigner) PresignPut(_ context.Context, key, _ string, _ int64) (s
 
 func (s *stubPresigner) PresignGet(_ context.Context, key string) (string, time.Duration, error) {
 	return fmt.Sprintf("https://storage.googleapis.com/%s/%s?X-Goog-Stub=1&X-Goog-Mode=get", s.bucket, key), 10 * time.Minute, nil
+}
+
+func (s *stubPresigner) PresignGetAsAttachment(_ context.Context, key, contentDisposition string) (string, time.Duration, error) {
+	return fmt.Sprintf("https://storage.googleapis.com/%s/%s?X-Goog-Stub=1&X-Goog-Mode=get&response-content-disposition=%s",
+		s.bucket, key, url.QueryEscape(contentDisposition)), 10 * time.Minute, nil
 }

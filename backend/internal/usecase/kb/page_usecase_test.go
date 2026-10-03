@@ -812,3 +812,33 @@ func Test_doc分解_数式と図のattrsを検査する(t *testing.T) {
 		})
 	}
 }
+
+func Test_本文の分解_添付のattrs(t *testing.T) {
+	const id = "0198a000-0000-7000-8000-0000000000c1"
+
+	t.Run("attachmentId だけを残し、表示の値は捨てる（保存時に行から書き直すため）", func(t *testing.T) {
+		tree, err := parsePageDoc(`{"type":"doc","content":[{"type":"attachment","attrs":{` +
+			`"attachmentId":"` + strings.ToUpper(id) + `","filename":"偽.pdf","size":1,"contentType":"text/html","pageId":"x","extra":true}}]}`)
+		require.NoError(t, err)
+		require.Equal(t, domain.BlockTypeAttachment, tree[0].Type)
+		require.JSONEq(t, `{"attachmentId":"`+id+`"}`, tree[0].Attrs, "UUID は正規形（小文字）にそろえる")
+		require.Nil(t, tree[0].Inline, "添付は中身を持たない")
+	})
+
+	invalid := []struct {
+		name string
+		doc  string
+	}{
+		{"attachmentId が無い", `{"type":"doc","content":[{"type":"attachment","attrs":{"filename":"a.pdf"}}]}`},
+		{"attrs が無い", `{"type":"doc","content":[{"type":"attachment"}]}`},
+		{"attachmentId が null", `{"type":"doc","content":[{"type":"attachment","attrs":{"attachmentId":null}}]}`},
+		{"attachmentId が文字列でない", `{"type":"doc","content":[{"type":"attachment","attrs":{"attachmentId":42}}]}`},
+		{"attachmentId が UUID でない", `{"type":"doc","content":[{"type":"attachment","attrs":{"attachmentId":"kb/ws/page/att/1.bin"}}]}`},
+	}
+	for _, tc := range invalid {
+		t.Run(tc.name+"なら断る", func(t *testing.T) {
+			_, err := parsePageDoc(tc.doc)
+			require.ErrorIs(t, err, ErrPageDocInvalid)
+		})
+	}
+}

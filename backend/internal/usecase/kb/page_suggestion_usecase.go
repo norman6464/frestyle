@@ -31,6 +31,7 @@ type CreateSuggestionUseCase struct {
 	versionRepo repository.PageVersionRepository
 	suggestions repository.PageSuggestionRepository
 	txManager   repository.TxManager
+	attachments repository.PageAttachmentRepository
 }
 
 func NewCreateSuggestionUseCase(
@@ -38,12 +39,14 @@ func NewCreateSuggestionUseCase(
 	versionRepo repository.PageVersionRepository,
 	suggestions repository.PageSuggestionRepository,
 	txManager repository.TxManager,
+	attachments repository.PageAttachmentRepository,
 ) *CreateSuggestionUseCase {
 	return &CreateSuggestionUseCase{
 		kbRepo:      kbRepo,
 		versionRepo: versionRepo,
 		suggestions: suggestions,
 		txManager:   txManager,
+		attachments: attachments,
 	}
 }
 
@@ -87,6 +90,11 @@ func (u *CreateSuggestionUseCase) Execute(ctx context.Context, input CreateSugge
 	// あとで採用したときに初めて壊れて発覚してしまう。
 	tree, err := parsePageDoc(StripPageRefTitles(input.Doc))
 	if err != nil {
+		return nil, err
+	}
+	// 添付は本文の保存と同じく、このページの添付だけを通し、表示の値を行から書き直す。提案の差分には
+	// ファイル名が出るので、ここで書き直さないとコメント権限の人が名前を偽って承認する人を欺ける。
+	if err := bindPageAttachments(ctx, u.attachments, input.WorkspaceID, input.PageID, tree); err != nil {
 		return nil, err
 	}
 	// flattenPageDoc は木の中の重複 id を新規 UUID へ採番し直す。rows 自体は使わないが

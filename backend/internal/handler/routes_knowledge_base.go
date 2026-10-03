@@ -58,6 +58,8 @@ func registerKnowledgeBaseRoutes(g *gin.RouterGroup, deps *routeDeps) {
 		persistence.NewTicketRefReader(deps.db),
 		persistence.NewTxManager(deps.db),
 		newKbImagePresignerOrFallback(deps),
+		persistence.NewPageAttachmentRepository(deps.db),
+		newPageAttachmentPresignerOrFallback(deps),
 		persistence.NewLabelRepository(deps.db),
 		persistence.NewInvitationRepository(deps.db),
 		persistence.NewNotificationRepository(deps.db),
@@ -81,6 +83,22 @@ func newKbImagePresignerOrFallback(deps *routeDeps) repository.KbImagePresigner 
 		log.Fatalf("[kb-image] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v — %s", bucket, err, imagesBucketHint)
 	}
 	return persistence.NewKbImagePresigner(pre)
+}
+
+// newPageAttachmentPresignerOrFallback は newKbImagePresignerOrFallback と同じ判断 —
+// IMAGES_BUCKET 未設定なら stub、設定済みで初期化に失敗すれば起動を止める。添付はページ画像と同じ
+// バケットを kb/<ws>/<page>/att/ の接頭辞で共有する（バケットを増やさない。チケット添付と同じ）。
+func newPageAttachmentPresignerOrFallback(deps *routeDeps) repository.PageAttachmentPresigner {
+	bucket := deps.cfg.Images.Bucket
+	if bucket == "" {
+		log.Printf("[kb-attachment] IMAGES_BUCKET unset — using stub presigner (DEV)")
+		return persistence.NewStubPageAttachmentPresigner("stub-bucket")
+	}
+	pre, err := infraGCS.NewPresigner(context.Background(), bucket)
+	if err != nil {
+		log.Fatalf("[kb-attachment] IMAGES_BUCKET=%q is set but GCS presigner init failed: %v — %s", bucket, err, imagesBucketHint)
+	}
+	return persistence.NewPageAttachmentPresigner(pre)
 }
 
 // registerKnowledgeBasePublicRoutes は認証不要のナレッジエンドポイントを登録する。
@@ -111,6 +129,8 @@ func registerKnowledgeBaseRoutesWith(
 	ticketRefs repository.TicketRefReader,
 	txManager repository.TxManager,
 	kbImagePresigner repository.KbImagePresigner,
+	pageAttachments repository.PageAttachmentRepository,
+	pageAttachmentPresigner repository.PageAttachmentPresigner,
 	labels repository.LabelRepository,
 	invitations repository.InvitationRepository,
 	notifications repository.NotificationRepository,
@@ -120,7 +140,7 @@ func registerKnowledgeBaseRoutesWith(
 	// ReplacePageBlocksUseCase は本文保存の成功直後に versionRepo.CreateVersionIfDue を同じ
 	// トランザクションで呼ぶので、PageVersionHandler と同じ 1 つの
 	// インスタンスを共有する（RestorePageVersionUseCase もこれをそのまま呼ぶ）。
-	replaceBlocks := kb.NewReplacePageBlocksUseCase(pages, txManager, versions, permissions, notifications)
+	replaceBlocks := kb.NewReplacePageBlocksUseCase(pages, txManager, versions, permissions, notifications, pageAttachments)
 	h := NewKnowledgeBasePageHandler(
 		kb.NewCheckPagePermissionUseCase(permissions),
 		kb.NewCheckWorkspacePermissionUseCase(permissions),
@@ -202,7 +222,7 @@ func registerKnowledgeBaseRoutesWith(
 	// 揃わなくなるため）。
 	sgh := NewPageSuggestionHandler(
 		kb.NewCheckPagePermissionUseCase(permissions),
-		kb.NewCreateSuggestionUseCase(pages, versions, suggestions, txManager),
+		kb.NewCreateSuggestionUseCase(pages, versions, suggestions, txManager, pageAttachments),
 		kb.NewListOpenPageSuggestionsUseCase(suggestions),
 		kb.NewAcceptPageSuggestionUseCase(pages, suggestions, versions, replaceBlocks, txManager),
 		kb.NewRejectPageSuggestionUseCase(suggestions),
@@ -344,6 +364,17 @@ func registerKnowledgeBaseRoutesWith(
 	// ページに閉じた画像の読み取り経路。
 	kbGroup.POST("/kb/workspaces/:workspaceSlug/pages/:pageId/images/upload-url", h.IssueImageUploadURL)
 	kbGroup.GET("/kb/workspaces/:workspaceSlug/pages/:pageId/images/download-url", h.IssueImageDownloadURL)
+	// ページに閉じた添付ファイル。アップロードは 2 段（URL の発行 → 記録）、ダウンロードは
+	// 元のファイル名で保存させる URL を都度発行する。
+	ah := NewPageAttachmentHandler(
+		kb.NewCheckPagePermissionUseCase(permissions),
+		kb.NewIssuePageAttachmentUploadURLUseCase(pages, pageAttachmentPresigner),
+		kb.NewCreatePageAttachmentUseCase(pages, pageAttachments),
+		kb.NewIssuePageAttachmentDownloadURLUseCase(pageAttachments, pageAttachmentPresigner),
+	)
+	kbGroup.POST("/kb/workspaces/:workspaceSlug/pages/:pageId/attachments/upload-url", ah.IssueUploadURL)
+	kbGroup.POST("/kb/workspaces/:workspaceSlug/pages/:pageId/attachments", ah.Create)
+	kbGroup.GET("/kb/workspaces/:workspaceSlug/pages/:pageId/attachments/:attachmentId/download-url", ah.IssueDownloadURL)
 	kbGroup.PUT("/kb/workspaces/:workspaceSlug/pages/:pageId/cover", h.SetCover)
 	kbGroup.DELETE("/kb/workspaces/:workspaceSlug/pages/:pageId/cover", h.ClearCover)
 	// 逆リンク: このページを参照しているページの一覧。

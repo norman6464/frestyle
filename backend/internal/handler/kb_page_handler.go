@@ -240,6 +240,7 @@ type kbPageDocResponse struct {
 func respondKnowledgeBaseErr(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, repository.ErrPageNotFound),
+		errors.Is(err, repository.ErrPageAttachmentNotFound),
 		errors.Is(err, repository.ErrSpaceNotFound),
 		errors.Is(err, repository.ErrLabelNotFound),
 		errors.Is(err, repository.ErrWorkspaceNotFound):
@@ -276,6 +277,10 @@ func respondKnowledgeBaseErr(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "parent_space_mismatch"})
 	case errors.Is(err, kb.ErrPageAnchorNotSibling):
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "anchor_not_sibling"})
+	case errors.Is(err, kb.ErrPageDocUnknownAttachment):
+		// 本文の添付がこのページの添付ではない（別ページから貼り付けた等）。画面はこの理由を出して
+		// 添付を外すよう促す（invalid_document と分けるのはそのため）。
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "unknown_attachment"})
 	case errors.Is(err, kb.ErrPageDocInvalid), errors.Is(err, kb.ErrPageDocUnknownNodeType):
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_document"})
 	case errors.Is(err, kb.ErrInvalidPageIcon):
@@ -290,6 +295,14 @@ func respondKnowledgeBaseErr(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "unsupported_content_type"})
 	case errors.Is(err, domain.ErrImageTooLarge):
 		c.JSON(http.StatusBadRequest, errorResponse{Error: "image_too_large"})
+	case errors.Is(err, domain.ErrUnsupportedAttachmentContentType):
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "unsupported_content_type"})
+	case errors.Is(err, domain.ErrAttachmentTooLarge):
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "attachment_too_large"})
+	case errors.Is(err, domain.ErrInvalidAttachmentFilename):
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_request"})
+	case errors.Is(err, kb.ErrInvalidPageAttachmentKey):
+		c.JSON(http.StatusBadRequest, errorResponse{Error: "invalid_attachment_key"})
 	case errors.Is(err, repository.ErrCommentThreadNotFound):
 		c.JSON(http.StatusNotFound, errorResponse{Error: "not_found"})
 	case errors.Is(err, domain.ErrInvalidCommentBody):

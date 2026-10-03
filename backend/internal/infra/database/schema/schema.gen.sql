@@ -274,6 +274,26 @@ CREATE TABLE "notifications" (
 );
 -- Create index "idx_notifications_user_id" to table: "notifications"
 CREATE INDEX "idx_notifications_user_id" ON "notifications" ("user_id");
+-- Create "page_attachments" table
+CREATE TABLE "page_attachments" (
+  "id" uuid NOT NULL,
+  "workspace_id" uuid NOT NULL,
+  "page_id" uuid NOT NULL,
+  "key" text NOT NULL,
+  "filename" character varying(255) NOT NULL,
+  "content_type" text NOT NULL,
+  "size_bytes" bigint NOT NULL,
+  "uploaded_by_user_id" bigint NOT NULL,
+  "created_at" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("id"),
+  CONSTRAINT "fk_page_attachments_page" FOREIGN KEY ("workspace_id", "page_id") REFERENCES "pages" ("workspace_id", "id") ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT "fk_page_attachments_uploaded_by" FOREIGN KEY ("uploaded_by_user_id") REFERENCES "users" ("id") ON UPDATE NO ACTION ON DELETE RESTRICT,
+  CONSTRAINT "ck_page_attachments_content_type_not_empty" CHECK (content_type <> ''::text),
+  CONSTRAINT "ck_page_attachments_filename_not_empty" CHECK (btrim((filename)::text) <> ''::text),
+  CONSTRAINT "ck_page_attachments_size_positive" CHECK (size_bytes > 0)
+);
+-- Create index "idx_page_attachments_page" to table: "page_attachments"
+CREATE INDEX "idx_page_attachments_page" ON "page_attachments" ("workspace_id", "page_id");
 -- Create "page_favorites" table
 CREATE TABLE "page_favorites" (
   "user_id" bigint NOT NULL,

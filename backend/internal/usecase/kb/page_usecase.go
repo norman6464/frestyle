@@ -572,6 +572,9 @@ func normalizeBlockAttrs(t domain.BlockType, m map[string]json.RawMessage) error
 		if raw, ok := m["engine"]; !ok || json.Unmarshal(raw, &engine) != nil || !domain.IsDiagramEngine(engine) {
 			m["engine"] = json.RawMessage(`"` + string(domain.DiagramEngineMermaid) + `"`)
 		}
+	case domain.BlockTypeAttachment:
+		// attachmentId だけを受け取る（表示の値は bindPageAttachments が添付の行から書き直す）。
+		return normalizeAttachmentAttrs(m)
 	case domain.BlockTypeColumns:
 		// count は列数（2〜3 の整数）。範囲外・整数でなければ外す（画面は列の数から決める）。
 		if raw, ok := m["count"]; ok {
@@ -988,19 +991,25 @@ func BuildPageTree(pages []domain.Page, policy PageTreeOrphanPolicy) []*PageTree
 // 本文の保存は @名指しの「公開」でもある。前の本文（snapshot）に無かった名指しだけを対象に、
 // ページを見られる一員へ page_mentioned 通知を送る（本人は除く）。通知の作成に失敗しても
 // 保存は失敗させない（既に書き終えているため。チケットの発言と同じ）。
+// 本文の添付（attachment ノード）は、このページの添付の行と突き合わせてから保存する
+// （bindPageAttachments。attachment ノードの無い本文では attachments を呼ばない）。
 type ReplacePageBlocksUseCase struct {
 	repo        repository.KnowledgeBaseRepository
 	txManager   repository.TxManager
 	versionRepo repository.PageVersionRepository
 	perms       repository.KnowledgeBasePermissionRepository
 	notifs      repository.NotificationRepository
+	attachments repository.PageAttachmentRepository
 }
 
 func NewReplacePageBlocksUseCase(
 	r repository.KnowledgeBaseRepository, txManager repository.TxManager, versionRepo repository.PageVersionRepository,
 	perms repository.KnowledgeBasePermissionRepository, notifs repository.NotificationRepository,
+	attachments repository.PageAttachmentRepository,
 ) *ReplacePageBlocksUseCase {
-	return &ReplacePageBlocksUseCase{repo: r, txManager: txManager, versionRepo: versionRepo, perms: perms, notifs: notifs}
+	return &ReplacePageBlocksUseCase{
+		repo: r, txManager: txManager, versionRepo: versionRepo, perms: perms, notifs: notifs, attachments: attachments,
+	}
 }
 
 type ReplacePageBlocksInput struct {
@@ -1041,6 +1050,10 @@ func (u *ReplacePageBlocksUseCase) Execute(ctx context.Context, in ReplacePageBl
 	// 閲覧できない読み手にも返ってしまう）。
 	tree, err := parsePageDoc(StripPageRefTitles(in.Doc))
 	if err != nil {
+		return nil, err
+	}
+	// 添付の表示の値（ファイル名など）は行から書き直すので、行・snapshot・検索の材料を作る前に呼ぶ。
+	if err := bindPageAttachments(ctx, u.attachments, in.WorkspaceID, in.PageID, tree); err != nil {
 		return nil, err
 	}
 	rows, err := flattenPageDoc(tree)
@@ -1827,11 +1840,14 @@ func stripPageRefTitlesNode(node any) bool {
 // pageRef・ticketRef は特定の 1 件への固定参照で、雛形が複数のページに展開されると全展開先が
 // 同じ参照先を指してしまい意味をなさない。画像（domain.BlockTypeImage）はページ固有の
 // オブジェクトストレージ key（kbImageKeyPrefix）に紐づき、雛形経由で複製すると元ページの
-// 画像が消えたときにコピー側だけ宙に浮いた参照が残る。いずれも意図的に除外する。
+// 画像が消えたときにコピー側だけ宙に浮いた参照が残る。添付（domain.BlockTypeAttachment）は
+// 元ページの添付の行を指し、展開先のページの添付ではないので、そのまま本文に入れると展開先の
+// 保存が断られる（bindPageAttachments）。いずれも意図的に除外する。
 var kbTemplateExcludedNodeTypes = map[string]bool{
-	kbPageRefNodeType:             true,
-	kbTicketRefNodeType:           true,
-	string(domain.BlockTypeImage): true,
+	kbPageRefNodeType:                  true,
+	kbTicketRefNodeType:                true,
+	string(domain.BlockTypeImage):      true,
+	string(domain.BlockTypeAttachment): true,
 }
 
 // stripPageRefAndImageNodesForTemplate は「雛形として保存」の直前に、本文の木から
@@ -2199,11 +2215,12 @@ func extractPageBodyText(nodes []*kbDocNode) string {
 }
 
 // leafSearchText は葉ブロック 1 つが本文検索に出す文字。行の数式は中身を持たないので
-// attrs.latex を、それ以外は inline から（extractInlineText）。図は本文が text なので
+// attrs.latex を、添付は attrs.filename を、それ以外は inline から（extractInlineText）。図は本文が text なので
 // inline からそのまま載る。永続化層の extractPageSearchFromBlocks も同じ規則（片方だけ
 // 直すと保存と再構築で本文が食い違う。結合テストが両方を突き合わせる）。
 func leafSearchText(n *kbDocNode) string {
-	if n.Type == domain.BlockTypeBlockMath {
+	switch n.Type {
+	case domain.BlockTypeBlockMath:
 		var attrs struct {
 			Latex string `json:"latex"`
 		}
@@ -2211,6 +2228,15 @@ func leafSearchText(n *kbDocNode) string {
 			return ""
 		}
 		return attrs.Latex
+	case domain.BlockTypeAttachment:
+		// 添付は中身を持たないので、ファイル名を 1 行として出す（bindPageAttachments が行から写した値）。
+		var attrs struct {
+			Filename string `json:"filename"`
+		}
+		if json.Unmarshal([]byte(n.Attrs), &attrs) != nil {
+			return ""
+		}
+		return attrs.Filename
 	}
 	if n.Inline == nil {
 		return ""

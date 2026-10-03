@@ -35,7 +35,7 @@ var kbTables = []string{
 	// 持つため、blocks・pages を TRUNCATE ... CASCADE すれば自動的に一緒に空になるが、
 	// page_snapshots と同じく明示しておく（この表の作法に揃える）。
 	"blocks", "page_paths", "page_snapshots", "page_search", "page_links", "page_ticket_links",
-	"page_views", "page_favorites",
+	"page_views", "page_favorites", "page_attachments",
 	"pages", "spaces", "workspaces",
 }
 

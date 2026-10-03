@@ -616,6 +616,7 @@ const COLUMN_CHILD_TYPES = [
   'table',
   'blockMath',
   'diagram',
+  'attachment',
 ] as const;
 
 /** 列の content 式。画像ノードを外したスキーマ（image: false）では image も式から外す。 */
@@ -758,6 +759,89 @@ export const Diagram = Node.create({
   },
 });
 
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function sizeOrNull(value: string | null): number | null {
+  if (value === null || !/^\d+$/.test(value)) return null;
+  const size = Number(value);
+  return Number.isSafeInteger(size) ? size : null;
+}
+
+/**
+ * Attachment は「添付ファイル」— 1 行を占める葉（atom）。attrs.attachmentId でページの添付
+ * （page_attachments の行）を指す。保管庫の key は本文に持たない（ダウンロードはそのたびに
+ * サーバーへ URL を求める）。
+ *
+ * pageId・filename・contentType・size は**表示のための写し**。保存のたびにサーバーが添付の行から
+ * 書き直し、クライアントが書いた値は使わない。pageId は別のページから貼り付けた添付を見分けるために
+ * 持つ（別のページの添付を置いた本文はサーバーが保存を断る）。
+ */
+export const Attachment = Node.create({
+  name: 'attachment',
+  group: 'block',
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      attachmentId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-attachment-id'),
+        renderHTML: (attributes) => ({ 'data-attachment-id': stringOrNull(attributes.attachmentId) }),
+      },
+      pageId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-page-id'),
+        renderHTML: (attributes) => ({ 'data-page-id': stringOrNull(attributes.pageId) }),
+      },
+      filename: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-filename'),
+        renderHTML: (attributes) => ({ 'data-filename': stringOrNull(attributes.filename) }),
+      },
+      contentType: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-content-type'),
+        renderHTML: (attributes) => ({ 'data-content-type': stringOrNull(attributes.contentType) }),
+      },
+      size: {
+        default: null,
+        parseHTML: (element) => sizeOrNull(element.getAttribute('data-size')),
+        renderHTML: (attributes) => ({
+          'data-size': typeof attributes.size === 'number' ? String(attributes.size) : null,
+        }),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-attachment]',
+        // ID の形をここでも確かめる（貼り付けは外部の HTML からも来る）。通らなければ添付として取り込まない。
+        getAttrs: (element) => {
+          const id = element.getAttribute('data-attachment-id');
+          return id !== null && PAGE_REF_UUID_PATTERN.test(id) ? null : false;
+        },
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'div',
+      mergeAttributes({ 'data-attachment': '', class: 'rte-attachment' }, HTMLAttributes),
+      stringOrNull(node.attrs.filename) ?? '添付ファイル',
+    ];
+  },
+
+  renderText({ node }) {
+    return stringOrNull(node.attrs.filename) ?? '添付ファイル';
+  },
+});
+
 /** createSchemaExtensions の組み立てオプション。 */
 export interface CreateSchemaExtensionsOptions {
   /** 画像ノードをスキーマに含めるか（既定 true）。 */
@@ -855,6 +939,8 @@ export function createSchemaExtensions(
     InlineMath,
     withBlockId(BlockMath),
     withBlockId(Diagram),
+    // 添付（第 6 段）。表示の値はサーバーが保存時に添付の行から書き直す。
+    withBlockId(Attachment),
   ];
 
   if (image) {

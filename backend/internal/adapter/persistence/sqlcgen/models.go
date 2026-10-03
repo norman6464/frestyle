@@ -133,6 +133,18 @@ type Page struct {
 	Visibility         string
 }
 
+type PageAttachment struct {
+	ID               uuid.UUID
+	WorkspaceID      uuid.UUID
+	PageID           uuid.UUID
+	Key              string
+	Filename         string
+	ContentType      string
+	SizeBytes        int64
+	UploadedByUserID int64
+	CreatedAt        time.Time
+}
+
 type PageFavorite struct {
 	UserID      int64
 	WorkspaceID uuid.UUID

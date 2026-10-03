@@ -2,7 +2,7 @@ package domain
 
 import "errors"
 
-// AcceptedAttachmentContentTypes はチケット添付で受け付ける Content-Type の許可リスト。
+// AcceptedAttachmentContentTypes は添付（チケット・ナレッジのページの両方）で受け付ける Content-Type の許可リスト。
 // ここに無い型は ValidateAttachmentUpload が ErrUnsupportedAttachmentContentType で弾く
 // （image_upload.go の ValidateImageUpload と同じ考え方 — 検証しないまま presign を焼くと
 // 上限の無い PUT を許すのと同じ穴になる）。

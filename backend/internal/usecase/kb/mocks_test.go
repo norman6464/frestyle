@@ -834,3 +834,41 @@ func (m *mockUserDisplayReader) ListUserDisplaysByIDs(ctx context.Context, ids [
 	rows, _ := args.Get(0).([]domain.UserDisplay)
 	return rows, args.Error(1)
 }
+
+// --- mock: PageAttachmentRepository ---
+
+type mockPageAttachmentRepo struct{ mock.Mock }
+
+var _ repository.PageAttachmentRepository = (*mockPageAttachmentRepo)(nil)
+
+func (m *mockPageAttachmentRepo) CreatePageAttachment(ctx context.Context, a *domain.PageAttachment) error {
+	return m.Called(ctx, a).Error(0)
+}
+
+func (m *mockPageAttachmentRepo) FindPageAttachment(ctx context.Context, workspaceID, pageID, attachmentID string) (*domain.PageAttachment, error) {
+	args := m.Called(ctx, workspaceID, pageID, attachmentID)
+	a, _ := args.Get(0).(*domain.PageAttachment)
+	return a, args.Error(1)
+}
+
+func (m *mockPageAttachmentRepo) ListPageAttachmentsByIDs(ctx context.Context, workspaceID, pageID string, ids []string) ([]domain.PageAttachment, error) {
+	args := m.Called(ctx, workspaceID, pageID, ids)
+	rows, _ := args.Get(0).([]domain.PageAttachment)
+	return rows, args.Error(1)
+}
+
+// --- mock: PageAttachmentPresigner ---
+
+type mockPageAttachmentPresigner struct{ mock.Mock }
+
+var _ repository.PageAttachmentPresigner = (*mockPageAttachmentPresigner)(nil)
+
+func (m *mockPageAttachmentPresigner) PresignUpload(ctx context.Context, key, contentType string, size int64) (string, int, error) {
+	args := m.Called(ctx, key, contentType, size)
+	return args.String(0), args.Int(1), args.Error(2)
+}
+
+func (m *mockPageAttachmentPresigner) PresignDownload(ctx context.Context, key, filename string) (string, int, error) {
+	args := m.Called(ctx, key, filename)
+	return args.String(0), args.Int(1), args.Error(2)
+}

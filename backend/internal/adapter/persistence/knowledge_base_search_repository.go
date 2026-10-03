@@ -304,16 +304,25 @@ func extractPageSearchFromBlocks(
 				walk(n.children)
 				continue
 			}
-			// 行の数式は中身を持たないので attrs.latex を 1 行として出す（usecase/kb.leafSearchText と同じ規則）。
-			if n.typ == domain.BlockTypeBlockMath {
+			// 行の数式は中身を持たないので attrs.latex を、添付は attrs.filename（保存時に添付の行から
+			// 写した値）を 1 行として出す（usecase/kb.leafSearchText と同じ規則）。
+			if n.typ == domain.BlockTypeBlockMath || n.typ == domain.BlockTypeAttachment {
 				var attrs struct {
-					Latex string `json:"latex"`
+					Latex    string `json:"latex"`
+					Filename string `json:"filename"`
 				}
-				if json.Unmarshal([]byte(n.attrs), &attrs) == nil && attrs.Latex != "" {
+				text := ""
+				if json.Unmarshal([]byte(n.attrs), &attrs) == nil {
+					text = attrs.Latex
+					if n.typ == domain.BlockTypeAttachment {
+						text = attrs.Filename
+					}
+				}
+				if text != "" {
 					if textBuf.Len() > 0 {
 						textBuf.WriteByte('\n')
 					}
-					textBuf.WriteString(attrs.Latex)
+					textBuf.WriteString(text)
 				}
 				continue
 			}
