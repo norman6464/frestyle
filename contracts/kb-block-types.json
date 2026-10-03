@@ -96,6 +96,10 @@
     {
       "type": "attachment",
       "container": false
+    },
+    {
+      "type": "embed",
+      "container": false
     }
   ]
 }

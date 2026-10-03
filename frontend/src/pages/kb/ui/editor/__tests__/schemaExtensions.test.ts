@@ -58,7 +58,7 @@ describe('createSchemaExtensions', () => {
 describe('isBlockRowNodeType', () => {
   it('withBlockId を付けた種類だけが blocks の行になる（pageRef・ticketRef・mention・inlineMath・text・hardBreak・doc は行にならない）', () => {
     const schema = getSchema(createSchemaExtensions());
-    for (const name of ['paragraph', 'heading', 'listItem', 'tableCell', 'image', 'horizontalRule', 'attachment']) {
+    for (const name of ['paragraph', 'heading', 'listItem', 'tableCell', 'image', 'horizontalRule', 'attachment', 'embed']) {
       expect(isBlockRowNodeType(schema.nodes[name]), name).toBe(true);
     }
     for (const name of ['doc', 'text', 'hardBreak', 'pageRef', 'ticketRef', 'mention', 'inlineMath']) {
@@ -133,5 +133,39 @@ describe('Attachment（添付）のスキーマ', () => {
     );
     expect(html).toContain('>見積.xlsx<');
     expect(html).toContain('data-size="10"');
+  });
+});
+
+describe('Embed（埋め込み）のスキーマ', () => {
+  const extensions = createSchemaExtensions();
+  const parse = (html: string) => generateJSON(html, extensions).content ?? [];
+
+  it('貼り付けた HTML から埋め込みを読む', () => {
+    const [node] = parse('<div data-embed data-provider="youtube" data-video-id="dQw4w9WgXcQ" data-title="説明会">説明会</div>');
+    expect(node).toMatchObject({ type: 'embed', attrs: { provider: 'youtube', videoId: 'dQw4w9WgXcQ', title: '説明会' } });
+  });
+
+  it.each([
+    ['許可していない提供元', 'vimeo', 'dQw4w9WgXcQ'],
+    ['動画の ID が短い', 'youtube', 'dQw4w9WgXc'],
+    ['動画の ID に URL の続きを混ぜる', 'youtube', 'dQw4w9WgXcQ?autoplay=1'],
+  ])('%s なら埋め込みとして取り込まない', (_name, provider, videoId) => {
+    const nodes = parse(`<div data-embed data-provider="${provider}" data-video-id="${videoId}">x</div>`);
+    expect(nodes.some((n) => n.type === 'embed')).toBe(false);
+  });
+
+  it('上限を超える題名は捨てる（埋め込みは残す）', () => {
+    const long = 'あ'.repeat(201);
+    const [node] = parse(`<div data-embed data-provider="youtube" data-video-id="dQw4w9WgXcQ" data-title="${long}"></div>`);
+    expect(node).toMatchObject({ type: 'embed', attrs: { title: null } });
+  });
+
+  it('題名が無ければ「YouTube の動画」と描き、文字にもそう出す', () => {
+    const json = { type: 'doc', content: [{ type: 'embed', attrs: { provider: 'youtube', videoId: 'dQw4w9WgXcQ' } }] };
+    const html = generateHTML(json, extensions);
+    expect(html).toContain('>YouTube の動画<');
+    expect(html).toContain('data-video-id="dQw4w9WgXcQ"');
+    const schema = getSchema(extensions);
+    expect(getText(schema.nodeFromJSON(json), { textSerializers: getTextSerializersFromSchema(schema) })).toBe('YouTube の動画');
   });
 });

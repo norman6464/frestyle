@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"regexp"
+	"time"
+)
 
 // BlockType は blocks.type に入るノード名。値は ProseMirror（tiptap）のノード名そのもの。
 //
@@ -41,7 +44,34 @@ const (
 	BlockTypeDiagram   BlockType = "diagram"
 	// 添付（第 6 段）。中身を持たず、attrs.attachmentId で page_attachments の行を指す。
 	BlockTypeAttachment BlockType = "attachment"
+	// 埋め込み（第 7 段）。中身を持たず、attrs.provider と attrs.videoId で外部の動画を指す
+	// （生の URL は持たない。attrs.id はブロックの id なので、動画の ID は videoId に置く）。
+	BlockTypeEmbed BlockType = "embed"
 )
+
+// EmbedProvider は埋め込みの提供元。今は YouTube だけ。
+//
+// 提供元を足すときは 3 か所を一緒に変える: ここ（保存を許す提供元と ID の形）、frontend の
+// 認識と検査（URL から embed への変換・sanitizeDocLinks）、index.html の CSP の frame-src。
+// どれか 1 つでも欠けると、保存は通るのに再生できない（または保存で断られる）埋め込みができる。
+type EmbedProvider string
+
+const EmbedProviderYouTube EmbedProvider = "youtube"
+
+// embedVideoIDPatterns は提供元ごとの動画の ID の形。ここに無い提供元は保存を断る。
+// ID は iframe の URL のパスにそのまま入るので、形で縛る（任意の文字を通すと URL を組み替えられる）。
+var embedVideoIDPatterns = map[EmbedProvider]*regexp.Regexp{
+	EmbedProviderYouTube: regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`),
+}
+
+// EmbedTitleMaxRunes は埋め込みの題名（書いた人が入れる文字）の上限（文字数）。
+const EmbedTitleMaxRunes = 200
+
+// ValidEmbedVideo は、提供元が許可リストにあり、動画の ID がその提供元の形かを返す。
+func ValidEmbedVideo(provider, videoID string) bool {
+	pattern, ok := embedVideoIDPatterns[EmbedProvider(provider)]
+	return ok && pattern.MatchString(videoID)
+}
 
 // MathLatexMaxRunes は数式（行の数式・行内の数式）の latex の上限（文字数）。数式は描画の
 // 計算量が式の長さで伸びるので、本文全体の上限とは別に式 1 つの上限を持つ。超えたら保存を断る
@@ -137,6 +167,7 @@ var blockTypeSpecs = []blockTypeSpec{
 	{BlockTypeBlockMath, false},
 	{BlockTypeDiagram, false},
 	{BlockTypeAttachment, false},
+	{BlockTypeEmbed, false},
 }
 
 // ValidBlockTypes は保存を許すノード名の一覧。blockTypeSpecs から導く。

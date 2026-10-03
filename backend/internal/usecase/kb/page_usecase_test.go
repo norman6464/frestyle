@@ -852,3 +852,61 @@ func Test_本文の分解_添付のattrs(t *testing.T) {
 		})
 	}
 }
+
+func Test_本文の分解_埋め込みのattrs(t *testing.T) {
+	embed := func(attrs string) string {
+		return `{"type":"doc","content":[{"type":"embed","attrs":` + attrs + `}]}`
+	}
+
+	t.Run("provider・videoId・title だけを残す", func(t *testing.T) {
+		tree, err := parsePageDoc(embed(`{"id":"0198a000-0000-7000-8000-0000000000e1","provider":"youtube","videoId":"dQw4w9WgXcQ","title":"説明会の録画","url":"https://evil.example/","extra":1}`))
+		require.NoError(t, err)
+		require.Equal(t, domain.BlockTypeEmbed, tree[0].Type)
+		require.Equal(t, "0198a000-0000-7000-8000-0000000000e1", tree[0].ID, "attrs.id はブロックの id のまま")
+		require.JSONEq(t, `{"provider":"youtube","videoId":"dQw4w9WgXcQ","title":"説明会の録画"}`, tree[0].Attrs)
+		require.Nil(t, tree[0].Inline)
+	})
+
+	t.Run("題名は空・null・無しなら外す。上限ちょうどは通す", func(t *testing.T) {
+		limit := strings.Repeat("あ", domain.EmbedTitleMaxRunes)
+		for _, title := range []string{`""`, `null`} {
+			tree, err := parsePageDoc(embed(`{"provider":"youtube","videoId":"dQw4w9WgXcQ","title":` + title + `}`))
+			require.NoError(t, err, title)
+			require.JSONEq(t, `{"provider":"youtube","videoId":"dQw4w9WgXcQ"}`, tree[0].Attrs, title)
+		}
+		tree, err := parsePageDoc(embed(`{"provider":"youtube","videoId":"dQw4w9WgXcQ"}`))
+		require.NoError(t, err)
+		require.JSONEq(t, `{"provider":"youtube","videoId":"dQw4w9WgXcQ"}`, tree[0].Attrs)
+		_, err = parsePageDoc(embed(`{"provider":"youtube","videoId":"dQw4w9WgXcQ","title":"` + limit + `"}`))
+		require.NoError(t, err)
+	})
+
+	invalid := []struct {
+		name  string
+		attrs string
+	}{
+		{"許可していない提供元", `{"provider":"vimeo","videoId":"dQw4w9WgXcQ"}`},
+		{"提供元が無い", `{"videoId":"dQw4w9WgXcQ"}`},
+		{"提供元が文字列でない", `{"provider":1,"videoId":"dQw4w9WgXcQ"}`},
+		{"動画の ID が短い", `{"provider":"youtube","videoId":"dQw4w9WgXc"}`},
+		{"動画の ID が長い", `{"provider":"youtube","videoId":"dQw4w9WgXcQQ"}`},
+		{"動画の ID に許していない文字", `{"provider":"youtube","videoId":"dQw4w9WgX/Q"}`},
+		{"動画の ID に URL の続きを混ぜる", `{"provider":"youtube","videoId":"dQw4w9WgXcQ?autoplay=1"}`},
+		{"動画の ID が無い", `{"provider":"youtube"}`},
+		{"動画の ID が null", `{"provider":"youtube","videoId":null}`},
+		{"題名が文字列でない", `{"provider":"youtube","videoId":"dQw4w9WgXcQ","title":42}`},
+		{"題名が長すぎる", `{"provider":"youtube","videoId":"dQw4w9WgXcQ","title":"` + strings.Repeat("あ", domain.EmbedTitleMaxRunes+1) + `"}`},
+		{"attrs が無い", `null`},
+	}
+	for _, tc := range invalid {
+		t.Run(tc.name+"なら断る", func(t *testing.T) {
+			_, err := parsePageDoc(embed(tc.attrs))
+			require.ErrorIs(t, err, ErrPageDocInvalid)
+		})
+	}
+
+	t.Run("中身（content）を持つなら断る", func(t *testing.T) {
+		_, err := parsePageDoc(`{"type":"doc","content":[{"type":"embed","attrs":{"provider":"youtube","videoId":"dQw4w9WgXcQ"},"content":[{"type":"text","text":"x"}]}]}`)
+		require.ErrorIs(t, err, ErrPageDocInvalid)
+	})
+}

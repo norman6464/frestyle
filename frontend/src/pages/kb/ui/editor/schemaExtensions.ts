@@ -16,6 +16,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 import { sanitizeCodeBlockLanguage } from './codeBlockLanguages';
 import { HighlightMark, TextColorMark } from './colorMarks';
+import { EMBED_TITLE_MAX_LENGTH, isValidEmbedVideo } from '@/shared/config/embedProviders';
 import { isAllowedLinkHref, isInternalPageLinkHref, sanitizeLinkHref } from '@/shared/lib/linkSafety';
 /**
  * withBlockId は「blocks テーブルの1行になるノード」に安定した id attribute を足す。
@@ -617,6 +618,7 @@ const COLUMN_CHILD_TYPES = [
   'blockMath',
   'diagram',
   'attachment',
+  'embed',
 ] as const;
 
 /** 列の content 式。画像ノードを外したスキーマ（image: false）では image も式から外す。 */
@@ -842,6 +844,72 @@ export const Attachment = Node.create({
   },
 });
 
+function embedTitleOf(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' && [...value].length <= EMBED_TITLE_MAX_LENGTH ? value : null;
+}
+
+/**
+ * Embed は「埋め込み」— 外部の動画を指す 1 行の葉（atom）。attrs.provider（許可リスト）と
+ * attrs.videoId（提供元ごとの形）で指し、生の URL は持たない（URL を持つと、書いた人が選んだ相手へ
+ * 読み手を繋げてしまう）。attrs.id はブロックの id なので、動画の ID は videoId に置く。
+ * title は書いた人が入れる飾りの文字（無ければ提供元の既定の呼び名で描く）。
+ *
+ * 描画（押すまで外部を読み込まないカード）は NodeView が担い、ここ（スキーマ）は形だけを決める。
+ */
+export const Embed = Node.create({
+  name: 'embed',
+  group: 'block',
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      provider: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-provider'),
+        renderHTML: (attributes) => ({ 'data-provider': stringOrNull(attributes.provider) }),
+      },
+      videoId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-video-id'),
+        renderHTML: (attributes) => ({ 'data-video-id': stringOrNull(attributes.videoId) }),
+      },
+      title: {
+        default: null,
+        // 上限を超える題名は捨てる（そのまま保存すると backend が断り、自動保存が止まり続ける）。
+        parseHTML: (element) => embedTitleOf(element.getAttribute('data-title')),
+        renderHTML: (attributes) => ({ 'data-title': embedTitleOf(attributes.title) }),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-embed]',
+        // 提供元と動画の ID をここでも確かめる（貼り付けは外部の HTML からも来る）。
+        getAttrs: (element) =>
+          isValidEmbedVideo(element.getAttribute('data-provider'), element.getAttribute('data-video-id')) ? null : false,
+      },
+    ];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return [
+      'div',
+      mergeAttributes({ 'data-embed': '', class: 'rte-embed' }, HTMLAttributes),
+      embedTitleOf(node.attrs.title) ?? EMBED_DEFAULT_TITLE,
+    ];
+  },
+
+  renderText({ node }) {
+    return embedTitleOf(node.attrs.title) ?? EMBED_DEFAULT_TITLE;
+  },
+});
+
+/** 題名が無い埋め込みの呼び名（今の提供元は YouTube だけ）。 */
+export const EMBED_DEFAULT_TITLE = 'YouTube の動画';
+
 /** createSchemaExtensions の組み立てオプション。 */
 export interface CreateSchemaExtensionsOptions {
   /** 画像ノードをスキーマに含めるか（既定 true）。 */
@@ -941,6 +1009,8 @@ export function createSchemaExtensions(
     withBlockId(Diagram),
     // 添付（第 6 段）。表示の値はサーバーが保存時に添付の行から書き直す。
     withBlockId(Attachment),
+    // 埋め込み（第 7 段）。押すまで外部を読み込まないカードで描く（NodeView は editorExtensions.ts）。
+    withBlockId(Embed),
   ];
 
   if (image) {
