@@ -16,9 +16,10 @@ import (
 // usecase/kb の kbInlineTextNodeType / kbPageRefNodeType と同じ値だが、このパッケージからは
 // import できない（依存方向の制約）ため独立して持つ。
 const (
-	pageSearchTextNodeType      = "text"
-	pageSearchPageRefNodeType   = "pageRef"
-	pageSearchTicketRefNodeType = "ticketRef"
+	pageSearchTextNodeType       = "text"
+	pageSearchPageRefNodeType    = "pageRef"
+	pageSearchTicketRefNodeType  = "ticketRef"
+	pageSearchInlineMathNodeType = "inlineMath"
 )
 
 // pageSearchInlineNode は inline 配列の 1 要素を最小限に読むための型。
@@ -29,6 +30,7 @@ type pageSearchInlineNode struct {
 	Attrs struct {
 		PageID   string `json:"pageId"`
 		TicketID string `json:"ticketId"`
+		Latex    string `json:"latex"`
 	} `json:"attrs"`
 }
 
@@ -226,6 +228,8 @@ func (r *knowledgeBaseRepository) RebuildPageSearchAndLinks(ctx context.Context,
 // するフィールド（id / inline / children）だけに絞ってある。
 type orderedBlockNode struct {
 	id       string
+	typ      domain.BlockType
+	attrs    string
 	inline   *string
 	children []*orderedBlockNode
 }
@@ -242,7 +246,7 @@ func buildOrderedBlockForest(blocks []domain.Block) []*orderedBlockNode {
 	nodes := make(map[string]*orderedBlockNode, len(blocks))
 	order := make(map[string]string, len(blocks))
 	for _, b := range blocks {
-		nodes[b.ID] = &orderedBlockNode{id: b.ID, inline: b.Inline}
+		nodes[b.ID] = &orderedBlockNode{id: b.ID, typ: b.Type, attrs: b.Attrs, inline: b.Inline}
 		order[b.ID] = b.Position
 	}
 	rootIDs := make([]string, 0)
@@ -300,6 +304,19 @@ func extractPageSearchFromBlocks(
 				walk(n.children)
 				continue
 			}
+			// 行の数式は中身を持たないので attrs.latex を 1 行として出す（usecase/kb.leafSearchText と同じ規則）。
+			if n.typ == domain.BlockTypeBlockMath {
+				var attrs struct {
+					Latex string `json:"latex"`
+				}
+				if json.Unmarshal([]byte(n.attrs), &attrs) == nil && attrs.Latex != "" {
+					if textBuf.Len() > 0 {
+						textBuf.WriteByte('\n')
+					}
+					textBuf.WriteString(attrs.Latex)
+				}
+				continue
+			}
 			if n.inline == nil {
 				continue
 			}
@@ -312,6 +329,8 @@ func extractPageSearchFromBlocks(
 				switch it.Type {
 				case pageSearchTextNodeType:
 					blockText.WriteString(it.Text)
+				case pageSearchInlineMathNodeType:
+					blockText.WriteString(it.Attrs.Latex)
 				case pageSearchPageRefNodeType:
 					id, err := uuid.Parse(it.Attrs.PageID)
 					if err != nil {

@@ -553,3 +553,36 @@ func TestKnowledgeBaseContainersSearchAndLinks_Integration(t *testing.T) {
 	require.NoError(t, sqlDB.QueryRow(`SELECT count(*) FROM blocks WHERE page_id = $1`, page.ID).Scan(&rows))
 	assert.Equal(t, 11, rows, "callout+p（2）, details+summary+content+p（4）, columns+column+p+column+p（5）")
 }
+
+// TestKnowledgeBaseMathAndDiagramSearch_Integration は数式（行内・行）と図の文字が本文検索に載り、
+// 保存経路（usecase の extractPageBodyText）と再構築経路（このパッケージの
+// extractPageSearchFromBlocks）で同じ本文になることを実 PostgreSQL で固定する。
+// 平文化は依存方向の都合で 2 か所に分かれているので、片方だけ直すとここで食い違いが出る。
+func TestKnowledgeBaseMathAndDiagramSearch_Integration(t *testing.T) {
+	sqlDB := testsupport.OpenTestDB(t)
+	uc := newKbUseCases(sqlDB)
+	repo := persistence.NewKnowledgeBaseRepository(sqlDB)
+	ctx := context.Background()
+
+	testsupport.TruncateAll(t, sqlDB, kbTables...)
+	ws := createWorkspace(t, sqlDB, "ws-math")
+	space := createSpace(t, sqlDB, ws, "eng")
+	page := mustCreatePage(ctx, t, uc, ws, space, nil, "数式と図のページ")
+
+	doc := `{"type":"doc","content":[` +
+		`{"type":"paragraph","content":[{"type":"text","text":"行内の式 "},{"type":"inlineMath","attrs":{"latex":"E=mc^2"}}]},` +
+		`{"type":"blockMath","attrs":{"latex":"\\frac{a}{b}"}},` +
+		`{"type":"diagram","attrs":{"engine":"mermaid"},"content":[{"type":"text","text":"graph TD; 申請-->承認"}]}` +
+		`]}`
+	_, err := uc.replace.Execute(ctx, kb.ReplacePageBlocksInput{WorkspaceID: ws, PageID: page.ID, Doc: doc, EditorUserID: 1})
+	require.NoError(t, err)
+
+	_, saved, found := queryPageSearchRow(t, sqlDB, page.ID)
+	require.True(t, found)
+	assert.Equal(t, "行内の式 E=mc^2\n\\frac{a}{b}\ngraph TD; 申請-->承認", saved)
+
+	require.NoError(t, repo.RebuildPageSearchAndLinks(ctx, ws, page.ID))
+	_, rebuilt, found := queryPageSearchRow(t, sqlDB, page.ID)
+	require.True(t, found)
+	assert.Equal(t, saved, rebuilt, "保存経路と再構築経路で本文が同じ")
+}

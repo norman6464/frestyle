@@ -559,6 +559,19 @@ func normalizeBlockAttrs(t domain.BlockType, m map[string]json.RawMessage) error
 				delete(m, "open")
 			}
 		}
+	case domain.BlockTypeBlockMath:
+		// latex が無ければ空の式として通す（挿入した直後の行の数式）。あれば文字列で上限まで。
+		if raw, ok := m["latex"]; ok {
+			if err := validateMathLatex(raw); err != nil {
+				return err
+			}
+		}
+	case domain.BlockTypeDiagram:
+		// engine は図の書式。知らない値・無い・文字列でないは mermaid にそろえる（今は 1 つだけ）。
+		var engine string
+		if raw, ok := m["engine"]; !ok || json.Unmarshal(raw, &engine) != nil || !domain.IsDiagramEngine(engine) {
+			m["engine"] = json.RawMessage(`"` + string(domain.DiagramEngineMermaid) + `"`)
+		}
 	case domain.BlockTypeColumns:
 		// count は列数（2〜3 の整数）。範囲外・整数でなければ外す（画面は列の数から決める）。
 		if raw, ok := m["count"]; ok {
@@ -567,6 +580,20 @@ func normalizeBlockAttrs(t domain.BlockType, m map[string]json.RawMessage) error
 				delete(m, "count")
 			}
 		}
+	}
+	return nil
+}
+
+// validateMathLatex は数式の latex（attrs の値の生 JSON）が文字列で、上限
+// （domain.MathLatexMaxRunes）以内かを確かめる。null・数値・配列はすべて断る（*string で読むのは
+// null を弾くため — json.Unmarshal は null を string へ読んでもエラーにしない）。
+func validateMathLatex(raw json.RawMessage) error {
+	var latex *string
+	if err := json.Unmarshal(raw, &latex); err != nil || latex == nil {
+		return fmt.Errorf("%w: 数式の latex が文字列ではありません", ErrPageDocInvalid)
+	}
+	if utf8.RuneCountInString(*latex) > domain.MathLatexMaxRunes {
+		return fmt.Errorf("%w: 数式が長すぎます（上限 %d 文字）", ErrPageDocInvalid, domain.MathLatexMaxRunes)
 	}
 	return nil
 }
@@ -597,6 +624,7 @@ func normalizeInlineNodes(items []json.RawMessage, depth int, budget *kbDocBudge
 		}
 		var n struct {
 			Type    string            `json:"type"`
+			Attrs   json.RawMessage   `json:"attrs"`
 			Marks   []json.RawMessage `json:"marks"`
 			Content []json.RawMessage `json:"content"`
 		}
@@ -605,6 +633,18 @@ func normalizeInlineNodes(items []json.RawMessage, depth int, budget *kbDocBudge
 		}
 		if n.Type == "" {
 			return nil, fmt.Errorf("%w: content の要素に type がありません", ErrPageDocInvalid)
+		}
+		if n.Type == kbInlineMathNodeType {
+			// 行内の数式は attrs.latex が必須（式の無い行内の数式は描くものが無い）。行の数式と同じ上限。
+			var attrs struct {
+				Latex json.RawMessage `json:"latex"`
+			}
+			if len(n.Attrs) == 0 || json.Unmarshal(n.Attrs, &attrs) != nil || len(attrs.Latex) == 0 {
+				return nil, fmt.Errorf("%w: 行内の数式に latex がありません", ErrPageDocInvalid)
+			}
+			if err := validateMathLatex(attrs.Latex); err != nil {
+				return nil, err
+			}
 		}
 
 		changed := false
@@ -1570,6 +1610,10 @@ const kbTicketRefNodeType = "ticketRef"
 // 10 進文字列（チケットの発言の mention と同じ）、attrs.name は表示のための写し（保存しない）。
 const kbMentionNodeType = "mention"
 
+// kbInlineMathNodeType は本文中の「行内の数式」インラインノードの type 名。attrs.latex に式を持つ
+// （上限は domain.MathLatexMaxRunes。行の数式＝ブロックの blockMath と同じ検査を掛ける）。
+const kbInlineMathNodeType = "inlineMath"
+
 // ResolvePageRefTitlesUseCase は本文（ProseMirror doc）中のページ参照の題名を、
 // 読み手にとっての「いまの題名」へ差し替える。
 //
@@ -2116,19 +2160,21 @@ type kbInlineTextNode struct {
 	Attrs struct {
 		PageID   string `json:"pageId"`
 		TicketID string `json:"ticketId"`
+		Latex    string `json:"latex"`
 	} `json:"attrs"`
 }
 
 // extractPageBodyText は本文検索用のプレーンテキストを抽出する。各葉ブロックの inline 内の
-// "text" 型ノードの .text を連結し、ブロックの境目は改行（"\n"）で区切る。pageRef ノードは
+// "text" 型ノードの .text（と行内の数式の latex）を連結し、行の数式は latex を 1 行として出す。
+// ブロックの境目は改行（"\n"）で区切る。pageRef ノードは
 // 寄与しない — 参照先の題名は読み手ごとに解決される派生値（StripPageRefTitles /
 // ResolvePageRefTitlesUseCase 参照）で、保存本文に含めると「閲覧できない読み手のページも、
 // その題名を通じて検索でヒットする」抜け道になる。
 //
 // 木は parsePageDoc が返す kbDocNode（保存直前・正規化済み）を対象にし、flattenPageDoc を
 // 呼んだ**後**の木を渡すこと（呼び出し順は extractPageLinks と揃えてある）。容器ノード
-// （domain.BlockType.IsContainer）は子を辿るだけで自身は何も出さない。中身が空の葉ブロック
-// （Inline が nil）はスキップする。
+// （domain.BlockType.IsContainer）は子を辿るだけで自身は何も出さない。出す文字が無い葉ブロック
+// （leafSearchText が空）はスキップする。
 func extractPageBodyText(nodes []*kbDocNode) string {
 	var buf strings.Builder
 	var walk func(nodes []*kbDocNode)
@@ -2138,10 +2184,7 @@ func extractPageBodyText(nodes []*kbDocNode) string {
 				walk(n.Children)
 				continue
 			}
-			if n.Inline == nil {
-				continue
-			}
-			text := extractInlineText(*n.Inline)
+			text := leafSearchText(n)
 			if text == "" {
 				continue
 			}
@@ -2155,8 +2198,28 @@ func extractPageBodyText(nodes []*kbDocNode) string {
 	return buf.String()
 }
 
-// extractInlineText は葉ブロック 1 つの inline JSON 配列から "text" 型ノードの .text を
-// そのまま連結する（マークは無視。区切りは呼び出し側 extractPageBodyText が持つ）。
+// leafSearchText は葉ブロック 1 つが本文検索に出す文字。行の数式は中身を持たないので
+// attrs.latex を、それ以外は inline から（extractInlineText）。図は本文が text なので
+// inline からそのまま載る。永続化層の extractPageSearchFromBlocks も同じ規則（片方だけ
+// 直すと保存と再構築で本文が食い違う。結合テストが両方を突き合わせる）。
+func leafSearchText(n *kbDocNode) string {
+	if n.Type == domain.BlockTypeBlockMath {
+		var attrs struct {
+			Latex string `json:"latex"`
+		}
+		if json.Unmarshal([]byte(n.Attrs), &attrs) != nil {
+			return ""
+		}
+		return attrs.Latex
+	}
+	if n.Inline == nil {
+		return ""
+	}
+	return extractInlineText(*n.Inline)
+}
+
+// extractInlineText は葉ブロック 1 つの inline JSON 配列から "text" 型ノードの .text と、
+// 行内の数式の latex をそのまま連結する（マークは無視。区切りは呼び出し側 extractPageBodyText が持つ）。
 // 壊れた JSON（本来 parsePageDoc を通った直後の値なので起きない想定）は空文字にする。
 func extractInlineText(inline string) string {
 	var items []kbInlineTextNode
@@ -2165,10 +2228,12 @@ func extractInlineText(inline string) string {
 	}
 	var buf strings.Builder
 	for _, it := range items {
-		if it.Type != kbInlineTextNodeType {
-			continue
+		switch it.Type {
+		case kbInlineTextNodeType:
+			buf.WriteString(it.Text)
+		case kbInlineMathNodeType:
+			buf.WriteString(it.Attrs.Latex)
 		}
-		buf.WriteString(it.Text)
 	}
 	return buf.String()
 }

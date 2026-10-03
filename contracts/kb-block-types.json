@@ -84,6 +84,14 @@
     {
       "type": "column",
       "container": true
+    },
+    {
+      "type": "blockMath",
+      "container": false
+    },
+    {
+      "type": "diagram",
+      "container": false
     }
   ]
 }

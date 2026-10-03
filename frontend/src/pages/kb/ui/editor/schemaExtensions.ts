@@ -614,6 +614,8 @@ const COLUMN_CHILD_TYPES = [
   'image',
   'horizontalRule',
   'table',
+  'blockMath',
+  'diagram',
 ] as const;
 
 /** 列の content 式。画像ノードを外したスキーマ（image: false）では image も式から外す。 */
@@ -633,6 +635,120 @@ export const Column = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     return ['div', mergeAttributes({ 'data-column': '', class: 'rte-column' }, HTMLAttributes), 0];
+  },
+});
+
+/** 数式の latex の上限（文字数。backend の domain.MathLatexMaxRunes と同じ）。 */
+export const MATH_LATEX_MAX_LENGTH = 5000;
+
+/** 図の書式（backend の domain.ValidDiagramEngines と同じ。今は mermaid だけ）。 */
+export const DIAGRAM_ENGINES = ['mermaid'] as const;
+export type DiagramEngine = (typeof DIAGRAM_ENGINES)[number];
+
+function diagramEngine(value: unknown): DiagramEngine {
+  return (DIAGRAM_ENGINES as readonly string[]).includes(value as string) ? (value as DiagramEngine) : 'mermaid';
+}
+
+function latexOf(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+/**
+ * InlineMath は「行内の数式」— 文中に置くインラインの 1 要素（atom）。式は attrs.latex。
+ * 描画（KaTeX）は使うページでだけ読み込む NodeView が担い、ここ（スキーマ）は形だけを決める。
+ * 描画の仕組みが無い経路（getHTML・貼り付け）では式の文字そのままを出す。
+ */
+export const InlineMath = Node.create({
+  name: 'inlineMath',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      latex: {
+        default: '',
+        parseHTML: (element) => element.getAttribute('data-latex') ?? '',
+        renderHTML: (attributes) => ({ 'data-latex': latexOf(attributes.latex) }),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'span[data-inline-math]' }];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return ['span', mergeAttributes({ 'data-inline-math': '', class: 'rte-inline-math' }, HTMLAttributes), latexOf(node.attrs.latex)];
+  },
+
+  renderText({ node }) {
+    return latexOf(node.attrs.latex);
+  },
+});
+
+/**
+ * BlockMath は「行の数式」— 1 行を占める数式（atom）。中身を持たず、式は attrs.latex（blocks の
+ * 1 行になる葉。backend は latex を本文検索に載せる）。
+ */
+export const BlockMath = Node.create({
+  name: 'blockMath',
+  group: 'block',
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      latex: {
+        default: '',
+        parseHTML: (element) => element.getAttribute('data-latex') ?? '',
+        renderHTML: (attributes) => ({ 'data-latex': latexOf(attributes.latex) }),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'div[data-block-math]' }];
+  },
+
+  renderHTML({ node, HTMLAttributes }) {
+    return ['div', mergeAttributes({ 'data-block-math': '', class: 'rte-block-math' }, HTMLAttributes), latexOf(node.attrs.latex)];
+  },
+
+  renderText({ node }) {
+    return latexOf(node.attrs.latex);
+  },
+});
+
+/**
+ * Diagram は「図」— 本文（mermaid の書式）を text として持つ葉。コードブロックと同じく
+ * マークを付けず、空白と改行をそのまま保つ。描いた図は使うページでだけ読み込む NodeView が出す。
+ */
+export const Diagram = Node.create({
+  name: 'diagram',
+  group: 'block',
+  content: 'text*',
+  marks: '',
+  code: true,
+  defining: true,
+
+  addAttributes() {
+    return {
+      engine: {
+        default: 'mermaid',
+        parseHTML: (element) => diagramEngine(element.getAttribute('data-engine')),
+        renderHTML: (attributes) => ({ 'data-engine': diagramEngine(attributes.engine) }),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'div[data-diagram]', preserveWhitespace: 'full', contentElement: 'code' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes({ 'data-diagram': '', class: 'rte-diagram' }, HTMLAttributes), ['pre', ['code', 0]]];
   },
 });
 
@@ -729,6 +845,10 @@ export function createSchemaExtensions(
     withBlockId(DetailsContent),
     withBlockId(Columns),
     withBlockId(image ? Column : Column.extend({ content: columnContent(false) })),
+    // 数式と図（第 5 段）。行内の数式は id を持たない（行にならない）。
+    InlineMath,
+    withBlockId(BlockMath),
+    withBlockId(Diagram),
   ];
 
   if (image) {
