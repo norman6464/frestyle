@@ -5,7 +5,10 @@ import type Image from '@tiptap/extension-image';
 import type { ImageOptions } from '@tiptap/extension-image';
 import { Placeholder } from '@tiptap/extensions';
 import { ReactNodeViewRenderer, textblockTypeInputRule } from '@tiptap/react';
+import type { AnyExtension } from '@tiptap/core';
 import type { EditorCommand } from './editorCommands';
+import AttachmentView, { type DownloadAttachment } from './AttachmentView';
+import { AttachmentUploads } from './attachmentInsertion';
 import CodeBlockView from './CodeBlockView';
 import DiagramView from './DiagramView';
 import ImageView from './ImageView';
@@ -86,6 +89,22 @@ function withImageView(image: typeof Image, resolveImageSrc?: (src: string) => P
   });
 }
 
+/**
+ * withAttachmentView は添付へカードの NodeView（AttachmentView）を上掛けする。downloadAttachment は
+ * withImageView の resolveImageSrc と同じく options に入れ、AttachmentView が
+ * `extension.options.downloadAttachment` として読む（生成時に固定）。
+ */
+function withAttachmentView(attachment: AnyExtension, downloadAttachment?: DownloadAttachment) {
+  return attachment.extend<{ downloadAttachment?: DownloadAttachment }>({
+    addOptions() {
+      return { downloadAttachment };
+    },
+    addNodeView() {
+      return ReactNodeViewRenderer(AttachmentView);
+    },
+  });
+}
+
 /** createEditorExtensions の組み立てオプション。拡張を増やすときはここに口を足す。 */
 export interface CreateEditorExtensionsOptions {
   /** 空エディタに表示するプレースホルダ文言。 */
@@ -102,6 +121,10 @@ export interface CreateEditorExtensionsOptions {
    * 渡さなければ ImageView は解決を試みず src をそのまま使う（story・他画面との後方互換）。
    */
   resolveImageSrc?: (src: string) => Promise<string>;
+  /**
+   * 添付の ID からダウンロード用の期限付き URL を取る関数。渡さなければ添付のダウンロードは押せない。
+   */
+  downloadAttachment?: DownloadAttachment;
 }
 
 /**
@@ -115,7 +138,7 @@ export interface CreateEditorExtensionsOptions {
 export function createEditorExtensions(
   options: CreateEditorExtensionsOptions = {},
 ): Extensions {
-  const { placeholder = '本文を入力…', image = true, slashItems, resolveImageSrc } = options;
+  const { placeholder = '本文を入力…', image = true, slashItems, resolveImageSrc, downloadAttachment } = options;
 
   const extensions: Extensions = createSchemaExtensions({ image }).map((extension) => {
     if (extension.name === 'heading') {
@@ -135,6 +158,9 @@ export function createEditorExtensions(
     if (extension.name === 'image') {
       return withImageView(extension as typeof Image, resolveImageSrc);
     }
+    if (extension.name === 'attachment') {
+      return withAttachmentView(extension, downloadAttachment);
+    }
     return extension;
   });
 
@@ -152,6 +178,8 @@ export function createEditorExtensions(
     MentionSuggestion,
     // 数式と図の命令・入力規則（`$…$`・`$$`）・Enter で数式の入力欄を開く。
     MathAndDiagram,
+    // 添付の送信中の仮の表示と、別のページの添付の貼り付け止め（今のページは storage 経由）。
+    AttachmentUploads,
     // IME（日本語入力）確定でも効く ＃ 見出し・``` コードブロック変換。
     MarkdownShortcuts,
     Placeholder.configure({ placeholder }),

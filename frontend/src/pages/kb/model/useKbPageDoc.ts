@@ -47,6 +47,9 @@ export function useKbPageDoc(pageId: string | undefined) {
   // 呼び出し側（KbPage）はこの値が変わるたびに再読み込みを促す通知を出す
   // （boolean だと同じ真値が続くだけで2回目以降の発火を検知できないため回数にする）。
   const [contentConflictCount, setContentConflictCount] = useState(0);
+  // 本文保存が unknown_attachment（400。このページの添付ではない添付が本文にある）で失敗した回数。
+  // 再送しても直らない（その添付を取り除くまで断られ続ける）ので、上と同じく回数で知らせる。
+  const [unknownAttachmentCount, setUnknownAttachmentCount] = useState(0);
 
   // 速く行き来したときに、古い応答が新しいページを上書きするのを防ぐ。
   const generation = useRef(0);
@@ -118,8 +121,12 @@ export function useKbPageDoc(pageId: string | undefined) {
           // 並行編集で起きるレース）は、この画面の状態を書き換えても再送で直らない
           // （エディタ側が古いページの block id を持ったままの可能性がある）。
           // 呼び出し側で再読み込みを促す通知を出せるよう、原因を区別して伝える。
-          if (getApiError(err).serverCode === 'block_id_conflict') {
+          const serverCode = getApiError(err).serverCode;
+          if (serverCode === 'block_id_conflict') {
             setContentConflictCount((n) => n + 1);
+          }
+          if (serverCode === 'unknown_attachment') {
+            setUnknownAttachmentCount((n) => n + 1);
           }
         });
       saveInFlightPromise.current = promise;
@@ -343,6 +350,7 @@ export function useKbPageDoc(pageId: string | undefined) {
     ...state,
     saveStatus,
     contentConflictCount,
+    unknownAttachmentCount,
     onDocChange,
     renameTitle,
     changeIcon,

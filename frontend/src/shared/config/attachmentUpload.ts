@@ -1,5 +1,5 @@
 /**
- * チケット添付で受け入れる Content-Type の許可リスト。
+ * 添付（チケット・ナレッジのページ）で受け入れる Content-Type の許可リスト。
  *
  * `backend/internal/domain/attachment_upload.go` の `AcceptedAttachmentContentTypes` と
  * 1 対 1 で揃える（サーバー側の許可リストの単一ソースをそのまま写す。増減したら両方直す）。

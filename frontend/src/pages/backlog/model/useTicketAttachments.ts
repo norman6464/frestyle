@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { reflectWrite } from '@/shared/api/queryCache';
 import { queryShownState } from '@/shared/api/queryState';
 import { TicketRepository, ticketAttachmentsQuery, type TicketAttachment } from '@/entities/ticket';
-import { isAcceptedAttachmentContentType, MAX_ATTACHMENT_UPLOAD_BYTES } from '../config/attachmentUpload';
+import { isAcceptedAttachmentContentType, MAX_ATTACHMENT_UPLOAD_BYTES } from '@/shared/config/attachmentUpload';
 
 const LOAD_FAILED = '添付を読み込めませんでした。時間をおいて開き直すと最新の状態が出ます。';
 const REJECTED_TYPE = '対応していない形式のファイルです。';

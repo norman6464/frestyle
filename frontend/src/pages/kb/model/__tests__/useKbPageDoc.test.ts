@@ -640,6 +640,37 @@ describe('useKbPageDoc', () => {
     }
   });
 
+  it('保存がunknown_attachmentで失敗したらunknownAttachmentCountを増やす（contentConflictCountは増やさない）', async () => {
+    vi.useFakeTimers();
+    try {
+      hoisted.replaceContent.mockRejectedValue(
+        new AxiosError('Bad Request', 'ERR_BAD_REQUEST', undefined, undefined, {
+          status: 400,
+          statusText: 'Bad Request',
+          headers: {},
+          config: { headers: new AxiosHeaders() },
+          data: { error: 'unknown_attachment' },
+        }),
+      );
+      const { result } = renderHook(() => useKbPageDoc('p1'));
+      await act(async () => {});
+      expect(result.current.unknownAttachmentCount).toBe(0);
+
+      act(() => {
+        result.current.onDocChange({ type: 'doc', content: [] });
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      expect(result.current.unknownAttachmentCount).toBe(1);
+      expect(result.current.contentConflictCount).toBe(0);
+      expect(result.current.saveStatus).toBe('unsaved');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('block_id_conflict以外の失敗ではcontentConflictCountを増やさない', async () => {
     vi.useFakeTimers();
     try {
@@ -655,6 +686,7 @@ describe('useKbPageDoc', () => {
       });
 
       expect(result.current.contentConflictCount).toBe(0);
+      expect(result.current.unknownAttachmentCount).toBe(0);
     } finally {
       vi.useRealTimers();
     }

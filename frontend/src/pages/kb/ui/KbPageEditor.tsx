@@ -10,6 +10,7 @@ import {
   type SearchTicketsForRef,
 } from './editor';
 import type { KbSelectedVersionState } from '../model/useKbPageVersions';
+import type { AttachmentUploader, DownloadAttachment } from './editor';
 
 export interface KbPageEditorProps {
   data: KbResolvedPage;
@@ -28,6 +29,12 @@ export interface KbPageEditorProps {
   focusSignal: number;
   onImageUpload: ((file: File) => Promise<string>) | undefined;
   resolveImageSrc: (src: string) => Promise<string>;
+  /** 添付を送って記録する口（編集できるときだけ。提案の下書きには渡さない — 送るには編集権限が要る）。 */
+  onAttachmentUpload: AttachmentUploader | undefined;
+  /** 添付のダウンロード URL を取る口（今の本文・版のプレビュー・提案の下書きのどれでも使う）。 */
+  downloadAttachment: DownloadAttachment | undefined;
+  /** 添付できない・送れなかった・置き換えた、を書いている人へ知らせる口。 */
+  onNotice: (message: string) => void;
   /** `[[` でページを探す口（編集できる形にだけ渡す）。 */
   searchPages: SearchPagesForRef | undefined;
   /** `#` でチケットを探す口（同じく編集できる形にだけ渡す）。 */
@@ -58,6 +65,9 @@ function KbPageEditor({
   focusSignal,
   onImageUpload,
   resolveImageSrc,
+  onAttachmentUpload,
+  downloadAttachment,
+  onNotice,
   searchPages,
   searchTickets,
   searchMembers,
@@ -74,6 +84,9 @@ function KbPageEditor({
         ariaLabel={`${data.page.title} の本文（提案を編集中）`}
         onNavigateToPage={onNavigateToPage}
         resolveImageSrc={resolveImageSrc}
+        downloadAttachment={downloadAttachment}
+        attachmentPageId={data.page.id}
+        onNotice={onNotice}
         searchPages={searchPages}
         searchTickets={searchTickets}
         searchMembers={searchMembers}
@@ -94,6 +107,7 @@ function KbPageEditor({
         ariaLabel={`${data.page.title} の本文（読み取り専用・過去の版）`}
         onNavigateToPage={onNavigateToPage}
         resolveImageSrc={resolveImageSrc}
+        downloadAttachment={downloadAttachment}
       />
     );
   }
@@ -113,6 +127,10 @@ function KbPageEditor({
       focusSignal={focusSignal}
       onImageUpload={onImageUpload}
       resolveImageSrc={resolveImageSrc}
+      onAttachmentUpload={onAttachmentUpload}
+      downloadAttachment={downloadAttachment}
+      attachmentPageId={data.page.id}
+      onNotice={onNotice}
       searchPages={data.canEdit ? searchPages : undefined}
       searchTickets={data.canEdit ? searchTickets : undefined}
       searchMembers={data.canEdit ? searchMembers : undefined}

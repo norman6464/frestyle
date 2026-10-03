@@ -1332,3 +1332,81 @@ mark.rte-highlight {
 .rte-color-none:hover {
   background: var(--color-surface-2);
 }
+
+/*
+ * 添付（第 6 段）。種類の印・ファイル名・大きさ・「ダウンロード」を 1 行のカードにする。
+ * 名前は長くても 1 行で切り（全文は title）、ボタンは右に寄せる。送信中の仮の表示
+ * （.rte-attachment-uploading。本文には書かない decoration）も同じ枠で出す。
+ */
+.rte-content .ProseMirror .rte-attachment {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-surface-3);
+  border-radius: 8px;
+  background: var(--color-surface-1);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.rte-content .ProseMirror .rte-attachment.is-selected,
+.rte-content .ProseMirror .rte-attachment.ProseMirror-selectednode {
+  outline: 2px solid var(--color-brand, #3b82f6);
+  outline-offset: 1px;
+}
+
+.rte-content .ProseMirror .rte-attachment-icon {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  color: var(--color-text-muted);
+}
+
+.rte-content .ProseMirror .rte-attachment-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+}
+
+.rte-content .ProseMirror .rte-attachment-size {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.rte-content .ProseMirror .rte-attachment-error {
+  flex: none;
+  color: var(--fs-danger-ink);
+  font-size: 0.75rem;
+}
+
+.rte-content .ProseMirror .rte-attachment-download {
+  flex: none;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--color-surface-3);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.rte-content .ProseMirror .rte-attachment-download:hover:not(:disabled) {
+  background: var(--color-surface-2);
+  color: var(--color-text-primary);
+}
+
+.rte-content .ProseMirror .rte-attachment-download:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.rte-content .ProseMirror .rte-attachment-uploading {
+  border-style: dashed;
+  color: var(--color-text-muted);
+}

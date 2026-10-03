@@ -10,6 +10,7 @@ import type {
   KbIcon,
   KbMySpace,
   KbPage,
+  KbPageAttachment,
   KbPageContentSaveResult,
   KbPageDoc,
   KbPageSuggestion,
@@ -432,6 +433,45 @@ const KbRepository = {
       headers: { 'Content-Type': file.type || 'image/png' },
     });
     return key;
+  },
+
+  /**
+   * 添付ファイルを保管庫へ直接アップロードし、記録した添付を返す（編集権限が要る）。
+   *
+   * 手順は 3 つ: 署名付き URL の発行 → 保管庫へ PUT → 記録。PUT は uploadPageImage と同じく
+   * 素の axios で送る（保管庫は自前 API とは別オリジンで、Cookie 認証を持ち込まない）。
+   * Content-Type と大きさは署名に焼き込まれるので、発行・PUT・記録で同じ値を使う。
+   * **失敗は例外として投げる。**
+   */
+  async uploadPageAttachment(workspaceSlug: string, pageId: string, file: File): Promise<KbPageAttachment> {
+    const contentType = file.type;
+    const issued = await apiClient.post<{ url: string; key: string; expiresIn: number }>(
+      KB_API.pageAttachmentUploadUrl(workspaceSlug, pageId),
+      { contentType, size: file.size },
+    );
+    await axios.put(issued.data.url, file, { headers: { 'Content-Type': contentType } });
+    const created = await apiClient.post<KbPageAttachment>(KB_API.pageAttachments(workspaceSlug, pageId), {
+      key: issued.data.key,
+      filename: file.name,
+      contentType,
+      sizeBytes: file.size,
+    });
+    return created.data;
+  },
+
+  /**
+   * 添付を元のファイル名で保存させる期限付き URL を発行する（閲覧権限）。押すたびに呼ぶ
+   * （期限があるので控えない）。**失敗は例外として投げる。**
+   */
+  async issuePageAttachmentDownloadURL(
+    workspaceSlug: string,
+    pageId: string,
+    attachmentId: string,
+  ): Promise<{ url: string; expiresIn: number }> {
+    const res = await apiClient.get<{ url: string; expiresIn: number }>(
+      KB_API.pageAttachmentDownloadUrl(workspaceSlug, pageId, attachmentId),
+    );
+    return res.data;
   },
 
   /**

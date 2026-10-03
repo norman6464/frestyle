@@ -234,6 +234,20 @@ export interface KbResolvedCover {
 }
 
 /**
+ * ページ本文の添付ファイル 1 件（POST .../attachments の応答）。本文の attachment ノードは id を
+ * attachmentId に持ち、ほかの値はサーバーが保存のたびに同じ行から書き直す表示の写し。
+ * 保管庫の key は持たない（ダウンロードは押すたびに期限付き URL を取り直す）。
+ */
+export interface KbPageAttachment {
+  id: string;
+  pageId: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+/**
  * 自分がアクセスできるスペース 1 件（段 14。GET /me/spaces）。
  * KbSpace と違い visibility を持たず、代わりに自分の役割を持つ。
  */
