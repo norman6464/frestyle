@@ -36,7 +36,34 @@ const (
 	BlockTypeDetailsContent BlockType = "detailsContent"
 	BlockTypeColumns        BlockType = "columns"
 	BlockTypeColumn         BlockType = "column"
+	// 数式と図（第 5 段）。行の数式は中身を持たず式を attrs.latex に、図は本文を text として持つ。
+	BlockTypeBlockMath BlockType = "blockMath"
+	BlockTypeDiagram   BlockType = "diagram"
 )
+
+// MathLatexMaxRunes は数式（行の数式・行内の数式）の latex の上限（文字数）。数式は描画の
+// 計算量が式の長さで伸びるので、本文全体の上限とは別に式 1 つの上限を持つ。超えたら保存を断る
+// （黙って切ると式が壊れたまま保存され、書いた人が気づけない）。
+const MathLatexMaxRunes = 5000
+
+// DiagramEngine は図の書式（描画に使う道具）。今は mermaid だけ。
+type DiagramEngine string
+
+const DiagramEngineMermaid DiagramEngine = "mermaid"
+
+// ValidDiagramEngines は保存を許す図の書式。知らない値は保存側が DiagramEngineMermaid に
+// そろえる（今は 1 つしか無いので、落とす理由にはしない）。
+var ValidDiagramEngines = []DiagramEngine{DiagramEngineMermaid}
+
+// IsDiagramEngine は保存を許す図の書式かを返す。
+func IsDiagramEngine(engine string) bool {
+	for _, e := range ValidDiagramEngines {
+		if string(e) == engine {
+			return true
+		}
+	}
+	return false
+}
 
 // CalloutKind は注意書きの種類（見た目の色と印）。既定は info。
 type CalloutKind string
@@ -105,6 +132,8 @@ var blockTypeSpecs = []blockTypeSpec{
 	{BlockTypeDetailsContent, true},
 	{BlockTypeColumns, true},
 	{BlockTypeColumn, true},
+	{BlockTypeBlockMath, false},
+	{BlockTypeDiagram, false},
 }
 
 // ValidBlockTypes は保存を許すノード名の一覧。blockTypeSpecs から導く。

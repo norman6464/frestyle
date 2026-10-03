@@ -167,6 +167,14 @@ func Test_doc往復_分解して組み立てると同値(t *testing.T) {
 			]}`,
 		},
 		{
+			name: "数式と図",
+			doc: `{"type":"doc","content":[
+				{"type":"paragraph","content":[{"type":"text","text":"行内 "},{"type":"inlineMath","attrs":{"latex":"a^2+b^2"}}]},
+				{"type":"blockMath","attrs":{"latex":"\\sum_{i=1}^n i"}},
+				{"type":"diagram","attrs":{"engine":"mermaid"},"content":[{"type":"text","text":"graph TD\n  A-->B"}]}
+			]}`,
+		},
+		{
 			name: "画像と区切り線と引用",
 			doc: `{"type":"doc","content":[
 				{"type":"image","attrs":{"src":"kb/ws1/page1/1.bin","alt":"代替","title":null}},
@@ -747,6 +755,60 @@ func Test_doc分解_容器のattrsは許した形だけ残す(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, tree, 1)
 			require.JSONEq(t, tc.want, tree[0].Attrs)
+		})
+	}
+}
+
+func Test_doc分解_数式と図のattrsを検査する(t *testing.T) {
+	long := strings.Repeat("x", domain.MathLatexMaxRunes+1)
+	limit := strings.Repeat("あ", domain.MathLatexMaxRunes)
+
+	t.Run("行の数式の latex は文字列で上限まで受け付ける", func(t *testing.T) {
+		tree, err := parsePageDoc(`{"type":"doc","content":[{"type":"blockMath","attrs":{"latex":"` + limit + `"}}]}`)
+		require.NoError(t, err)
+		require.Equal(t, domain.BlockTypeBlockMath, tree[0].Type)
+		require.Nil(t, tree[0].Inline, "行の数式は中身を持たない（式は attrs）")
+	})
+
+	invalid := []struct {
+		name string
+		doc  string
+	}{
+		{"行の数式の latex が上限を超える", `{"type":"doc","content":[{"type":"blockMath","attrs":{"latex":"` + long + `"}}]}`},
+		{"行の数式の latex が文字列でない", `{"type":"doc","content":[{"type":"blockMath","attrs":{"latex":42}}]}`},
+		{"行の数式の latex が null", `{"type":"doc","content":[{"type":"blockMath","attrs":{"latex":null}}]}`},
+		{"行内の数式の latex が上限を超える", `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"inlineMath","attrs":{"latex":"` + long + `"}}]}]}`},
+		{"行内の数式の latex が文字列でない", `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"inlineMath","attrs":{"latex":["x"]}}]}]}`},
+		{"行内の数式に attrs が無い", `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"inlineMath"}]}]}`},
+	}
+	for _, tc := range invalid {
+		t.Run(tc.name+"なら断る", func(t *testing.T) {
+			_, err := parsePageDoc(tc.doc)
+			require.ErrorIs(t, err, ErrPageDocInvalid)
+		})
+	}
+
+	t.Run("行の数式に latex が無ければ空の式として通す", func(t *testing.T) {
+		tree, err := parsePageDoc(`{"type":"doc","content":[{"type":"blockMath"}]}`)
+		require.NoError(t, err)
+		require.JSONEq(t, `{}`, tree[0].Attrs)
+	})
+
+	engines := []struct {
+		name  string
+		attrs string
+	}{
+		{"許可リストの engine", `{"engine":"mermaid"}`},
+		{"知らない engine", `{"engine":"plantuml"}`},
+		{"文字列でない engine", `{"engine":1}`},
+		{"engine が無い", `{}`},
+	}
+	for _, tc := range engines {
+		t.Run("図の"+tc.name+"は mermaid にそろえる", func(t *testing.T) {
+			tree, err := parsePageDoc(`{"type":"doc","content":[{"type":"diagram","attrs":` + tc.attrs + `,"content":[{"type":"text","text":"graph TD"}]}]}`)
+			require.NoError(t, err)
+			require.JSONEq(t, `{"engine":"mermaid"}`, tree[0].Attrs)
+			require.NotNil(t, tree[0].Inline, "図の本文は葉の inline に text として持つ")
 		})
 	}
 }

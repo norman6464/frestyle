@@ -80,6 +80,27 @@ func Test_本文プレーンテキスト抽出(t *testing.T) {
 			want: "",
 		},
 		{
+			name: "行内の数式は latex を本文の文字として載せる",
+			doc: `{"type":"doc","content":[
+				{"type":"paragraph","content":[
+					{"type":"text","text":"式 "},
+					{"type":"inlineMath","attrs":{"latex":"E=mc^2"}},
+					{"type":"text","text":" を使う"}
+				]}
+			]}`,
+			want: "式 E=mc^2 を使う",
+		},
+		{
+			name: "行の数式は latex を、図は本文の文字を、それぞれ 1 行として載せる",
+			doc: `{"type":"doc","content":[
+				{"type":"blockMath","attrs":{"latex":"\\int_0^1 x\\,dx"}},
+				{"type":"diagram","attrs":{"engine":"mermaid"},"content":[{"type":"text","text":"graph TD; A-->B"}]},
+				{"type":"blockMath","attrs":{"latex":""}},
+				{"type":"paragraph","content":[{"type":"text","text":"本文"}]}
+			]}`,
+			want: "\\int_0^1 x\\,dx\ngraph TD; A-->B\n本文",
+		},
+		{
 			name: "画像や区切り線など inline を持たないブロックは何も出さない",
 			doc: `{"type":"doc","content":[
 				{"type":"image","attrs":{"src":"kb/ws1/page1/1.bin"}},
