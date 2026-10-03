@@ -11,6 +11,8 @@ import AttachmentView, { type DownloadAttachment } from './AttachmentView';
 import { AttachmentUploads } from './attachmentInsertion';
 import CodeBlockView from './CodeBlockView';
 import DiagramView from './DiagramView';
+import EmbedView from './EmbedView';
+import { EmbedPaste } from './embedPaste';
 import ImageView from './ImageView';
 import MathView from './MathView';
 import { BlockOperations } from './blockOperations';
@@ -161,6 +163,10 @@ export function createEditorExtensions(
     if (extension.name === 'attachment') {
       return withAttachmentView(extension, downloadAttachment);
     }
+    if (extension.name === 'embed') {
+      // 埋め込みは押すまで外部を読み込まないカードで描く（EmbedView）。
+      return extension.extend({ addNodeView: () => ReactNodeViewRenderer(EmbedView) });
+    }
     return extension;
   });
 
@@ -180,6 +186,8 @@ export function createEditorExtensions(
     MathAndDiagram,
     // 添付の送信中の仮の表示と、別のページの添付の貼り付け止め（今のページは storage 経由）。
     AttachmentUploads,
+    // 空の行に動画の URL だけを貼ったら埋め込みにする（文の途中の URL は素のリンクのまま）。
+    EmbedPaste,
     // IME（日本語入力）確定でも効く ＃ 見出し・``` コードブロック変換。
     MarkdownShortcuts,
     Placeholder.configure({ placeholder }),

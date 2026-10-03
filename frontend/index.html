@@ -25,11 +25,18 @@
                                                            サインイン・トークン更新で叩く 2 つの
                                                            Google API）/ Cloud Storage の署名付き URL
         - frame-src https://frestyle-507912.firebaseapp.com https://apis.google.com
+                    https://www.youtube-nocookie.com
                                                          : Google サインイン（signInWithPopup）が
                                                            authDomain 上の /__/auth/iframe を埋め込み、
                                                            その出し入れを gapi（apis.google.com）が行う。
                                                            default-src 'self' のままだと popup を開いても
-                                                           結果が親ページへ返らない
+                                                           結果が親ページへ返らない。
+                                                           youtube-nocookie.com はナレッジの本文の埋め込み
+                                                           （YouTube）。押したときに初めて iframe を作る。
+                                                           提供元を足すときは backend の許可リスト・
+                                                           frontend の認識（shared/config/embedProviders.ts）・
+                                                           ここの 3 か所を一緒に変える。e2e/smoke.spec.ts が
+                                                           本番の値を固定している
         - form-action 'self'                            : フォームの送信先を自分自身に限る
         - base-uri 'self'                               : <base> 注入対策
         - object-src 'none'                             : <object>/<embed>/<applet> 禁止
@@ -40,7 +47,7 @@
       `X-Frame-Options: DENY` を配信して等価に行う。`report-uri` / `report-to` / `sandbox` も
       同様に meta では無視されるので、配信が必要な場合は firebase.json 側に追加する。
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://api.frestyle.dev https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://storage.googleapis.com; frame-src https://frestyle-507912.firebaseapp.com https://apis.google.com; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://api.frestyle.dev https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://storage.googleapis.com; frame-src https://frestyle-507912.firebaseapp.com https://apis.google.com https://www.youtube-nocookie.com; form-action 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
 
     <!--
