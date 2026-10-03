@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { ACCEPTED_IMAGE_ACCEPT_ATTR } from '@/shared/config/imageUpload';
+import { ACCEPTED_ATTACHMENT_ACCEPT_ATTR } from '@/shared/config/attachmentUpload';
 import { createEditorExtensions } from './editorExtensions';
 import type { EditorCommand } from './editorCommands';
 import { buildSlashItems } from './slashItems';
-import { acceptedImageFiles, insertUploadedImages } from './imageInsertion';
+import { insertUploadedImages } from './imageInsertion';
+import {
+  classifyFiles,
+  clearAttachmentUploads,
+  insertUploadedAttachments,
+  type AttachmentUploader,
+} from './attachmentInsertion';
+import type { DownloadAttachment } from './AttachmentView';
 import { sanitizeDocLinks } from '@/shared/lib/linkSafety';
 import { sanitizeDocColors } from './inlineColors';
 import type { SearchPagesForRef } from './pageRefSuggestion';
@@ -47,6 +55,27 @@ export interface RichTextEditorProps {
    * エディタ生成時に固定される（extraSlashCommands と同じ契約）。
    */
   resolveImageSrc?: (src: string) => Promise<string>;
+  /**
+   * 画像以外のファイルを添付として送って記録し、記録した添付を返す。指定したときだけ添付
+   * （ドラッグ&ドロップ・貼り付け・'/' の「ファイル」）が有効になる。失敗は例外で返す
+   * （理由は onNotice に出す）。
+   */
+  onAttachmentUpload?: AttachmentUploader;
+  /**
+   * 添付の ID からダウンロード用の期限付き URL を取る。渡さなければ添付のダウンロードは押せない。
+   * エディタ生成時に固定される（resolveImageSrc と同じ契約）。
+   */
+  downloadAttachment?: DownloadAttachment;
+  /**
+   * 今のページの ID。別のページの添付を貼り付けで持ち込まないために使う（そのまま保存すると
+   * サーバーが断る）。差し替えは即座に効く（storage 経由）。
+   */
+  attachmentPageId?: string;
+  /**
+   * 書いている人へ知らせたいことがあったときに呼ばれる（添付できない種類・大きさ、送信の失敗、
+   * 別のページの添付を置き換えたこと）。トースト等の出し方は呼び出し側が決める。
+   */
+  onNotice?: (message: string) => void;
   /**
    * エディタ生成直後に一度だけ呼ばれるライフサイクルフック。
    * 生成直後にフォーカスしたい・外部から editor を参照して拡張したい、といった用途の拡張点。
@@ -196,6 +225,10 @@ export default function RichTextEditor({
   saveStatus,
   onImageUpload,
   resolveImageSrc,
+  onAttachmentUpload,
+  downloadAttachment,
+  attachmentPageId,
+  onNotice,
   onCreate,
   extraSlashCommands,
   onNavigateToPage,
@@ -226,9 +259,26 @@ export default function RichTextEditor({
   useEffect(() => {
     onImageUploadRef.current = onImageUpload;
   }, [onImageUpload]);
+  // 添付の送り先・知らせの口も同じ理由で ref 越しに最新を呼ぶ。
+  const onAttachmentUploadRef = useRef(onAttachmentUpload);
+  useEffect(() => {
+    onAttachmentUploadRef.current = onAttachmentUpload;
+  }, [onAttachmentUpload]);
+  const onNoticeRef = useRef(onNotice);
+  useEffect(() => {
+    onNoticeRef.current = onNotice;
+  }, [onNotice]);
+  // 送っている間に別のページへ移ったかを見るための、今のページ。エディタはページを移っても
+  // 作り直さない（value の差し替えで中身だけ入れ替える）ので、mountedRef だけでは見分けられない。
+  const attachmentPageIdRef = useRef(attachmentPageId);
+  useEffect(() => {
+    attachmentPageIdRef.current = attachmentPageId;
+  }, [attachmentPageId]);
   const editorRef = useRef<Editor | null>(null);
   // '/image' から開くファイル選択（キーボード/クリックでも画像を挿入できる経路）。
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // '/file' から開くファイル選択（添付）。
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   // 本文の器。ブロックの取っ手（BlockHandle）がこの中で位置を決める。
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -260,14 +310,36 @@ export default function RichTextEditor({
     };
   }, []);
 
-  // クリップボード/ドロップから画像ファイルだけ取り出し、選択順どおりに順次アップロード挿入する。
-  const handleImageFiles = useCallback((files: FileList | null | undefined): boolean => {
-    const upload = onImageUploadRef.current;
+  // クリップボード/ドロップ/ファイル選択のファイルを、画像・添付・断るものに分けて扱う
+  // （classifyFiles）。画像は今までどおり画像に、それ以外の許可した種類は添付に、選択順どおりに
+  // 順次送って置く。送り先がどちらも無い（読み取り専用など）ときは何もしない（false）。
+  const handleFiles = useCallback((files: FileList | null | undefined): boolean => {
+    const uploadImage = onImageUploadRef.current;
+    const uploadAttachment = onAttachmentUploadRef.current;
     const currentEditor = editorRef.current;
-    if (!upload || !currentEditor) return false;
-    const images = acceptedImageFiles(files);
-    if (images.length === 0) return false;
-    void insertUploadedImages(currentEditor, images, upload, () => mountedRef.current);
+    if ((!uploadImage && !uploadAttachment) || !currentEditor) return false;
+    const { images, attachments, rejected } = classifyFiles(files, {
+      imageUpload: Boolean(uploadImage),
+      attachmentUpload: Boolean(uploadAttachment),
+    });
+    if (images.length === 0 && attachments.length === 0 && rejected.length === 0) return false;
+    for (const { reason } of rejected) onNoticeRef.current?.(reason);
+    // 送り終えたときに、まだ同じページを開いているか（別のページの本文へ前のページの画像・添付を
+    // 置かない。どちらも保管庫の名前・添付の行が前のページに属するので、置くと表示も保存も壊れる）。
+    const pageAtStart = attachmentPageIdRef.current;
+    const isAlive = () => mountedRef.current && attachmentPageIdRef.current === pageAtStart;
+    if (uploadImage && images.length > 0) {
+      void insertUploadedImages(currentEditor, images, uploadImage, isAlive);
+    }
+    if (uploadAttachment && attachments.length > 0) {
+      void insertUploadedAttachments(
+        currentEditor,
+        attachments,
+        uploadAttachment,
+        (message) => onNoticeRef.current?.(message),
+        isAlive,
+      );
+    }
     return true;
   }, []);
 
@@ -300,25 +372,36 @@ export default function RichTextEditor({
   // 配線されているときだけ /image（ファイル選択）を足す。onImageUpload の有無だけに依存させ、
   // 拡張一式が編集のたびに作り直されないようにする。
   const hasImageUpload = Boolean(onImageUpload);
+  const hasAttachmentUpload = Boolean(onAttachmentUpload);
   const slashItems = useMemo<EditorCommand[]>(() => {
-    const extra: EditorCommand[] = hasImageUpload
-      ? [
-          {
-            id: 'image',
-            label: '画像',
-            group: 'insert',
-            glyph: '画像',
-            icon: { set: 'fs', name: 'image' },
-            keywords: ['image', 'img', 'photo', 'picture', 'upload'],
-            run: () => fileInputRef.current?.click(),
-          },
-        ]
-      : [];
+    const extra: EditorCommand[] = [];
+    if (hasImageUpload) {
+      extra.push({
+        id: 'image',
+        label: '画像',
+        group: 'insert',
+        glyph: '画像',
+        icon: { set: 'fs', name: 'image' },
+        keywords: ['image', 'img', 'photo', 'picture', 'upload'],
+        run: () => fileInputRef.current?.click(),
+      });
+    }
+    if (hasAttachmentUpload) {
+      extra.push({
+        id: 'file',
+        label: 'ファイル',
+        group: 'insert',
+        glyph: '添付',
+        icon: { set: 'fs', name: 'paperclip' },
+        keywords: ['file', 'attach', 'attachment', 'upload', 'pdf'],
+        run: () => attachmentInputRef.current?.click(),
+      });
+    }
     return buildSlashItems([...extra, ...(extraSlashCommands ?? [])]);
     // extraSlashCommands は「エディタ生成時に固定」の契約（props の JSDoc 参照）なので
     // 依存に入れない — 入れても extensions は作り直されず、揃わない再計算だけが増える。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasImageUpload]);
+  }, [hasImageUpload, hasAttachmentUpload]);
 
   // tiptap（useEditor）は描き直しのたびに、渡した設定と今の設定を比べ、違えば setOptions で
   // 入れ直す（view の更新まで走る）。機能一式・editorProps をその場で作ると毎回「違う」になり、
@@ -326,12 +409,12 @@ export default function RichTextEditor({
   // 効かない。ここで固定し、実際に変わったとき（読み上げの名前など）だけ入れ直させる。
   const extensions = useMemo(
     () => [
-      ...createEditorExtensions({ placeholder, slashItems, resolveImageSrc }),
+      ...createEditorExtensions({ placeholder, slashItems, resolveImageSrc, downloadAttachment }),
       // コメント件数バッジ（decoration）。extensions は生成時に固定されるため、件数・クリック
       // ハンドラは ref 越しに渡す（commentBadgeCountsRef は上の useCommentBadgeSync が返す）。
       createCommentBadgesExtension(commentBadgeCountsRef, handleCommentBadgeClick),
     ],
-    [placeholder, slashItems, resolveImageSrc, commentBadgeCountsRef, handleCommentBadgeClick],
+    [placeholder, slashItems, resolveImageSrc, downloadAttachment, commentBadgeCountsRef, handleCommentBadgeClick],
   );
   const editorProps = useMemo(
     () => ({
@@ -341,17 +424,17 @@ export default function RichTextEditor({
         'aria-multiline': 'true',
         'aria-label': ariaLabel,
       },
-      // クリップボード/ドロップに画像ファイルがあればアップロードして挿入する。
-      handlePaste: (_view: unknown, event: ClipboardEvent) => handleImageFiles(event.clipboardData?.files),
+      // クリップボード/ドロップにファイルがあれば、画像は画像に、それ以外は添付にして送る。
+      handlePaste: (_view: unknown, event: ClipboardEvent) => handleFiles(event.clipboardData?.files),
       handleDrop: (_view: unknown, event: DragEvent) => {
-        if (event.dataTransfer?.files && handleImageFiles(event.dataTransfer.files)) {
+        if (event.dataTransfer?.files && handleFiles(event.dataTransfer.files)) {
           event.preventDefault();
           return true;
         }
         return false;
       },
     }),
-    [ariaLabel, handleImageFiles],
+    [ariaLabel, handleFiles],
   );
 
   const editor = useEditor({
@@ -397,6 +480,8 @@ export default function RichTextEditor({
     if (fullDocString(filledValue) !== fullDocString(editor.getJSON())) {
       // 差し替えで入ってくる doc も読み込み時と同じ経路で洗ってある（filledValue）。
       editor.commands.setContent(filledValue, { emitUpdate: false });
+      // 送っている途中の添付の仮の表示は、前の本文の位置を指している。差し替えた本文には置かない。
+      clearAttachmentUploads(editor);
       // setContent(emitUpdate:false) は onUpdate を発火しないため、次の自分の編集が
       // 正しく重複判定できるよう、ここで基準値（id 除外）を手動で合わせておく。
       lastValueRef.current = stableDocString(filledValue);
@@ -426,6 +511,13 @@ export default function RichTextEditor({
     if (!editor || editor.isDestroyed) return;
     editor.storage.mentionSuggestion.searchMembers = searchMembers ?? null;
   }, [editor, searchMembers]);
+
+  // 添付の貼り付け止めが使う「今のページ」と知らせの口も同じ作法（storage 経由）。
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.storage.attachmentUploads.pageId = attachmentPageId ?? null;
+    editor.storage.attachmentUploads.onNotice = (message: string) => onNoticeRef.current?.(message);
+  }, [editor, attachmentPageId]);
 
   // 「増えたときだけ」フォーカスを移す。マウント時の値では動かない — ページを
   // 開き直しただけで本文が奪ってしまわないため（サイドバーの openSignal と同じ形）。
@@ -472,7 +564,23 @@ export default function RichTextEditor({
           aria-hidden="true"
           tabIndex={-1}
           onChange={(e) => {
-            handleImageFiles(e.target.files);
+            handleFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+      )}
+      {onAttachmentUpload && (
+        // '/file' から開く隠しファイル入力（DnD/貼り付けと同じ振り分けへ流す。画像を選べば画像になる）。
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          multiple
+          accept={ACCEPTED_ATTACHMENT_ACCEPT_ATTR}
+          className="hidden"
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={(e) => {
+            handleFiles(e.target.files);
             e.target.value = '';
           }}
         />

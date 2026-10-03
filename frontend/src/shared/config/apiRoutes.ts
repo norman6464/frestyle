@@ -175,6 +175,29 @@ export const KB_API = {
    */
   pageImageDownloadUrl: (workspaceSlug: string, pageId: string, key: string) =>
     `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/pages/${encodeURIComponent(pageId)}/images/download-url?key=${encodeURIComponent(key)}`,
+  /**
+   * POST — /api/v2/kb/workspaces/:slug/pages/:pageId/attachments/upload-url
+   *
+   * ページ本文の添付ファイルの PUT 署名 URL を発行する（編集権限）。body は {contentType, size}。
+   * 応答の key は記録（pageAttachments）にそのまま渡す。本文には key を書かない。
+   */
+  pageAttachmentUploadUrl: (workspaceSlug: string, pageId: string) =>
+    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/pages/${encodeURIComponent(pageId)}/attachments/upload-url`,
+  /**
+   * POST — /api/v2/kb/workspaces/:slug/pages/:pageId/attachments
+   *
+   * PUT を終えた添付を記録する（編集権限）。body は {key, filename, contentType, sizeBytes}。
+   * 応答の id を本文の attachment ノードの attachmentId に入れる。
+   */
+  pageAttachments: (workspaceSlug: string, pageId: string) =>
+    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/pages/${encodeURIComponent(pageId)}/attachments`,
+  /**
+   * GET — /api/v2/kb/workspaces/:slug/pages/:pageId/attachments/:attachmentId/download-url
+   *
+   * 添付を元のファイル名で保存させる期限付き URL を発行する（閲覧権限）。押すたびに取り直す。
+   */
+  pageAttachmentDownloadUrl: (workspaceSlug: string, pageId: string, attachmentId: string) =>
+    `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/pages/${encodeURIComponent(pageId)}/attachments/${encodeURIComponent(attachmentId)}/download-url`,
   /** PUT(設定) / DELETE(解除) — /api/v2/kb/workspaces/:slug/pages/:pageId/cover */
   pageCover: (workspaceSlug: string, pageId: string) =>
     `${API_V2}/kb/workspaces/${encodeURIComponent(workspaceSlug)}/pages/${encodeURIComponent(pageId)}/cover`,

@@ -120,6 +120,13 @@ describe('extractPlainText', () => {
     expect(extractPlainText(doc)).toBe('式 [math: a^2]\n[math: \\sum i]\ngraph TD; A-->B');
   });
 
+  it('添付はファイル名と ID を疑似テキストとして埋め込む（同じ名前の別の添付へ差し替えても差分に出る）', () => {
+    const before = { type: 'doc', content: [{ type: 'attachment', attrs: { attachmentId: 'a1', filename: '議事録.pdf' } }] };
+    const after = { type: 'doc', content: [{ type: 'attachment', attrs: { attachmentId: 'a2', filename: '議事録.pdf' } }] };
+    expect(extractPlainText(before)).toBe('[file: 議事録.pdf (a1)]');
+    expect(extractPlainText(after)).not.toBe(extractPlainText(before));
+  });
+
   it('mentionの相手のuserIdは疑似テキストとして本文に埋め込まれる（写しの名前は差分に出さない）', () => {
     const doc = { type: 'doc', content: [{ type: 'mention', attrs: { userId: '42', name: '表示用の名前' } }] };
     expect(extractPlainText(doc)).toBe('[mention: 42]');

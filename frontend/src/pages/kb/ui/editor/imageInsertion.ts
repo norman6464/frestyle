@@ -1,16 +1,10 @@
 import type { Editor } from '@tiptap/react';
-import { isAcceptedImageMimeType } from '@/shared/config/imageUpload';
 import { sanitizeImageSrc } from '@/shared/lib/linkSafety';
 /** ImageUploader は File を受け取り、表示用 URL を返す関数。 */
 export type ImageUploader = (file: File) => Promise<string>;
 
-/**
- * acceptedImageFiles は FileList/配列から、受け入れ可能な MIME の画像ファイルだけを取り出す。
- * ドロップ・貼り付け・ファイル選択のいずれの入力も同じ基準で正規化する。
- */
-export function acceptedImageFiles(files: FileList | File[] | null | undefined): File[] {
-  return Array.from(files ?? []).filter((file) => isAcceptedImageMimeType(file.type));
-}
+// 画像かどうか・大きさの振り分けは attachmentInsertion.ts の classifyFiles がまとめて行う
+// （ドロップ・貼り付け・ファイル選択のどの入口も同じ基準で分ける）。
 
 /**
  * insertUploadedImages は画像ファイル群をアップロードして editor へ挿入する。

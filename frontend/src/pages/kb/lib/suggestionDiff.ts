@@ -34,7 +34,9 @@ const DIFF_TIMEOUT_MS = 2_000;
  * （コメント権限で本文以外を実質書き換えられてしまう）。そのため、これらは本文の文字列へ
  * 疑似テキストとして埋め込む — リンクは「本文 (href)」、画像は「[image: src]」、
  * ページ参照は「[page: pageId]」、チケット参照は「[ticket: ticketId]」、名指しは「[mention: userId]」、
- * 数式は「[math: latex]」、コードブロックは「[code: language]」の形にする（図は本文の文字がそのまま出る）。
+ * 数式は「[math: latex]」、コードブロックは「[code: language]」、添付は「[file: ファイル名 (attachmentId)]」の
+ * 形にする（図は本文の文字がそのまま出る）。添付に ID を添えるのは、同じ名前の別の添付（版を上げて
+ * 送り直したファイルなど）へ差し替えても差分に出るようにするため。
  *
  * ブロックが object でない・type を持たない等パースできない形は `[変更あり]` という
  * プレースホルダ行にする（何が起きたか分かる程度の情報は残しつつ、例外は投げない）。
@@ -77,6 +79,8 @@ function collectText(node: unknown, depth: number): string {
     text = `[mention: ${attrStringOf(node, 'userId')}]`;
   } else if (type === 'codeBlock') {
     text = `[code: ${codeBlockLanguageOf(node)}]`;
+  } else if (type === 'attachment') {
+    text = `[file: ${attrStringOf(node, 'filename')} (${attrStringOf(node, 'attachmentId')})]`;
   }
 
   if (Array.isArray(node.content)) {

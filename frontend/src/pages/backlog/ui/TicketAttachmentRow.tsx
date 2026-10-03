@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { TicketRepository, type TicketAttachment } from '@/entities/ticket';
-import { formatFileSize } from '../lib/formatFileSize';
+import { formatFileSize } from '@/shared/lib/formatFileSize';
 import { FsIcon } from '@/shared/ui';
 
 export interface TicketAttachmentRowProps {

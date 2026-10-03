@@ -206,7 +206,8 @@ export function sanitizeDocLinks<T extends JSONContent>(node: T, depth = 0): T {
 /**
  * sanitizeContent は content 配列を歩く。3 つの仕事をする:
  * 1. object でない要素（null・数値など。壊れた doc や敵対的な入力が混じりうる）を落とす
- * 2. 画像ノードで許可できない src を持つものをノードごと落とす
+ * 2. 画像ノードで許可できない src を持つもの、添付ノードで attachmentId が UUID でないものを
+ *    ノードごと落とす（添付は ID だけが本文の正本。形の崩れた ID は保存側も断る）
  * 3. 残りを再帰的に sanitizeDocLinks へ通す
  */
 function sanitizeContent(content: JSONContent[] | undefined, depth: number): JSONContent[] | undefined {
@@ -215,6 +216,10 @@ function sanitizeContent(content: JSONContent[] | undefined, depth: number): JSO
   const next: JSONContent[] = [];
   for (const child of content) {
     if (!isPlainObject(child)) {
+      changed = true;
+      continue;
+    }
+    if (child.type === 'attachment' && !isAttachmentId((child as JSONContent).attrs?.attachmentId)) {
       changed = true;
       continue;
     }
@@ -274,6 +279,13 @@ function sanitizeMarks(marks: DocMark[] | undefined): DocMark[] | undefined {
   // マークが 1 つも残らなかったら marks 自体を落とす。tiptap の getJSON も空の marks は書かないので、
   // 空配列を残すと「同じ内容なのに JSON が違う」状態になり、保存の差分検出や往復比較が濁る。
   return next.length > 0 ? next : undefined;
+}
+
+/** 添付の ID の形（UUID の字面。backend は uuid.Parse で読み、正規形の小文字で保存する）。 */
+const ATTACHMENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function isAttachmentId(value: unknown): boolean {
+  return typeof value === 'string' && ATTACHMENT_ID_PATTERN.test(value);
 }
 
 /** 図の書式の許可リスト（backend の domain.ValidDiagramEngines と同じ）。 */

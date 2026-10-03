@@ -132,6 +132,7 @@ export default function KbPage() {
     error,
     saveStatus,
     contentConflictCount,
+    unknownAttachmentCount,
     onDocChange,
     renameTitle,
     changeIcon,
@@ -170,6 +171,16 @@ export default function KbPage() {
       '他の変更と競合したため本文を保存できませんでした。ページを再読み込みしてやり直してください。',
     );
   }, [contentConflictCount, showToast]);
+
+  // 本文保存が unknown_attachment で失敗したら、その添付を外すよう促す（再送では直らない）。
+  // 貼り付けの時点で別のページの添付は置き換えている（attachmentInsertion.ts）ので、ここに来るのは
+  // それをすり抜けた形（ほかのクライアントから入った本文など）。
+  const prevUnknownAttachmentCount = useRef(unknownAttachmentCount);
+  useEffect(() => {
+    if (unknownAttachmentCount === prevUnknownAttachmentCount.current) return;
+    prevUnknownAttachmentCount.current = unknownAttachmentCount;
+    showToast('error', 'このページのものではない添付が本文にあるため保存できませんでした。その添付を取り除いてください。');
+  }, [unknownAttachmentCount, showToast]);
 
   // handleChangeCover がアップロード完了後に「まだ同じページを開いているか」を確かめるための、
   // 常に最新のページを指す ref（data はクロージャに古い値が残るため state 変数の直接比較では
@@ -621,6 +632,27 @@ export default function KbPage() {
         : undefined,
     [uploadWorkspaceSlug, uploadPageId],
   );
+  // 添付も画像と同じく、編集できるときだけ送り先を渡す（送る先は書いたその時点のページ）。
+  const handleAttachmentUpload = useMemo(
+    () =>
+      uploadWorkspaceSlug && uploadPageId
+        ? (file: File) => KbRepository.uploadPageAttachment(uploadWorkspaceSlug, uploadPageId, file)
+        : undefined,
+    [uploadWorkspaceSlug, uploadPageId],
+  );
+  // 添付のダウンロードは閲覧できれば押せる（版のプレビュー・提案の下書きでも同じ口）。URL は期限が
+  // あるので控えず、押すたびに取り直す。
+  const attachmentWorkspaceSlug = data?.workspaceSlug;
+  const attachmentPageId = data?.page.id;
+  const downloadAttachment = useMemo(
+    () =>
+      attachmentWorkspaceSlug && attachmentPageId
+        ? async (attachmentId: string) =>
+            (await KbRepository.issuePageAttachmentDownloadURL(attachmentWorkspaceSlug, attachmentPageId, attachmentId)).url
+        : undefined,
+    [attachmentWorkspaceSlug, attachmentPageId],
+  );
+  const handleEditorNotice = useCallback((message: string) => showToast('error', message), [showToast]);
 
   // `[[` の候補。いまのワークスペースの題名検索を包み、自分自身は候補から外す（自己参照を防ぐ）。
   // ワークスペースが決まるまでは口を渡さない（`[[` は素の文字のまま）。
@@ -973,6 +1005,9 @@ export default function KbPage() {
                   focusSignal={bodyFocusSignal}
                   onImageUpload={handleImageUpload}
                   resolveImageSrc={resolveImageSrc}
+                  onAttachmentUpload={handleAttachmentUpload}
+                  downloadAttachment={downloadAttachment}
+                  onNotice={handleEditorNotice}
                   searchPages={searchPagesForRef}
                   searchTickets={searchTicketsForRef}
                   searchMembers={searchMembersForMention}

@@ -2,7 +2,7 @@ import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { useToast } from '@/shared/lib/hooks/useToast';
 import { getApiError } from '@/shared/lib/classifyApiError';
 import { useTicketAttachments } from '../model/useTicketAttachments';
-import { ACCEPTED_ATTACHMENT_ACCEPT_ATTR } from '../config/attachmentUpload';
+import { ACCEPTED_ATTACHMENT_ACCEPT_ATTR } from '@/shared/config/attachmentUpload';
 import TicketAttachmentRow from './TicketAttachmentRow';
 import TicketPendingAttachmentRow from './TicketPendingAttachmentRow';
 import { EmptyNotice, ErrorNotice, FsIcon, Loading } from '@/shared/ui';

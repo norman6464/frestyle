@@ -43,6 +43,7 @@ export type {
   KbPageDoc,
   KbResolvedPage,
   KbResolvedCover,
+  KbPageAttachment,
   KbAncestorRef,
   KbMySpace,
   KbSpaceMember,

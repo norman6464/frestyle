@@ -1,7 +1,7 @@
 /**
  * バイト数を「12.3 KB」のような表示用文字列にする（1024 進数・小数第 1 位まで）。
  *
- * 添付の一覧表示専用（他画面では使わないので shared には置かない）。
+ * 添付の表示（チケットの添付の一覧・ナレッジの本文の添付）で使う。
  */
 export function formatFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '';

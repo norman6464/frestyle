@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { Editor, type JSONContent } from '@tiptap/react';
 import { createEditorExtensions } from '../editorExtensions';
 import { emptyRichDoc } from '@/shared/lib/richDoc';
-import { acceptedImageFiles, insertUploadedImages } from '../imageInsertion';
+import { insertUploadedImages } from '../imageInsertion';
 
 let editor: Editor | null = null;
 
@@ -27,22 +27,6 @@ const imageFile = (name: string) => new File(['x'], name, { type: 'image/png' })
 afterEach(() => {
   editor?.destroy();
   editor = null;
-});
-
-describe('acceptedImageFiles', () => {
-  it('画像 MIME のファイルだけを取り出す', () => {
-    const files = [
-      imageFile('a.png'),
-      new File(['x'], 'b.txt', { type: 'text/plain' }),
-      new File(['x'], 'c.webp', { type: 'image/webp' }),
-    ];
-    expect(acceptedImageFiles(files).map((f) => f.name)).toEqual(['a.png', 'c.webp']);
-  });
-
-  it('null / undefined は空配列', () => {
-    expect(acceptedImageFiles(null)).toEqual([]);
-    expect(acceptedImageFiles(undefined)).toEqual([]);
-  });
 });
 
 describe('insertUploadedImages', () => {

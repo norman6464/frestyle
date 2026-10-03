@@ -16,3 +16,5 @@ export { TICKET_REF_TRIGGER } from './ticketRefSuggestion';
 export type { TicketRefCandidate, SearchTicketsForRef } from './ticketRefSuggestion';
 export { MENTION_TRIGGER } from './mentionSuggestion';
 export type { MentionCandidate, SearchMembersForMention } from './mentionSuggestion';
+export type { AttachmentUploader, UploadedAttachment } from './attachmentInsertion';
+export type { DownloadAttachment } from './AttachmentView';

@@ -1,5 +1,5 @@
 import type { PendingAttachment } from '../model/useTicketAttachments';
-import { formatFileSize } from '../lib/formatFileSize';
+import { formatFileSize } from '@/shared/lib/formatFileSize';
 import { FsIcon } from '@/shared/ui';
 
 export interface TicketPendingAttachmentRowProps {
