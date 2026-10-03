@@ -2,6 +2,7 @@ import { getSchema, mergeAttributes, Node } from '@tiptap/core';
 import type { AnyExtension, Extensions } from '@tiptap/core';
 import type { NodeType } from '@tiptap/pm/model';
 import Blockquote from '@tiptap/extension-blockquote';
+import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details';
 import Code from '@tiptap/extension-code';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Heading from '@tiptap/extension-heading';
@@ -455,6 +456,118 @@ export const KbMention = Node.create({
   },
 });
 
+/** 注意書きの種類（domain.CalloutKind と同じ 4 値。既定は info）。 */
+export const CALLOUT_KINDS = ['info', 'warning', 'danger', 'success'] as const;
+export type CalloutKind = (typeof CALLOUT_KINDS)[number];
+
+function calloutKind(value: unknown): CalloutKind {
+  return (CALLOUT_KINDS as readonly string[]).includes(value as string) ? (value as CalloutKind) : 'info';
+}
+
+/**
+ * Callout は「注意書き」— 中にブロックを持つ容器（左に印、地は種類ごとの淡い色）。
+ * attrs.kind は許可リストの値だけ（知らない値は info へ）。保存側も同じ規則で落とす。
+ */
+export const Callout = Node.create({
+  name: 'callout',
+  group: 'block',
+  content: 'block+',
+  defining: true,
+
+  addAttributes() {
+    return {
+      kind: {
+        default: 'info',
+        parseHTML: (element) => calloutKind(element.getAttribute('data-kind')),
+        renderHTML: (attributes) => ({ 'data-kind': calloutKind(attributes.kind) }),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'div[data-callout]' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes({ 'data-callout': '', class: 'rte-callout' }, HTMLAttributes), 0];
+  },
+});
+
+/** 段組みの列数の範囲（domain の ColumnsMinCount / ColumnsMaxCount と同じ）。 */
+export const COLUMNS_MIN_COUNT = 2;
+export const COLUMNS_MAX_COUNT = 3;
+
+function columnsCount(value: unknown): number {
+  const n = typeof value === 'string' ? Number(value) : value;
+  return typeof n === 'number' && Number.isInteger(n) && n >= COLUMNS_MIN_COUNT && n <= COLUMNS_MAX_COUNT
+    ? n
+    : COLUMNS_MIN_COUNT;
+}
+
+/**
+ * Columns / Column は「段組み」— 2〜3 列の容器と、その 1 列。列の中に容器（注意書き・折りたたみ・
+ * 段組み）は入れ子にしない（深さと崩れを抑える。content 式で閉じる）。狭い画面では縦に積む（CSS）。
+ */
+export const Columns = Node.create({
+  name: 'columns',
+  group: 'block',
+  content: `column{${COLUMNS_MIN_COUNT},${COLUMNS_MAX_COUNT}}`,
+  defining: true,
+  isolating: true,
+
+  addAttributes() {
+    return {
+      count: {
+        default: COLUMNS_MIN_COUNT,
+        parseHTML: (element) => columnsCount(element.getAttribute('data-count')),
+        renderHTML: (attributes) => ({ 'data-count': String(columnsCount(attributes.count)) }),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'div[data-columns]' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes({ 'data-columns': '', class: 'rte-columns' }, HTMLAttributes), 0];
+  },
+});
+
+/** 列の中に置ける種類（容器＝注意書き・折りたたみ・段組みは入れ子にしない）。 */
+const COLUMN_CHILD_TYPES = [
+  'paragraph',
+  'heading',
+  'bulletList',
+  'orderedList',
+  'taskList',
+  'blockquote',
+  'codeBlock',
+  'image',
+  'horizontalRule',
+  'table',
+] as const;
+
+/** 列の content 式。画像ノードを外したスキーマ（image: false）では image も式から外す。 */
+function columnContent(image: boolean): string {
+  return `(${COLUMN_CHILD_TYPES.filter((type) => image || type !== 'image').join(' | ')})+`;
+}
+
+export const Column = Node.create({
+  name: 'column',
+  content: columnContent(true),
+  defining: true,
+  isolating: true,
+
+  parseHTML() {
+    return [{ tag: 'div[data-column]' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes({ 'data-column': '', class: 'rte-column' }, HTMLAttributes), 0];
+  },
+});
+
 /** createSchemaExtensions の組み立てオプション。 */
 export interface CreateSchemaExtensionsOptions {
   /** 画像ノードをスキーマに含めるか（既定 true）。 */
@@ -533,6 +646,14 @@ export function createSchemaExtensions(
     TicketRef,
     // @名指し（インラインの atom）。表示名はサーバーが読み出し時に解決する。
     KbMention,
+    // 容器（第 4 段）: 注意書き・折りたたみ（要約は葉、中身は容器）・段組み。
+    // 折りたたみは公式拡張。開閉の状態（open）は本文に保存する（書いた人が既定を決める）。
+    withBlockId(Callout),
+    withBlockId(Details).configure({ persist: true }),
+    withBlockId(DetailsSummary),
+    withBlockId(DetailsContent),
+    withBlockId(Columns),
+    withBlockId(image ? Column : Column.extend({ content: columnContent(false) })),
   ];
 
   if (image) {

@@ -1,20 +1,89 @@
 {
   "description": "ナレッジのページ本文を構成するブロックの種類と、それが容器（中にブロックを持つ）か葉かの一覧。backend（internal/domain/block.go の表）と frontend（pages/kb の本文エディタのスキーマ）の両方のテストがこのファイルと突き合わせる。片方にだけ種類を足すと、保存は通るのに検索・コメント・被リンクが黙って壊れるため、ここを 1 つの正本にする。",
   "blockTypes": [
-    { "type": "paragraph", "container": false },
-    { "type": "heading", "container": false },
-    { "type": "codeBlock", "container": false },
-    { "type": "blockquote", "container": true },
-    { "type": "bulletList", "container": true },
-    { "type": "orderedList", "container": true },
-    { "type": "listItem", "container": true },
-    { "type": "taskList", "container": true },
-    { "type": "taskItem", "container": true },
-    { "type": "table", "container": true },
-    { "type": "tableRow", "container": true },
-    { "type": "tableHeader", "container": true },
-    { "type": "tableCell", "container": true },
-    { "type": "image", "container": false },
-    { "type": "horizontalRule", "container": false }
+    {
+      "type": "paragraph",
+      "container": false
+    },
+    {
+      "type": "heading",
+      "container": false
+    },
+    {
+      "type": "codeBlock",
+      "container": false
+    },
+    {
+      "type": "blockquote",
+      "container": true
+    },
+    {
+      "type": "bulletList",
+      "container": true
+    },
+    {
+      "type": "orderedList",
+      "container": true
+    },
+    {
+      "type": "listItem",
+      "container": true
+    },
+    {
+      "type": "taskList",
+      "container": true
+    },
+    {
+      "type": "taskItem",
+      "container": true
+    },
+    {
+      "type": "table",
+      "container": true
+    },
+    {
+      "type": "tableRow",
+      "container": true
+    },
+    {
+      "type": "tableHeader",
+      "container": true
+    },
+    {
+      "type": "tableCell",
+      "container": true
+    },
+    {
+      "type": "image",
+      "container": false
+    },
+    {
+      "type": "horizontalRule",
+      "container": false
+    },
+    {
+      "type": "callout",
+      "container": true
+    },
+    {
+      "type": "details",
+      "container": true
+    },
+    {
+      "type": "detailsSummary",
+      "container": false
+    },
+    {
+      "type": "detailsContent",
+      "container": true
+    },
+    {
+      "type": "columns",
+      "container": true
+    },
+    {
+      "type": "column",
+      "container": true
+    }
   ]
 }

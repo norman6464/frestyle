@@ -37,6 +37,7 @@
     "@tiptap/extension-blockquote": "^3.30.2",
     "@tiptap/extension-code": "^3.30.2",
     "@tiptap/extension-code-block-lowlight": "^3.30.2",
+    "@tiptap/extension-details": "^3.30.5",
     "@tiptap/extension-heading": "^3.30.2",
     "@tiptap/extension-horizontal-rule": "^3.30.2",
     "@tiptap/extension-image": "^3.30.2",
