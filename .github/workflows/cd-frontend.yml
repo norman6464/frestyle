@@ -128,27 +128,47 @@ jobs:
       - name: 配信された実物を確かめる
         env:
           AUTH_MODE: ${{ inputs.auth_mode || 'configured' }}
+          # 配信の完了（release complete）からエッジ（CDN）が新しい index.html を返すまでには少し間がある。
+          # 完了の直後に 1 回だけ取ると古い HTML を掴んで失敗と判定するので、揃うまで間隔を空けて取り直す。
+          # 上限（ATTEMPTS × INTERVAL 秒）まで待っても古いままなら、本当にエッジに古い版が残っているとみなして落とす。
+          # 上限はジョブの timeout-minutes に収める。
+          ATTEMPTS: '18'
+          INTERVAL: '10'
         run: |
+          # 利用者が開くのと同じ URL を取る（キャッシュを避ける問い合わせ文字列は付けない。見たいのは利用者に見えている版）
           url="https://frestyle-dev.web.app/"
-          code=$(curl -sS -o /tmp/index.html -w '%{http_code}' --max-time 30 "$url")
-          if [ "$code" != "200" ]; then
-            echo "::error::${url} が ${code} を返しました"
-            exit 1
-          fi
+          expected=$(grep -o 'assets/[A-Za-z0-9._-]*\.js' frontend/dist/index.html | sort -u)
 
-          if ! grep -q 'id="root"' /tmp/index.html; then
-            echo "::error::配信された HTML に描画先が見つかりません"
-            exit 1
-          fi
+          attempt=1
+          while :; do
+            problem=""
+            # 通信そのものに失敗しても curl は -w で 000 を出す。set -e で止まらないよう終了コードだけ握る
+            code=$(curl -sS -o /tmp/index.html -w '%{http_code}' --max-time 15 "$url") || code="${code:-000}"
+            if [ "$code" != "200" ]; then
+              problem="${url} が ${code} を返しました"
+            elif ! grep -q 'id="root"' /tmp/index.html; then
+              problem="配信された HTML に描画先が見つかりません"
+            else
+              missing_assets=""
+              for asset in ${expected}; do
+                grep -q "${asset}" /tmp/index.html || missing_assets="${missing_assets} ${asset}"
+              done
+              if [ -n "${missing_assets}" ]; then
+                problem="配信された HTML が今回の資産を指していません（欠け:${missing_assets}）。エッジに古い版が残っています"
+              fi
+            fi
 
-          missing_assets=""
-          for asset in $(grep -o 'assets/[A-Za-z0-9._-]*\.js' frontend/dist/index.html | sort -u); do
-            grep -q "${asset}" /tmp/index.html || missing_assets="${missing_assets} ${asset}"
+            if [ -z "${problem}" ]; then
+              break
+            fi
+            if [ "${attempt}" -ge "${ATTEMPTS}" ]; then
+              echo "::error::${problem}（${attempt} 回取り直しても揃いませんでした）"
+              exit 1
+            fi
+            echo "${attempt} 回目: ${problem}。${INTERVAL} 秒後に取り直します"
+            attempt=$((attempt + 1))
+            sleep "${INTERVAL}"
           done
-          if [ -n "${missing_assets}" ]; then
-            echo "::error::配信された HTML が今回の資産を指していません（欠け:${missing_assets}）。エッジに古い版が残っています"
-            exit 1
-          fi
 
           entry=$(grep -o 'assets/[A-Za-z0-9._-]*\.js' /tmp/index.html | head -1)
           entry_code=$(curl -sS -o /tmp/entry.js -w '%{http_code}' --max-time 30 "https://frestyle-dev.web.app/${entry}")
@@ -157,11 +177,11 @@ jobs:
             exit 1
           fi
 
-          echo "配信を確認しました（${url} → ${code} / ${entry} → ${entry_code}）"
+          echo "配信を確認しました（${url} → ${code} / ${entry} → ${entry_code}・${attempt} 回目で揃った）"
           {
             echo "### 配信の確認"
             echo "- \`${url}\` → ${code}"
-            echo "- 今回の資産をすべて指している"
+            echo "- 今回の資産をすべて指している（${attempt} 回目の取得で揃った）"
             echo "- \`${entry}\` → ${entry_code}"
             echo "- ログイン: $([ "${AUTH_MODE}" = "unconfigured" ] && echo "停止" || echo "有効")"
           } >> "$GITHUB_STEP_SUMMARY"
