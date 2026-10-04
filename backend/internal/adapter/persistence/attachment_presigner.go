@@ -16,23 +16,40 @@ type attachmentDownloadPresigner interface {
 	PresignGetAsAttachment(ctx context.Context, key, contentDisposition string) (url string, ttl time.Duration, err error)
 }
 
-// pageAttachmentPresigner はナレッジのページ添付用 presigner
-// （kb/{workspaceId}/{pageId}/att/{epochNs}.bin キー。キーの組み立ては呼び出し側の usecase が行う）。
-type pageAttachmentPresigner struct {
+// attachmentPresigner は添付（ナレッジのページ添付・チケット添付）の presigner。アップロードは
+// 大きさを署名に焼き込んだ PUT、ダウンロードは元のファイル名で保存させる GET。キーの組み立て
+// （kb/{ws}/{page}/att/… ・ tickets/{ws}/{ticket}/…）は呼び出し側の usecase が行う。
+// repository.PageAttachmentPresigner と repository.TicketAttachmentPresigner の両方を満たす。
+type attachmentPresigner struct {
 	pre attachmentDownloadPresigner
 }
 
+var (
+	_ repository.PageAttachmentPresigner   = (*attachmentPresigner)(nil)
+	_ repository.TicketAttachmentPresigner = (*attachmentPresigner)(nil)
+)
+
 // NewPageAttachmentPresigner は本番経路。infra/gcs.Presigner を渡して使う。
 func NewPageAttachmentPresigner(p attachmentDownloadPresigner) repository.PageAttachmentPresigner {
-	return &pageAttachmentPresigner{pre: p}
+	return &attachmentPresigner{pre: p}
 }
 
 // NewStubPageAttachmentPresigner は test / dev 用 stub。
 func NewStubPageAttachmentPresigner(bucket string) repository.PageAttachmentPresigner {
-	return &pageAttachmentPresigner{pre: &stubPresigner{bucket: bucket}}
+	return &attachmentPresigner{pre: &stubPresigner{bucket: bucket}}
 }
 
-func (p *pageAttachmentPresigner) PresignUpload(ctx context.Context, key, contentType string, size int64) (string, int, error) {
+// NewTicketAttachmentPresigner は本番経路（チケット添付）。infra/gcs.Presigner を渡して使う。
+func NewTicketAttachmentPresigner(p attachmentDownloadPresigner) repository.TicketAttachmentPresigner {
+	return &attachmentPresigner{pre: p}
+}
+
+// NewStubTicketAttachmentPresigner は test / dev 用 stub（チケット添付）。
+func NewStubTicketAttachmentPresigner(bucket string) repository.TicketAttachmentPresigner {
+	return &attachmentPresigner{pre: &stubPresigner{bucket: bucket}}
+}
+
+func (p *attachmentPresigner) PresignUpload(ctx context.Context, key, contentType string, size int64) (string, int, error) {
 	url, ttl, err := p.pre.PresignPut(ctx, key, contentType, size)
 	if err != nil {
 		return "", 0, err
@@ -40,7 +57,7 @@ func (p *pageAttachmentPresigner) PresignUpload(ctx context.Context, key, conten
 	return url, int(ttl.Seconds()), nil
 }
 
-func (p *pageAttachmentPresigner) PresignDownload(ctx context.Context, key, filename string) (string, int, error) {
+func (p *attachmentPresigner) PresignDownload(ctx context.Context, key, filename string) (string, int, error) {
 	url, ttl, err := p.pre.PresignGetAsAttachment(ctx, key, attachmentContentDisposition(filename))
 	if err != nil {
 		return "", 0, err

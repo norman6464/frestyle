@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -48,7 +49,11 @@ func Test_添付一式_発行記録一覧ダウンロードURL削除(t *testing.
 	w = f.do(t, http.MethodGet, base+"/"+attachmentID+"/download-url", "")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	dl := decodeJSON[map[string]any](t, w)
-	assert.NotEmpty(t, dl["url"])
+	dlURL, ok := dl["url"].(string)
+	require.True(t, ok)
+	parsed, err := url.Parse(dlURL)
+	require.NoError(t, err)
+	assert.Equal(t, "資料.pdf", parsed.Query().Get("filename"), "記録した元のファイル名で保存させる URL を発行する（fake は保存名を query に写す）")
 
 	// 5) 削除。
 	w = f.do(t, http.MethodDelete, base+"/"+attachmentID, "")

@@ -136,7 +136,8 @@ func (u *ListTicketAttachmentsUseCase) Execute(ctx context.Context, workspaceID,
 	return u.repo.ListTicketAttachments(ctx, workspaceID, ticketID)
 }
 
-// IssueTicketAttachmentDownloadURLUseCase は添付の GET presigned URL を発行する。専用表
+// IssueTicketAttachmentDownloadURLUseCase は添付の GET presigned URL を、元のファイル名で保存させる
+// 指定つきで発行する。専用表
 // ticket_attachments を持つため、kb ページ画像のような「key 接頭辞でテナント境界を振り分けて
 // から検査する」二段構えは不要 — FindTicketAttachment が (workspace_id, ticket_id, id) で絞る
 // ので、見つかった時点でこのチケットの添付だと確定する。
@@ -172,7 +173,9 @@ func (u *IssueTicketAttachmentDownloadURLUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
-	url, expiresIn, err := u.presigner.PresignDownload(ctx, a.Key)
+	// 元のファイル名で保存させる（保管庫の名前は tickets/<ws>/<ticket>/<数字>.bin なので、そのままだと
+	// 利用者の手元に数字の名前のファイルが残る）。
+	url, expiresIn, err := u.presigner.PresignDownload(ctx, a.Key, a.Filename)
 	if err != nil {
 		return nil, err
 	}
