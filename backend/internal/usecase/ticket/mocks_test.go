@@ -831,8 +831,8 @@ func (m *mockTicketAttachmentPresigner) PresignUpload(ctx context.Context, key, 
 	return args.String(0), args.Int(1), args.Error(2)
 }
 
-func (m *mockTicketAttachmentPresigner) PresignDownload(ctx context.Context, key string) (string, int, error) {
-	args := m.Called(ctx, key)
+func (m *mockTicketAttachmentPresigner) PresignDownload(ctx context.Context, key, filename string) (string, int, error) {
+	args := m.Called(ctx, key, filename)
 	return args.String(0), args.Int(1), args.Error(2)
 }
 

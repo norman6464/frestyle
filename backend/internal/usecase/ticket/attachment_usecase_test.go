@@ -120,13 +120,13 @@ func Test_添付ダウンロードURL発行_見つからなければそのまま
 	require.ErrorIs(t, err, repository.ErrTicketAttachmentNotFound)
 }
 
-func Test_添付ダウンロードURL発行_保存済みのkeyで署名する(t *testing.T) {
+func Test_添付ダウンロードURL発行_保存済みのkeyと元のファイル名で署名する(t *testing.T) {
 	repo := &mockTicketAttachmentRepo{}
 	key := "tickets/" + tkWS + "/" + tkTicket + "/123.bin"
 	repo.On("FindTicketAttachment", mock.Anything, tkWS, tkTicket, "attachment-1").
-		Return(&domain.TicketAttachment{ID: "attachment-1", Key: key}, nil)
+		Return(&domain.TicketAttachment{ID: "attachment-1", Key: key, Filename: "見積書.xlsx"}, nil)
 	presigner := &mockTicketAttachmentPresigner{}
-	presigner.On("PresignDownload", mock.Anything, key).Return("https://example/get", 600, nil)
+	presigner.On("PresignDownload", mock.Anything, key, "見積書.xlsx").Return("https://example/get", 600, nil)
 
 	out, err := ticket.NewIssueTicketAttachmentDownloadURLUseCase(repo, presigner).
 		Execute(context.Background(), ticket.IssueTicketAttachmentDownloadURLInput{

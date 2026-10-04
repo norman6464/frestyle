@@ -27,5 +27,7 @@ type TicketAttachmentRepository interface {
 // 済ませている前提で、ここは署名の発行だけを担う（KbImagePresigner と同じ役割分担）。
 type TicketAttachmentPresigner interface {
 	PresignUpload(ctx context.Context, key, contentType string, size int64) (url string, expiresIn int, err error)
-	PresignDownload(ctx context.Context, key string) (url string, expiresIn int, err error)
+	// PresignDownload は filename を元の名前として保存させる GET 用 URL を返す
+	// （署名付き URL に Content-Disposition の指定を載せる。無いと保管庫の名前「数字.bin」で保存される）。
+	PresignDownload(ctx context.Context, key, filename string) (url string, expiresIn int, err error)
 }

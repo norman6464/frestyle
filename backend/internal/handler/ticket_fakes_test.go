@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -1335,8 +1336,8 @@ func (ticketAttachmentFakePresigner) PresignUpload(_ context.Context, key, _ str
 	return "https://fake-storage.example/" + key + "?mode=put", 600, nil
 }
 
-func (ticketAttachmentFakePresigner) PresignDownload(_ context.Context, key string) (string, int, error) {
-	return "https://fake-storage.example/" + key + "?mode=get", 600, nil
+func (ticketAttachmentFakePresigner) PresignDownload(_ context.Context, key, filename string) (string, int, error) {
+	return "https://fake-storage.example/" + key + "?mode=get&filename=" + url.QueryEscape(filename), 600, nil
 }
 
 var _ repository.TicketAttachmentPresigner = ticketAttachmentFakePresigner{}
