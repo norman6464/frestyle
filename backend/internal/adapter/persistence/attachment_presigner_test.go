@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"testing"
 	"time"
@@ -54,6 +55,45 @@ func Test_添付の保存名の指定(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, attachmentContentDisposition(tc.filename))
+		})
+	}
+}
+
+// failingAttachmentSigner は署名がすべて失敗する偽物（attachmentDownloadPresigner）。
+type failingAttachmentSigner struct{ err error }
+
+func (f failingAttachmentSigner) PresignPut(context.Context, string, string, int64) (string, time.Duration, error) {
+	return "https://should-not-be-used", time.Minute, f.err
+}
+
+func (f failingAttachmentSigner) PresignGet(context.Context, string) (string, time.Duration, error) {
+	return "https://should-not-be-used", time.Minute, f.err
+}
+
+func (f failingAttachmentSigner) PresignGetAsAttachment(context.Context, string, string) (string, time.Duration, error) {
+	return "https://should-not-be-used", time.Minute, f.err
+}
+
+// Test_添付presigner_署名に失敗したらそのエラーと空の値を返す は、署名の失敗を握り潰さず、途中の URL や
+// 有効期限を返さないことを固定する（ページ添付・チケット添付は同じ実装なので 1 つで見る）。
+func Test_添付presigner_署名に失敗したらそのエラーと空の値を返す(t *testing.T) {
+	ctx := context.Background()
+	signErr := errors.New("iam signBlob failed")
+	p := &attachmentPresigner{pre: failingAttachmentSigner{err: signErr}}
+
+	cases := []struct {
+		name string
+		call func() (string, int, error)
+	}{
+		{"アップロード", func() (string, int, error) { return p.PresignUpload(ctx, "tickets/ws/t/1.bin", "application/pdf", 10) }},
+		{"ダウンロード", func() (string, int, error) { return p.PresignDownload(ctx, "tickets/ws/t/1.bin", "a.pdf") }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, expiresIn, err := tc.call()
+			require.ErrorIs(t, err, signErr)
+			assert.Empty(t, got)
+			assert.Zero(t, expiresIn)
 		})
 	}
 }
