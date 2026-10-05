@@ -18,27 +18,14 @@ repositories {
 }
 
 dependencies {
+	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("org.springframework.boot:spring-boot-starter-jdbc")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	runtimeOnly("org.postgresql:postgresql")
-	testImplementation("org.springframework.boot:spring-boot-starter-jdbc-test")
-	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-tasks.test {
-	useJUnitPlatform {
-		excludeTags("integration")
-	}
-}
-
-tasks.register<Test>("integrationTest") {
-	group = "verification"
-	description = "実 PostgreSQL に接続する結合テスト"
-	testClassesDirs = sourceSets.test.get().output.classesDirs
-	classpath = sourceSets.test.get().runtimeClasspath
-	useJUnitPlatform {
-		includeTags("integration")
-	}
-	outputs.upToDateWhen { false }
+tasks.withType<Test> {
+	useJUnitPlatform()
 }
