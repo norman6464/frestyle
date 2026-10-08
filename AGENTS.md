@@ -23,9 +23,11 @@ This file is the single source of truth for AI coding agents working in this rep
 ## 1. Project basics
 
 - **Production URL**: https://frestyle.dev
-- **Backend**: Go 1.x / Gin / sqlc (`backend/`)
+- **Backend**: being replaced, Go → Java. Both trees live here until the cutover
+  - `backend/`: Go 1.x / Gin / sqlc. **This is what production runs** and what `cd-backend.yml` deploys
+  - `backend-java/`: Java 21 / Spring Boot 4 / Gradle (Kotlin DSL). The replacement, under construction. Nothing in CI, CD, or `docker-compose.yml` builds it yet
 - **Frontend**: React 19 / TypeScript / Vite / Tailwind CSS (`frontend/`)
-- **RDB**: PostgreSQL 17.6. Data access goes through **sqlc** (typed Go generated from SQL)
+- **RDB**: PostgreSQL 17.6. Data access goes through **sqlc** in `backend/` (typed Go generated from SQL) and **`JdbcClient`** in `backend-java/` (hand-written SQL, no JPA)
 - **Production runs on GCP**
   - Backend runs on Cloud Run, frontend on Firebase Hosting. Service names, project IDs, and image paths are in the infra repo, not here
   - Infrastructure definitions (Cloud Run / Artifact Registry / Firebase Hosting / WIF) are owned by the Terraform in the private repo `frestyle-infrastructure`. CD only swaps images and publishes; it never touches infrastructure definitions
@@ -36,9 +38,46 @@ This file is the single source of truth for AI coding agents working in this rep
 
 ---
 
-## 2. Clean architecture rules (most important)
+## 2. Architecture rules (most important)
 
-### 2.1 Dependency direction
+Each tree has its own architecture. Follow the rules of the tree you are editing: `backend-java/` is layered (2.1–2.3), `backend/` is clean architecture (2.4), `frontend/` is FSD (2.5).
+
+### 2.1 Java: layers and dependency direction
+
+```
+controller → service → repository → domain
+```
+
+- One package per layer under `com.frestyle.backend`: `controller` / `service` / `repository` / `domain` / `dto` / `config`
+- **Dependencies in any direction other than the arrows are forbidden**. Review is the only check for now
+- controller reaches a repository only through a service
+- service knows nothing about HTTP (never takes `HttpServletRequest`, `ResponseEntity`, or similar)
+- repository does not know about service. domain is plain Java (no Spring)
+- **Not decided yet, so ask before settling any of these yourself**:
+  - sub-packages per domain
+  - a home for external-service clients (the Go `infra`)
+  - interfaces in front of repositories
+  - one service calling another
+  - what a service takes as input: the request DTO or a type of its own (the Go `XxxInput`)
+  - a second guard on sensitive domain fields (the Go `json:"-"`)
+
+### 2.2 Java: Spring conventions
+
+- **The Go tree is the behavior to port, not the shape**. Write it the way Spring does: the usecases of one domain become methods on one `@Service` class (`TicketService`), not one class per operation
+- The service is the transaction boundary (`@Transactional`)
+- A repository issues hand-written SQL through `JdbcClient` (no JPA)
+- **Use what Spring Boot ships before writing your own**: health is Actuator, and the DB connection is the standard `SPRING_DATASOURCE_URL` / `USERNAME` / `PASSWORD` (a `jdbc:postgresql://` URL, unlike the Go side's `DATABASE_URL`)
+- Keep HikariCP settings in `application.properties`. Passed as the environment variable `SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT`, the same setting stops the app at startup (we hit this)
+
+### 2.3 Java: DTOs (request / response types)
+
+- Request / response types are `record`s in the `dto` package (`TicketRequest`, `TicketResponse`, ...)
+- Controllers bind a request DTO (`@RequestBody @Valid` + Bean Validation), call the service, and convert the returned domain object into a response DTO. Only DTOs go out as JSON, never a domain object
+- The conversion is a static factory on the DTO (`TicketResponse.from(ticket)`). `dto` imports `domain` only
+
+### 2.4 Go (`backend/`): clean architecture
+
+#### Dependency direction
 
 ```
 handler → usecase → repository / infra → domain
@@ -50,7 +89,7 @@ handler → usecase → repository / infra → domain
 - repository / infra do not know about usecase. domain depends on no other layer (standard library only)
 
 
-### 2.2 One struct, one responsibility (usecase)
+#### One struct, one responsibility (usecase)
 
 - One usecase holds one business rule. Do not bundle multiple operations
 - Write a usecase as **struct + `NewXxxUseCase` constructor + `Execute(ctx, in) (out, error)`**
@@ -59,7 +98,7 @@ handler → usecase → repository / infra → domain
   On the handler side, do not declare a local variable with the same name as a package (`user` / `exercise` / `kb`, etc.);
   it shadows the package reference and causes a compile error
 
-### 2.4 DTOs: request / response types
+#### DTOs: request / response types
 
 - Request / response types are DTOs and live in `backend/internal/handler/dto`, one file per domain (`ticket_dto.go`, `kb_dto.go`, ...). Do not define them inside handler files
 - Handlers bind a request DTO (`c.ShouldBindJSON` + `binding:"required"` etc.), call the usecase with an `XxxInput`, and convert the returned `*domain.Xxx` (or primitive) into a response DTO. Do not return domain structs directly as JSON
@@ -96,9 +135,11 @@ app > pages > widgets > features > entities > shared
 ### 3.3 Testing
 
 - **TDD is the default**
-- **Backend (unit)**: `testing` + `stretchr/testify` (`go test ./...`) — usecases use interface mocks (testify/mock), handlers use `httptest` + `gin.New()`, infra gets fakes / stubs injected at the boundary. **Only tests that need no DB** go here
-- **Backend (integration)**: repositories are verified against **a real PostgreSQL** (no sqlite; the dependency is not even included). Put `//go:build integration` at the top of the file and include `Integration` in the test function name. Locally run `make test-integration` (starts postgres in docker → runs → always tears down); in CI the dedicated job `integration tests (postgres)` runs with `-tags=integration`
-- Integration tests connect through `internal/testsupport.OpenTestDB`. Because `TruncateAll` runs TRUNCATE CASCADE, **there is a safety valve that aborts before connecting if the DSN points at Supabase / the production pooler** (so a misconfiguration cannot wipe production data)
+- **Java backend (unit)**: JUnit + AssertJ + Mockito from `spring-boot-starter-test` (`./gradlew test`) — services get Mockito mocks of their repositories, controllers use `@WebMvcTest` + MockMvc. **Only tests that need no DB** go here. Spring Boot 4 moved `@WebMvcTest` out of that starter into `spring-boot-starter-webmvc-test`; add it with the first controller test
+- **Java backend (integration)**: the Go rule carries over — a repository is verified against a real PostgreSQL (no H2). The harness is not built yet, so ask before choosing one
+- **Go backend (unit)**: `testing` + `stretchr/testify` (`go test ./...`) — usecases use interface mocks (testify/mock), handlers use `httptest` + `gin.New()`, infra gets fakes / stubs injected at the boundary. **Only tests that need no DB** go here
+- **Go backend (integration)**: repositories are verified against **a real PostgreSQL** (no sqlite; the dependency is not even included). Put `//go:build integration` at the top of the file and include `Integration` in the test function name. Locally run `make test-integration` (starts postgres in docker → runs → always tears down); in CI the dedicated job `integration tests (postgres)` runs with `-tags=integration`
+- Go integration tests connect through `internal/testsupport.OpenTestDB`. Because `TruncateAll` runs TRUNCATE CASCADE, **there is a safety valve that aborts before connecting if the DSN points at Supabase / the production pooler** (so a misconfiguration cannot wipe production data)
 - Frontend: Vitest + React Testing Library (`pnpm test`). **Pin `vitest` / `@vitest/browser-playwright` / `@vitest/coverage-v8` to the same exact version** (no `^`). The core and the browser side must speak the same protocol; if they drift, every story test stops with "could not connect to the browser session" (we hit this) — verify accessibility too with `render` + `screen.getByRole`; hooks use `renderHook`
 
 ---
@@ -106,4 +147,4 @@ app > pages > widgets > features > entities > shared
 ## Instructions for coding agents
 - For new screens, make maximum use of the **reusable components in `src/shared/ui/`**
 - Never commit or push directly to `main`
-- Put `xxxRequest` / `xxxResponse` DTOs in `internal/handler/dto` (see 2.4). Hide sensitive fields on the domain side with `json:"-"`
+- Put request / response DTOs in the `dto` package of the tree you are editing (Java: 2.3, Go: 2.4). In Go, hide sensitive fields on the domain side with `json:"-"`
