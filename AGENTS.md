@@ -23,9 +23,9 @@ This file is the single source of truth for AI coding agents working in this rep
 ## 1. Project basics
 
 - **Production URL**: https://frestyle.dev
-- **Backend**: Go 1.x / Gin / sqlc (`backend/`)
+- **Backend**: Java 21 / Spring Boot 4 / Gradle (Kotlin DSL) (`backend-java/`)
 - **Frontend**: React 19 / TypeScript / Vite / Tailwind CSS (`frontend/`)
-- **RDB**: PostgreSQL 17.6. Data access goes through **sqlc** (typed Go generated from SQL)
+- **RDB**: PostgreSQL 17.6. Data access goes through **`JdbcClient`** (hand-written SQL, no JPA)
 - **Production runs on GCP**
   - Backend runs on Cloud Run, frontend on Firebase Hosting. Service names, project IDs, and image paths are in the infra repo, not here
   - Infrastructure definitions (Cloud Run / Artifact Registry / Firebase Hosting / WIF) are owned by the Terraform in the private repo `frestyle-infrastructure`. CD only swaps images and publishes; it never touches infrastructure definitions
@@ -36,36 +36,40 @@ This file is the single source of truth for AI coding agents working in this rep
 
 ---
 
-## 2. Clean architecture rules (most important)
+## 2. Layered architecture rules (most important)
 
 ### 2.1 Dependency direction
 
 ```
-handler → usecase → repository / infra → domain
+controller → service → repository → domain
 ```
 
-- **Dependencies in any direction other than the arrows are forbidden**
-- handler never calls repository / infra directly. Always go through a usecase
-- usecase does not know about handler (never takes `*gin.Context` or similar as an argument)
-- repository / infra do not know about usecase. domain depends on no other layer (standard library only)
+- One package per layer under `com.frestyle.backend`: `controller` / `service` / `repository` / `domain` / `dto` / `config`
+- **Dependencies in any direction other than the arrows are forbidden**. Review is the only check for now
+- controller reaches a repository only through a service
+- service knows nothing about HTTP (never takes `HttpServletRequest`, `ResponseEntity`, or similar)
+- repository does not know about service. domain is plain Java (no Spring)
+- **Not decided yet, so ask before settling any of these yourself**:
+  - sub-packages per domain
+  - a home for external-service clients
+  - interfaces in front of repositories
+  - one service calling another
+  - what a service takes as input: the request DTO or a type of its own
+  - a second guard on sensitive domain fields (password hash, invitation token, etc.), on top of keeping them out of DTOs
 
+### 2.2 Spring conventions
 
-### 2.2 One struct, one responsibility (usecase)
-
-- One usecase holds one business rule. Do not bundle multiple operations
-- Write a usecase as **struct + `NewXxxUseCase` constructor + `Execute(ctx, in) (out, error)`**
-- Put new usecases in `internal/usecase/<domain>/`. Never directly under `internal/usecase/*.go`
-- usecase sub-packages do not import each other (if they seem to need to, question how the responsibilities are split).
-  On the handler side, do not declare a local variable with the same name as a package (`user` / `exercise` / `kb`, etc.);
-  it shadows the package reference and causes a compile error
+- One `@Service` class per domain (`TicketService`), one method per operation
+- The service is the transaction boundary (`@Transactional`)
+- A repository issues hand-written SQL through `JdbcClient` (no JPA)
+- **Use what Spring Boot ships before writing your own**: health is Actuator, and the DB connection is the standard `SPRING_DATASOURCE_URL` / `USERNAME` / `PASSWORD`
+- Keep HikariCP settings in `application.properties`. Passed as the environment variable `SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT`, the same setting stops the app at startup (we hit this)
 
 ### 2.4 DTOs: request / response types
 
-- Request / response types are DTOs and live in `backend/internal/handler/dto`, one file per domain (`ticket_dto.go`, `kb_dto.go`, ...). Do not define them inside handler files
-- Handlers bind a request DTO (`c.ShouldBindJSON` + `binding:"required"` etc.), call the usecase with an `XxxInput`, and convert the returned `*domain.Xxx` (or primitive) into a response DTO. Do not return domain structs directly as JSON
-- Conversion functions (`dto.TicketFromDomain(...)` style) live next to the DTO. `dto` imports `domain` only; it never imports usecase or handler
-- Sensitive fields (password hash, invitation token, BlobData, etc.) stay excluded on the domain side with `json:"-"` as a second line of defense
-- Existing handler-local request / response structs are migrated when the handler is next touched. The migration itself is a separate task, not part of this file
+- Request / response types are `record`s in the `dto` package (`TicketRequest`, `TicketResponse`, ...)
+- Controllers bind a request DTO (`@RequestBody @Valid` + Bean Validation), call the service, and convert the returned domain object into a response DTO. Only DTOs go out as JSON, never a domain object
+- The conversion is a static factory on the DTO (`TicketResponse.from(ticket)`). `dto` imports `domain` only
 
 ### 2.5 Frontend layers (FSD / Feature-Sliced Design)
 
@@ -96,9 +100,8 @@ app > pages > widgets > features > entities > shared
 ### 3.3 Testing
 
 - **TDD is the default**
-- **Backend (unit)**: `testing` + `stretchr/testify` (`go test ./...`) — usecases use interface mocks (testify/mock), handlers use `httptest` + `gin.New()`, infra gets fakes / stubs injected at the boundary. **Only tests that need no DB** go here
-- **Backend (integration)**: repositories are verified against **a real PostgreSQL** (no sqlite; the dependency is not even included). Put `//go:build integration` at the top of the file and include `Integration` in the test function name. Locally run `make test-integration` (starts postgres in docker → runs → always tears down); in CI the dedicated job `integration tests (postgres)` runs with `-tags=integration`
-- Integration tests connect through `internal/testsupport.OpenTestDB`. Because `TruncateAll` runs TRUNCATE CASCADE, **there is a safety valve that aborts before connecting if the DSN points at Supabase / the production pooler** (so a misconfiguration cannot wipe production data)
+- **Backend (unit)**: JUnit + AssertJ + Mockito from `spring-boot-starter-test` (`./gradlew test`) — services get Mockito mocks of their repositories, controllers use `@WebMvcTest` + MockMvc. **Only tests that need no DB** go here. Spring Boot 4 moved `@WebMvcTest` out of that starter into `spring-boot-starter-webmvc-test`; add it with the first controller test
+- **Backend (integration)**: repositories are verified against **a real PostgreSQL** (no H2), never against Supabase / the production pooler. The harness is not built yet, so ask before choosing one
 - Frontend: Vitest + React Testing Library (`pnpm test`). **Pin `vitest` / `@vitest/browser-playwright` / `@vitest/coverage-v8` to the same exact version** (no `^`). The core and the browser side must speak the same protocol; if they drift, every story test stops with "could not connect to the browser session" (we hit this) — verify accessibility too with `render` + `screen.getByRole`; hooks use `renderHook`
 
 ---
@@ -106,4 +109,4 @@ app > pages > widgets > features > entities > shared
 ## Instructions for coding agents
 - For new screens, make maximum use of the **reusable components in `src/shared/ui/`**
 - Never commit or push directly to `main`
-- Put `xxxRequest` / `xxxResponse` DTOs in `internal/handler/dto` (see 2.4). Hide sensitive fields on the domain side with `json:"-"`
+- Put `XxxRequest` / `XxxResponse` DTOs in the `dto` package (see 2.4)
